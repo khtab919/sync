@@ -42,6 +42,60 @@ jobs:
             cp .env.example .env || touch .env
           fi
 
+      - name: Create google-services.json if missing
+        run: |
+          if [ ! -f app/google-services.json ]; then
+            cat << 'EOF' > app/google-services.json
+          {
+            "project_info": {
+              "project_number": "335825631510",
+              "project_id": "gen-lang-client-0262570811",
+              "storage_bucket": "gen-lang-client-0262570811.firebasestorage.app"
+            },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:335825631510:android:c3c9ab3d14056ce9c17837",
+                  "android_client_info": {
+                    "package_name": "com.aistudio.layalilounge.x9m4kp"
+                  }
+                },
+                "oauth_client": [
+                  {
+                    "client_id": "335825631510-ikkospdenrk7g05u6rihldpdjf31076c.apps.googleusercontent.com",
+                    "client_type": 1,
+                    "android_info": {
+                      "package_name": "com.aistudio.layalilounge.x9m4kp",
+                      "certificate_hash": "0a01050628b01e8c227bbcac2d754c2b0311ea22"
+                    }
+                  },
+                  {
+                    "client_id": "335825631510-phs602etm4vsum7vju7gmgjic1nuh4de.apps.googleusercontent.com",
+                    "client_type": 3
+                  }
+                ],
+                "api_key": [
+                  {
+                    "current_key": "AIzaSyAdn0nUzmGACcTw__y_cuDOyLfgnDxQTSY"
+                  }
+                ],
+                "services": {
+                  "appinvite_service": {
+                    "other_platform_oauth_client": [
+                      {
+                        "client_id": "335825631510-phs602etm4vsum7vju7gmgjic1nuh4de.apps.googleusercontent.com",
+                        "client_type": 3
+                      }
+                    ]
+                  }
+                }
+              }
+            ],
+            "configuration_version": "1"
+          }
+          EOF
+          fi
+
       - name: Prepare Debug Keystore
         run: |
           if [ -f debug.keystore.base64 ]; then
@@ -72,4 +126,5 @@ jobs:
           draft: false
           prerelease: false
         env:
+      
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
