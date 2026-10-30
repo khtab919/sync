@@ -1,0 +1,341 @@
+{
+  "entities": {
+    "Booking": {
+      "title": "Booking",
+      "description": "A direct reservation for a wellness spa, massage therapy, or evening lounge event in a Syrian or Turkish city.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "UID of the authenticated user who owns this booking."
+        },
+        "venueId": {
+          "type": "string",
+          "description": "ID of the booked venue or center."
+        },
+        "venueName": {
+          "type": "string",
+          "description": "Display name of the booked venue."
+        },
+        "cityName": {
+          "type": "string",
+          "description": "City where the venue is located (Syria or Turkey)."
+        },
+        "country": {
+          "type": "string",
+          "enum": ["سوريا", "تركيا"],
+          "description": "Country name."
+        },
+        "serviceTitle": {
+          "type": "string",
+          "description": "Selected package or service title (e.g. massage or evening table)."
+        },
+        "category": {
+          "type": "string",
+          "description": "Category of the service."
+        },
+        "bookingDate": {
+          "type": "string",
+          "description": "Selected date for the reservation."
+        },
+        "timeSlot": {
+          "type": "string",
+          "description": "Selected time slot for the reservation."
+        },
+        "guestCount": {
+          "type": "integer",
+          "description": "Number of guests (1 to 20)."
+        },
+        "totalPriceUsd": {
+          "type": "integer",
+          "description": "Total reservation price in USD."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Special customer requests or notes."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["confirmed", "completed", "cancelled"],
+          "description": "Current reservation status."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when booking was created (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when booking was last updated (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "userId",
+        "venueId",
+        "venueName",
+        "cityName",
+        "country",
+        "serviceTitle",
+        "category",
+        "bookingDate",
+        "timeSlot",
+        "guestCount",
+        "totalPriceUsd",
+        "notes",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "CustomerReview": {
+      "title": "CustomerReview",
+      "description": "A verified customer review and star rating for a venue or service.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "UID of the authenticated reviewer."
+        },
+        "authorName": {
+          "type": "string",
+          "description": "Display name of the reviewer."
+        },
+        "venueId": {
+          "type": "string",
+          "description": "ID of the reviewed venue."
+        },
+        "venueName": {
+          "type": "string",
+          "description": "Name of the reviewed venue."
+        },
+        "cityName": {
+          "type": "string",
+          "description": "City of the reviewed venue."
+        },
+        "serviceType": {
+          "type": "string",
+          "description": "Type of service experienced."
+        },
+        "rating": {
+          "type": "integer",
+          "description": "Star rating from 1 to 5."
+        },
+        "comment": {
+          "type": "string",
+          "description": "Customer review text."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when review was submitted (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when review was updated (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "userId",
+        "authorName",
+        "venueId",
+        "venueName",
+        "cityName",
+        "serviceType",
+        "rating",
+        "comment",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "FavoriteVenue": {
+      "title": "FavoriteVenue",
+      "description": "A user's saved favorite venue or evening/spa service.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "UID of the authenticated user."
+        },
+        "venueId": {
+          "type": "string",
+          "description": "ID of the favorited venue."
+        },
+        "venueName": {
+          "type": "string",
+          "description": "Name of the favorited venue."
+        },
+        "cityName": {
+          "type": "string",
+          "description": "City of the favorited venue."
+        },
+        "category": {
+          "type": "string",
+          "description": "Category of the favorited venue."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when favorite was added (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "userId",
+        "venueId",
+        "venueName",
+        "cityName",
+        "category",
+        "createdAt"
+      ]
+    },
+    "PublishedService": {
+      "title": "PublishedService",
+      "description": "A service or showcase offer with photos, video, and price published by the admin/manager that broadcasts notifications to users.",
+      "type": "object",
+      "properties": {
+        "authorId": {
+          "type": "string",
+          "description": "UID of the admin/manager who published the service."
+        },
+        "title": {
+          "type": "string",
+          "description": "Title of the service or evening offer."
+        },
+        "cityName": {
+          "type": "string",
+          "description": "City name in Syria or Turkey."
+        },
+        "country": {
+          "type": "string",
+          "enum": ["سوريا", "تركيا"],
+          "description": "Country name."
+        },
+        "category": {
+          "type": "string",
+          "description": "Category of the service."
+        },
+        "description": {
+          "type": "string",
+          "description": "Detailed description of the offer."
+        },
+        "priceUsd": {
+          "type": "integer",
+          "description": "Price in USD."
+        },
+        "imageUrl": {
+          "type": "string",
+          "description": "Photo URI or preset visual identifier."
+        },
+        "videoUrl": {
+          "type": "string",
+          "description": "Video URI or showcase video link."
+        },
+        "mediaType": {
+          "type": "string",
+          "enum": ["photo", "video", "both"],
+          "description": "Type of media attached to the offer."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "archived"],
+          "description": "Publication status."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when published (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when updated (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "authorId",
+        "title",
+        "cityName",
+        "country",
+        "category",
+        "description",
+        "priceUsd",
+        "imageUrl",
+        "videoUrl",
+        "mediaType",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "BlockedUser": {
+      "title": "BlockedUser",
+      "description": "A user handle or identifier blocked by the admin/moderator.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "UID of the admin/user who created the block entry."
+        },
+        "blockedIdentifier": {
+          "type": "string",
+          "description": "Username, handle, or UID of the blocked account."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Reason for blocking."
+        },
+        "cityScope": {
+          "type": "string",
+          "description": "City scope for the ban."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "unblocked"],
+          "description": "Current block status."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when blocked (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when updated (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "userId",
+        "blockedIdentifier",
+        "reason",
+        "cityScope",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/bookings/{bookingId}": {
+      "schema": { "$ref": "#/entities/Booking" },
+      "description": "Direct service and evening reservations scoped to the authenticated user."
+    },
+    "/users/{userId}/reviews/{reviewId}": {
+      "schema": { "$ref": "#/entities/CustomerReview" },
+      "description": "Verified customer reviews authored by the authenticated user."
+    },
+    "/users/{userId}/favorites/{venueId}": {
+      "schema": { "$ref": "#/entities/FavoriteVenue" },
+      "description": "Saved favorite venues scoped to the authenticated user."
+    },
+    "/published_services/{serviceId}": {
+      "schema": { "$ref": "#/entities/PublishedService" },
+      "description": "Admin-published services and offers with photo/video showcase and pricing."
+    },
+    "/users/{userId}/blocked_users/{blockedId}": {
+      "schema": { "$ref": "#/entities/BlockedUser" },
+      "description": "Blocked user records managed by the administrator/user."
+    }
+  }
+}

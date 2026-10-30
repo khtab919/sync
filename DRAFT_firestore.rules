@@ -1,0 +1,338 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net: Default-deny all unmatched paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Hardened Global Primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        ('email' in request.auth.token &&
+         'email_verified' in request.auth.token &&
+         request.auth.token.email == 'khtaub7341@gmail.com' &&
+         request.auth.token.email_verified == true)
+      );
+    }
+
+    // Validation Blueprint: Booking
+    function isValidBooking(data) {
+      return data.keys().hasAll([
+               'userId', 'venueId', 'venueName', 'cityName', 'country',
+               'serviceTitle', 'category', 'bookingDate', 'timeSlot',
+               'guestCount', 'totalPriceUsd', 'notes', 'status',
+               'createdAt', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'userId', 'venueId', 'venueName', 'cityName', 'country',
+               'serviceTitle', 'category', 'bookingDate', 'timeSlot',
+               'guestCount', 'totalPriceUsd', 'notes', 'status',
+               'createdAt', 'updatedAt'
+             ]) &&
+             data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.userId == request.auth.uid &&
+             data.venueId is string && data.venueId.size() >= 1 && data.venueId.size() <= 100 &&
+             data.venueName is string && data.venueName.size() >= 1 && data.venueName.size() <= 150 &&
+             data.cityName is string && data.cityName.size() >= 1 && data.cityName.size() <= 80 &&
+             data.country is string && data.country in ['سوريا', 'تركيا'] &&
+             data.serviceTitle is string && data.serviceTitle.size() >= 1 && data.serviceTitle.size() <= 150 &&
+             data.category is string && data.category.size() >= 1 && data.category.size() <= 80 &&
+             data.bookingDate is string && data.bookingDate.size() >= 1 && data.bookingDate.size() <= 50 &&
+             data.timeSlot is string && data.timeSlot.size() >= 1 && data.timeSlot.size() <= 50 &&
+             data.guestCount is int && data.guestCount >= 1 && data.guestCount <= 20 &&
+             data.totalPriceUsd is int && data.totalPriceUsd >= 5 && data.totalPriceUsd <= 10000 &&
+             data.notes is string && data.notes.size() <= 400 &&
+             data.status is string && data.status in ['confirmed', 'completed', 'cancelled'] &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    // Validation Blueprint: CustomerReview
+    function isValidReview(data) {
+      return data.keys().hasAll([
+               'userId', 'authorName', 'venueId', 'venueName', 'cityName',
+               'serviceType', 'rating', 'comment', 'createdAt', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'userId', 'authorName', 'venueId', 'venueName', 'cityName',
+               'serviceType', 'rating', 'comment', 'createdAt', 'updatedAt'
+             ]) &&
+             data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.userId == request.auth.uid &&
+             data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 100 &&
+             data.venueId is string && data.venueId.size() >= 1 && data.venueId.size() <= 100 &&
+             data.venueName is string && data.venueName.size() >= 1 && data.venueName.size() <= 150 &&
+             data.cityName is string && data.cityName.size() >= 1 && data.cityName.size() <= 80 &&
+             data.serviceType is string && data.serviceType.size() >= 1 && data.serviceType.size() <= 100 &&
+             data.rating is int && data.rating >= 1 && data.rating <= 5 &&
+             data.comment is string && data.comment.size() >= 3 && data.comment.size() <= 500 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    // Validation Blueprint: FavoriteVenue
+    function isValidFavorite(data) {
+      return data.keys().hasAll([
+               'userId', 'venueId', 'venueName', 'cityName', 'category', 'createdAt'
+             ]) &&
+             data.keys().hasOnly([
+               'userId', 'venueId', 'venueName', 'cityName', 'category', 'createdAt'
+             ]) &&
+             data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.userId == request.auth.uid &&
+             data.venueId is string && data.venueId.size() >= 1 && data.venueId.size() <= 100 &&
+             data.venueName is string && data.venueName.size() >= 1 && data.venueName.size() <= 150 &&
+             data.cityName is string && data.cityName.size() >= 1 && data.cityName.size() <= 80 &&
+             data.category is string && data.category.size() >= 1 && data.category.size() <= 80 &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    // Validation Blueprint: PublishedService
+    function isValidPublishedService(data) {
+      return data.keys().hasAll([
+               'authorId', 'title', 'cityName', 'country', 'category',
+               'description', 'priceUsd', 'imageUrl', 'videoUrl',
+               'mediaType', 'status', 'createdAt', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'authorId', 'title', 'cityName', 'country', 'category',
+               'description', 'priceUsd', 'imageUrl', 'videoUrl',
+               'mediaType', 'status', 'createdAt', 'updatedAt'
+             ]) &&
+             data.authorId is string && data.authorId.size() >= 1 && data.authorId.size() <= 128 &&
+             (data.authorId == request.auth.uid || isAdmin()) &&
+             data.title is string && data.title.size() >= 2 && data.title.size() <= 150 &&
+             data.cityName is string && data.cityName.size() >= 2 && data.cityName.size() <= 80 &&
+             data.country is string && data.country in ['سوريا', 'تركيا'] &&
+             data.category is string && data.category.size() >= 2 && data.category.size() <= 80 &&
+             data.description is string && data.description.size() >= 3 && data.description.size() <= 600 &&
+             data.priceUsd is int && data.priceUsd >= 5 && data.priceUsd <= 10000 &&
+             data.imageUrl is string && data.imageUrl.size() <= 500 &&
+             data.videoUrl is string && data.videoUrl.size() <= 500 &&
+             data.mediaType is string && data.mediaType in ['photo', 'video', 'both'] &&
+             data.status is string && data.status in ['active', 'archived'] &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    // Validation Blueprint: BlockedUser
+    function isValidBlockedUser(data) {
+      return data.keys().hasAll([
+               'userId', 'blockedIdentifier', 'reason', 'cityScope',
+               'status', 'createdAt', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'userId', 'blockedIdentifier', 'reason', 'cityScope',
+               'status', 'createdAt', 'updatedAt'
+             ]) &&
+             data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             (data.userId == request.auth.uid || isAdmin()) &&
+             data.blockedIdentifier is string && data.blockedIdentifier.size() >= 2 && data.blockedIdentifier.size() <= 120 &&
+             data.reason is string && data.reason.size() >= 2 && data.reason.size() <= 300 &&
+             data.cityScope is string && data.cityScope.size() >= 2 && data.cityScope.size() <= 80 &&
+             data.status is string && data.status in ['active', 'unblocked'] &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    // Collection: User Bookings
+    match /users/{userId}/bookings/{bookingId} {
+      allow get: if isSignedIn() &&
+                    isValidId(userId) &&
+                    isValidId(bookingId) &&
+                    request.auth.uid == userId &&
+                    existing().userId == request.auth.uid;
+
+      allow list: if isSignedIn() &&
+                     request.auth.uid == userId &&
+                     existing().userId == request.auth.uid;
+
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       isValidId(bookingId) &&
+                       request.auth.uid == userId &&
+                       isValidBooking(incoming()) &&
+                       incoming().status == 'confirmed';
+
+      allow update: if isSignedIn() &&
+                       isValidId(userId) &&
+                       isValidId(bookingId) &&
+                       request.auth.uid == userId &&
+                       isValidBooking(incoming()) &&
+                       existing().userId == request.auth.uid &&
+                       existing().status == 'confirmed' &&
+                       incoming().userId == existing().userId &&
+                       incoming().venueId == existing().venueId &&
+                       incoming().venueName == existing().venueName &&
+                       incoming().cityName == existing().cityName &&
+                       incoming().country == existing().country &&
+                       incoming().serviceTitle == existing().serviceTitle &&
+                       incoming().category == existing().category &&
+                       incoming().totalPriceUsd == existing().totalPriceUsd &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'status', 'bookingDate', 'timeSlot', 'guestCount', 'notes', 'updatedAt'
+                       ]);
+
+      allow delete: if isSignedIn() &&
+                       isValidId(userId) &&
+                       isValidId(bookingId) &&
+                       request.auth.uid == userId &&
+                       existing().userId == request.auth.uid;
+    }
+
+    // Collection: User Verified Reviews
+    match /users/{userId}/reviews/{reviewId} {
+      allow get: if isSignedIn() &&
+                    isValidId(userId) &&
+                    isValidId(reviewId) &&
+                    request.auth.uid == userId &&
+                    existing().userId == request.auth.uid;
+
+      allow list: if isSignedIn() &&
+                     request.auth.uid == userId &&
+                     existing().userId == request.auth.uid;
+
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       isValidId(reviewId) &&
+                       request.auth.uid == userId &&
+                       isValidReview(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(userId) &&
+                       isValidId(reviewId) &&
+                       request.auth.uid == userId &&
+                       isValidReview(incoming()) &&
+                       existing().userId == request.auth.uid &&
+                       incoming().userId == existing().userId &&
+                       incoming().authorName == existing().authorName &&
+                       incoming().venueId == existing().venueId &&
+                       incoming().venueName == existing().venueName &&
+                       incoming().cityName == existing().cityName &&
+                       incoming().serviceType == existing().serviceType &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'rating', 'comment', 'updatedAt'
+                       ]);
+
+      allow delete: if isSignedIn() &&
+                       isValidId(userId) &&
+                       isValidId(reviewId) &&
+                       request.auth.uid == userId &&
+                       existing().userId == request.auth.uid;
+    }
+
+    // Collection: User Favorites
+    match /users/{userId}/favorites/{venueId} {
+      allow get: if isSignedIn() &&
+                    isValidId(userId) &&
+                    isValidId(venueId) &&
+                    request.auth.uid == userId &&
+                    existing().userId == request.auth.uid;
+
+      allow list: if isSignedIn() &&
+                     request.auth.uid == userId &&
+                     existing().userId == request.auth.uid;
+
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       isValidId(venueId) &&
+                       request.auth.uid == userId &&
+                       isValidFavorite(incoming()) &&
+                       incoming().venueId == venueId;
+
+      allow update: if false;
+
+      allow delete: if isSignedIn() &&
+                       isValidId(userId) &&
+                       isValidId(venueId) &&
+                       request.auth.uid == userId &&
+                       existing().userId == request.auth.uid;
+    }
+
+    // Collection: Published Services & Offers (Real-time Broadcasts)
+    match /published_services/{serviceId} {
+      allow get: if isSignedIn() &&
+                    isValidId(serviceId) &&
+                    (existing().status == 'active' || existing().authorId == request.auth.uid || isAdmin());
+
+      allow list: if isSignedIn() &&
+                     (existing().status == 'active' || existing().authorId == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() &&
+                       isValidId(serviceId) &&
+                       isValidPublishedService(incoming()) &&
+                       incoming().authorId == request.auth.uid &&
+                       incoming().status == 'active';
+
+      allow update: if isSignedIn() &&
+                       isValidId(serviceId) &&
+                       isValidPublishedService(incoming()) &&
+                       (existing().authorId == request.auth.uid || isAdmin()) &&
+                       incoming().authorId == existing().authorId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'title', 'cityName', 'country', 'category', 'description',
+                         'priceUsd', 'imageUrl', 'videoUrl', 'mediaType', 'status', 'updatedAt'
+                       ]);
+
+      allow delete: if isSignedIn() &&
+                       isValidId(serviceId) &&
+                       (existing().authorId == request.auth.uid || isAdmin());
+    }
+
+    // Collection: Blocked Users & Moderation
+    match /users/{userId}/blocked_users/{blockedId} {
+      allow get: if isSignedIn() &&
+                    isValidId(userId) &&
+                    isValidId(blockedId) &&
+                    ((request.auth.uid == userId && existing().userId == request.auth.uid) || isAdmin());
+
+      allow list: if isSignedIn() &&
+                     ((request.auth.uid == userId && existing().userId == request.auth.uid) || isAdmin());
+
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       isValidId(blockedId) &&
+                       (request.auth.uid == userId || isAdmin()) &&
+                       isValidBlockedUser(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(userId) &&
+                       isValidId(blockedId) &&
+                       ((request.auth.uid == userId && existing().userId == request.auth.uid) || isAdmin()) &&
+                       isValidBlockedUser(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().blockedIdentifier == existing().blockedIdentifier &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'reason', 'cityScope', 'status', 'updatedAt'
+                       ]);
+
+      allow delete: if isSignedIn() &&
+                       isValidId(userId) &&
+                       isValidId(blockedId) &&
+                       ((request.auth.uid == userId && existing().userId == request.auth.uid) || isAdmin());
+    }
+  }
+}

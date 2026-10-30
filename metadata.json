@@ -1,0 +1,6 @@
+{
+  "name": "Layali Lounge",
+  "description": "منصة حجز مراكز السبا والمساج والسهرات الفنية والفعاليات المسائية في المدن السورية والتركية مع تقييمات العملاء الموثوقة",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
