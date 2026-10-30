@@ -12,52 +12,52 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 
-private val DarkRoyalBrandScheme = darkColorScheme(
-    primary = RoyalGold,
-    onPrimary = ObsidianNight,
-    primaryContainer = ElevatedPlumCard,
-    onPrimaryContainer = SoftGold,
-    secondary = DustyRose,
-    onSecondary = ObsidianNight,
-    secondaryContainer = DeepRoyalViolet,
-    onSecondaryContainer = IvoryCream,
-    tertiary = EmeraldVerified,
-    onTertiary = ObsidianNight,
-    background = ObsidianNight,
-    onBackground = IvoryCream,
-    surface = VelvetPlum,
-    onSurface = IvoryCream,
-    surfaceVariant = ElevatedPlumCard,
-    onSurfaceVariant = MutedLavender,
-    outline = DeepWineOutline,
+private val DarkCreatorVipScheme = darkColorScheme(
+    primary = SovereignGold,
+    onPrimary = CharcoalNight,
+    primaryContainer = DarkCardSurface,
+    onPrimaryContainer = Color.White,
+    secondary = VioletBlueVip,
+    onSecondary = Color.White,
+    secondaryContainer = ElevatedDarkSurface,
+    onSecondaryContainer = Color.White,
+    tertiary = ShamCashTeal,
+    onTertiary = Color.White,
+    background = CharcoalNight,
+    onBackground = Color.White,
+    surface = DarkCardSurface,
+    onSurface = Color.White,
+    surfaceVariant = ElevatedDarkSurface,
+    onSurfaceVariant = MutedLightText,
+    outline = DarkBorderGray,
     error = ErrorCrimson
 )
 
-private val LightSoftRoseBrandScheme = lightColorScheme(
-    primary = DustyRose,
+private val LightCreatorVipScheme = lightColorScheme(
+    primary = CoralPinkPrimary,
     onPrimary = Color.White,
-    primaryContainer = SoftRoseCard,
-    onPrimaryContainer = DeepPlumText,
-    secondary = DeepRoyalViolet,
+    primaryContainer = SnowGraySurface,
+    onPrimaryContainer = TitleDarkText,
+    secondary = VioletBlueVip,
     onSecondary = Color.White,
-    secondaryContainer = SoftRoseSurface,
-    onSecondaryContainer = DeepPlumText,
-    tertiary = EmeraldVerified,
+    secondaryContainer = SnowGraySurface,
+    onSecondaryContainer = TitleDarkText,
+    tertiary = CharcoalButton,
     onTertiary = Color.White,
-    background = SoftBlushBackground,
-    onBackground = DeepPlumText,
-    surface = SoftRoseSurface,
-    onSurface = DeepPlumText,
-    surfaceVariant = SoftRoseCard,
-    onSurfaceVariant = MutedPlumText,
-    outline = SoftRoseOutline,
+    background = PureWhite,
+    onBackground = TitleDarkText,
+    surface = LightCardSurface,
+    onSurface = TitleDarkText,
+    surfaceVariant = SnowGraySurface,
+    onSurfaceVariant = SubtitleGrayText,
+    outline = LightBorderGray,
     error = ErrorCrimson
 )
 
 val LayaliShapes = Shapes(
-    small = RoundedCornerShape(12.dp),
+    small = RoundedCornerShape(14.dp),
     medium = RoundedCornerShape(20.dp),
-    large = RoundedCornerShape(28.dp)
+    large = RoundedCornerShape(26.dp)
 )
 
 @Composable
@@ -65,7 +65,7 @@ fun MyApplicationTheme(
     isSoftRoseLightTheme: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    val scheme = if (isSoftRoseLightTheme) LightSoftRoseBrandScheme else DarkRoyalBrandScheme
+    val scheme = if (isSoftRoseLightTheme) LightCreatorVipScheme else DarkCreatorVipScheme
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         MaterialTheme(
             colorScheme = scheme,

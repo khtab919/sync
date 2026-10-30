@@ -4,9 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.util.Log
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -63,12 +61,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -85,15 +80,10 @@ import com.example.R
 import com.example.security.AuthResult
 import com.example.security.SuperAdminSecurityManager
 import com.example.ui.components.WingedHeartLogo
-import com.example.ui.theme.BrandChampagneGold
-import com.example.ui.theme.BrandDeepViolet
-import com.example.ui.theme.BrandDustyRose
-import com.example.ui.theme.BrandRoyalPlum
+import com.example.ui.theme.CharcoalButton
+import com.example.ui.theme.CoralPinkPrimary
 import com.example.ui.theme.EmeraldVerified
-import com.example.ui.theme.ObsidianNight
-import com.example.ui.theme.RoyalGold
-import com.example.ui.theme.SoftGold
-import com.example.ui.theme.VelvetPlum
+import com.example.ui.theme.VioletBlueVip
 import com.example.util.LayaliNotificationHelper
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
@@ -247,15 +237,7 @@ fun AuthScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFF281136),
-                        BrandDeepViolet,
-                        ObsidianNight
-                    )
-                )
-            )
+            .background(MaterialTheme.colorScheme.background)
             .windowInsetsPadding(WindowInsets.safeDrawing),
         contentAlignment = Alignment.Center
     ) {
@@ -267,47 +249,47 @@ fun AuthScreen(
                 .padding(horizontal = 24.dp, vertical = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Luxury Brand Header
-            WingedHeartLogo(modifier = Modifier.size(64.dp))
+            // Modern Creator & VIP Club Brand Header
+            WingedHeartLogo(modifier = Modifier.size(60.dp))
             Spacer(modifier = Modifier.height(10.dp))
 
             Text(
                 text = if (isCreateAccountMode) "إنشاء حساب جديد" else "تسجيل الدخول",
                 style = MaterialTheme.typography.headlineLarge,
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground,
+                fontWeight = FontWeight.SemiBold,
                 textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "خدمات البنات • ليالي وسبا VIP في جميع المدن السورية والتركية",
+                text = "نادي Layali VIP • عروض السبا والسهرات في المدن السورية والتركية",
                 style = MaterialTheme.typography.bodyMedium,
-                color = BrandChampagneGold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(26.dp))
+            Spacer(modifier = Modifier.height(22.dp))
 
-            // Main Luxury Authentication Card (Screen 1 of UI/UX Case Study)
+            // Clean High-Contrast Authentication Card
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(26.dp),
+                shape = RoundedCornerShape(22.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = BrandRoyalPlum.copy(alpha = 0.72f)
+                    containerColor = MaterialTheme.colorScheme.surface
                 ),
-                border = BorderStroke(1.2.dp, BrandChampagneGold.copy(alpha = 0.45f))
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 22.dp, vertical = 24.dp)
+                        .padding(horizontal = 20.dp, vertical = 22.dp)
                 ) {
                     if (isCreateAccountMode) {
                         Text(
                             text = "الاسم الكامل أو اللقب",
                             style = MaterialTheme.typography.labelLarge,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontWeight = FontWeight.Medium,
                             modifier = Modifier.fillMaxWidth(),
                             textAlign = TextAlign.End
                         )
@@ -323,30 +305,30 @@ fun AuthScreen(
                                 Icon(
                                     imageVector = Icons.Default.VerifiedUser,
                                     contentDescription = null,
-                                    tint = BrandChampagneGold
+                                    tint = VioletBlueVip
                                 )
                             },
                             singleLine = true,
                             shape = RoundedCornerShape(16.dp),
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = BrandChampagneGold,
-                                unfocusedBorderColor = BrandChampagneGold.copy(alpha = 0.35f),
-                                focusedContainerColor = ObsidianNight.copy(alpha = 0.55f),
-                                unfocusedContainerColor = ObsidianNight.copy(alpha = 0.40f)
+                                focusedBorderColor = VioletBlueVip,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                                focusedContainerColor = MaterialTheme.colorScheme.background,
+                                unfocusedContainerColor = MaterialTheme.colorScheme.background
                             ),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .testTag("auth_fullname_input")
                         )
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(14.dp))
                     }
 
                     // Field 1: Username or Email
                     Text(
                         text = "اسم المستخدم أو البريد الإلكتروني",
                         style = MaterialTheme.typography.labelLarge,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Medium,
                         modifier = Modifier.fillMaxWidth(),
                         textAlign = TextAlign.End
                     )
@@ -362,31 +344,31 @@ fun AuthScreen(
                             Icon(
                                 imageVector = Icons.Default.Person,
                                 contentDescription = null,
-                                tint = BrandChampagneGold
+                                tint = VioletBlueVip
                             )
                         },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                         shape = RoundedCornerShape(16.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = BrandChampagneGold,
-                            unfocusedBorderColor = BrandChampagneGold.copy(alpha = 0.35f),
-                            focusedContainerColor = ObsidianNight.copy(alpha = 0.55f),
-                            unfocusedContainerColor = ObsidianNight.copy(alpha = 0.40f)
+                            focusedBorderColor = VioletBlueVip,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                            focusedContainerColor = MaterialTheme.colorScheme.background,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.background
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("auth_username_input")
                     )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
 
                     // Field 2: Password with show/hide eye icon
                     Text(
                         text = "كلمة المرور",
                         style = MaterialTheme.typography.labelLarge,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Medium,
                         modifier = Modifier.fillMaxWidth(),
                         textAlign = TextAlign.End
                     )
@@ -402,7 +384,7 @@ fun AuthScreen(
                             Icon(
                                 imageVector = Icons.Default.Lock,
                                 contentDescription = null,
-                                tint = BrandChampagneGold
+                                tint = VioletBlueVip
                             )
                         },
                         trailingIcon = {
@@ -421,7 +403,7 @@ fun AuthScreen(
                                     } else {
                                         "إظهار كلمة المرور"
                                     },
-                                    tint = BrandChampagneGold
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         },
@@ -434,10 +416,10 @@ fun AuthScreen(
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                         shape = RoundedCornerShape(16.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = BrandChampagneGold,
-                            unfocusedBorderColor = BrandChampagneGold.copy(alpha = 0.35f),
-                            focusedContainerColor = ObsidianNight.copy(alpha = 0.55f),
-                            unfocusedContainerColor = ObsidianNight.copy(alpha = 0.40f)
+                            focusedBorderColor = VioletBlueVip,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                            focusedContainerColor = MaterialTheme.colorScheme.background,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.background
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -462,7 +444,7 @@ fun AuthScreen(
                             Text(
                                 text = "نسيت كلمة المرور؟",
                                 style = MaterialTheme.typography.labelLarge,
-                                color = SoftGold
+                                color = CoralPinkPrimary
                             )
                         }
 
@@ -477,7 +459,7 @@ fun AuthScreen(
 
                     if (errorMessage != null) {
                         Surface(
-                            color = MaterialTheme.colorScheme.error.copy(alpha = 0.16f),
+                            color = MaterialTheme.colorScheme.error.copy(alpha = 0.12f),
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -495,7 +477,7 @@ fun AuthScreen(
 
                     if (statusNotice != null) {
                         Surface(
-                            color = EmeraldVerified.copy(alpha = 0.16f),
+                            color = EmeraldVerified.copy(alpha = 0.12f),
                             shape = RoundedCornerShape(12.dp),
                             border = BorderStroke(1.dp, EmeraldVerified),
                             modifier = Modifier
@@ -512,7 +494,7 @@ fun AuthScreen(
                         }
                     }
 
-                    // Primary Metallic Gold Button: "تسجيل الدخول"
+                    // Primary Capsule CTA Button (#FF3B6B)
                     Button(
                         onClick = {
                             errorMessage = null
@@ -547,23 +529,23 @@ fun AuthScreen(
                         enabled = !isLoading,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(56.dp)
+                            .height(50.dp)
                             .testTag("primary_login_button"),
                         shape = RoundedCornerShape(50),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = BrandChampagneGold,
-                            contentColor = ObsidianNight
+                            containerColor = CoralPinkPrimary,
+                            contentColor = Color.White
                         )
                     ) {
                         Text(
                             text = if (isCreateAccountMode) "إنشاء الحساب وتسجيل الدخول" else "تسجيل الدخول",
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = ObsidianNight
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(22.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
 
                     // Fast Sign-In Section: "أو تسجيل الدخول عبر:"
                     Row(
@@ -572,23 +554,23 @@ fun AuthScreen(
                     ) {
                         HorizontalDivider(
                             modifier = Modifier.weight(1f),
-                            color = BrandChampagneGold.copy(alpha = 0.25f)
+                            color = MaterialTheme.colorScheme.outline
                         )
                         Text(
                             text = "أو تسجيل الدخول عبر:",
                             style = MaterialTheme.typography.labelLarge,
-                            color = SoftGold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 12.dp)
                         )
                         HorizontalDivider(
                             modifier = Modifier.weight(1f),
-                            color = BrandChampagneGold.copy(alpha = 0.25f)
+                            color = MaterialTheme.colorScheme.outline
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
 
-                    // Horizontal Clear Social Sign-in Buttons (Google & Apple)
+                    // Horizontal Clear Social Sign-in Capsule Buttons (Google & Apple)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -616,12 +598,12 @@ fun AuthScreen(
                                 )
                             },
                             enabled = !isLoading,
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.background,
                             shape = RoundedCornerShape(50),
-                            border = BorderStroke(1.dp, BrandChampagneGold),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                             modifier = Modifier
                                 .weight(1f)
-                                .height(52.dp)
+                                .height(48.dp)
                                 .testTag("google_sign_in_button")
                         ) {
                             Row(
@@ -632,13 +614,13 @@ fun AuthScreen(
                                 if (isLoading) {
                                     CircularProgressIndicator(
                                         modifier = Modifier.size(20.dp),
-                                        color = ObsidianNight,
+                                        color = CoralPinkPrimary,
                                         strokeWidth = 2.dp
                                     )
                                 } else {
                                     Box(
                                         modifier = Modifier
-                                            .size(26.dp)
+                                            .size(24.dp)
                                             .clip(CircleShape)
                                             .background(Color(0xFF4285F4)),
                                         contentAlignment = Alignment.Center
@@ -646,16 +628,16 @@ fun AuthScreen(
                                         Text(
                                             text = "G",
                                             color = Color.White,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 15.sp
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontSize = 14.sp
                                         )
                                     }
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
                                         text = "Google",
                                         style = MaterialTheme.typography.titleMedium,
-                                        color = ObsidianNight,
-                                        fontWeight = FontWeight.Bold
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontWeight = FontWeight.SemiBold
                                     )
                                 }
                             }
@@ -667,12 +649,11 @@ fun AuthScreen(
                                 errorMessage = null
                                 onTraditionalLoginSuccess("عميل Apple VIP")
                             },
-                            color = Color.White,
+                            color = CharcoalButton,
                             shape = RoundedCornerShape(50),
-                            border = BorderStroke(1.dp, BrandChampagneGold),
                             modifier = Modifier
                                 .weight(1f)
-                                .height(52.dp)
+                                .height(48.dp)
                                 .testTag("apple_sign_in_button")
                         ) {
                             Row(
@@ -680,32 +661,24 @@ fun AuthScreen(
                                 horizontalArrangement = Arrangement.Center,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(26.dp)
-                                        .clip(CircleShape)
-                                        .background(Color.Black),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = "",
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 15.sp
-                                    )
-                                }
+                                Text(
+                                    text = "",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 16.sp
+                                )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = "Apple",
                                     style = MaterialTheme.typography.titleMedium,
-                                    color = ObsidianNight,
-                                    fontWeight = FontWeight.Bold
+                                    color = Color.White,
+                                    fontWeight = FontWeight.SemiBold
                                 )
                             }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(20.dp))
+                    Spacer(modifier = Modifier.height(18.dp))
 
                     // Create New Account / Switch Mode Link
                     Row(
@@ -716,14 +689,14 @@ fun AuthScreen(
                         Text(
                             text = if (isCreateAccountMode) "لديك حساب بالفعل؟" else "ليس لديك حساب؟",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = SoftGold
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = if (isCreateAccountMode) "تسجيل الدخول" else "إنشاء حساب جديد",
                             style = MaterialTheme.typography.titleMedium,
-                            color = BrandChampagneGold,
-                            fontWeight = FontWeight.Bold,
+                            color = VioletBlueVip,
+                            fontWeight = FontWeight.SemiBold,
                             modifier = Modifier
                                 .clickable {
                                     isCreateAccountMode = !isCreateAccountMode
@@ -747,13 +720,13 @@ fun AuthScreen(
                         .height(50.dp)
                         .testTag("dismiss_auth_screen_button"),
                     shape = RoundedCornerShape(50),
-                    border = BorderStroke(1.dp, BrandChampagneGold.copy(alpha = 0.7f))
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
                 ) {
                     Text(
                         text = "تصفح الشاشة الرئيسية والأقسام مباشرة",
-                        color = BrandChampagneGold,
+                        color = MaterialTheme.colorScheme.onBackground,
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
             }
@@ -764,7 +737,7 @@ fun AuthScreen(
         // Floating Telegram @RamaNUR Support Button on Auth Screen
         ExtendedFloatingActionButton(
             onClick = { LayaliNotificationHelper.openTelegramSupport(context) },
-            containerColor = BrandDustyRose,
+            containerColor = CoralPinkPrimary,
             contentColor = Color.White,
             shape = RoundedCornerShape(50),
             modifier = Modifier
@@ -781,7 +754,7 @@ fun AuthScreen(
                 Text(
                     text = "الدعم @RamaNUR",
                     style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.SemiBold
                 )
             }
         )

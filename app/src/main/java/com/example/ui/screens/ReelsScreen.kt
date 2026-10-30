@@ -5,19 +5,11 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -76,7 +68,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -85,6 +77,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -97,6 +90,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.PublishedService
 import com.example.data.model.Venue
+import com.example.ui.components.FramedUserAvatar
+import com.example.ui.components.LuxuryGradientButton
 import com.example.ui.components.SmartServiceMediaView
 import com.example.ui.theme.BrandChampagneGold
 import com.example.ui.theme.BrandDeepViolet
@@ -105,6 +100,7 @@ import com.example.ui.theme.EmeraldVerified
 import com.example.ui.theme.ObsidianNight
 import com.example.ui.theme.RoyalGold
 import com.example.ui.theme.SoftGold
+import com.example.ui.theme.VioletBlueVip
 import com.example.ui.theme.WarmCoral
 import com.example.util.LayaliNotificationHelper
 import kotlinx.coroutines.delay
@@ -149,6 +145,7 @@ fun ReelsScreen(
     onToggleFavoriteVenue: (Venue) -> Unit,
     onEditReelPrice: (ReelItemUiModel) -> Unit,
     onOpenAdminPublishReel: () -> Unit,
+    onOpenCreatorChat: () -> Unit = {},
     onShowMessage: (String) -> Unit
 ) {
     val context = LocalContext.current
@@ -266,6 +263,8 @@ fun ReelsScreen(
         } else {
             VerticalPager(
                 state = pagerState,
+                beyondViewportPageCount = 0,
+                key = { filteredReels[it].id },
                 modifier = Modifier
                     .fillMaxSize()
                     .testTag("reels_vertical_pager")
@@ -319,6 +318,7 @@ fun ReelsScreen(
                         reel.sourceVenue?.let(onOpenVenueDetails)
                         reel.sourcePublished?.let(onOpenPublishedMedia)
                     },
+                    onOpenCreatorChat = onOpenCreatorChat,
                     onEditPrice = { onEditReelPrice(reel) }
                 )
             }
@@ -620,10 +620,12 @@ private fun SingleReelFullPage(
     onShareReel: () -> Unit,
     onBookFromReel: () -> Unit,
     onOpenDetailsFromReel: () -> Unit,
+    onOpenCreatorChat: () -> Unit,
     onEditPrice: () -> Unit
 ) {
     val context = LocalContext.current
     var showHeartBurst by remember { mutableStateOf(false) }
+    var progress by remember { mutableFloatStateOf(0.15f) }
 
     LaunchedEffect(showHeartBurst) {
         if (showHeartBurst) {
@@ -632,25 +634,12 @@ private fun SingleReelFullPage(
         }
     }
 
-    val infiniteTransition = rememberInfiniteTransition(label = "reel_playback")
-    val progress by infiniteTransition.animateFloat(
-        initialValue = 0.05f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 11000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "reel_progress"
-    )
-    val ambientGlow by infiniteTransition.animateFloat(
-        initialValue = 0.25f,
-        targetValue = 0.85f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2200, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "ambient_glow"
-    )
+    LaunchedEffect(isPlaying) {
+        while (isPlaying) {
+            delay(300L)
+            progress = if (progress >= 0.98f) 0.08f else progress + 0.025f
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -676,32 +665,25 @@ private fun SingleReelFullPage(
             modifier = Modifier.fillMaxSize()
         )
 
-        // 2. Animated Luxury Ambient Bokeh & Light Rays Overlay (4K Video Motion Effect)
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val w = size.width
-            val h = size.height
-            val dynamicY = h * (0.25f + 0.45f * progress)
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        BrandChampagneGold.copy(alpha = 0.16f * ambientGlow),
-                        BrandDustyRose.copy(alpha = 0.10f * ambientGlow),
-                        Color.Transparent
-                    ),
-                    center = Offset(w * 0.5f, dynamicY),
-                    radius = w * 0.65f
-                ),
-                radius = w * 0.65f,
-                center = Offset(w * 0.5f, dynamicY)
-            )
-        }
-
-        // 3. Dark Bottom & Top Vignette Gradients for Crisp Arabic Typography
-        Box(
+        // 2. Cached Vignette & Luxury Ambient Overlay (zero per-frame allocations during swipe)
+        Spacer(
             modifier = Modifier
                 .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
+                .drawWithCache {
+                    val w = size.width
+                    val h = size.height
+                    val glowRadius = (w * 0.65f).coerceAtLeast(1f)
+                    val glowCenter = Offset(w * 0.5f, h * 0.42f)
+                    val glowBrush = Brush.radialGradient(
+                        colors = listOf(
+                            BrandChampagneGold.copy(alpha = 0.12f),
+                            BrandDustyRose.copy(alpha = 0.08f),
+                            Color.Transparent
+                        ),
+                        center = glowCenter,
+                        radius = glowRadius
+                    )
+                    val vignetteBrush = Brush.verticalGradient(
                         colors = listOf(
                             ObsidianNight.copy(alpha = 0.55f),
                             Color.Transparent,
@@ -709,7 +691,11 @@ private fun SingleReelFullPage(
                             ObsidianNight.copy(alpha = 0.95f)
                         )
                     )
-                )
+                    onDrawBehind {
+                        drawCircle(brush = glowBrush, radius = glowRadius, center = glowCenter)
+                        drawRect(brush = vignetteBrush)
+                    }
+                }
         )
 
         // 4. Center Play/Pause Indicator or Double-Tap Heart Burst
@@ -887,6 +873,70 @@ private fun SingleReelFullPage(
                 }
             }
 
+            // Creator Framed Avatar + @username + Level Badge Strip
+            val creatorFrames = listOf("emerald_crown", "amber_sovereign", "sapphire_neon", "amethyst_vip", "crimson_flame", "obsidian_elite")
+            val creatorFrameId = creatorFrames[(reelIndex - 1) % creatorFrames.size]
+            val creatorLevel = 16 + ((reelIndex * 3) % 20)
+            val creatorUsername = reel.sourceVenue?.providerUsername ?: "@layali_${reel.cityName.hashCode().let { kotlin.math.abs(it) % 99 }}"
+
+            Surface(
+                onClick = onOpenCreatorChat,
+                color = ObsidianNight.copy(alpha = 0.82f),
+                shape = RoundedCornerShape(20.dp),
+                border = BorderStroke(1.dp, BrandChampagneGold.copy(alpha = 0.6f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        color = VioletBlueVip,
+                        shape = RoundedCornerShape(50)
+                    ) {
+                        Text(
+                            text = "دردشة VIP ($15)",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Color.White,
+                            fontWeight = FontWeight.ExtraBold,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                        )
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                text = creatorUsername,
+                                style = MaterialTheme.typography.labelLarge,
+                                color = BrandChampagneGold,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                            Text(
+                                text = "المستوى الملكي Lv.$creatorLevel • متصل الآن",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = EmeraldVerified
+                            )
+                        }
+
+                        FramedUserAvatar(
+                            avatarUri = reel.imageUrl,
+                            fallbackInitial = reel.title.take(1),
+                            frameId = creatorFrameId,
+                            level = creatorLevel,
+                            avatarSize = 42.dp,
+                            showLevelBadge = true,
+                            isOnline = true
+                        )
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(8.dp))
 
             // Reel Title
@@ -945,7 +995,9 @@ private fun SingleReelFullPage(
                     shape = RoundedCornerShape(50),
                     border = BorderStroke(1.2.dp, BrandChampagneGold),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-                    modifier = Modifier.weight(0.42f)
+                    modifier = Modifier
+                        .weight(0.42f)
+                        .height(50.dp)
                 ) {
                     Text(
                         text = "التفاصيل والصور",
@@ -956,25 +1008,12 @@ private fun SingleReelFullPage(
                     )
                 }
 
-                Button(
+                LuxuryGradientButton(
+                    text = "احجز الآن • $${reel.priceUsd}",
                     onClick = onBookFromReel,
-                    shape = RoundedCornerShape(50),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = BrandChampagneGold,
-                        contentColor = ObsidianNight
-                    ),
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
-                    modifier = Modifier
-                        .weight(0.58f)
-                        .testTag("reel_book_now_button_${reel.id}")
-                ) {
-                    Text(
-                        text = "احجز الآن • $${reel.priceUsd}",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1
-                    )
-                }
+                    modifier = Modifier.weight(0.58f),
+                    testTag = "reel_book_now_button_${reel.id}"
+                )
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -1132,6 +1171,18 @@ fun HomeReelsPreviewStrip(
     }
 }
 
+private val ReelStoryBorderBrush = Brush.linearGradient(
+    colors = listOf(BrandChampagneGold, BrandDustyRose, BrandChampagneGold)
+)
+
+private val ReelStoryVignetteBrush = Brush.verticalGradient(
+    colors = listOf(
+        ObsidianNight.copy(alpha = 0.35f),
+        Color.Transparent,
+        ObsidianNight.copy(alpha = 0.90f)
+    )
+)
+
 @Composable
 private fun HomeReelStoryCard(
     title: String,
@@ -1148,9 +1199,7 @@ private fun HomeReelStoryCard(
         shape = RoundedCornerShape(20.dp),
         border = BorderStroke(
             width = 2.dp,
-            brush = Brush.linearGradient(
-                colors = listOf(BrandChampagneGold, BrandDustyRose, BrandChampagneGold)
-            )
+            brush = ReelStoryBorderBrush
         ),
         modifier = Modifier
             .width(122.dp)
@@ -1168,15 +1217,7 @@ private fun HomeReelStoryCard(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                ObsidianNight.copy(alpha = 0.35f),
-                                Color.Transparent,
-                                ObsidianNight.copy(alpha = 0.90f)
-                            )
-                        )
-                    )
+                    .background(ReelStoryVignetteBrush)
             )
 
             // Top Play 4K Badge

@@ -27,16 +27,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.QrCode2
+import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Security
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -59,18 +56,23 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.ui.theme.BrandChampagneGold
-import com.example.ui.theme.BrandDeepViolet
-import com.example.ui.theme.BrandDustyRose
-import com.example.ui.theme.BrandRoyalPlum
+import com.example.data.model.PaymentReceiptRecord
+import com.example.ui.components.LuxuryGradientButton
+import com.example.ui.components.MandatoryReceiptAttachmentCard
+import com.example.ui.components.ShamCashEmblemIcon
+import com.example.ui.components.ShamCashOfficialCard
+import com.example.ui.components.SmartServiceMediaView
+import com.example.ui.components.UsdtBep20OfficialCard
+import com.example.ui.theme.CharcoalNight
+import com.example.ui.theme.CoralPinkPrimary
+import com.example.ui.theme.DarkCardSurface
 import com.example.ui.theme.EmeraldVerified
-import com.example.ui.theme.ErrorCrimson
-import com.example.ui.theme.ObsidianNight
-import com.example.ui.theme.RoyalGold
-import com.example.ui.theme.SoftGold
+import com.example.ui.theme.ShamCashTeal
+import com.example.ui.theme.SovereignGold
+import com.example.ui.theme.UsdtTetherGreen
+import com.example.ui.theme.VioletBlueVip
 import com.example.ui.viewmodel.WalletTransaction
 
 data class TopUpPackageOption(
@@ -85,7 +87,16 @@ data class TopUpPackageOption(
 fun WalletScreen(
     walletBalanceUsd: Int,
     transactions: List<WalletTransaction>,
-    onTopUpConfirm: (amountUsd: Int, bonusUsd: Int, methodTitle: String) -> Unit,
+    paymentReceipts: List<PaymentReceiptRecord> = emptyList(),
+    onSubmitRealDepositReceipt: (
+        amountUsd: Int,
+        bonusUsd: Int,
+        methodKey: String,
+        receiptImageUri: String,
+        transactionRef: String
+    ) -> Unit = { _, _, _, _, _ -> },
+    onShowMessage: (String) -> Unit = {},
+    onTopUpConfirm: (amountUsd: Int, bonusUsd: Int, methodTitle: String) -> Unit = { _, _, _ -> },
     onBack: () -> Unit
 ) {
     BackHandler(onBack = onBack)
@@ -93,108 +104,116 @@ fun WalletScreen(
     val packages = remember {
         listOf(
             TopUpPackageOption(
+                id = "pkg_10",
+                amountUsd = 10,
+                bonusUsd = 0,
+                titleAr = "باقة $10 (USDT / شام كاش)",
+                subtitleAr = "(حد الإيداع الأساسي)"
+            ),
+            TopUpPackageOption(
                 id = "pkg_50",
                 amountUsd = 50,
                 bonusUsd = 5,
-                titleAr = "باقة $50",
-                subtitleAr = "(احصل على $5 مجاناً)"
+                titleAr = "باقة $50 الملكية",
+                subtitleAr = "(احصل على +$5 هدية VIP)"
             ),
             TopUpPackageOption(
                 id = "pkg_100",
                 amountUsd = 100,
                 bonusUsd = 15,
-                titleAr = "باقة $100",
-                subtitleAr = "(احصل على $15 مجاناً)"
+                titleAr = "باقة $100 الماسية",
+                subtitleAr = "(احصل على +$15 هدية VIP)"
             ),
             TopUpPackageOption(
                 id = "pkg_200",
                 amountUsd = 200,
                 bonusUsd = 35,
-                titleAr = "باقة $200",
-                subtitleAr = "(احصل على $35 مجاناً)"
+                titleAr = "باقة $200 الإمبراطورية",
+                subtitleAr = "(احصل على +$35 هدية VIP)"
             )
         )
     }
 
     var selectedPackageIndex by remember { mutableIntStateOf(0) }
     var customAmountInput by remember { mutableStateOf("") }
-    var selectedTopUpMethod by remember { mutableStateOf("بطاقة ائتمانية (Visa / Mastercard)") }
+    // "USDT_BEP20" or "SHAM_CASH"
+    var selectedGatewayKey by remember { mutableStateOf("USDT_BEP20") }
+    var attachedReceiptUri by remember { mutableStateOf("") }
+    var transactionReferenceInput by remember { mutableStateOf("") }
 
-    val goldCardGradient = Brush.linearGradient(
+    val customParsed = customAmountInput.toIntOrNull()
+    val activeAmount = if (customParsed != null && customParsed > 0) {
+        customParsed
+    } else {
+        packages[selectedPackageIndex].amountUsd
+    }
+    val activeBonus = if (customParsed != null && customParsed > 0) {
+        if (customParsed >= 200) 35 else if (customParsed >= 100) 15 else if (customParsed >= 50) 5 else 0
+    } else {
+        packages[selectedPackageIndex].bonusUsd
+    }
+
+    val vipNightCardGradient = Brush.linearGradient(
         colors = listOf(
-            Color(0xFFF6DF9E),
-            Color(0xFFD9B15E),
-            Color(0xFFB88736)
+            CharcoalNight,
+            DarkCardSurface,
+            Color(0xFF0F293A)
         ),
         start = Offset(0f, 0f),
         end = Offset(900f, 500f)
     )
 
-    val goldButtonGradient = Brush.horizontalGradient(
-        colors = listOf(
-            Color(0xFFE7C77C),
-            Color(0xFFC49746)
-        )
-    )
-
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFF230D30),
-                        Color(0xFF170821),
-                        Color(0xFF12061A)
-                    )
-                )
-            )
+            .background(MaterialTheme.colorScheme.background)
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 22.dp, vertical = 18.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Top Bar: "شراء رصيد - المحفظة"
+            // 1. Top Bar: "الإيداع الحقيقي - شام كاش & USDT"
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Spacer(modifier = Modifier.size(44.dp))
+                    Spacer(modifier = Modifier.size(42.dp))
                     Text(
-                        text = "شراء رصيد - المحفظة",
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
+                        text = "الإيداع الحقيقي • شام كاش & USDT",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        fontWeight = FontWeight.ExtraBold
                     )
                     IconButton(
                         onClick = onBack,
                         modifier = Modifier
-                            .size(44.dp)
+                            .size(42.dp)
                             .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.08f))
+                            .background(MaterialTheme.colorScheme.surface)
+                            .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
                             .testTag("wallet_back_button")
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "رجوع",
-                            tint = BrandChampagneGold
+                            tint = MaterialTheme.colorScheme.onSurface
                         )
                     }
                 }
             }
 
-            // Luxury Metallic Gold Balance Card (Screen 4 of Case Study)
+            // 2. Luxury Sapphire & Sovereign Gold Balance Card
             item {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(175.dp)
                         .clip(RoundedCornerShape(24.dp))
-                        .background(goldCardGradient)
-                        .border(1.5.dp, Color(0xFFFFF1C5).copy(alpha = 0.7f), RoundedCornerShape(24.dp))
+                        .background(vipNightCardGradient)
+                        .border(1.5.dp, SovereignGold.copy(alpha = 0.65f), RoundedCornerShape(24.dp))
                         .padding(22.dp)
                         .testTag("wallet_balance_card")
                 ) {
@@ -207,22 +226,28 @@ fun WalletScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = "رصيدك رصيد VIP",
-                                style = MaterialTheme.typography.titleLarge,
-                                color = Color(0xFF21102B),
-                                fontWeight = FontWeight.Bold
-                            )
+                            Surface(
+                                color = SovereignGold.copy(alpha = 0.18f),
+                                shape = RoundedCornerShape(50),
+                                border = BorderStroke(1.dp, SovereignGold.copy(alpha = 0.65f))
+                            ) {
+                                Text(
+                                    text = "محفظة VIP الموثقة بالإيصالات",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = SovereignGold,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
+                                )
+                            }
 
-                            // Dual overlapping metallic circles emblem
                             Canvas(modifier = Modifier.size(width = 52.dp, height = 32.dp)) {
                                 drawCircle(
-                                    color = Color(0xFF7B5624).copy(alpha = 0.75f),
+                                    color = SovereignGold.copy(alpha = 0.88f),
                                     radius = size.height * 0.46f,
                                     center = Offset(size.width * 0.34f, size.height * 0.5f)
                                 )
                                 drawCircle(
-                                    color = Color(0xFF9E7334).copy(alpha = 0.75f),
+                                    color = VioletBlueVip.copy(alpha = 0.88f),
                                     radius = size.height * 0.46f,
                                     center = Offset(size.width * 0.66f, size.height * 0.5f)
                                 )
@@ -234,218 +259,313 @@ fun WalletScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.Bottom
                         ) {
-                            Text(
-                                text = "رصيدك الحالي:",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = Color(0xFF2A1437),
-                                fontWeight = FontWeight.Bold
-                            )
+                            Column {
+                                Text(
+                                    text = "بوابات الدفع المعتمدة:",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = Color.White.copy(alpha = 0.7f)
+                                )
+                                Text(
+                                    text = "شام كاش السوري • USDT BEP-20",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = EmeraldVerified,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
 
-                            Text(
-                                text = "$${walletBalanceUsd}",
-                                fontSize = 36.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF1A0A24),
-                                modifier = Modifier.testTag("wallet_current_balance_text")
-                            )
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(
+                                    text = "رصيدك الحالي:",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = Color.White.copy(alpha = 0.78f)
+                                )
+                                Text(
+                                    text = "$$walletBalanceUsd",
+                                    fontSize = 34.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = SovereignGold,
+                                    modifier = Modifier.testTag("wallet_current_balance_text")
+                                )
+                            }
                         }
                     }
                 }
             }
 
-            // Quick Top-up Packages Header
+            // 3. Payment Gateway Selector Tabs: USDT (BEP-20) vs شام كاش السوري
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "1. اختر بوابة الدفع الرسمية:",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        // Option 1: USDT (BEP-20) Tether
+                        val isUsdt = selectedGatewayKey == "USDT_BEP20"
+                        Surface(
+                            onClick = { selectedGatewayKey = "USDT_BEP20" },
+                            shape = RoundedCornerShape(20.dp),
+                            color = if (isUsdt) UsdtTetherGreen.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surface,
+                            border = BorderStroke(
+                                width = if (isUsdt) 2.dp else 1.dp,
+                                color = if (isUsdt) UsdtTetherGreen else MaterialTheme.colorScheme.outline
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("select_gateway_usdt_bep20")
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(14.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Surface(
+                                    color = UsdtTetherGreen,
+                                    shape = CircleShape,
+                                    modifier = Modifier.size(38.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(
+                                            text = "₮",
+                                            color = Color.White,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            fontSize = 20.sp
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "USDT (BEP-20)",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                                Text(
+                                    text = "باركود + QR فوري",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = UsdtTetherGreen,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        // Option 2: Syrian Sham Cash (شام كاش السوري)
+                        val isSham = selectedGatewayKey == "SHAM_CASH"
+                        Surface(
+                            onClick = { selectedGatewayKey = "SHAM_CASH" },
+                            shape = RoundedCornerShape(20.dp),
+                            color = if (isSham) ShamCashTeal.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surface,
+                            border = BorderStroke(
+                                width = if (isSham) 2.dp else 1.dp,
+                                color = if (isSham) ShamCashTeal else MaterialTheme.colorScheme.outline
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("select_gateway_sham_cash")
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(14.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Surface(
+                                    color = Color.White,
+                                    shape = CircleShape,
+                                    border = BorderStroke(1.dp, ShamCashTeal),
+                                    modifier = Modifier.size(38.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        ShamCashEmblemIcon(modifier = Modifier.size(26.dp))
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "شام كاش السوري",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                                Text(
+                                    text = "Sham Cash QR",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = ShamCashTeal,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 4. Amount Selection Packages
             item {
                 Text(
-                    text = "شحن رصيد سريع",
+                    text = "2. حدد مبلغ الإيداع المطلوب ($):",
                     style = MaterialTheme.typography.titleLarge,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onBackground,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
 
-            // Package Option Cards
             items(packages.size) { index ->
                 val pkg = packages[index]
                 val isSelected = customAmountInput.isBlank() && selectedPackageIndex == index
 
-                Box(
+                Surface(
+                    onClick = {
+                        customAmountInput = ""
+                        selectedPackageIndex = index
+                    },
+                    shape = RoundedCornerShape(18.dp),
+                    color = if (isSelected) {
+                        SovereignGold.copy(alpha = 0.12f)
+                    } else {
+                        MaterialTheme.colorScheme.surface
+                    },
+                    border = BorderStroke(
+                        width = if (isSelected) 1.5.dp else 1.dp,
+                        color = if (isSelected) SovereignGold else MaterialTheme.colorScheme.outline
+                    ),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(20.dp))
-                        .then(
-                            if (isSelected) {
-                                Modifier.background(goldButtonGradient)
-                            } else {
-                                Modifier
-                                    .background(Color(0xFF331842).copy(alpha = 0.88f))
-                                    .border(
-                                        1.dp,
-                                        BrandChampagneGold.copy(alpha = 0.32f),
-                                        RoundedCornerShape(20.dp)
-                                    )
-                            }
-                        )
-                        .clickable {
-                            customAmountInput = ""
-                            selectedPackageIndex = index
-                        }
-                        .padding(vertical = 18.dp, horizontal = 20.dp)
-                        .testTag("wallet_package_${pkg.amountUsd}"),
-                    contentAlignment = Alignment.Center
+                        .testTag("wallet_package_${pkg.amountUsd}")
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = pkg.titleAr,
-                            style = MaterialTheme.typography.headlineMedium,
-                            color = if (isSelected) Color(0xFF1E0B28) else Color.White,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = pkg.subtitleAr,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = if (isSelected) Color(0xFF2D143B) else BrandChampagneGold,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-            }
-
-            // Custom Amount Input Section
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(
-                        text = "كتابة مبلغ مخصص",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    OutlinedTextField(
-                        value = customAmountInput,
-                        onValueChange = { input ->
-                            customAmountInput = input.filter { it.isDigit() }
-                        },
-                        placeholder = {
-                            Text(
-                                text = "أدخل مبلغاً مخصصاً لشحن الرصيد ($)",
-                                color = Color.White.copy(alpha = 0.5f)
-                            )
-                        },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.Edit,
-                                contentDescription = null,
-                                tint = BrandChampagneGold
-                            )
-                        },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        shape = RoundedCornerShape(18.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = Color(0xFF2E153D),
-                            unfocusedContainerColor = Color(0xFF2A1238),
-                            focusedBorderColor = BrandChampagneGold,
-                            unfocusedBorderColor = BrandChampagneGold.copy(alpha = 0.35f),
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White
-                        ),
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .testTag("wallet_custom_amount_input")
-                    )
-                }
-            }
-
-            // Payment Method Chips for Top-up
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = "وسيلة الشحن المفضلة:",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = BrandChampagneGold
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            .padding(vertical = 14.dp, horizontal = 18.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        val methods = listOf(
-                            "بطاقة ائتمانية (Visa / Mastercard)",
-                            "Apple Pay / Google Pay"
-                        )
-                        methods.forEach { method ->
-                            val selected = selectedTopUpMethod == method
-                            FilterChip(
-                                selected = selected,
-                                onClick = { selectedTopUpMethod = method },
-                                label = { Text(method, maxLines = 1) },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Default.CreditCard,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = BrandChampagneGold,
-                                    selectedLabelColor = ObsidianNight,
-                                    selectedLeadingIconColor = ObsidianNight
-                                )
+                        Surface(
+                            color = if (isSelected) SovereignGold else MaterialTheme.colorScheme.surfaceVariant,
+                            shape = RoundedCornerShape(50)
+                        ) {
+                            Text(
+                                text = pkg.subtitleAr,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = if (isSelected) CharcoalNight else MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
                             )
                         }
+
+                        Text(
+                            text = pkg.titleAr,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }
 
-            // Primary Interactive CTA Button: "تأكيد شحن الرصيد"
+            // Custom Amount Input
             item {
-                val customParsed = customAmountInput.toIntOrNull()
-                val activeAmount = if (customParsed != null && customParsed > 0) {
-                    customParsed
+                OutlinedTextField(
+                    value = customAmountInput,
+                    onValueChange = { input ->
+                        customAmountInput = input.filter { it.isDigit() }
+                    },
+                    placeholder = {
+                        Text(
+                            text = "أو اكتب مبلغاً مخصصاً بالدولار ($)...",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = null,
+                            tint = SovereignGold
+                        )
+                    },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                        focusedBorderColor = SovereignGold,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("wallet_custom_amount_input")
+                )
+            }
+
+            // 5. Active Payment Gateway Card (USDT BEP-20 with Barcode + QR OR Sham Cash with QR)
+            item {
+                if (selectedGatewayKey == "SHAM_CASH") {
+                    ShamCashOfficialCard(
+                        amountUsd = activeAmount,
+                        onCopyMessage = onShowMessage
+                    )
                 } else {
-                    packages[selectedPackageIndex].amountUsd
+                    UsdtBep20OfficialCard(
+                        amountUsd = activeAmount,
+                        onCopyMessage = onShowMessage
+                    )
                 }
-                val activeBonus = if (customParsed != null && customParsed > 0) {
-                    if (customParsed >= 100) 15 else if (customParsed >= 50) 5 else 0
+            }
+
+            // 6. Mandatory Payment Receipt Attachment Section ("اي شخص يقوم بالدفع يرفق ايصال الدفع")
+            item {
+                MandatoryReceiptAttachmentCard(
+                    receiptImageUri = attachedReceiptUri,
+                    transactionRef = transactionReferenceInput,
+                    onReceiptSelected = { uriStr ->
+                        attachedReceiptUri = uriStr
+                        onShowMessage("تم إرفاق صورة إيصال الدفع بنجاح ✓")
+                    },
+                    onTransactionRefChange = { transactionReferenceInput = it }
+                )
+            }
+
+            // 7. Submit Real Deposit Button (Requires Receipt)
+            item {
+                val gatewayLabel = if (selectedGatewayKey == "SHAM_CASH") {
+                    "شام كاش السوري"
                 } else {
-                    packages[selectedPackageIndex].bonusUsd
+                    "USDT (BEP-20)"
                 }
 
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(58.dp)
-                            .clip(RoundedCornerShape(30.dp))
-                            .background(goldButtonGradient)
-                            .clickable {
-                                onTopUpConfirm(activeAmount, activeBonus, selectedTopUpMethod)
+                    LuxuryGradientButton(
+                        text = if (attachedReceiptUri.isBlank()) {
+                            "أرفق إيصال الدفع أولاً لتأكيد إيداع $$activeAmount"
+                        } else if (activeBonus > 0) {
+                            "تأكيد الإيداع وإرسال الإيصال ($$activeAmount + $$activeBonus)"
+                        } else {
+                            "تأكيد الإيداع وإرسال الإيصال ($$activeAmount)"
+                        },
+                        icon = Icons.Default.ReceiptLong,
+                        isEmeraldStyle = attachedReceiptUri.isNotBlank(),
+                        onClick = {
+                            if (attachedReceiptUri.isBlank()) {
+                                onShowMessage("لا يوجد دفع وهمي! يرجى إرفاق صورة إيصال التحويل ($gatewayLabel) أولاً.")
+                            } else {
+                                onSubmitRealDepositReceipt(
+                                    activeAmount,
+                                    activeBonus,
+                                    selectedGatewayKey,
+                                    attachedReceiptUri,
+                                    transactionReferenceInput
+                                )
+                                attachedReceiptUri = ""
+                                transactionReferenceInput = ""
                                 customAmountInput = ""
                             }
-                            .testTag("confirm_wallet_topup_button"),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.AccountBalanceWallet,
-                                contentDescription = null,
-                                tint = Color(0xFF1E0B28),
-                                modifier = Modifier.size(22.dp)
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = if (activeBonus > 0) {
-                                    "تأكيد شحن الرصيد ($$activeAmount + $$activeBonus مجاناً)"
-                                } else {
-                                    "تأكيد شحن الرصيد ($$activeAmount)"
-                                },
-                                style = MaterialTheme.typography.titleLarge,
-                                color = Color(0xFF1E0B28),
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        testTag = "confirm_wallet_topup_button"
+                    )
 
                     Spacer(modifier = Modifier.height(8.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -453,19 +573,112 @@ fun WalletScreen(
                             imageVector = Icons.Default.Security,
                             contentDescription = null,
                             tint = EmeraldVerified,
-                            modifier = Modifier.size(15.dp)
+                            modifier = Modifier.size(16.dp)
                         )
-                        Spacer(modifier = Modifier.width(5.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "عملية شحن مشفرة وآمنة 100% • يضاف الرصيد فوراً",
+                            text = "جميع عمليات الدفع موثقة بإيصالات حقيقية عبر شام كاش و USDT BEP-20",
                             style = MaterialTheme.typography.labelMedium,
-                            color = SoftGold
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
             }
 
-            // Recent Wallet Transactions History
+            // 8. Attached Payment Receipts History
+            if (paymentReceipts.isNotEmpty()) {
+                item {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(top = 8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ReceiptLong,
+                            contentDescription = null,
+                            tint = SovereignGold,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "سجل إيصالات الدفع المرفقة (${paymentReceipts.size})",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onBackground,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                items(paymentReceipts, key = { it.id }) { receipt ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(18.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        ),
+                        border = BorderStroke(1.dp, EmeraldVerified.copy(alpha = 0.5f))
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(54.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .border(1.dp, EmeraldVerified, RoundedCornerShape(12.dp))
+                            ) {
+                                SmartServiceMediaView(
+                                    imageUrl = receipt.receiptImageUri,
+                                    accentHex = 0xFF10B981,
+                                    secondaryHex = 0xFF09111E,
+                                    category = "إيصال",
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                horizontalAlignment = Alignment.End
+                            ) {
+                                Text(
+                                    text = "${receipt.purposeAr} • ${receipt.methodTitleAr}",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                if (receipt.transactionReference.isNotBlank()) {
+                                    Text(
+                                        text = "مرجع العملية: ${receipt.transactionReference}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = SovereignGold
+                                    )
+                                }
+                                Text(
+                                    text = "${receipt.timestampLabel} • إيصال مرفق وموثق ✓",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = EmeraldVerified
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(10.dp))
+
+                            Text(
+                                text = "+$${receipt.amountUsd + receipt.bonusUsd}",
+                                style = MaterialTheme.typography.titleLarge,
+                                color = EmeraldVerified,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 9. Wallet Ledger Transactions History
             if (transactions.isNotEmpty()) {
                 item {
                     Row(
@@ -475,15 +688,15 @@ fun WalletScreen(
                         Icon(
                             imageVector = Icons.Default.History,
                             contentDescription = null,
-                            tint = BrandChampagneGold,
+                            tint = VioletBlueVip,
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = "سجل حركات المحفظة الأخيرة",
                             style = MaterialTheme.typography.titleMedium,
-                            color = BrandChampagneGold,
-                            fontWeight = FontWeight.Bold
+                            color = MaterialTheme.colorScheme.onBackground,
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
                 }
@@ -493,12 +706,9 @@ fun WalletScreen(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.cardColors(
-                            containerColor = Color(0xFF2B1339)
+                            containerColor = MaterialTheme.colorScheme.surface
                         ),
-                        border = BorderStroke(
-                            0.8.dp,
-                            if (tx.isCredit) EmeraldVerified.copy(alpha = 0.45f) else BrandDustyRose.copy(alpha = 0.45f)
-                        )
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
                     ) {
                         Row(
                             modifier = Modifier
@@ -514,7 +724,7 @@ fun WalletScreen(
                                 Icon(
                                     imageVector = Icons.Default.CheckCircle,
                                     contentDescription = null,
-                                    tint = if (tx.isCredit) EmeraldVerified else BrandDustyRose,
+                                    tint = if (tx.isCredit) EmeraldVerified else CoralPinkPrimary,
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(modifier = Modifier.width(10.dp))
@@ -522,21 +732,21 @@ fun WalletScreen(
                                     Text(
                                         text = tx.title,
                                         style = MaterialTheme.typography.bodyLarge,
-                                        color = Color.White,
-                                        fontWeight = FontWeight.SemiBold
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontWeight = FontWeight.Medium
                                     )
                                     Text(
                                         text = tx.timestampLabel,
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = SoftGold
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
                             Text(
                                 text = if (tx.isCredit) "+$${tx.amountUsd}" else "-$${tx.amountUsd}",
-                                style = MaterialTheme.typography.titleLarge,
-                                color = if (tx.isCredit) EmeraldVerified else BrandDustyRose,
-                                fontWeight = FontWeight.Bold
+                                style = MaterialTheme.typography.titleMedium,
+                                color = if (tx.isCredit) EmeraldVerified else CoralPinkPrimary,
+                                fontWeight = FontWeight.SemiBold
                             )
                         }
                     }

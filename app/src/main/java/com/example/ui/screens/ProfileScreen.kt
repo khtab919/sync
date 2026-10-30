@@ -5,13 +5,14 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -26,13 +27,19 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.AdminPanelSettings
+import androidx.compose.material.icons.filled.AlternateEmail
+import androidx.compose.material.icons.filled.AttachMoney
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LightMode
@@ -40,6 +47,7 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayCircleFilled
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.SupportAgent
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.AlertDialog
@@ -47,8 +55,10 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -67,32 +77,39 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.example.R
+import com.example.data.model.AvatarFrameCatalog
 import com.example.data.model.BlockedUser
 import com.example.data.model.PublishedService
 import com.example.data.model.UserProfile
 import com.example.ui.components.BrandActionBadgesRow
+import com.example.ui.components.FramedUserAvatar
+import com.example.ui.components.HeroBannerCanvas
+import com.example.ui.components.LuxuryGradientButton
 import com.example.ui.components.SmartServiceMediaView
 import com.example.ui.components.WingedHeartLogo
-import com.example.ui.theme.BrandChampagneGold
-import com.example.ui.theme.BrandDeepViolet
-import com.example.ui.theme.BrandDustyRose
-import com.example.ui.theme.BrandRoyalPlum
-import com.example.ui.theme.BrandSoftPearl
-import com.example.ui.theme.DeepPlumText
+import com.example.ui.components.copyTextToClipboard
+import com.example.ui.theme.CharcoalNight
+import com.example.ui.theme.CoralPinkPrimary
+import com.example.ui.theme.DarkCardSurface
 import com.example.ui.theme.EmeraldVerified
 import com.example.ui.theme.ErrorCrimson
-import com.example.ui.theme.ObsidianNight
+import com.example.ui.theme.LightBorderGray
+import com.example.ui.theme.PureWhite
+import com.example.ui.theme.SnowGraySurface
+import com.example.ui.theme.SovereignGold
+import com.example.ui.theme.SubtitleGrayText
+import com.example.ui.theme.TitleDarkText
+import com.example.ui.theme.VioletBlueVip
 import com.example.util.LayaliNotificationHelper
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ProfileScreen(
     userProfile: UserProfile,
@@ -106,6 +123,12 @@ fun ProfileScreen(
     isSoftRoseLightTheme: Boolean,
     onToggleThemeMode: () -> Unit,
     onUpdateProfile: (displayName: String, bio: String, cityName: String, roleTitle: String, isAvailable: Boolean) -> Unit,
+    onUpdateUsername: (String) -> Unit = {},
+    onSelectAvatarFrame: (String) -> Unit = {},
+    onUpdateChatPricing: (priceUsd: Int, isEnabled: Boolean) -> Unit = { _, _ -> },
+    onGainProfileXp: (Int) -> Unit = {},
+    onOpenChatTab: () -> Unit = {},
+    onOpenWalletTab: () -> Unit = {},
     onUpdateAvatar: (String) -> Unit,
     onAddShowcasePhoto: (String) -> Unit,
     onOpenMediaViewer: (PublishedService, Boolean) -> Unit,
@@ -124,6 +147,9 @@ fun ProfileScreen(
     val context = LocalContext.current
     var showEditProfileDialog by remember { mutableStateOf(false) }
     var quickBlockInput by remember { mutableStateOf("") }
+    var customChatPriceText by remember(userProfile.chatPriceUsd) {
+        mutableStateOf(userProfile.chatPriceUsd.toString())
+    }
 
     val avatarPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
@@ -141,45 +167,45 @@ fun ProfileScreen(
         }
     }
 
+    val activeFrame = remember(userProfile.selectedFrameId) {
+        AvatarFrameCatalog.findById(userProfile.selectedFrameId)
+    }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
             .testTag("profile_screen_list"),
         contentPadding = PaddingValues(bottom = 110.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 1. Royal Winged-Heart Profile Showcase Card (Matching Brand Board Phone Screen)
+        // 1. Overhauled Royal Profile Hero Card (Framed Avatar + Level + @username + Stats)
         item {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp, vertical = 12.dp),
-                shape = RoundedCornerShape(28.dp),
+                shape = RoundedCornerShape(26.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 ),
-                border = BorderStroke(1.5.dp, BrandChampagneGold.copy(alpha = 0.7f))
+                border = BorderStroke(1.2.dp, SovereignGold.copy(alpha = 0.55f))
             ) {
                 Box(modifier = Modifier.fillMaxWidth()) {
-                    // Top Decorative Brand Banner Background
+                    // Top Hero Banner Background
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(140.dp)
+                            .height(142.dp)
                     ) {
-                        Image(
-                            painter = painterResource(id = R.drawable.img_brand_identity),
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
+                        HeroBannerCanvas(modifier = Modifier.fillMaxSize())
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .background(
                                     Brush.verticalGradient(
                                         colors = listOf(
-                                            BrandDeepViolet.copy(alpha = 0.45f),
+                                            CharcoalNight.copy(alpha = 0.2f),
                                             MaterialTheme.colorScheme.surface
                                         )
                                     )
@@ -195,35 +221,29 @@ fun ProfileScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Surface(
-                                color = BrandDeepViolet.copy(alpha = 0.82f),
+                                color = CharcoalNight.copy(alpha = 0.86f),
                                 shape = RoundedCornerShape(50),
-                                border = BorderStroke(1.dp, BrandChampagneGold)
+                                border = BorderStroke(1.dp, SovereignGold)
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    WingedHeartLogo(modifier = Modifier.size(20.dp))
+                                    WingedHeartLogo(modifier = Modifier.size(18.dp))
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "الملف الشخصي الملكي VIP",
+                                        text = "Lv.${userProfile.level} • ${activeFrame.nameAr}",
                                         style = MaterialTheme.typography.labelMedium,
-                                        color = BrandChampagneGold,
-                                        fontWeight = FontWeight.Bold
+                                        color = SovereignGold,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1
                                     )
                                 }
                             }
 
-                            val isUserLoggedIn = isGoogleSignedIn || isSuperAdmin || userProfile.displayName.isNotBlank()
                             Surface(
-                                onClick = {
-                                    if (isUserLoggedIn) {
-                                        showEditProfileDialog = true
-                                    } else {
-                                        onOpenGoogleSignIn()
-                                    }
-                                },
-                                color = BrandDustyRose,
+                                onClick = { showEditProfileDialog = true },
+                                color = SovereignGold,
                                 shape = RoundedCornerShape(50),
                                 modifier = Modifier.testTag("edit_profile_button")
                             ) {
@@ -232,35 +252,34 @@ fun ProfileScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
-                                        imageVector = if (isUserLoggedIn) Icons.Default.Edit else Icons.Default.Person,
+                                        imageVector = Icons.Default.Edit,
                                         contentDescription = null,
-                                        tint = Color.White,
+                                        tint = CharcoalNight,
                                         modifier = Modifier.size(14.dp)
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text(
-                                        text = if (isUserLoggedIn) "تعديل الملف" else "تسجيل الدخول",
+                                        text = "تعديل الملف و @الاسم",
                                         style = MaterialTheme.typography.labelMedium,
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold
+                                        color = CharcoalNight,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        maxLines = 1
                                     )
                                 }
                             }
                         }
                     }
 
-                    // Profile Avatar, Name, Bio, and Stats
+                    // Framed Avatar + Display Name + @username + Bio + Stats
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 76.dp, start = 18.dp, end = 18.dp, bottom = 18.dp),
+                            .padding(top = 72.dp, start = 18.dp, end = 18.dp, bottom = 18.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Avatar with Camera upload badge
                         Box(
                             contentAlignment = Alignment.BottomEnd,
                             modifier = Modifier
-                                .size(104.dp)
                                 .clickable {
                                     avatarPickerLauncher.launch(
                                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
@@ -268,39 +287,28 @@ fun ProfileScreen(
                                 }
                                 .testTag("profile_avatar_picker")
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .clip(CircleShape)
-                                    .border(3.dp, BrandChampagneGold, CircleShape)
-                                    .background(BrandRoyalPlum),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (userProfile.avatarUri.isNotBlank()) {
-                                    SmartServiceMediaView(
-                                        imageUrl = userProfile.avatarUri,
-                                        accentHex = 0xFFD6789B,
-                                        secondaryHex = 0xFF47256B,
-                                        category = "صورة شخصية",
-                                        modifier = Modifier.fillMaxSize()
-                                    )
-                                } else {
-                                    WingedHeartLogo(modifier = Modifier.size(68.dp))
-                                }
-                            }
+                            FramedUserAvatar(
+                                avatarUri = userProfile.avatarUri,
+                                fallbackInitial = userProfile.displayName.ifBlank { "V" },
+                                frameId = userProfile.selectedFrameId,
+                                level = userProfile.level,
+                                avatarSize = 100.dp,
+                                showLevelBadge = true,
+                                isOnline = userProfile.isAvailableNow
+                            )
 
                             Surface(
-                                color = BrandDustyRose,
+                                color = SovereignGold,
                                 shape = CircleShape,
-                                border = BorderStroke(1.5.dp, Color.White),
+                                border = BorderStroke(1.5.dp, CharcoalNight),
                                 modifier = Modifier.size(34.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         imageVector = Icons.Default.CameraAlt,
                                         contentDescription = "تغيير صورة الملف الشخصي",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(18.dp)
+                                        tint = CharcoalNight,
+                                        modifier = Modifier.size(17.dp)
                                     )
                                 }
                             }
@@ -313,67 +321,121 @@ fun ProfileScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 text = if (hasActiveAccount) {
-                                    userProfile.displayName.ifBlank { userEmail?.substringBefore("@") ?: "حسابي الشخصي" }
+                                    userProfile.displayName.ifBlank { userEmail?.substringBefore("@") ?: "عضو ليالي الملكي" }
                                 } else {
-                                    "لا يوجد حساب مسجل حالياً"
+                                    "عضو نادي ليالي الملكي VIP"
                                 },
                                 style = MaterialTheme.typography.headlineMedium,
                                 color = MaterialTheme.colorScheme.onSurface,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.ExtraBold
                             )
-                            if (hasActiveAccount) {
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Icon(
-                                    imageVector = Icons.Default.Verified,
-                                    contentDescription = "موثق",
-                                    tint = EmeraldVerified,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-                        }
-
-                        if (hasActiveAccount && (userProfile.roleTitle.isNotBlank() || userProfile.telegramHandle.isNotBlank())) {
-                            Text(
-                                text = listOf(userProfile.roleTitle, userProfile.telegramHandle)
-                                    .filter { it.isNotBlank() }
-                                    .joinToString(" • "),
-                                style = MaterialTheme.typography.labelLarge,
-                                color = BrandDustyRose,
-                                fontWeight = FontWeight.Bold
-                            )
-                        } else if (!hasActiveAccount) {
-                            Text(
-                                text = "سجل دخولك أو أنشئ حسابك الجديد لحفظ بياناتك وحجوزاتك",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = BrandChampagneGold,
-                                textAlign = TextAlign.Center
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Icon(
+                                imageVector = Icons.Default.Verified,
+                                contentDescription = "موثق",
+                                tint = VioletBlueVip,
+                                modifier = Modifier.size(22.dp)
                             )
                         }
 
-                        if (hasActiveAccount && userProfile.cityName.isNotBlank()) {
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        // Dedicated @username Pill Badge ("اجعل هناك اسم مستخدم")
+                        val formattedUsername = userProfile.username.ifBlank { "@layali_vip" }.let {
+                            if (it.startsWith("@")) it else "@$it"
+                        }
+                        Surface(
+                            onClick = {
+                                copyTextToClipboard(context, "Username", formattedUsername)
+                            },
+                            color = SovereignGold.copy(alpha = 0.15f),
+                            shape = RoundedCornerShape(50),
+                            border = BorderStroke(1.dp, SovereignGold.copy(alpha = 0.7f)),
+                            modifier = Modifier.testTag("profile_username_badge")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
                                 Icon(
-                                    imageVector = Icons.Default.LocationOn,
-                                    contentDescription = null,
-                                    tint = BrandChampagneGold,
-                                    modifier = Modifier.size(16.dp)
+                                    imageVector = Icons.Default.ContentCopy,
+                                    contentDescription = "نسخ اسم المستخدم",
+                                    tint = SovereignGold,
+                                    modifier = Modifier.size(14.dp)
                                 )
-                                Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = userProfile.cityName,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.primary
+                                    text = formattedUsername,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = SovereignGold,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                                Icon(
+                                    imageVector = Icons.Default.AlternateEmail,
+                                    contentDescription = null,
+                                    tint = SovereignGold,
+                                    modifier = Modifier.size(15.dp)
                                 )
                             }
                         }
 
-                        if (hasActiveAccount && userProfile.bio.isNotBlank()) {
-                            Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        // Paid Chat Price Badge + Role Title
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Surface(
+                                onClick = onOpenChatTab,
+                                color = VioletBlueVip.copy(alpha = 0.16f),
+                                shape = RoundedCornerShape(50),
+                                border = BorderStroke(1.dp, VioletBlueVip)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Chat,
+                                        contentDescription = null,
+                                        tint = VioletBlueVip,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "سعر الدردشة معي: $${userProfile.chatPriceUsd}",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = VioletBlueVip,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            if (userProfile.cityName.isNotBlank()) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.LocationOn,
+                                        contentDescription = null,
+                                        tint = SovereignGold,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    Text(
+                                        text = userProfile.cityName,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = SubtitleGrayText
+                                    )
+                                }
+                            }
+                        }
+
+                        if (userProfile.bio.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(6.dp))
                             Text(
                                 text = userProfile.bio,
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = SubtitleGrayText,
                                 textAlign = TextAlign.Center
                             )
                         }
@@ -382,12 +444,9 @@ fun ProfileScreen(
 
                         // Availability Switch Row
                         Surface(
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
                             shape = RoundedCornerShape(16.dp),
-                            border = BorderStroke(
-                                1.dp,
-                                if (userProfile.isAvailableNow) EmeraldVerified else BrandChampagneGold.copy(alpha = 0.3f)
-                            ),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
@@ -397,10 +456,13 @@ fun ProfileScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
                                     Box(
                                         modifier = Modifier
-                                            .size(10.dp)
+                                            .size(9.dp)
                                             .clip(CircleShape)
                                             .background(if (userProfile.isAvailableNow) EmeraldVerified else ErrorCrimson)
                                     )
@@ -408,17 +470,18 @@ fun ProfileScreen(
                                     Column {
                                         Text(
                                             text = if (userProfile.isAvailableNow) {
-                                                "الحالة: متاح الآن لاستقبال الحجوزات والطلبات"
+                                                "الحالة: متصل الآن للدردشة والحجوزات"
                                             } else {
-                                                "الحالة: مشغول حالياً (الحجز المسبق فقط)"
+                                                "الحالة: الحجز المسبق فقط"
                                             },
                                             style = MaterialTheme.typography.labelLarge,
-                                            color = MaterialTheme.colorScheme.onSurface
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            fontWeight = FontWeight.Bold
                                         )
                                         Text(
-                                            text = "تواصل مباشر عبر تلجرام ${userProfile.telegramHandle}",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            text = "اسم المستخدم: $formattedUsername • إطار: ${activeFrame.nameAr}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = SubtitleGrayText
                                         )
                                     }
                                 }
@@ -444,19 +507,17 @@ fun ProfileScreen(
 
                         Spacer(modifier = Modifier.height(14.dp))
 
-                        // Live Profile Stats (Customer vs Super Admin)
+                        // Profile Stats Row
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            if (isSuperAdmin) {
-                                ProfileStatBox(
-                                    modifier = Modifier.weight(1f),
-                                    countLabel = "${publishedServices.size}",
-                                    title = "عروض منشورة",
-                                    onClick = onOpenAdminTab
-                                )
-                            }
+                            ProfileStatBox(
+                                modifier = Modifier.weight(1f),
+                                countLabel = "Lv.${userProfile.level}",
+                                title = "المستوى",
+                                onClick = { onGainProfileXp(250) }
+                            )
                             ProfileStatBox(
                                 modifier = Modifier.weight(1f),
                                 countLabel = "$bookingsCount",
@@ -475,400 +536,38 @@ fun ProfileScreen(
                                 title = "تقييماتي",
                                 onClick = onOpenExploreTab
                             )
-                            if (isSuperAdmin) {
-                                ProfileStatBox(
-                                    modifier = Modifier.weight(1f),
-                                    countLabel = "${blockedUsers.count { it.status == "active" }}",
-                                    title = "المحظورين",
-                                    onClick = onOpenAdminTab
-                                )
-                            }
                         }
 
                         if (isSuperAdmin) {
                             Spacer(modifier = Modifier.height(12.dp))
-                            Button(
+                            LuxuryGradientButton(
+                                text = "فتح لوحة التحكم الإدارية (Super Admin)",
+                                icon = Icons.Default.AdminPanelSettings,
                                 onClick = onOpenAdminTab,
-                                shape = RoundedCornerShape(16.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = BrandChampagneGold,
-                                    contentColor = ObsidianNight
-                                ),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("open_super_admin_dashboard_button")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.AdminPanelSettings,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "فتح لوحة التحكم الإدارية (Super Admin)",
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
+                                modifier = Modifier.fillMaxWidth(),
+                                testTag = "open_super_admin_dashboard_button"
+                            )
                         }
                     }
                 }
             }
         }
 
-        // 2. 3D Brand Action Badges Row (Matching Brand Board Mobile Screen)
+        // 2. Profile Level & XP Progression Card ("اجعل لفل واطارات للملف الشخصي")
         item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp),
-                shape = RoundedCornerShape(22.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                ),
-                border = BorderStroke(1.dp, BrandChampagneGold.copy(alpha = 0.4f))
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "الوصول السريع وخدمات التواصل المباشر",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    BrandActionBadgesRow(
-                        onFavoritesClick = onOpenFavoritesTab,
-                        onSupportChatClick = { LayaliNotificationHelper.openTelegramSupport(context) },
-                        onDirectCallClick = onOpenExploreTab,
-                        onCitiesClick = onOpenExploreTab
-                    )
-                }
-            }
-        }
+            val progressRatio = (userProfile.xpPoints.toFloat() / userProfile.nextLevelXp.coerceAtLeast(1).toFloat())
+                .coerceIn(0.08f, 1f)
 
-        // 3. My Visual Showcase: Photos, Videos & Prices inside Profile (Super Admin Only)
-        if (isSuperAdmin) {
-        item {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp),
+                    .padding(horizontal = 20.dp)
+                    .testTag("profile_level_xp_card"),
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 ),
-                border = BorderStroke(1.dp, BrandDustyRose.copy(alpha = 0.55f))
-            ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "معرض الصور والفيديو والأسعار في ملفي",
-                                style = MaterialTheme.typography.titleLarge,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Text(
-                                text = "اضغط على أي عرض لمشاهدة الفيديو 4K أو ألبوم الصور أو تعديل السعر",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = {
-                                showcasePhotoPickerLauncher.launch(
-                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                )
-                            },
-                            shape = RoundedCornerShape(14.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = BrandDustyRose,
-                                contentColor = Color.White
-                            ),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("إضافة صورة للملف", fontWeight = FontWeight.Bold)
-                        }
-
-                        OutlinedButton(
-                            onClick = onOpenAdminTab,
-                            shape = RoundedCornerShape(14.dp),
-                            border = BorderStroke(1.dp, BrandChampagneGold),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(
-                                Icons.Default.AdminPanelSettings,
-                                contentDescription = null,
-                                tint = BrandChampagneGold,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("نشر فيديو وسعر جديد", color = MaterialTheme.colorScheme.primary)
-                        }
-                    }
-
-                    if (userProfile.customPhotos.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            text = "الصور المرفوعة من جهازك (${userProfile.customPhotos.size}):",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = BrandChampagneGold
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            items(userProfile.customPhotos) { photoUri ->
-                                Box(
-                                    modifier = Modifier
-                                        .width(150.dp)
-                                        .height(110.dp)
-                                        .clip(RoundedCornerShape(16.dp))
-                                        .border(1.5.dp, BrandChampagneGold, RoundedCornerShape(16.dp))
-                                ) {
-                                    SmartServiceMediaView(
-                                        imageUrl = photoUri,
-                                        accentHex = 0xFFD6789B,
-                                        secondaryHex = 0xFF47256B,
-                                        category = "صورة مرفوعة",
-                                        modifier = Modifier.fillMaxSize()
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        items(publishedServices, key = { "prof_pub_${it.id}" }) { service ->
-                            Card(
-                                modifier = Modifier
-                                    .width(250.dp)
-                                    .clickable { onOpenMediaViewer(service, true) },
-                                shape = RoundedCornerShape(18.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                                ),
-                                border = BorderStroke(1.dp, BrandChampagneGold.copy(alpha = 0.45f))
-                            ) {
-                                Column {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(130.dp)
-                                    ) {
-                                        SmartServiceMediaView(
-                                            imageUrl = service.imageUrl,
-                                            accentHex = 0xFFD6789B,
-                                            secondaryHex = 0xFF47256B,
-                                            category = service.category,
-                                            modifier = Modifier.fillMaxSize()
-                                        )
-                                        Surface(
-                                            color = BrandDustyRose,
-                                            shape = RoundedCornerShape(50),
-                                            modifier = Modifier
-                                                .align(Alignment.TopStart)
-                                                .padding(8.dp)
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.PlayCircleFilled,
-                                                    contentDescription = null,
-                                                    tint = Color.White,
-                                                    modifier = Modifier.size(14.dp)
-                                                )
-                                                Spacer(modifier = Modifier.width(4.dp))
-                                                Text(
-                                                    text = "فيديو + صور",
-                                                    style = MaterialTheme.typography.labelMedium,
-                                                    color = Color.White
-                                                )
-                                            }
-                                        }
-
-                                        Surface(
-                                            onClick = { onEditServicePrice(service) },
-                                            color = BrandChampagneGold,
-                                            shape = RoundedCornerShape(10.dp),
-                                            modifier = Modifier
-                                                .align(Alignment.BottomEnd)
-                                                .padding(8.dp)
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Text(
-                                                    text = "$${service.priceUsd}",
-                                                    style = MaterialTheme.typography.titleMedium,
-                                                    color = ObsidianNight,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                                Spacer(modifier = Modifier.width(4.dp))
-                                                Icon(
-                                                    imageVector = Icons.Default.Edit,
-                                                    contentDescription = "تعديل السعر",
-                                                    tint = ObsidianNight,
-                                                    modifier = Modifier.size(14.dp)
-                                                )
-                                            }
-                                        }
-                                    }
-
-                                    Column(modifier = Modifier.padding(12.dp)) {
-                                        Text(
-                                            text = service.title,
-                                            style = MaterialTheme.typography.titleMedium,
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Text(
-                                            text = "${service.cityName} • ${service.category}",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = BrandDustyRose
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        }
-
-        // 4. Visual Identity Theme Switcher Card (Dark Theme vs Light & Soft Rose Theme)
-        item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                ),
-                border = BorderStroke(1.dp, BrandChampagneGold.copy(alpha = 0.45f))
-            ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    Text(
-                        text = "الهوية البصرية ونمط العرض (Dark / Soft Rose)",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Text(
-                        text = "اختر بين النسخة الداكنة الملكية أو النسخة الفاتحة والناعمة المعتمدة في الهوية البصرية",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        // Dark Theme Option Card
-                        Surface(
-                            onClick = { if (isSoftRoseLightTheme) onToggleThemeMode() },
-                            color = BrandDeepViolet,
-                            shape = RoundedCornerShape(18.dp),
-                            border = BorderStroke(
-                                width = if (!isSoftRoseLightTheme) 2.dp else 0.8.dp,
-                                color = if (!isSoftRoseLightTheme) BrandChampagneGold else Color.White.copy(alpha = 0.2f)
-                            ),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(14.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.DarkMode,
-                                    contentDescription = null,
-                                    tint = BrandChampagneGold,
-                                    modifier = Modifier.size(26.dp)
-                                )
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    text = "النسخة الداكنة",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = "Dark Royal Violet",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = BrandChampagneGold
-                                )
-                            }
-                        }
-
-                        // Soft Rose Light Theme Option Card
-                        Surface(
-                            onClick = { if (!isSoftRoseLightTheme) onToggleThemeMode() },
-                            color = BrandSoftPearl,
-                            shape = RoundedCornerShape(18.dp),
-                            border = BorderStroke(
-                                width = if (isSoftRoseLightTheme) 2.dp else 0.8.dp,
-                                color = if (isSoftRoseLightTheme) BrandDustyRose else DeepPlumText.copy(alpha = 0.2f)
-                            ),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(14.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.LightMode,
-                                    contentDescription = null,
-                                    tint = BrandDustyRose,
-                                    modifier = Modifier.size(26.dp)
-                                )
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    text = "النسخة الفاتحة والناعمة",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = DeepPlumText,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = "Light & Soft Rose",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = BrandDustyRose
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // 5. Quick User Blocking & Telegram Support Card inside Profile (Super Admin Only)
-        if (isSuperAdmin) {
-        item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                ),
-                border = BorderStroke(1.dp, ErrorCrimson.copy(alpha = 0.45f))
+                border = BorderStroke(1.dp, SovereignGold.copy(alpha = 0.5f))
             ) {
                 Column(
                     modifier = Modifier.padding(18.dp),
@@ -879,18 +578,279 @@ fun ProfileScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        Surface(
+                            color = SovereignGold.copy(alpha = 0.18f),
+                            shape = RoundedCornerShape(50),
+                            border = BorderStroke(1.dp, SovereignGold)
+                        ) {
+                            Text(
+                                text = "${userProfile.xpPoints} / ${userProfile.nextLevelXp} XP",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = SovereignGold,
+                                fontWeight = FontWeight.ExtraBold,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                            )
+                        }
+
                         Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "مستوى الحساب الملكي (Lv.${userProfile.level})",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
                             Icon(
-                                imageVector = Icons.Default.Block,
+                                imageVector = Icons.Default.AutoAwesome,
                                 contentDescription = null,
-                                tint = ErrorCrimson,
+                                tint = SovereignGold,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+
+                    LinearProgressIndicator(
+                        progress = { progressRatio },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(10.dp)
+                            .clip(RoundedCornerShape(50)),
+                        color = SovereignGold,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedButton(
+                            onClick = { onGainProfileXp(300) },
+                            shape = RoundedCornerShape(50),
+                            border = BorderStroke(1.dp, SovereignGold),
+                            modifier = Modifier.testTag("boost_profile_xp_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Star,
+                                contentDescription = null,
+                                tint = SovereignGold,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "ترقية المستوى (+300 XP)",
+                                color = SovereignGold,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Text(
+                            text = "كل حجز أو إيداع موثق يرفع لفل حسابك",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = SubtitleGrayText
+                        )
+                    }
+                }
+            }
+        }
+
+        // 3. Avatar Frames Studio ("اجعل لفل واطارات للملف الشخصي")
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .testTag("profile_avatar_frames_card"),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+            ) {
+                Column(
+                    modifier = Modifier.padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            color = VioletBlueVip.copy(alpha = 0.16f),
+                            shape = RoundedCornerShape(50)
+                        ) {
+                            Text(
+                                text = "${AvatarFrameCatalog.frames.size} إطارات ملكية",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = VioletBlueVip,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
+
+                        Text(
+                            text = "إطارات الملف الشخصي الملكية",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
+
+                    Text(
+                        text = "اختر الإطار الذي يظهر حول صورتك في الملف الشخصي والدردشة والريلز:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = SubtitleGrayText
+                    )
+
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(vertical = 4.dp)
+                    ) {
+                        items(AvatarFrameCatalog.frames, key = { it.id }) { frameItem ->
+                            val isSelected = userProfile.selectedFrameId == frameItem.id
+                            val framePrimary = Color(frameItem.primaryHex)
+
+                            Surface(
+                                onClick = { onSelectAvatarFrame(frameItem.id) },
+                                shape = RoundedCornerShape(20.dp),
+                                color = if (isSelected) {
+                                    framePrimary.copy(alpha = 0.14f)
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceVariant
+                                },
+                                border = BorderStroke(
+                                    width = if (isSelected) 2.dp else 1.dp,
+                                    color = if (isSelected) framePrimary else MaterialTheme.colorScheme.outline
+                                ),
+                                modifier = Modifier
+                                    .width(146.dp)
+                                    .testTag("select_avatar_frame_${frameItem.id}")
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    FramedUserAvatar(
+                                        avatarUri = userProfile.avatarUri,
+                                        fallbackInitial = userProfile.displayName.ifBlank { "V" },
+                                        frameId = frameItem.id,
+                                        level = frameItem.minLevel.coerceAtLeast(userProfile.level),
+                                        avatarSize = 62.dp,
+                                        showLevelBadge = true
+                                    )
+
+                                    Text(
+                                        text = frameItem.nameAr,
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+
+                                    Surface(
+                                        color = if (isSelected) framePrimary else CharcoalNight,
+                                        shape = RoundedCornerShape(50)
+                                    ) {
+                                        Text(
+                                            text = if (isSelected) "مفعّل الآن ✓" else "تفعيل الإطار",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (isSelected) CharcoalNight else Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 4. Paid Chat Pricing Configuration Card ("اجعل بإمكان اي شخص تسعير الدردشه معه")
+        item {
+            val presetChatPrices = listOf(5, 10, 15, 25, 50, 100)
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .testTag("profile_chat_pricing_card"),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
+                border = BorderStroke(1.dp, VioletBlueVip.copy(alpha = 0.55f))
+            ) {
+                Column(
+                    modifier = Modifier.padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Switch(
+                            checked = userProfile.isPaidChatEnabled,
+                            onCheckedChange = { enabled ->
+                                onUpdateChatPricing(userProfile.chatPriceUsd, enabled)
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = EmeraldVerified
+                            )
+                        )
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "تسعير الدردشة الخاصة معي ($)",
+                                style = MaterialTheme.typography.titleLarge,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Icon(
+                                imageVector = Icons.Default.AttachMoney,
+                                contentDescription = null,
+                                tint = SovereignGold,
                                 modifier = Modifier.size(22.dp)
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "الحظر السريع والإشعارات الفورية",
-                                style = MaterialTheme.typography.titleLarge,
-                                color = MaterialTheme.colorScheme.primary
+                        }
+                    }
+
+                    Text(
+                        text = "يمكن لأي شخص تحديد سعر فتح الدردشة الخاصة معه. السعر الحالي لحسابك (${userProfile.username}): $${userProfile.chatPriceUsd}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = SubtitleGrayText
+                    )
+
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        presetChatPrices.forEach { price ->
+                            val isSelected = userProfile.chatPriceUsd == price
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = {
+                                    customChatPriceText = price.toString()
+                                    onUpdateChatPricing(price, true)
+                                },
+                                label = {
+                                    Text(
+                                        text = "$$price",
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                },
+                                shape = RoundedCornerShape(50),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = SovereignGold,
+                                    selectedLabelColor = CharcoalNight
+                                )
                             )
                         }
                     }
@@ -900,102 +860,58 @@ fun ProfileScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        OutlinedTextField(
-                            value = quickBlockInput,
-                            onValueChange = { quickBlockInput = it },
-                            placeholder = { Text("اكتب اسم المستخدم أو @Handle لحظره...") },
-                            singleLine = true,
-                            modifier = Modifier.weight(1f)
-                        )
                         Button(
                             onClick = {
-                                if (quickBlockInput.trim().isNotEmpty()) {
-                                    onQuickBlockUser(quickBlockInput.trim(), "حظر مباشر من الملف الشخصي")
-                                    quickBlockInput = ""
-                                }
+                                val parsed = (customChatPriceText.toIntOrNull() ?: 15).coerceIn(1, 5000)
+                                onUpdateChatPricing(parsed, true)
                             },
-                            enabled = quickBlockInput.trim().isNotEmpty(),
+                            shape = RoundedCornerShape(50),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = ErrorCrimson,
-                                contentColor = Color.White
+                                containerColor = SovereignGold,
+                                contentColor = CharcoalNight
                             ),
-                            shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier.height(54.dp)
+                            modifier = Modifier.height(50.dp)
                         ) {
-                            Icon(Icons.Default.Block, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("حظر", fontWeight = FontWeight.Bold)
+                            Text("حفظ السعر", fontWeight = FontWeight.ExtraBold)
                         }
-                    }
 
-                    if (blockedUsers.isNotEmpty()) {
-                        blockedUsers.take(4).forEach { blocked ->
-                            val isBlocked = blocked.status == "active"
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
-                                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "${blocked.blockedIdentifier} (${if (isBlocked) "محظور" else "غير محظور"})",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = if (isBlocked) ErrorCrimson else EmeraldVerified
-                                )
-                                TextButton(onClick = { onToggleBlockStatus(blocked.id, blocked.status) }) {
-                                    Text(
-                                        text = if (isBlocked) "فك الحظر" else "إعادة الحظر",
-                                        color = MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                        }
+                        OutlinedTextField(
+                            value = customChatPriceText,
+                            onValueChange = { input ->
+                                customChatPriceText = input.filter { it.isDigit() }
+                            },
+                            label = { Text("سعر مخصص للدردشة ($)") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.weight(1f)
+                        )
                     }
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Button(
-                            onClick = { LayaliNotificationHelper.openTelegramSupport(context) },
-                            shape = RoundedCornerShape(14.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = BrandDustyRose,
-                                contentColor = Color.White
-                            ),
+                        LuxuryGradientButton(
+                            text = "فتح قسم الدردشة",
+                            icon = Icons.Default.Chat,
+                            isEmeraldStyle = true,
+                            onClick = onOpenChatTab,
                             modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Default.SupportAgent, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("دعم تلجرام @RamaNUR", fontWeight = FontWeight.Bold)
-                        }
-
-                        OutlinedButton(
-                            onClick = onTriggerBroadcastNotification,
-                            shape = RoundedCornerShape(14.dp),
-                            border = BorderStroke(1.dp, BrandChampagneGold),
+                        )
+                        LuxuryGradientButton(
+                            text = "شام كاش & USDT",
+                            icon = Icons.Default.AttachMoney,
+                            isEmeraldStyle = false,
+                            onClick = onOpenWalletTab,
                             modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(
-                                Icons.Default.NotificationsActive,
-                                contentDescription = null,
-                                tint = BrandChampagneGold,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("بث إشعار أندرويد", color = MaterialTheme.colorScheme.primary)
-                        }
+                        )
                     }
                 }
             }
         }
-        }
 
-        // 6. Account & Authentication Card
+        // 5. Quick Access Badges Card
         item {
             Card(
                 modifier = Modifier
@@ -1005,7 +921,479 @@ fun ProfileScreen(
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 ),
-                border = BorderStroke(1.dp, BrandChampagneGold.copy(alpha = 0.35f))
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "الوصول السريع وخدمات التواصل المباشر",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    BrandActionBadgesRow(
+                        onFavoritesClick = onOpenFavoritesTab,
+                        onSupportChatClick = { LayaliNotificationHelper.openTelegramSupport(context) },
+                        onDirectCallClick = onOpenChatTab,
+                        onCitiesClick = onOpenExploreTab
+                    )
+                }
+            }
+        }
+
+        // 6. Super Admin Showcase inside Profile
+        if (isSuperAdmin) {
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                ) {
+                    Column(modifier = Modifier.padding(18.dp)) {
+                        Text(
+                            text = "معرض الصور والفيديو والأسعار (Super Admin)",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "اضغط على أي عرض لمشاهدة الفيديو 4K أو تعديل السعر",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = SubtitleGrayText
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    showcasePhotoPickerLauncher.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                    )
+                                },
+                                shape = RoundedCornerShape(50),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = SovereignGold,
+                                    contentColor = CharcoalNight
+                                ),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(46.dp)
+                            ) {
+                                Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("إضافة صورة", fontWeight = FontWeight.Bold, maxLines = 1)
+                            }
+
+                            OutlinedButton(
+                                onClick = onOpenAdminTab,
+                                shape = RoundedCornerShape(50),
+                                border = BorderStroke(1.dp, VioletBlueVip),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(46.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.AdminPanelSettings,
+                                    contentDescription = null,
+                                    tint = VioletBlueVip,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "نشر عرض جديد",
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+
+                        if (userProfile.customPhotos.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                items(userProfile.customPhotos) { photoUri ->
+                                    Box(
+                                        modifier = Modifier
+                                            .width(140.dp)
+                                            .height(100.dp)
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
+                                    ) {
+                                        SmartServiceMediaView(
+                                            imageUrl = photoUri,
+                                            accentHex = 0xFFF59E0B,
+                                            secondaryHex = 0xFF09111E,
+                                            category = "صورة مرفوعة",
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            items(publishedServices, key = { "prof_pub_${it.id}" }) { service ->
+                                Card(
+                                    modifier = Modifier
+                                        .width(240.dp)
+                                        .clickable { onOpenMediaViewer(service, true) },
+                                    shape = RoundedCornerShape(18.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                    ),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                                ) {
+                                    Column {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(124.dp)
+                                        ) {
+                                            SmartServiceMediaView(
+                                                imageUrl = service.imageUrl,
+                                                accentHex = 0xFFF59E0B,
+                                                secondaryHex = 0xFF09111E,
+                                                category = service.category,
+                                                modifier = Modifier.fillMaxSize()
+                                            )
+                                            Surface(
+                                                color = SovereignGold,
+                                                shape = RoundedCornerShape(50),
+                                                modifier = Modifier
+                                                    .align(Alignment.TopStart)
+                                                    .padding(8.dp)
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.PlayCircleFilled,
+                                                        contentDescription = null,
+                                                        tint = CharcoalNight,
+                                                        modifier = Modifier.size(13.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(4.dp))
+                                                    Text(
+                                                        text = "4K",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = CharcoalNight,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                }
+                                            }
+
+                                            Surface(
+                                                onClick = { onEditServicePrice(service) },
+                                                color = CharcoalNight.copy(alpha = 0.85f),
+                                                shape = RoundedCornerShape(50),
+                                                modifier = Modifier
+                                                    .align(Alignment.BottomEnd)
+                                                    .padding(8.dp)
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(
+                                                        text = "$${service.priceUsd}",
+                                                        style = MaterialTheme.typography.labelLarge,
+                                                        color = SovereignGold,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                    Spacer(modifier = Modifier.width(4.dp))
+                                                    Icon(
+                                                        imageVector = Icons.Default.Edit,
+                                                        contentDescription = "تعديل السعر",
+                                                        tint = VioletBlueVip,
+                                                        modifier = Modifier.size(13.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+
+                                        Column(modifier = Modifier.padding(12.dp)) {
+                                            Text(
+                                                text = service.title,
+                                                style = MaterialTheme.typography.titleMedium,
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Text(
+                                                text = "${service.cityName} • ${service.category}",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = SubtitleGrayText
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 7. Theme Mode Switcher Card
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Text(
+                        text = "نمط الهوية البصرية (لؤلؤي نهاري / ياقوتي ليلي)",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "اختر بين الهوية اللؤلؤية الدافئة أو الكحلي الملكي المرصع بالذهب والزمرد",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = SubtitleGrayText
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Surface(
+                            onClick = { if (!isSoftRoseLightTheme) onToggleThemeMode() },
+                            color = PureWhite,
+                            shape = RoundedCornerShape(16.dp),
+                            border = BorderStroke(
+                                width = if (isSoftRoseLightTheme) 2.dp else 1.dp,
+                                color = if (isSoftRoseLightTheme) SovereignGold else LightBorderGray
+                            ),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(14.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.LightMode,
+                                    contentDescription = null,
+                                    tint = CoralPinkPrimary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "اللؤلؤي الذهبي",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = TitleDarkText,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Royal Pearl Light",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = SubtitleGrayText
+                                )
+                            }
+                        }
+
+                        Surface(
+                            onClick = { if (isSoftRoseLightTheme) onToggleThemeMode() },
+                            color = CharcoalNight,
+                            shape = RoundedCornerShape(16.dp),
+                            border = BorderStroke(
+                                width = if (!isSoftRoseLightTheme) 2.dp else 1.dp,
+                                color = if (!isSoftRoseLightTheme) SovereignGold else Color.White.copy(alpha = 0.2f)
+                            ),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(14.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.DarkMode,
+                                    contentDescription = null,
+                                    tint = SovereignGold,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "الياقوتي الليلي",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Midnight Sapphire VIP",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = SovereignGold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 8. Super Admin Quick Block & Broadcast Card
+        if (isSuperAdmin) {
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    border = BorderStroke(1.dp, ErrorCrimson.copy(alpha = 0.45f))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Block,
+                                contentDescription = null,
+                                tint = ErrorCrimson,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "الحظر السريع والإشعارات الفورية",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedTextField(
+                                value = quickBlockInput,
+                                onValueChange = { quickBlockInput = it },
+                                placeholder = { Text("اسم المستخدم لحظره...") },
+                                singleLine = true,
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier.weight(1f)
+                            )
+                            Button(
+                                onClick = {
+                                    if (quickBlockInput.trim().isNotEmpty()) {
+                                        onQuickBlockUser(quickBlockInput.trim(), "حظر مباشر من الملف الشخصي")
+                                        quickBlockInput = ""
+                                    }
+                                },
+                                enabled = quickBlockInput.trim().isNotEmpty(),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = ErrorCrimson,
+                                    contentColor = Color.White
+                                ),
+                                shape = RoundedCornerShape(50),
+                                modifier = Modifier.height(48.dp)
+                            ) {
+                                Text("حظر", maxLines = 1)
+                            }
+                        }
+
+                        if (blockedUsers.isNotEmpty()) {
+                            blockedUsers.take(4).forEach { blocked ->
+                                val isBlocked = blocked.status == "active"
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "${blocked.blockedIdentifier} (${if (isBlocked) "محظور" else "غير محظور"})",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = if (isBlocked) ErrorCrimson else EmeraldVerified
+                                    )
+                                    TextButton(onClick = { onToggleBlockStatus(blocked.id, blocked.status) }) {
+                                        Text(
+                                            text = if (isBlocked) "فك الحظر" else "إعادة الحظر",
+                                            color = VioletBlueVip
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Button(
+                                onClick = { LayaliNotificationHelper.openTelegramSupport(context) },
+                                shape = RoundedCornerShape(50),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = SovereignGold,
+                                    contentColor = CharcoalNight
+                                ),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(46.dp)
+                            ) {
+                                Icon(Icons.Default.SupportAgent, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("دعم @RamaNUR", fontWeight = FontWeight.Bold, maxLines = 1)
+                            }
+
+                            OutlinedButton(
+                                onClick = onTriggerBroadcastNotification,
+                                shape = RoundedCornerShape(50),
+                                border = BorderStroke(1.dp, VioletBlueVip),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(46.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.NotificationsActive,
+                                    contentDescription = null,
+                                    tint = VioletBlueVip,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("بث إشعار", color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 9. Account & Authentication Card
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp),
+                shape = RoundedCornerShape(22.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
             ) {
                 Column(
                     modifier = Modifier
@@ -1022,30 +1410,31 @@ fun ProfileScreen(
                             Icon(
                                 imageVector = Icons.Default.Person,
                                 contentDescription = null,
-                                tint = BrandChampagneGold,
-                                modifier = Modifier.size(28.dp)
+                                tint = SovereignGold,
+                                modifier = Modifier.size(26.dp)
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Column {
                                 Text(
                                     text = if (isSuperAdmin) {
-                                        "حساب المسؤول الرئيسي متصل (${userEmail ?: "RamaNUR@gmail.com"})"
+                                        "حساب المسؤول الرئيسي (${userEmail ?: "RamaNUR@gmail.com"})"
                                     } else if (isGoogleSignedIn) {
                                         "حساب متصل (${userEmail ?: "مزامنة سحابية نشطة"})"
                                     } else {
                                         "وضع تصفح العملاء VIP"
                                     },
                                     style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = FontWeight.Bold
                                 )
                                 Text(
                                     text = if (isSuperAdmin) {
                                         "صلاحية Super Admin مفعلة بالكامل"
                                     } else {
-                                        "يمكنك تسجيل الدخول بالبريد الإلكتروني وكلمة المرور أو Google"
+                                        "سجل دخولك لمزامنة الحجوزات والمحفظة"
                                     },
                                     style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = SubtitleGrayText
                                 )
                             }
                         }
@@ -1053,7 +1442,7 @@ fun ProfileScreen(
                         if (isGoogleSignedIn || isSuperAdmin) {
                             OutlinedButton(
                                 onClick = onSignOut,
-                                shape = RoundedCornerShape(12.dp),
+                                shape = RoundedCornerShape(50),
                                 border = BorderStroke(1.dp, ErrorCrimson)
                             ) {
                                 Icon(
@@ -1063,52 +1452,45 @@ fun ProfileScreen(
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("خروج", color = ErrorCrimson)
+                                Text("خروج", color = ErrorCrimson, maxLines = 1)
                             }
                         }
                     }
 
-                    Button(
+                    LuxuryGradientButton(
+                        text = if (isGoogleSignedIn || isSuperAdmin) {
+                            "تبديل الحساب / تسجيل الدخول بحساب آخر"
+                        } else {
+                            "تسجيل الدخول بالبريد الإلكتروني وكلمة المرور"
+                        },
+                        icon = Icons.Default.CheckCircle,
                         onClick = onOpenGoogleSignIn,
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = BrandChampagneGold,
-                            contentColor = ObsidianNight
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("profile_open_auth_screen_button")
-                    ) {
-                        Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = if (isGoogleSignedIn || isSuperAdmin) {
-                                "تبديل الحساب / تسجيل الدخول بحساب آخر"
-                            } else {
-                                "تسجيل الدخول بالبريد الإلكتروني وكلمة المرور"
-                            },
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                        modifier = Modifier.fillMaxWidth(),
+                        testTag = "profile_open_auth_screen_button"
+                    )
                 }
             }
         }
     }
 
+    // Complete Profile & @username Edit Dialog
     if (showEditProfileDialog) {
         var nameInput by remember { mutableStateOf(userProfile.displayName) }
+        var usernameInput by remember { mutableStateOf(userProfile.username.ifBlank { "@layali_vip" }) }
         var roleInput by remember { mutableStateOf(userProfile.roleTitle) }
         var cityInput by remember { mutableStateOf(userProfile.cityName) }
         var bioInput by remember { mutableStateOf(userProfile.bio) }
+        var chatPriceInput by remember { mutableStateOf(userProfile.chatPriceUsd.toString()) }
 
         AlertDialog(
             onDismissRequest = { showEditProfileDialog = false },
             containerColor = MaterialTheme.colorScheme.surface,
             title = {
                 Text(
-                    text = "تعديل الملف الشخصي",
+                    text = "تعديل الملف الشخصي واسم المستخدم",
                     style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold
                 )
             },
             text = {
@@ -1117,30 +1499,51 @@ fun ProfileScreen(
                         value = nameInput,
                         onValueChange = { nameInput = it },
                         label = { Text("الاسم الظاهر في الملف الشخصي") },
-                        placeholder = { Text("أدخل اسمك الشخصي") },
                         singleLine = true,
+                        shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
-                        value = roleInput,
-                        onValueChange = { roleInput = it },
-                        label = { Text("اللقب أو الوصف المختصر (اختياري)") },
-                        placeholder = { Text("مثال: عضو VIP") },
+                        value = usernameInput,
+                        onValueChange = { usernameInput = it },
+                        label = { Text("اسم المستخدم (@username)") },
                         singleLine = true,
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("edit_profile_username_input")
+                    )
+                    OutlinedTextField(
+                        value = chatPriceInput,
+                        onValueChange = { chatPriceInput = it.filter { ch -> ch.isDigit() } },
+                        label = { Text("سعر الدردشة معي بالدولار ($)") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
                         value = cityInput,
                         onValueChange = { cityInput = it },
-                        label = { Text("المدينة (مثال: دمشق، حلب، إسطنبول، أنطاليا)") },
+                        label = { Text("المدينة (حلب، دمشق، إسطنبول...)") },
                         singleLine = true,
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = roleInput,
+                        onValueChange = { roleInput = it },
+                        label = { Text("اللقب أو الوصف المختصر") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
                         value = bioInput,
                         onValueChange = { bioInput = it },
-                        label = { Text("نبذة شخصية (اختياري)") },
-                        minLines = 3,
+                        label = { Text("نبذة شخصية") },
+                        minLines = 2,
+                        shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -1155,11 +1558,15 @@ fun ProfileScreen(
                             roleInput,
                             userProfile.isAvailableNow
                         )
+                        onUpdateUsername(usernameInput)
+                        val parsedPrice = (chatPriceInput.toIntOrNull() ?: userProfile.chatPriceUsd).coerceIn(1, 5000)
+                        onUpdateChatPricing(parsedPrice, userProfile.isPaidChatEnabled)
                         showEditProfileDialog = false
                     },
+                    shape = RoundedCornerShape(50),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = BrandDustyRose,
-                        contentColor = Color.White
+                        containerColor = SovereignGold,
+                        contentColor = CharcoalNight
                     )
                 ) {
                     Text("حفظ التعديلات", fontWeight = FontWeight.Bold)
@@ -1167,7 +1574,7 @@ fun ProfileScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showEditProfileDialog = false }) {
-                    Text("إلغاء")
+                    Text("إلغاء", color = SubtitleGrayText)
                 }
             }
         )
@@ -1185,8 +1592,8 @@ private fun ProfileStatBox(
         onClick = onClick,
         modifier = modifier,
         color = MaterialTheme.colorScheme.surfaceVariant,
-        shape = RoundedCornerShape(14.dp),
-        border = BorderStroke(0.8.dp, BrandChampagneGold.copy(alpha = 0.35f))
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, SovereignGold.copy(alpha = 0.35f))
     ) {
         Column(
             modifier = Modifier.padding(vertical = 10.dp, horizontal = 6.dp),
@@ -1195,8 +1602,8 @@ private fun ProfileStatBox(
             Text(
                 text = countLabel,
                 style = MaterialTheme.typography.titleLarge,
-                color = BrandChampagneGold,
-                fontWeight = FontWeight.Bold
+                color = SovereignGold,
+                fontWeight = FontWeight.ExtraBold
             )
             Text(
                 text = title,

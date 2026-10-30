@@ -8,8 +8,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -20,44 +18,35 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AccessTime
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Block
-import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.CardGiftcard
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.PhotoLibrary
-import androidx.compose.material.icons.filled.PlayCircleFilled
-import androidx.compose.material.icons.filled.RateReview
-import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Verified
-import androidx.compose.material.icons.filled.Videocam
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -67,1417 +56,1126 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.data.model.CustomerReview
 import com.example.data.model.ServicePackage
 import com.example.data.model.Venue
-import com.example.ui.components.BrandActionBadgesRow
-import com.example.ui.components.FullScreenMediaViewerDialog
-import com.example.ui.components.InteractiveVideoShowcaseCard
 import com.example.ui.components.SmartServiceMediaView
-import com.example.ui.theme.BrandChampagneGold
-import com.example.ui.theme.BrandDeepViolet
-import com.example.ui.theme.BrandDustyRose
-import com.example.ui.theme.EmeraldVerified
-import com.example.ui.theme.ErrorCrimson
-import com.example.ui.theme.ObsidianNight
-import com.example.ui.theme.RoyalGold
-import com.example.ui.theme.SoftGold
-import com.example.ui.theme.WarmCoral
+import com.example.ui.theme.CharcoalButton
+import com.example.ui.theme.CoralPinkPrimary
+import com.example.ui.theme.LightBorderGray
+import com.example.ui.theme.PureWhite
+import com.example.ui.theme.SnowGraySurface
+import com.example.ui.theme.SubtitleGrayText
+import com.example.ui.theme.TitleDarkText
+import com.example.ui.theme.VioletBlueVip
 import com.example.util.LayaliNotificationHelper
+import java.util.Locale
 
-@OptIn(ExperimentalLayoutApi::class)
+data class VipPlanOption(
+    val id: String,
+    val tierTitle: String,
+    val discountBadge: String,
+    val priceUsd: Int,
+    val durationLabel: String,
+    val benefits: List<String>,
+    val sourcePackage: ServicePackage
+)
+
+fun buildVipPlanOptions(venue: Venue): List<VipPlanOption> {
+    val basePkg = venue.packages.firstOrNull() ?: ServicePackage(
+        id = "pkg_default_${venue.id}",
+        title = venue.name,
+        durationLabel = "ليلة كاملة",
+        priceUsd = venue.startingPriceUsd,
+        description = venue.shortDescription,
+        isPopular = true
+    )
+    val basePrice = venue.startingPriceUsd.coerceAtLeast(15)
+    val secondPkg = venue.packages.getOrNull(1)
+    val thirdPkg = venue.packages.getOrNull(2)
+
+    return listOf(
+        VipPlanOption(
+            id = basePkg.id,
+            tierTitle = "الباقة الفضية • ${basePkg.title}",
+            discountBadge = "توفير 10%",
+            priceUsd = basePrice,
+            durationLabel = basePkg.durationLabel,
+            benefits = listOf(
+                "حجز فوري مؤكد في ${venue.name} (${venue.cityName})",
+                basePkg.description.ifBlank { "استقبال خاص وضيافة ترحيبية فاخرة" },
+                "إمكانية تعديل الموعد مجاناً قبل السهرة"
+            ),
+            sourcePackage = basePkg.copy(priceUsd = basePrice)
+        ),
+        VipPlanOption(
+            id = secondPkg?.id ?: "${basePkg.id}_gold",
+            tierTitle = secondPkg?.let { "الباقة الذهبية • ${it.title}" } ?: "الباقة الذهبية • جناح خاص",
+            discountBadge = "الأكثر طلباً • 20%",
+            priceUsd = secondPkg?.priceUsd ?: (basePrice + 30),
+            durationLabel = secondPkg?.durationLabel ?: "سهرة كاملة VIP",
+            benefits = listOf(
+                "طاولة أو جناح مميز مع أولوية الدخول بدون انتظار",
+                secondPkg?.description ?: "ضيافة متكاملة وقائمة عشاء أو جلسة عناية ملكية",
+                "مضيف شخصي وخدمة كونسيرج مخصصة طوال السهرة",
+                "هدية ترحيبية مجانية عند الوصول"
+            ),
+            sourcePackage = secondPkg ?: basePkg.copy(
+                id = "${basePkg.id}_gold",
+                title = "الباقة الذهبية • ${venue.name}",
+                priceUsd = basePrice + 30
+            )
+        ),
+        VipPlanOption(
+            id = thirdPkg?.id ?: "${basePkg.id}_royal_vip",
+            tierTitle = thirdPkg?.let { "الباقة الملكية VIP • ${it.title}" } ?: "الباقة الملكية VIP الشاملة",
+            discountBadge = "VIP حصري • 30%",
+            priceUsd = thirdPkg?.priceUsd ?: (basePrice + 65),
+            durationLabel = thirdPkg?.durationLabel ?: "ليلة ملكية شاملة",
+            benefits = listOf(
+                "الجناح الملكي الحصري بأعلى درجات الخصوصية والرفاهية",
+                thirdPkg?.description ?: "برنامج ضيافة ملكي مفتوح مع استقبال كبار الشخصيات",
+                "خدمة طلبات خاصة وتنسيق كامل للمناسبة",
+                "دعم فوري مباشر عبر الكونسيرج على مدار الساعة"
+            ),
+            sourcePackage = thirdPkg ?: basePkg.copy(
+                id = "${basePkg.id}_royal_vip",
+                title = "الباقة الملكية VIP • ${venue.name}",
+                priceUsd = basePrice + 65
+            )
+        )
+    )
+}
+
+/**
+ * Modern "Choose a Plan" ModalBottomSheet for Package Selection & Instant Wallet Payment.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ChoosePlanBookingBottomSheet(
+    venue: Venue,
+    walletBalanceUsd: Int,
+    onDismiss: () -> Unit,
+    onConfirmPlanBooking: (ServicePackage, Int) -> Unit,
+    onOpenWalletTopUp: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val planOptions = remember(venue) { buildVipPlanOptions(venue) }
+    var selectedPlanIndex by remember { mutableIntStateOf(0) }
+    val selectedPlan = planOptions.getOrElse(selectedPlanIndex) { planOptions.first() }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        dragHandle = {
+            Box(
+                modifier = Modifier
+                    .padding(top = 10.dp, bottom = 4.dp)
+                    .width(42.dp)
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(LightBorderGray)
+            )
+        }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            // 1. Sheet Header: Circular venue avatar + venue name + close X button
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .testTag("close_choose_plan_sheet")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "إغلاق",
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Column(horizontalAlignment = Alignment.End) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Verified,
+                                contentDescription = "موثق",
+                                tint = VioletBlueVip,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = venue.name,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Text(
+                            text = "${venue.cityName} • ${venue.category}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = SubtitleGrayText
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(CircleShape)
+                            .background(VioletBlueVip.copy(alpha = 0.12f))
+                            .border(1.dp, VioletBlueVip.copy(alpha = 0.35f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = venue.name.take(1),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = VioletBlueVip,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
+
+            Text(
+                text = "اختر الباقة المناسبة",
+                style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            // 2. Tier Selection Cards (Choose a Plan style)
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                planOptions.forEachIndexed { index, plan ->
+                    val isSelected = selectedPlanIndex == index
+                    val borderColor = if (isSelected) {
+                        if (index == 2) CoralPinkPrimary else VioletBlueVip
+                    } else {
+                        MaterialTheme.colorScheme.outline
+                    }
+
+                    Surface(
+                        onClick = { selectedPlanIndex = index },
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (isSelected) {
+                            borderColor.copy(alpha = 0.06f)
+                        } else {
+                            MaterialTheme.colorScheme.surface
+                        },
+                        border = BorderStroke(
+                            width = if (isSelected) 1.5.dp else 1.dp,
+                            color = borderColor
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("plan_tier_card_$index")
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = isSelected,
+                                onClick = { selectedPlanIndex = index },
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = borderColor,
+                                    unselectedColor = SubtitleGrayText
+                                )
+                            )
+
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(horizontal = 8.dp),
+                                horizontalAlignment = Alignment.End
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Surface(
+                                        color = if (isSelected) borderColor else MaterialTheme.colorScheme.surfaceVariant,
+                                        shape = RoundedCornerShape(50)
+                                    ) {
+                                        Text(
+                                            text = plan.discountBadge,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (isSelected) PureWhite else SubtitleGrayText,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                            maxLines = 1
+                                        )
+                                    }
+                                    Text(
+                                        text = plan.tierTitle,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontWeight = FontWeight.Medium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(4.dp))
+
+                                Row(
+                                    verticalAlignment = Alignment.Bottom,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(
+                                        text = "/ ${plan.durationLabel}",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = SubtitleGrayText
+                                    )
+                                    Text(
+                                        text = String.format(Locale.US, "$%d.00", plan.priceUsd),
+                                        fontSize = 22.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 3. Benefits List with small colored dots & thin HorizontalDividers
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                    Text(
+                        text = "مميزات الباقة المختارة",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = SubtitleGrayText,
+                        modifier = Modifier.padding(bottom = 6.dp)
+                    )
+                    selectedPlan.benefits.forEachIndexed { idx, benefit ->
+                        if (idx > 0) {
+                            HorizontalDivider(
+                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
+                                modifier = Modifier.padding(vertical = 6.dp)
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = benefit,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontWeight = FontWeight.Normal,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Box(
+                                modifier = Modifier
+                                    .size(7.dp)
+                                    .clip(CircleShape)
+                                    .background(if (idx % 2 == 0) VioletBlueVip else CoralPinkPrimary)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 4. Quick Payment Footer: Current balance + top-up link + 50.dp capsule CTA + Cancel capsule
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "شحن الرصيد +",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = CoralPinkPrimary,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .clickable { onOpenWalletTopUp() }
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                        .testTag("sheet_topup_wallet_link")
+                )
+
+                Text(
+                    text = String.format(Locale.US, "رصيدك الحالي: $%d.00", walletBalanceUsd),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+
+            Button(
+                onClick = {
+                    onConfirmPlanBooking(selectedPlan.sourcePackage, selectedPlan.priceUsd)
+                },
+                shape = RoundedCornerShape(50),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = CoralPinkPrimary,
+                    contentColor = PureWhite
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp)
+                    .testTag("sheet_confirm_booking_button")
+            ) {
+                Text(
+                    text = "تأكيد الحجز والدفع • $${selectedPlan.priceUsd}",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Normal,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Button(
+                onClick = onDismiss,
+                shape = RoundedCornerShape(50),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurface
+                ),
+                elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(46.dp)
+                    .testTag("sheet_cancel_booking_button")
+            ) {
+                Text(
+                    text = "إلغاء",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Normal,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
 @Composable
 fun VenueDetailScreen(
     venue: Venue,
+    liveReviews: List<CustomerReview>,
     isFavorite: Boolean,
-    userReviewsForVenue: List<CustomerReview>,
-    defaultAuthorName: String,
     isSubmitting: Boolean,
-    isSuperAdmin: Boolean = false,
+    isAdminUnlocked: Boolean = false,
+    walletBalanceUsd: Int = 0,
     onBack: () -> Unit,
     onToggleFavorite: () -> Unit,
-    onOpenCheckout: (ServicePackage) -> Unit = {},
-    onConfirmBooking: (
-        serviceTitle: String,
-        unitPriceUsd: Int,
-        bookingDate: String,
-        timeSlot: String,
-        guestCount: Int,
-        notes: String
-    ) -> Unit,
-    onSubmitReview: (
-        authorName: String,
-        serviceType: String,
-        rating: Int,
-        comment: String
-    ) -> Unit,
-    blockedAuthors: Set<String> = emptySet(),
-    onBlockAuthor: (String) -> Unit = {},
-    onUpdateVenuePrice: (Int) -> Unit = {},
-    onUpdateVenuePhoto: (String) -> Unit = {}
+    onProceedToCheckout: (ServicePackage) -> Unit,
+    onSubmitReview: (authorName: String, serviceType: String, rating: Int, comment: String) -> Unit,
+    onDeleteReview: (String) -> Unit,
+    onUpdateStartingPrice: (Int) -> Unit = {},
+    onUpdatePhoto: (String) -> Unit = {},
+    onOpenWalletTopUp: () -> Unit = {}
 ) {
-    BackHandler(onBack = onBack)
+    BackHandler { onBack() }
     val context = LocalContext.current
 
-    var selectedPackage by remember(venue.id, venue.startingPriceUsd) {
-        mutableStateOf(venue.packages.firstOrNull())
-    }
-    var showBookingDialog by remember { mutableStateOf(false) }
-    var showReviewDialog by remember { mutableStateOf(false) }
-    var showMediaViewer by remember { mutableStateOf<Boolean?>(null) } // true = video, false = photos
-    var showEditPriceDialog by remember { mutableStateOf(false) }
-    var newPriceInput by remember(venue.startingPriceUsd) {
-        mutableStateOf(venue.startingPriceUsd.toString())
-    }
+    var showChoosePlanSheet by remember { mutableStateOf(false) }
+    var showReviewSheet by remember { mutableStateOf(false) }
+    var showAdminEditSheet by remember { mutableStateOf(false) }
 
-    val presetPhotoKeys = remember(venue.visualPresetKey) {
-        listOf(
-            venue.visualPresetKey.ifBlank { "palace_qudud_hall" },
-            "palace_qudud_hall",
-            "card_qudud",
-            "card_lounge",
-            "card_spa",
-            "card_vip_night"
-        ).distinct()
-    }
-    val pagerState = rememberPagerState(pageCount = { presetPhotoKeys.size })
-
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 116.dp)
+            modifier = Modifier
+                .fillMaxSize()
+                .testTag("venue_detail_list"),
+            contentPadding = PaddingValues(bottom = 110.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Top Bar ("تفاصيل الخدمة") + Swipeable Image Carousel (Screen 3 of UI/UX Case Study)
+            // Top Header & Admin-only Media Card
             item {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    // Header Title Bar matching Screen 3
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    // Navigation Row
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(
-                            onClick = onToggleFavorite,
-                            modifier = Modifier
-                                .size(44.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .testTag("venue_detail_favorite_button")
-                        ) {
-                            Icon(
-                                imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                contentDescription = "المفضلة",
-                                tint = if (isFavorite) WarmCoral else BrandChampagneGold
-                            )
-                        }
-
-                        Text(
-                            text = "تفاصيل الخدمة",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.onBackground,
-                            fontWeight = FontWeight.Bold
-                        )
-
                         IconButton(
                             onClick = onBack,
                             modifier = Modifier
                                 .size(44.dp)
                                 .clip(CircleShape)
                                 .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .testTag("venue_detail_back_button")
+                                .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                                .testTag("detail_back_button")
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "رجوع",
-                                tint = BrandChampagneGold
-                            )
-                        }
-                    }
-
-                    // Swipeable Image Carousel (HorizontalPager) with Pagination Dots
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp)
-                            .height(250.dp)
-                            .clip(RoundedCornerShape(24.dp))
-                            .border(1.2.dp, BrandChampagneGold.copy(alpha = 0.55f), RoundedCornerShape(24.dp))
-                    ) {
-                        HorizontalPager(
-                            state = pagerState,
-                            modifier = Modifier.fillMaxSize()
-                        ) { page ->
-                            SmartServiceMediaView(
-                                imageUrl = presetPhotoKeys[page],
-                                accentHex = venue.accentHex,
-                                secondaryHex = venue.secondaryHex,
-                                category = venue.category,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .clickable { showMediaViewer = false }
+                                tint = MaterialTheme.colorScheme.onSurface
                             )
                         }
 
-                        // Top-right 4K Video Badge inside Carousel
                         Row(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(12.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Surface(
-                                onClick = { showMediaViewer = true },
-                                color = BrandDustyRose.copy(alpha = 0.92f),
-                                shape = RoundedCornerShape(50),
-                                border = BorderStroke(1.dp, BrandChampagneGold)
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                            if (isAdminUnlocked) {
+                                IconButton(
+                                    onClick = { showAdminEditSheet = true },
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .clip(CircleShape)
+                                        .background(VioletBlueVip.copy(alpha = 0.12f))
+                                        .border(1.dp, VioletBlueVip, CircleShape)
+                                        .testTag("detail_admin_edit_button")
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.PlayCircleFilled,
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = "فيديو 4K",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold
+                                        imageVector = Icons.Default.Edit,
+                                        contentDescription = "تعديل السعر والصورة",
+                                        tint = VioletBlueVip
                                     )
                                 }
                             }
 
-                            if (isSuperAdmin) {
+                            IconButton(
+                                onClick = onToggleFavorite,
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                                    .testTag("detail_favorite_button")
+                            ) {
+                                Icon(
+                                    imageVector = if (isFavorite) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                                    contentDescription = "حفظ",
+                                    tint = if (isFavorite) CoralPinkPrimary else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+
+                    // Creator/Venue Header Card
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(24.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Surface(
-                                    onClick = { showEditPriceDialog = true },
-                                    color = BrandChampagneGold,
+                                    color = VioletBlueVip.copy(alpha = 0.1f),
                                     shape = RoundedCornerShape(50)
                                 ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Edit,
-                                            contentDescription = null,
-                                            tint = ObsidianNight,
-                                            modifier = Modifier.size(13.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "${venue.cityName} • ${venue.category}",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = VioletBlueVip,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                    )
+                                }
+
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Column(horizontalAlignment = Alignment.End) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Verified,
+                                                contentDescription = "موثق",
+                                                tint = VioletBlueVip,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Text(
+                                                text = venue.name,
+                                                style = MaterialTheme.typography.titleLarge,
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                                fontWeight = FontWeight.Medium,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
                                         Text(
-                                            text = "$${venue.startingPriceUsd}",
+                                            text = venue.providerDisplayName,
                                             style = MaterialTheme.typography.labelMedium,
-                                            color = ObsidianNight,
-                                            fontWeight = FontWeight.Bold
+                                            color = SubtitleGrayText
+                                        )
+                                    }
+
+                                    Box(
+                                        modifier = Modifier
+                                            .size(44.dp)
+                                            .clip(CircleShape)
+                                            .background(VioletBlueVip.copy(alpha = 0.12f))
+                                            .border(1.dp, VioletBlueVip.copy(alpha = 0.35f), CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = venue.name.take(1),
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = VioletBlueVip,
+                                            fontWeight = FontWeight.Medium
                                         )
                                     }
                                 }
                             }
-                        }
 
-                        // Carousel Indicator Dots at the bottom center (• • ● •)
-                        Row(
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .padding(bottom = 12.dp)
-                                .clip(RoundedCornerShape(50))
-                                .background(ObsidianNight.copy(alpha = 0.65f))
-                                .padding(horizontal = 12.dp, vertical = 6.dp),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            repeat(presetPhotoKeys.size) { idx ->
-                                val isCurrent = pagerState.currentPage == idx
-                                Box(
-                                    modifier = Modifier
-                                        .size(if (isCurrent) 9.dp else 6.dp)
-                                        .clip(CircleShape)
-                                        .background(
-                                            if (isCurrent) BrandChampagneGold else Color.White.copy(alpha = 0.45f)
-                                        )
-                                )
-                            }
-                        }
-                    }
+                            // Admin-assigned Media View (or clean placeholder)
+                            SmartServiceMediaView(
+                                imageUrl = venue.visualPresetKey,
+                                accentHex = venue.accentHex,
+                                secondaryHex = venue.secondaryHex,
+                                category = venue.category,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(230.dp)
+                                    .clip(RoundedCornerShape(18.dp))
+                            )
 
-                    // Large Bold Service Title, Rating & Location below Carousel (Screen 3 hierarchy)
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 14.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Surface(
-                                color = RoyalGold,
-                                shape = RoundedCornerShape(50)
-                            ) {
-                                Text(
-                                    text = venue.category,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = ObsidianNight,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-                                )
-                            }
-                            Surface(
-                                color = EmeraldVerified.copy(alpha = 0.22f),
-                                shape = RoundedCornerShape(50),
-                                border = BorderStroke(1.dp, EmeraldVerified)
+                            // Price & Rating summary row
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.Verified,
+                                        imageVector = Icons.Default.Star,
                                         contentDescription = null,
-                                        tint = EmeraldVerified,
-                                        modifier = Modifier.size(14.dp)
+                                        tint = CoralPinkPrimary,
+                                        modifier = Modifier.size(18.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(4.dp))
                                     Text(
-                                        text = venue.providerDisplayName.ifBlank { "مركز معتمد وموثوق" },
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = EmeraldVerified,
-                                        fontWeight = FontWeight.Bold
+                                        text = "${venue.ratingAverage} (${venue.reviewCount} تقييم)",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = SubtitleGrayText
+                                    )
+                                }
+
+                                Text(
+                                    text = String.format(Locale.US, "يبدأ من $%d.00", venue.startingPriceUsd),
+                                    fontSize = 20.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+
+                            Text(
+                                text = venue.fullDescription,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = SubtitleGrayText
+                            )
+
+                            // Secondary 2-button capsule row ("مراسلة", "إكرامية / طلب خاص")
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Button(
+                                    onClick = { LayaliNotificationHelper.openTelegramSupport(context) },
+                                    shape = RoundedCornerShape(50),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                        contentColor = MaterialTheme.colorScheme.onSurface
+                                    ),
+                                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(44.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.Chat,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                        tint = VioletBlueVip
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "مراسلة",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Normal,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+
+                                Button(
+                                    onClick = { showChoosePlanSheet = true },
+                                    shape = RoundedCornerShape(50),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                        contentColor = MaterialTheme.colorScheme.onSurface
+                                    ),
+                                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(44.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.CardGiftcard,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                        tint = CoralPinkPrimary
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "إكرامية / باقات",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Normal,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
                             }
                         }
+                    }
+                }
+            }
 
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = venue.name,
-                            style = MaterialTheme.typography.headlineMedium,
-                            color = Color.White
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
+            // Reviews Section
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.LocationOn,
-                                    contentDescription = null,
-                                    tint = RoyalGold,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "${venue.cityName} (${venue.country}) • ${venue.neighborhood}",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = SoftGold
-                                )
-                            }
-
-                            Surface(
-                                color = BrandChampagneGold,
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Text(
-                                    text = "$${venue.startingPriceUsd}",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = ObsidianNight,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Rating, Opening Hours & Highlights
-            item {
-                Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Star,
-                                contentDescription = null,
-                                tint = RoyalGold,
-                                modifier = Modifier.size(22.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "${venue.ratingAverage}",
-                                style = MaterialTheme.typography.titleLarge,
-                                color = RoyalGold
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "(${venue.reviewCount + userReviewsForVenue.size} تقييم عميل موثق)",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.AccessTime,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = venue.openingHours,
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    Text(
-                        text = "تفاصيل ومزايا الخدمة",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = BrandChampagneGold,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        venue.badges.forEach { badge ->
-                            Surface(
-                                color = MaterialTheme.colorScheme.surfaceVariant,
+                            Button(
+                                onClick = { showReviewSheet = true },
                                 shape = RoundedCornerShape(50),
-                                border = BorderStroke(1.dp, BrandChampagneGold.copy(alpha = 0.45f))
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    contentColor = MaterialTheme.colorScheme.onSurface
+                                ),
+                                elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp),
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                                modifier = Modifier.testTag("open_review_dialog_button")
                             ) {
                                 Text(
-                                    text = badge,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = SoftGold,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                                    text = "+ أضف تقييمك",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Normal,
+                                    maxLines = 1
                                 )
                             }
-                        }
-                    }
 
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Text(
-                        text = "تفاصيل الخدمة",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = BrandChampagneGold,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = venue.fullDescription,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(
-                            text = "• خدمة احترافية راقية وسريعة بأعلى معايير الخصوصية",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = SoftGold
-                        )
-                        Text(
-                            text = "• أجنحة ملكية خاصة ومجهزة بالكامل للسهرات والسبا",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = SoftGold
-                        )
-                        Text(
-                            text = "• تأكيد فوري للحجز مع دعم مباشر عبر تلجرام @RamaNUR",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = SoftGold
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // 3D Brand Action Badges from Visual Identity Board
-                    BrandActionBadgesRow(
-                        onFavoritesClick = onToggleFavorite,
-                        onSupportChatClick = { LayaliNotificationHelper.openTelegramSupport(context) },
-                        onDirectCallClick = {
-                            val pkg = selectedPackage ?: venue.packages.firstOrNull()
-                            if (pkg != null) onOpenCheckout(pkg) else showBookingDialog = true
-                        },
-                        onCitiesClick = onBack
-                    )
-
-                    Spacer(modifier = Modifier.height(18.dp))
-
-                    // Video & Photo Showcase Section
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Videocam,
-                                contentDescription = null,
-                                tint = BrandDustyRose,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "عرض الفيديو والصور الحية للمركز",
-                                style = MaterialTheme.typography.titleLarge,
-                                color = MaterialTheme.colorScheme.primary
+                                text = "آراء الضيوف الموثقة",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontWeight = FontWeight.Medium
                             )
                         }
 
-                        TextButton(onClick = { showMediaViewer = false }) {
-                            Icon(
-                                imageVector = Icons.Default.PhotoLibrary,
-                                contentDescription = null,
-                                tint = BrandChampagneGold,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("فتح الألبوم الكامل", color = BrandChampagneGold)
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    InteractiveVideoShowcaseCard(
-                        videoTitle = venue.showcaseVideoTitle,
-                        durationLabel = venue.showcaseDuration,
-                        cityName = venue.cityName,
-                        priceUsd = venue.startingPriceUsd,
-                        imageUrl = venue.visualPresetKey
-                    )
-
-                    if (venue.galleryHighlights.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            itemsIndexed(venue.galleryHighlights) { index, photoCaption ->
-                                val presetKey = presetPhotoKeys[index % presetPhotoKeys.size]
-                                Card(
-                                    modifier = Modifier
-                                        .width(215.dp)
-                                        .height(125.dp)
-                                        .clickable { showMediaViewer = false },
-                                    shape = RoundedCornerShape(16.dp),
-                                    border = BorderStroke(1.dp, BrandChampagneGold.copy(alpha = 0.55f))
+                        venue.curatedReviews.forEach { review ->
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
-                                    Box(modifier = Modifier.fillMaxSize()) {
-                                        SmartServiceMediaView(
-                                            imageUrl = presetKey,
-                                            accentHex = venue.accentHex,
-                                            secondaryHex = venue.secondaryHex,
-                                            category = venue.category,
-                                            modifier = Modifier.fillMaxSize()
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = "${review.rating}.0 ★",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = CoralPinkPrimary,
+                                            fontWeight = FontWeight.Medium
                                         )
-                                        Row(
-                                            modifier = Modifier
-                                                .align(Alignment.BottomStart)
-                                                .fillMaxWidth()
-                                                .background(ObsidianNight.copy(alpha = 0.78f))
-                                                .padding(horizontal = 10.dp, vertical = 6.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.PhotoLibrary,
-                                                contentDescription = null,
-                                                tint = BrandChampagneGold,
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text(
-                                                text = photoCaption,
-                                                style = MaterialTheme.typography.labelMedium,
-                                                color = Color.White,
-                                                maxLines = 1
-                                            )
-                                        }
+                                        Text(
+                                            text = "${review.authorName} • ${review.cityBadge}",
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            fontWeight = FontWeight.Medium
+                                        )
                                     }
+                                    Text(
+                                        text = review.comment,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = SubtitleGrayText
+                                    )
                                 }
                             }
                         }
                     }
                 }
             }
-
-            // Packages Section Header
-            item {
-                Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "اختر الباقة أو الخدمة للحجز المباشر",
-                                style = MaterialTheme.typography.titleLarge,
-                                color = SoftGold
-                            )
-                            Text(
-                                text = "يمكنك طلب جلسة مساج، حمام ملكي، أو حجز طاولة سهرة فنية مباشرة",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        if (isSuperAdmin) {
-                            OutlinedButton(
-                                onClick = { showEditPriceDialog = true },
-                                shape = RoundedCornerShape(12.dp),
-                                border = BorderStroke(1.dp, BrandChampagneGold)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Edit,
-                                    contentDescription = null,
-                                    tint = BrandChampagneGold,
-                                    modifier = Modifier.size(15.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("تعديل السعر", color = BrandChampagneGold)
-                            }
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                }
-            }
-
-            // Packages List
-            items(venue.packages, key = { it.id }) { pkg ->
-                val isSelected = selectedPackage?.id == pkg.id
-                PackageCardItem(
-                    pkg = pkg,
-                    isSelected = isSelected,
-                    onSelect = { selectedPackage = pkg },
-                    onBookNowClick = {
-                        selectedPackage = pkg
-                        onOpenCheckout(pkg)
-                    }
-                )
-            }
-
-            // Verified Customer Reviews Section
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "تقييمات العملاء الموثوقة",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = SoftGold
-                        )
-                        Text(
-                            text = "تقييمات حقيقية من عملاء قاموا بالحجز والتجربة",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    OutlinedButton(
-                        onClick = { showReviewDialog = true },
-                        shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(1.dp, RoyalGold),
-                        modifier = Modifier.testTag("add_venue_review_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.RateReview,
-                            contentDescription = null,
-                            tint = RoyalGold,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "أضف تقييمك",
-                            color = RoyalGold,
-                            style = MaterialTheme.typography.labelLarge
-                        )
-                    }
-                }
-            }
-
-            // User's Cloud Reviews for this Venue
-            val visibleUserReviews = userReviewsForVenue.filterNot {
-                blockedAuthors.contains(it.authorName.trim())
-            }
-            items(visibleUserReviews, key = { "user_${it.id}" }) { review ->
-                ReviewItemCard(
-                    authorName = review.authorName,
-                    cityBadge = review.cityName,
-                    serviceTitle = review.serviceType,
-                    rating = review.rating.toInt(),
-                    comment = review.comment,
-                    dateLabel = "تقييمك الموثق",
-                    isCurrentUser = true,
-                    onBlockAuthor = if (isSuperAdmin) ({ onBlockAuthor(review.authorName) }) else null
-                )
-            }
-
-            // Curated Verified Reviews (filtered by blocked users)
-            val visibleCuratedReviews = venue.curatedReviews.filterNot {
-                blockedAuthors.contains(it.authorName.trim())
-            }
-            items(visibleCuratedReviews, key = { it.id }) { review ->
-                ReviewItemCard(
-                    authorName = review.authorName,
-                    cityBadge = review.cityBadge,
-                    serviceTitle = review.serviceTitle,
-                    rating = review.rating,
-                    comment = review.comment,
-                    dateLabel = review.dateLabel,
-                    isCurrentUser = false,
-                    onBlockAuthor = if (isSuperAdmin) ({ onBlockAuthor(review.authorName) }) else null
-                )
-            }
         }
 
-        // Sticky Bottom Direct Booking Bar (Screen 3 of UI/UX Case Study: Price per night/hour + wide gold CTA "بدء الحجز والطلب")
+        // Bottom Sticky Capsule CTA Bar
         Surface(
             modifier = Modifier.align(Alignment.BottomCenter),
             color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 12.dp,
-            shadowElevation = 16.dp,
-            border = BorderStroke(1.dp, BrandChampagneGold.copy(alpha = 0.45f))
+            tonalElevation = 8.dp,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp, vertical = 14.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(0.9f)) {
+                Button(
+                    onClick = { showChoosePlanSheet = true },
+                    shape = RoundedCornerShape(50),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = CoralPinkPrimary,
+                        contentColor = PureWhite
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp)
+                        .testTag("open_booking_sheet_button")
+                ) {
                     Text(
-                        text = "$${selectedPackage?.priceUsd ?: venue.startingPriceUsd} / ليلة",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = BrandChampagneGold,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = selectedPackage?.title ?: venue.name,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = SoftGold,
-                        maxLines = 1
+                        text = "احجز الآن • باقات تبدأ من $${venue.startingPriceUsd}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Normal,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
-                Spacer(modifier = Modifier.width(12.dp))
+            }
+        }
+    }
+
+    if (showChoosePlanSheet) {
+        ChoosePlanBookingBottomSheet(
+            venue = venue,
+            walletBalanceUsd = walletBalanceUsd,
+            onDismiss = { showChoosePlanSheet = false },
+            onConfirmPlanBooking = { selectedPkg, _ ->
+                showChoosePlanSheet = false
+                onProceedToCheckout(selectedPkg)
+            },
+            onOpenWalletTopUp = {
+                showChoosePlanSheet = false
+                onOpenWalletTopUp()
+            }
+        )
+    }
+
+    if (showReviewSheet) {
+        AddReviewDialog(
+            venue = venue,
+            isSubmitting = isSubmitting,
+            onDismiss = { showReviewSheet = false },
+            onConfirmReview = { author, service, rating, comment ->
+                onSubmitReview(author, service, rating, comment)
+                showReviewSheet = false
+            }
+        )
+    }
+
+    if (showAdminEditSheet && isAdminUnlocked) {
+        AdminEditVenueSheet(
+            venue = venue,
+            onDismiss = { showAdminEditSheet = false },
+            onSavePrice = { newPrice ->
+                onUpdateStartingPrice(newPrice)
+                showAdminEditSheet = false
+            },
+            onSelectPhoto = { photoKey ->
+                onUpdatePhoto(photoKey)
+                showAdminEditSheet = false
+            }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AdminEditVenueSheet(
+    venue: Venue,
+    onDismiss: () -> Unit,
+    onSavePrice: (Int) -> Unit,
+    onSelectPhoto: (String) -> Unit
+) {
+    var priceInput by remember(venue.startingPriceUsd) {
+        mutableStateOf(venue.startingPriceUsd.toString())
+    }
+
+    val photoPickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            onSelectPhoto(uri.toString())
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Text(
+                text = "تعديل السعر وصورة الخدمة (الإدارة)",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Medium
+            )
+
+            OutlinedTextField(
+                value = priceInput,
+                onValueChange = { input -> priceInput = input.filter { it.isDigit() } },
+                label = { Text("السعر المعتمد بالدولار ($)") },
+                singleLine = true,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("admin_venue_price_input")
+            )
+
+            Button(
+                onClick = {
+                    photoPickerLauncher.launch(
+                        androidx.activity.result.PickVisualMediaRequest(
+                            androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly
+                        )
+                    )
+                },
+                shape = RoundedCornerShape(50),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = VioletBlueVip,
+                    contentColor = PureWhite
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .testTag("admin_pick_gallery_photo_button")
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PhotoLibrary,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "تعيين / تغيير الصورة من المعرض",
+                    fontWeight = FontWeight.Normal,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Button(
+                    onClick = onDismiss,
+                    shape = RoundedCornerShape(50),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = MaterialTheme.colorScheme.onSurface
+                    ),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                ) {
+                    Text("إلغاء", fontWeight = FontWeight.Normal, maxLines = 1)
+                }
+
                 Button(
                     onClick = {
-                        val pkg = selectedPackage ?: venue.packages.firstOrNull()
-                        if (pkg != null) {
-                            onOpenCheckout(pkg)
-                        } else {
-                            showBookingDialog = true
-                        }
+                        val parsed = priceInput.toIntOrNull() ?: venue.startingPriceUsd
+                        onSavePrice(parsed)
                     },
                     shape = RoundedCornerShape(50),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = BrandChampagneGold,
-                        contentColor = ObsidianNight
+                        containerColor = CoralPinkPrimary,
+                        contentColor = PureWhite
                     ),
                     modifier = Modifier
-                        .weight(1.3f)
-                        .height(54.dp)
-                        .testTag("open_direct_booking_button")
+                        .weight(1f)
+                        .height(48.dp)
+                        .testTag("admin_save_venue_price_button")
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.CalendarMonth,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "بدء الحجز والطلب",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Text("حفظ السعر", fontWeight = FontWeight.Normal, maxLines = 1)
                 }
             }
-        }
-    }
-
-    // Full-screen Media Viewer Dialog
-    showMediaViewer?.let { isVideoInitial ->
-        FullScreenMediaViewerDialog(
-            title = venue.name,
-            cityName = venue.cityName,
-            category = venue.category,
-            priceUsd = venue.startingPriceUsd,
-            primaryImageUrl = venue.visualPresetKey,
-            videoTitle = venue.showcaseVideoTitle,
-            galleryCaptions = venue.galleryHighlights,
-            initialTabIsVideo = isVideoInitial,
-            isSuperAdmin = isSuperAdmin,
-            onDismiss = { showMediaViewer = null },
-            onBookNow = {
-                showMediaViewer = null
-                showBookingDialog = true
-            },
-            onEditPriceClick = {
-                showMediaViewer = null
-                showEditPriceDialog = true
-            },
-            onAddCustomPhoto = { uriStr ->
-                onUpdateVenuePhoto(uriStr)
-            }
-        )
-    }
-
-    // Quick Price Edit Dialog
-    if (showEditPriceDialog) {
-        AlertDialog(
-            onDismissRequest = { showEditPriceDialog = false },
-            containerColor = MaterialTheme.colorScheme.surface,
-            title = {
-                Text(
-                    text = "تعديل السعر المعتمد",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = BrandChampagneGold
-                )
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(
-                        text = "${venue.name} • ${venue.cityName}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = SoftGold
-                    )
-                    OutlinedTextField(
-                        value = newPriceInput,
-                        onValueChange = { newPriceInput = it.filter { ch -> ch.isDigit() } },
-                        label = { Text("السعر الجديد بالدولار ($)") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val parsed = newPriceInput.toIntOrNull() ?: venue.startingPriceUsd
-                        onUpdateVenuePrice(parsed)
-                        showEditPriceDialog = false
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = BrandDustyRose,
-                        contentColor = Color.White
-                    )
-                ) {
-                    Text("حفظ السعر", fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showEditPriceDialog = false }) {
-                    Text("إلغاء")
-                }
-            }
-        )
-    }
-
-    if (showBookingDialog) {
-        val pkg = selectedPackage ?: venue.packages.first()
-        DirectBookingDialog(
-            venue = venue,
-            selectedPackage = pkg,
-            isSubmitting = isSubmitting,
-            onDismiss = { showBookingDialog = false },
-            onConfirm = { date, slot, guests, notes ->
-                onConfirmBooking(pkg.title, pkg.priceUsd, date, slot, guests, notes)
-                showBookingDialog = false
-            }
-        )
-    }
-
-    if (showReviewDialog) {
-        AddVerifiedReviewDialog(
-            venue = venue,
-            defaultAuthorName = defaultAuthorName,
-            isSubmitting = isSubmitting,
-            onDismiss = { showReviewDialog = false },
-            onSubmit = { author, service, rating, comment ->
-                onSubmitReview(author, service, rating, comment)
-                showReviewDialog = false
-            }
-        )
-    }
-}
-
-@Composable
-private fun PackageCardItem(
-    pkg: ServicePackage,
-    isSelected: Boolean,
-    onSelect: () -> Unit,
-    onBookNowClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 6.dp)
-            .clickable { onSelect() },
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) {
-                MaterialTheme.colorScheme.surfaceVariant
-            } else {
-                MaterialTheme.colorScheme.surface
-            }
-        ),
-        border = BorderStroke(
-            width = if (isSelected) 1.8.dp else 0.8.dp,
-            color = if (isSelected) RoyalGold else RoyalGold.copy(alpha = 0.22f)
-        )
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    if (pkg.isPopular) {
-                        Surface(
-                            color = WarmCoral.copy(alpha = 0.2f),
-                            shape = RoundedCornerShape(50),
-                            modifier = Modifier.padding(bottom = 6.dp)
-                        ) {
-                            Text(
-                                text = "الأكثر طلباً",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = WarmCoral,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp)
-                            )
-                        }
-                    }
-                    Text(
-                        text = pkg.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "المدة: ${pkg.durationLabel}",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = SoftGold
-                    )
-                }
-
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = "$${pkg.priceUsd}",
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = RoyalGold
-                    )
-                    Text(
-                        text = "شامل الضيافة",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = pkg.description,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
             Spacer(modifier = Modifier.height(12.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                Button(
-                    onClick = onBookNowClick,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isSelected) RoyalGold else MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = if (isSelected) ObsidianNight else Color.White
-                    )
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.CheckCircle,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "طلب وحجز هذه الباقة",
-                        style = MaterialTheme.typography.labelLarge
-                    )
-                }
-            }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ReviewItemCard(
-    authorName: String,
-    cityBadge: String,
-    serviceTitle: String,
-    rating: Int,
-    comment: String,
-    dateLabel: String,
-    isCurrentUser: Boolean,
-    onBlockAuthor: (() -> Unit)? = null
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 6.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f)
-        ),
-        border = BorderStroke(
-            width = 0.8.dp,
-            color = if (isCurrentUser) EmeraldVerified else RoyalGold.copy(alpha = 0.2f)
-        )
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(CircleShape)
-                            .background(RoyalGold.copy(alpha = 0.2f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = authorName.take(1),
-                            style = MaterialTheme.typography.titleMedium,
-                            color = RoyalGold
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = authorName,
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Icon(
-                                imageVector = Icons.Default.Verified,
-                                contentDescription = "عميل موثق",
-                                tint = EmeraldVerified,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                        Text(
-                            text = "$cityBadge • $serviceTitle",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-
-                Column(horizontalAlignment = Alignment.End) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        repeat(rating.coerceIn(1, 5)) {
-                            Icon(
-                                imageVector = Icons.Default.Star,
-                                contentDescription = null,
-                                tint = RoyalGold,
-                                modifier = Modifier.size(15.dp)
-                            )
-                        }
-                        if (onBlockAuthor != null && !isCurrentUser) {
-                            Spacer(modifier = Modifier.width(6.dp))
-                            IconButton(
-                                onClick = onBlockAuthor,
-                                modifier = Modifier.size(28.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Block,
-                                    contentDescription = "حظر المستخدم",
-                                    tint = ErrorCrimson.copy(alpha = 0.85f),
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        }
-                    }
-                    Text(
-                        text = dateLabel,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-            Text(
-                text = comment,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-        }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-fun DirectBookingDialog(
+fun AddReviewDialog(
     venue: Venue,
-    selectedPackage: ServicePackage,
     isSubmitting: Boolean,
     onDismiss: () -> Unit,
-    onConfirm: (date: String, timeSlot: String, guestCount: Int, notes: String) -> Unit
+    onConfirmReview: (authorName: String, serviceType: String, rating: Int, comment: String) -> Unit
 ) {
-    val dateOptions = remember {
-        listOf(
-            "اليوم - المساء",
-            "غداً - المساء",
-            "الخميس القادم",
-            "الجمعة القادمة",
-            "السبت القادم"
-        )
-    }
-    var selectedDate by remember { mutableStateOf(dateOptions.first()) }
-    var selectedTimeSlot by remember {
-        mutableStateOf(venue.availableTimeSlots.firstOrNull() ?: "08:00 مساءً")
-    }
-    var guestCount by remember { mutableIntStateOf(2) }
-    var notes by remember { mutableStateOf("") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface,
-        title = {
-            Column {
-                Text(
-                    text = "تأكيد الحجز المباشر",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = RoyalGold
-                )
-                Text(
-                    text = "${venue.name} • ${venue.cityName}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = SoftGold
-                )
-            }
-        },
-        text = {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text(
-                            text = selectedPackage.title,
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "سعر الفرد/الباقة: $${selectedPackage.priceUsd} • ${selectedPackage.durationLabel}",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = RoyalGold
-                        )
-                    }
-                }
-
-                Text(
-                    text = "اختر يوم الحجز:",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = SoftGold
-                )
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    dateOptions.forEach { dateOpt ->
-                        FilterChip(
-                            selected = selectedDate == dateOpt,
-                            onClick = { selectedDate = dateOpt },
-                            label = { Text(dateOpt) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = RoyalGold,
-                                selectedLabelColor = ObsidianNight
-                            )
-                        )
-                    }
-                }
-
-                Text(
-                    text = "اختر الوقت المتاح:",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = SoftGold
-                )
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    venue.availableTimeSlots.forEach { slot ->
-                        FilterChip(
-                            selected = selectedTimeSlot == slot,
-                            onClick = { selectedTimeSlot = slot },
-                            label = { Text(slot) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = RoyalGold,
-                                selectedLabelColor = ObsidianNight
-                            )
-                        )
-                    }
-                }
-
-                // Guest Counter
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "عدد الأشخاص:",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = SoftGold
-                    )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(
-                            onClick = { if (guestCount > 1) guestCount-- }
-                        ) {
-                            Icon(Icons.Default.Remove, contentDescription = "إنقاص", tint = RoyalGold)
-                        }
-                        Text(
-                            text = "$guestCount",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(horizontal = 8.dp)
-                        )
-                        IconButton(
-                            onClick = { if (guestCount < 20) guestCount++ }
-                        ) {
-                            Icon(Icons.Default.Add, contentDescription = "زيادة", tint = RoyalGold)
-                        }
-                    }
-                }
-
-                OutlinedTextField(
-                    value = notes,
-                    onValueChange = { notes = it },
-                    label = { Text("ملاحظات خاصة (نوع المساج، موقع الطاولة، مناسبة خاصة...)") },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("booking_notes_input"),
-                    maxLines = 3
-                )
-
-                Surface(
-                    color = RoyalGold.copy(alpha = 0.15f),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, RoyalGold)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "الإجمالي المؤكد:",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = SoftGold
-                        )
-                        Text(
-                            text = "$${selectedPackage.priceUsd * guestCount}",
-                            style = MaterialTheme.typography.headlineMedium,
-                            color = RoyalGold
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    onConfirm(selectedDate, selectedTimeSlot, guestCount, notes)
-                },
-                enabled = !isSubmitting,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = RoyalGold,
-                    contentColor = ObsidianNight
-                ),
-                modifier = Modifier.testTag("confirm_direct_booking_button")
-            ) {
-                Text(
-                    text = if (isSubmitting) "جارٍ التأكيد..." else "تأكيد الحجز الآن",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("إلغاء", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-    )
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-fun AddVerifiedReviewDialog(
-    venue: Venue,
-    defaultAuthorName: String,
-    isSubmitting: Boolean,
-    onDismiss: () -> Unit,
-    onSubmit: (authorName: String, serviceType: String, rating: Int, comment: String) -> Unit
-) {
-    var authorName by remember { mutableStateOf(defaultAuthorName.ifBlank { "عميل موثق" }) }
+    var authorName by remember { mutableStateOf("") }
     var selectedService by remember {
         mutableStateOf(venue.packages.firstOrNull()?.title ?: venue.category)
     }
     var rating by remember { mutableIntStateOf(5) }
     var comment by remember { mutableStateOf("") }
 
-    AlertDialog(
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
-        title = {
-            Column {
-                Text(
-                    text = "إضافة تقييم عميل موثق",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = RoyalGold
-                )
-                Text(
-                    text = "${venue.name} • ${venue.cityName}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = SoftGold
-                )
-            }
-        },
-        text = {
-            Column(
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = "إضافة تقييم موثق • ${venue.name}",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Medium
+            )
+
+            OutlinedTextField(
+                value = authorName,
+                onValueChange = { authorName = it },
+                label = { Text("الاسم الكريم") },
+                singleLine = true,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("review_author_input")
+            )
+
+            OutlinedTextField(
+                value = comment,
+                onValueChange = { comment = it },
+                label = { Text("اكتب تجربتك") },
+                minLines = 2,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("review_comment_input")
+            )
+
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                OutlinedTextField(
-                    value = authorName,
-                    onValueChange = { authorName = it },
-                    label = { Text("الاسم الظاهر في التقييم") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Text(
-                    text = "الخدمة التي قمت بتجربتها:",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = SoftGold
-                )
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    venue.packages.forEach { pkg ->
-                        FilterChip(
-                            selected = selectedService == pkg.title,
-                            onClick = { selectedService = pkg.title },
-                            label = { Text(pkg.title, maxLines = 1) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = RoyalGold,
-                                selectedLabelColor = ObsidianNight
-                            )
-                        )
-                    }
-                }
-
-                Text(
-                    text = "التقييم بالنجوم ($rating / 5):",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = SoftGold
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    for (star in 1..5) {
-                        IconButton(onClick = { rating = star }) {
-                            Icon(
-                                imageVector = Icons.Default.Star,
-                                contentDescription = "$star نجوم",
-                                tint = if (star <= rating) RoyalGold else MaterialTheme.colorScheme.outline,
-                                modifier = Modifier.size(30.dp)
-                            )
-                        }
-                    }
-                }
-
-                OutlinedTextField(
-                    value = comment,
-                    onValueChange = { comment = it },
-                    label = { Text("اكتب تجربتك بالتفصيل (جودة المساج، الأجواء، الخدمة...)") },
+                Button(
+                    onClick = onDismiss,
+                    shape = RoundedCornerShape(50),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = MaterialTheme.colorScheme.onSurface
+                    ),
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("review_comment_input"),
-                    minLines = 3,
-                    maxLines = 5
-                )
+                        .weight(1f)
+                        .height(48.dp)
+                ) {
+                    Text("إلغاء", fontWeight = FontWeight.Normal, maxLines = 1)
+                }
+
+                Button(
+                    onClick = {
+                        onConfirmReview(
+                            authorName.ifBlank { "ضيف VIP" },
+                            selectedService,
+                            rating,
+                            comment.ifBlank { "خدمة ممتازة وراقية جداً." }
+                        )
+                    },
+                    enabled = !isSubmitting,
+                    shape = RoundedCornerShape(50),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = CoralPinkPrimary,
+                        contentColor = PureWhite
+                    ),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                        .testTag("submit_review_button")
+                ) {
+                    Text("نشر التقييم", fontWeight = FontWeight.Normal, maxLines = 1)
+                }
             }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    onSubmit(
-                        authorName.ifBlank { "عميل موثق" },
-                        selectedService,
-                        rating,
-                        comment
-                    )
-                },
-                enabled = !isSubmitting && comment.trim().length >= 3,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = RoyalGold,
-                    contentColor = ObsidianNight
-                ),
-                modifier = Modifier.testTag("submit_review_button")
-            ) {
-                Text(
-                    text = if (isSubmitting) "جارٍ النشر..." else "نشر التقييم الموثق",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("إلغاء", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+            Spacer(modifier = Modifier.height(12.dp))
         }
-    )
+    }
 }

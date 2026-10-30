@@ -2,42 +2,76 @@ package com.example.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Brand Visual Identity Palette (Matching Uploaded Brand Board)
-// 1. Deep Royal Violet & Obsidian Night (Dark Theme)
-val ObsidianNight = Color(0xFF140D20)
-val VelvetPlum = Color(0xFF1F1431)
-val ElevatedPlumCard = Color(0xFF2C1D44)
-val DeepRoyalViolet = Color(0xFF47256B)
+// ============================================================================
+// Royal Emerald, Warm Amber Gold & Midnight Sapphire Luxury Identity
+// (Replaces previous Coral Pink / Violet palette as requested)
+// ============================================================================
 
-// 2. Dusty Rose & Orchid Pink Accents
-val DustyRose = Color(0xFFD6789B)
-val SoftRosePink = Color(0xFFE7A1BC)
-val WarmCoral = Color(0xFFD6789B)
+// 1. Core Backgrounds & Surfaces
+val PureWhite = Color(0xFFFAF8F5)          // Warm Pearl Ivory
+val SnowGraySurface = Color(0xFFF1EDE6)    // Soft Alabaster Champagne Surface
+val LightCardSurface = Color(0xFFFFFFFF)   // Crisp Ivory Card
 
-// 3. Champagne Gold & Rose Gold
-val RoyalGold = Color(0xFFE3BE88)
-val SoftGold = Color(0xFFF5DFB8)
+val CharcoalNight = Color(0xFF09111E)      // Deep Midnight Sapphire
+val DarkCardSurface = Color(0xFF111D30)    // Obsidian Navy Card Surface
+val ElevatedDarkSurface = Color(0xFF182842)// Elevated Sapphire Slate
 
-// 4. Pearl White & Soft Rose Cream (Light & Soft Rose Theme)
-val IvoryCream = Color(0xFFFAF5F8)
-val SoftBlushBackground = Color(0xFFFDF6F9)
-val SoftRoseSurface = Color(0xFFF7E8F0)
-val SoftRoseCard = Color(0xFFF0D9E6)
-val DeepPlumText = Color(0xFF281536)
-val MutedPlumText = Color(0xFF634875)
+// 2. Primary Interactive Accents (Amber Gold, Emerald Teal & Cyan Sapphire)
+val CoralPinkPrimary = Color(0xFFD97706)   // Rich Sovereign Amber Gold (Primary CTA)
+val CoralSoftAccent = Color(0xFFF59E0B)    // Radiant Champagne Gold Accent
+val VioletBlueVip = Color(0xFF0D9488)      // Royal Emerald Teal (VIP & Badges)
+val CharcoalButton = Color(0xFF0B172A)     // Deep Sapphire Button
 
-// Supporting Tokens
-val MutedLavender = Color(0xFFCBBAD9)
-val DeepWineOutline = Color(0xFF4B336A)
-val SoftRoseOutline = Color(0xFFD9B8CA)
-val EmeraldVerified = Color(0xFF34D399)
-val TelegramBlue = Color(0xFF26A5E4)
-val ErrorCrimson = Color(0xFFF87171)
+// Additional New Luxury Palette Tokens
+val SovereignGold = Color(0xFFF59E0B)
+val DeepAmberGold = Color(0xFFB45309)
+val ShamCashTeal = Color(0xFF0EA5E9)
+val ShamCashIndigo = Color(0xFF3B82F6)
+val UsdtTetherGreen = Color(0xFF10B981)
+val MidnightSapphire = Color(0xFF09111E)
 
-// Brand Board Token Aliases
-val BrandChampagneGold = RoyalGold
-val BrandDeepViolet = ObsidianNight
-val BrandDustyRose = DustyRose
-val BrandRoyalPlum = DeepRoyalViolet
-val BrandSoftPearl = SoftBlushBackground
+// 3. Typography & Hierarchy Colors
+val TitleDarkText = Color(0xFF0F172A)
+val SubtitleGrayText = Color(0xFF475569)
+val MutedLightText = Color(0xFF94A3B8)
 
+// 4. Borders & Dividers (1.dp Crisp Hairlines)
+val LightBorderGray = Color(0xFFE2DDD3)
+val DarkBorderGray = Color(0xFF243552)
+
+// 5. Status & Semantic Accents
+val EmeraldVerified = Color(0xFF10B981)
+val TelegramBlue = Color(0xFF0284C7)
+val ErrorCrimson = Color(0xFFEF4444)
+
+// ============================================================================
+// Compatibility Aliases (Mapped to New Royal Gold & Emerald Sapphire Tokens)
+// ============================================================================
+val ObsidianNight = CharcoalNight
+val VelvetPlum = DarkCardSurface
+val ElevatedPlumCard = ElevatedDarkSurface
+val DeepRoyalViolet = Color(0xFF16253D)
+
+val DustyRose = CoralPinkPrimary
+val SoftRosePink = CoralSoftAccent
+val WarmCoral = CoralSoftAccent
+
+val RoyalGold = SovereignGold
+val SoftGold = Color(0xFFFDE68A)
+
+val IvoryCream = PureWhite
+val SoftBlushBackground = PureWhite
+val SoftRoseSurface = SnowGraySurface
+val SoftRoseCard = LightCardSurface
+val DeepPlumText = TitleDarkText
+val MutedPlumText = SubtitleGrayText
+
+val MutedLavender = MutedLightText
+val DeepWineOutline = DarkBorderGray
+val SoftRoseOutline = LightBorderGray
+
+val BrandChampagneGold = SovereignGold
+val BrandDeepViolet = CharcoalNight
+val BrandDustyRose = CoralPinkPrimary
+val BrandRoyalPlum = DarkCardSurface
+val BrandSoftPearl = PureWhite

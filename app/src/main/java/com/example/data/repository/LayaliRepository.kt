@@ -39,7 +39,15 @@ class LayaliRepository(private val db: FirebaseFirestore) {
             ?: throw IllegalStateException("User must be signed in with Google before accessing Firestore.")
     }
 
+    private fun isSyntheticSessionId(userId: String): Boolean {
+        return userId.isBlank() || userId == "guest_session" || userId.startsWith("user_")
+    }
+
     fun observeBookings(userId: String = requireUserId()): Flow<List<Booking>> = flow {
+        if (isSyntheticSessionId(userId)) {
+            emit(emptyList())
+            return@flow
+        }
         val path = "users/$userId/bookings"
         emitAll(
             db.collection("users").document(userId).collection("bookings")
@@ -59,6 +67,10 @@ class LayaliRepository(private val db: FirebaseFirestore) {
     }
 
     fun observeUserReviews(userId: String = requireUserId()): Flow<List<CustomerReview>> = flow {
+        if (isSyntheticSessionId(userId)) {
+            emit(emptyList())
+            return@flow
+        }
         val path = "users/$userId/reviews"
         emitAll(
             db.collection("users").document(userId).collection("reviews")
@@ -78,6 +90,10 @@ class LayaliRepository(private val db: FirebaseFirestore) {
     }
 
     fun observeFavorites(userId: String = requireUserId()): Flow<List<FavoriteVenue>> = flow {
+        if (isSyntheticSessionId(userId)) {
+            emit(emptyList())
+            return@flow
+        }
         val path = "users/$userId/favorites"
         emitAll(
             db.collection("users").document(userId).collection("favorites")
@@ -97,6 +113,10 @@ class LayaliRepository(private val db: FirebaseFirestore) {
     }
 
     fun observePublishedServices(): Flow<List<PublishedService>> = flow {
+        if (auth.currentUser == null) {
+            emit(emptyList())
+            return@flow
+        }
         val path = "published_services"
         emitAll(
             db.collection("published_services")
@@ -116,6 +136,10 @@ class LayaliRepository(private val db: FirebaseFirestore) {
     }
 
     fun observeBlockedUsers(userId: String = requireUserId()): Flow<List<BlockedUser>> = flow {
+        if (isSyntheticSessionId(userId)) {
+            emit(emptyList())
+            return@flow
+        }
         val path = "users/$userId/blocked_users"
         emitAll(
             db.collection("users").document(userId).collection("blocked_users")

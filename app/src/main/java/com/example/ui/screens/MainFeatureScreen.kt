@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.DarkMode
@@ -128,10 +129,12 @@ import com.example.data.model.CustomerReview
 import com.example.data.model.FavoriteVenue
 import com.example.data.model.PublishedService
 import com.example.data.model.ServicePackage
+import com.example.data.model.UserProfile
 import com.example.data.model.Venue
 import com.example.data.repository.LayaliRepository
 import com.example.ui.auth.signOut
 import com.example.ui.components.BrandActionBadgesRow
+import com.example.ui.components.FramedUserAvatar
 import com.example.ui.components.FullScreenMediaViewerDialog
 import com.example.ui.components.SmartServiceMediaView
 import com.example.ui.components.WingedHeartLogo
@@ -139,12 +142,17 @@ import com.example.ui.theme.BrandChampagneGold
 import com.example.ui.theme.BrandDeepViolet
 import com.example.ui.theme.BrandDustyRose
 import com.example.ui.theme.BrandRoyalPlum
+import com.example.ui.theme.CharcoalNight
+import com.example.ui.theme.CoralPinkPrimary
 import com.example.ui.theme.EmeraldVerified
 import com.example.ui.theme.ErrorCrimson
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.ObsidianNight
+import com.example.ui.theme.PureWhite
 import com.example.ui.theme.RoyalGold
 import com.example.ui.theme.SoftGold
+import com.example.ui.theme.SovereignGold
+import com.example.ui.theme.VioletBlueVip
 import com.example.ui.theme.WarmCoral
 import com.example.ui.viewmodel.LayaliViewModel
 import com.example.ui.viewmodel.SortOption
@@ -155,8 +163,9 @@ import com.google.firebase.firestore.FirebaseFirestore
 enum class MainTab(val titleAr: String, val tag: String) {
     EXPLORE("الرئيسية", "tab_explore"),
     REELS("الريلز", "tab_reels"),
-    BOOKINGS("الحجوزات", "tab_bookings"),
+    CHAT("الدردشة", "tab_chat"),
     WALLET("شراء رصيد", "tab_wallet"),
+    BOOKINGS("الحجوزات", "tab_bookings"),
     FAVORITES("المفضلة", "tab_favorites"),
     PROFILE("الحساب", "tab_profile"),
     REVIEWS("التقييمات", "tab_reviews"),
@@ -232,6 +241,11 @@ fun MainFeatureScreen(
     val userProfile by viewModel.userProfile.collectAsStateWithLifecycle()
     val walletBalanceUsd by viewModel.walletBalanceUsd.collectAsStateWithLifecycle()
     val walletTransactions by viewModel.walletTransactions.collectAsStateWithLifecycle()
+    val paymentReceipts by viewModel.paymentReceipts.collectAsStateWithLifecycle()
+    val chatMembers by viewModel.chatMembers.collectAsStateWithLifecycle()
+    val unlockedChatMemberIds by viewModel.unlockedChatMemberIds.collectAsStateWithLifecycle()
+    val activeChatMemberId by viewModel.activeChatMemberId.collectAsStateWithLifecycle()
+    val chatMessagesByMember by viewModel.chatMessagesByMember.collectAsStateWithLifecycle()
     val deletedCatalogVenueIds by viewModel.deletedCatalogVenueIds.collectAsStateWithLifecycle()
     val snackbarMessage by viewModel.snackbarMessage.collectAsStateWithLifecycle()
     val isSubmitting by viewModel.isSubmitting.collectAsStateWithLifecycle()
@@ -439,7 +453,7 @@ fun MainFeatureScreen(
             MainTab.EXPLORE,
             MainTab.REELS,
             MainTab.WALLET,
-            MainTab.BOOKINGS,
+            MainTab.CHAT,
             MainTab.PROFILE
         )
     }
@@ -452,10 +466,10 @@ fun MainFeatureScreen(
                 contentWindowInsets = WindowInsets.safeDrawing,
                 snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
                 floatingActionButton = {
-                    if (selectedVenue == null && activeCheckoutOrder == null) {
+                    if (selectedVenue == null && activeCheckoutOrder == null && currentTab != MainTab.CHAT) {
                         ExtendedFloatingActionButton(
                             onClick = { LayaliNotificationHelper.openTelegramSupport(context) },
-                            containerColor = BrandDustyRose,
+                            containerColor = VioletBlueVip,
                             contentColor = Color.White,
                             shape = RoundedCornerShape(50),
                             modifier = Modifier.testTag("telegram_support_fab"),
@@ -490,7 +504,7 @@ fun MainFeatureScreen(
                                     modifier = Modifier.testTag(tab.tag),
                                     icon = {
                                         if (isWalletCenterTab) {
-                                            // Prominent Elevated Gold Wallet Button matching Screen 2 of UI/UX Case Study
+                                            // Prominent Elevated Emerald/Gold VIP Wallet Button
                                             Box(
                                                 modifier = Modifier
                                                     .size(46.dp)
@@ -498,15 +512,14 @@ fun MainFeatureScreen(
                                                     .background(
                                                         Brush.linearGradient(
                                                             colors = listOf(
-                                                                Color(0xFFF3DEAE),
-                                                                BrandChampagneGold,
-                                                                Color(0xFFC2974D)
+                                                                VioletBlueVip,
+                                                                SovereignGold
                                                             )
                                                         )
                                                     )
                                                     .border(
                                                         1.5.dp,
-                                                        if (selected) Color.White else ObsidianNight,
+                                                        if (selected) PureWhite else Color.Transparent,
                                                         CircleShape
                                                     ),
                                                 contentAlignment = Alignment.Center
@@ -514,8 +527,8 @@ fun MainFeatureScreen(
                                                 Icon(
                                                     imageVector = Icons.Default.AccountBalanceWallet,
                                                     contentDescription = "شراء رصيد",
-                                                    tint = ObsidianNight,
-                                                    modifier = Modifier.size(24.dp)
+                                                    tint = Color.White,
+                                                    modifier = Modifier.size(22.dp)
                                                 )
                                             }
                                         } else {
@@ -523,6 +536,7 @@ fun MainFeatureScreen(
                                                 imageVector = when (tab) {
                                                     MainTab.EXPLORE -> Icons.Default.Home
                                                     MainTab.REELS -> Icons.Default.PlayCircleFilled
+                                                    MainTab.CHAT -> Icons.Default.Chat
                                                     MainTab.BOOKINGS -> Icons.Default.CalendarMonth
                                                     MainTab.WALLET -> Icons.Default.AccountBalanceWallet
                                                     MainTab.FAVORITES -> Icons.Default.FavoriteBorder
@@ -538,16 +552,16 @@ fun MainFeatureScreen(
                                         Text(
                                             text = if (isWalletCenterTab) "شراء رصيد" else tab.titleAr,
                                             fontSize = 11.sp,
-                                            fontWeight = if (isWalletCenterTab || selected) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (isWalletCenterTab) BrandChampagneGold else Color.Unspecified,
+                                            fontWeight = if (isWalletCenterTab || selected) FontWeight.SemiBold else FontWeight.Normal,
+                                            color = if (isWalletCenterTab) SovereignGold else Color.Unspecified,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
                                         )
                                     },
                                     colors = NavigationBarItemDefaults.colors(
-                                        selectedIconColor = ObsidianNight,
-                                        selectedTextColor = BrandChampagneGold,
-                                        indicatorColor = if (isWalletCenterTab) Color.Transparent else BrandChampagneGold,
+                                        selectedIconColor = VioletBlueVip,
+                                        selectedTextColor = VioletBlueVip,
+                                        indicatorColor = if (isWalletCenterTab) Color.Transparent else VioletBlueVip.copy(alpha = 0.16f),
                                         unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                         unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -581,6 +595,7 @@ fun MainFeatureScreen(
                                             imageVector = when (tab) {
                                                 MainTab.EXPLORE -> Icons.Default.Home
                                                 MainTab.REELS -> Icons.Default.PlayCircleFilled
+                                                MainTab.CHAT -> Icons.Default.Chat
                                                 MainTab.BOOKINGS -> Icons.Default.CalendarMonth
                                                 MainTab.WALLET -> Icons.Default.AccountBalanceWallet
                                                 MainTab.FAVORITES -> Icons.Default.FavoriteBorder
@@ -601,7 +616,7 @@ fun MainFeatureScreen(
                         val checkoutTarget = activeCheckoutOrder
                         val activeVenue = selectedVenue
                         if (checkoutTarget != null) {
-                            // Screen 5: Checkout & Payment Steps Screen
+                            // Screen 5: Checkout & Real Payment Verification Steps Screen
                             CheckoutScreen(
                                 venue = checkoutTarget.first,
                                 selectedPackage = checkoutTarget.second,
@@ -613,7 +628,7 @@ fun MainFeatureScreen(
                                     viewModel.closeVenueDetail()
                                     currentTab = MainTab.WALLET
                                 },
-                                onConfirmCheckout = { date, slot, guests, notes, paymentMethod ->
+                                onConfirmCheckout = { date, slot, guests, notes, paymentMethod, receiptUri, txRef ->
                                     if (paymentMethod == PaymentMethodType.WALLET) {
                                         viewModel.deductWalletBalance(
                                             amountUsd = checkoutTarget.second.priceUsd * guests,
@@ -628,22 +643,27 @@ fun MainFeatureScreen(
                                         timeSlot = slot,
                                         guestCount = guests,
                                         notes = notes,
+                                        paymentMethodTitle = paymentMethod.titleAr,
+                                        receiptImageUri = receiptUri,
+                                        transactionReference = txRef,
                                         onSuccess = {
                                             activeCheckoutOrder = null
                                             viewModel.closeVenueDetail()
                                             currentTab = MainTab.BOOKINGS
                                         }
                                     )
-                                }
+                                },
+                                onShowMessage = viewModel::showInfoMessage
                             )
                         } else if (activeVenue != null) {
-                            // Screen 3: Service Details Screen with Image Carousel & Sticky Bottom Bar
+                            // Screen 3: Modern Creator & VIP Club Details Screen with Choose a Plan Sheet
                             VenueDetailScreen(
                                 venue = activeVenue,
+                                liveReviews = userReviewsList.filter { it.venueId == activeVenue.id },
                                 isFavorite = favoriteIds.contains(activeVenue.id),
-                                userReviewsForVenue = userReviewsList.filter { it.venueId == activeVenue.id },
-                                defaultAuthorName = userProfile.displayName.ifBlank { userDisplayName },
                                 isSubmitting = isSubmitting,
+                                isAdminUnlocked = isSuperAdmin,
+                                walletBalanceUsd = walletBalanceUsd,
                                 onBack = { viewModel.closeVenueDetail() },
                                 onToggleFavorite = {
                                     viewModel.toggleFavorite(
@@ -651,23 +671,8 @@ fun MainFeatureScreen(
                                         favoriteIds.contains(activeVenue.id)
                                     )
                                 },
-                                onOpenCheckout = { pkg ->
+                                onProceedToCheckout = { pkg ->
                                     activeCheckoutOrder = activeVenue to pkg
-                                },
-                                onConfirmBooking = { serviceTitle, unitPrice, date, slot, guests, notes ->
-                                    viewModel.createDirectBooking(
-                                        venue = activeVenue,
-                                        serviceTitle = serviceTitle,
-                                        unitPriceUsd = unitPrice,
-                                        bookingDate = date,
-                                        timeSlot = slot,
-                                        guestCount = guests,
-                                        notes = notes,
-                                        onSuccess = {
-                                            viewModel.closeVenueDetail()
-                                            currentTab = MainTab.BOOKINGS
-                                        }
-                                    )
                                 },
                                 onSubmitReview = { author, service, rating, comment ->
                                     viewModel.submitCustomerReview(
@@ -678,25 +683,22 @@ fun MainFeatureScreen(
                                         comment = comment
                                     )
                                 },
-                                blockedAuthors = blockedAuthorsSet,
-                                onBlockAuthor = { authorToBlock ->
-                                    viewModel.blockUserAccount(
-                                        identifier = authorToBlock,
-                                        reason = "حظر مباشر من قسم التقييمات",
-                                        cityScope = activeVenue.cityName
-                                    )
-                                },
-                                onUpdateVenuePrice = { newPrice ->
+                                onDeleteReview = viewModel::deleteCustomerReview,
+                                onUpdateStartingPrice = { newPrice ->
                                     viewModel.updateVenueStartingPrice(activeVenue.id, newPrice)
                                 },
-                                onUpdateVenuePhoto = { newPhotoUri ->
+                                onUpdatePhoto = { newPhotoUri ->
                                     viewModel.updateVenuePhoto(activeVenue.id, newPhotoUri)
                                 },
-                                isSuperAdmin = isSuperAdmin
+                                onOpenWalletTopUp = {
+                                    viewModel.closeVenueDetail()
+                                    currentTab = MainTab.WALLET
+                                }
                             )
                         } else {
                             when (currentTab) {
                                 MainTab.EXPLORE -> ExploreTabContent(
+                                    userProfile = userProfile,
                                     userDisplayName = userProfile.displayName.ifBlank { userDisplayName },
                                     userAvatarUri = userProfile.avatarUri,
                                     walletBalanceUsd = walletBalanceUsd,
@@ -714,6 +716,8 @@ fun MainFeatureScreen(
                                     onToggleThemeMode = viewModel::toggleThemeMode,
                                     onOpenLoginScreen = onRequestGoogleSignIn,
                                     onOpenWalletTab = { currentTab = MainTab.WALLET },
+                                    onOpenChatTab = { currentTab = MainTab.CHAT },
+                                    onOpenBookingsTab = { currentTab = MainTab.BOOKINGS },
                                     onOpenProfileTab = { currentTab = MainTab.PROFILE },
                                     onOpenAdminPanel = { currentTab = MainTab.ADMIN },
                                     onOpenReviewsTab = { currentTab = MainTab.REVIEWS },
@@ -820,16 +824,36 @@ fun MainFeatureScreen(
                                         }
                                     },
                                     onOpenAdminPublishReel = { currentTab = MainTab.ADMIN },
+                                    onOpenCreatorChat = { currentTab = MainTab.CHAT },
+                                    onShowMessage = viewModel::showInfoMessage
+                                )
+
+                                MainTab.CHAT -> ChatScreen(
+                                    userProfile = userProfile,
+                                    walletBalanceUsd = walletBalanceUsd,
+                                    chatMembers = chatMembers,
+                                    unlockedMemberIds = unlockedChatMemberIds,
+                                    activeConversationMemberId = activeChatMemberId,
+                                    messagesByMember = chatMessagesByMember,
+                                    onSelectConversationMember = viewModel::selectActiveChatMember,
+                                    onUnlockChatWithWallet = viewModel::unlockChatWithWallet,
+                                    onUnlockChatWithReceipt = viewModel::unlockChatWithReceipt,
+                                    onSendChatMessage = viewModel::sendChatMessage,
+                                    onUpdateMyChatPrice = viewModel::updateChatPricing,
+                                    onOpenWalletTab = { currentTab = MainTab.WALLET },
                                     onShowMessage = viewModel::showInfoMessage
                                 )
 
                                 MainTab.WALLET -> WalletScreen(
                                     walletBalanceUsd = walletBalanceUsd,
                                     transactions = walletTransactions,
+                                    paymentReceipts = paymentReceipts,
                                     onBack = { currentTab = MainTab.EXPLORE },
+                                    onSubmitRealDepositReceipt = viewModel::submitRealDepositReceipt,
                                     onTopUpConfirm = { amount, bonus, pkgTitle ->
                                         viewModel.topUpWallet(amount, bonus, pkgTitle)
-                                    }
+                                    },
+                                    onShowMessage = viewModel::showInfoMessage
                                 )
 
                                 MainTab.PROFILE -> ProfileScreen(
@@ -844,6 +868,10 @@ fun MainFeatureScreen(
                                     isSoftRoseLightTheme = isSoftRoseLightTheme,
                                     onToggleThemeMode = viewModel::toggleThemeMode,
                                     onUpdateProfile = viewModel::updateUserProfile,
+                                    onUpdateUsername = viewModel::updateUsername,
+                                    onSelectAvatarFrame = viewModel::selectAvatarFrame,
+                                    onUpdateChatPricing = viewModel::updateChatPricing,
+                                    onGainProfileXp = viewModel::gainProfileXp,
                                     onUpdateAvatar = viewModel::updateProfileAvatar,
                                     onAddShowcasePhoto = { uriStr ->
                                         viewModel.addCustomProfilePhoto(uriStr)
@@ -874,6 +902,8 @@ fun MainFeatureScreen(
                                     onOpenBookingsTab = { currentTab = MainTab.BOOKINGS },
                                     onOpenFavoritesTab = { currentTab = MainTab.FAVORITES },
                                     onOpenExploreTab = { currentTab = MainTab.EXPLORE },
+                                    onOpenChatTab = { currentTab = MainTab.CHAT },
+                                    onOpenWalletTab = { currentTab = MainTab.WALLET },
                                     onQuickBlockUser = { identifier, reason ->
                                         viewModel.blockUserAccount(
                                             identifier = identifier,
@@ -1111,28 +1141,19 @@ fun MainFeatureScreen(
             )
         }
 
-        // Direct Booking Dialog
+        // Choose a Plan Bottom Sheet for Quick Orders
         quickOrderVenue?.let { venue ->
-            val defaultPkg = venue.packages.first()
-            DirectBookingDialog(
+            ChoosePlanBookingBottomSheet(
                 venue = venue,
-                selectedPackage = defaultPkg,
-                isSubmitting = isSubmitting,
+                walletBalanceUsd = walletBalanceUsd,
                 onDismiss = { quickOrderVenue = null },
-                onConfirm = { date, slot, guests, notes ->
-                    viewModel.createDirectBooking(
-                        venue = venue,
-                        serviceTitle = defaultPkg.title,
-                        unitPriceUsd = defaultPkg.priceUsd,
-                        bookingDate = date,
-                        timeSlot = slot,
-                        guestCount = guests,
-                        notes = notes,
-                        onSuccess = {
-                            quickOrderVenue = null
-                            currentTab = MainTab.BOOKINGS
-                        }
-                    )
+                onConfirmPlanBooking = { chosenPkg, _ ->
+                    quickOrderVenue = null
+                    activeCheckoutOrder = venue to chosenPkg
+                },
+                onOpenWalletTopUp = {
+                    quickOrderVenue = null
+                    currentTab = MainTab.WALLET
                 }
             )
         }
@@ -1142,6 +1163,7 @@ fun MainFeatureScreen(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ExploreTabContent(
+    userProfile: UserProfile,
     userDisplayName: String,
     userAvatarUri: String,
     walletBalanceUsd: Int,
@@ -1159,6 +1181,8 @@ private fun ExploreTabContent(
     onToggleThemeMode: () -> Unit,
     onOpenLoginScreen: () -> Unit,
     onOpenWalletTab: () -> Unit,
+    onOpenChatTab: () -> Unit,
+    onOpenBookingsTab: () -> Unit,
     onOpenProfileTab: () -> Unit,
     onOpenAdminPanel: () -> Unit,
     onOpenReviewsTab: () -> Unit,
@@ -1180,13 +1204,19 @@ private fun ExploreTabContent(
 ) {
     val context = LocalContext.current
     var showFiltersRow by rememberSaveable { mutableStateOf(true) }
+    var visibleVenuesCount by rememberSaveable(selectedCountry, selectedCity, selectedCategory, searchQuery) {
+        mutableIntStateOf(6)
+    }
+    val displayedVenues = remember(venues, visibleVenuesCount) {
+        venues.take(visibleVenuesCount)
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 104.dp)
     ) {
-        // 1. Top Header Bar ("الرئيسية" + Notification Bell + Wallet Chip + Login + Profile)
-        item {
+        // 1. Top Header Bar ("الرئيسية" + Notification Bell + Wallet Chip + Bookings + Framed Profile)
+        item(key = "explore_top_header", contentType = "header") {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1198,7 +1228,7 @@ private fun ExploreTabContent(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Notification Bell Icon (matches Screen 2 top-left)
+                    // Notification Bell Icon
                     IconButton(
                         onClick = {
                             LayaliNotificationHelper.sendNewServiceBroadcastNotification(
@@ -1211,46 +1241,63 @@ private fun ExploreTabContent(
                             )
                         },
                         modifier = Modifier
-                            .size(44.dp)
+                            .size(42.dp)
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .border(1.dp, BrandChampagneGold.copy(alpha = 0.4f), CircleShape)
+                            .border(1.dp, SovereignGold.copy(alpha = 0.45f), CircleShape)
                             .testTag("home_notification_bell_button")
                     ) {
                         Icon(
                             imageVector = Icons.Default.NotificationsActive,
                             contentDescription = "الإشعارات",
-                            tint = BrandChampagneGold,
-                            modifier = Modifier.size(20.dp)
+                            tint = SovereignGold,
+                            modifier = Modifier.size(19.dp)
                         )
                     }
 
                     // Quick Wallet Balance Pill
                     Surface(
                         onClick = onOpenWalletTab,
-                        color = BrandChampagneGold.copy(alpha = 0.18f),
+                        color = VioletBlueVip.copy(alpha = 0.16f),
                         shape = RoundedCornerShape(50),
-                        border = BorderStroke(1.dp, BrandChampagneGold),
+                        border = BorderStroke(1.dp, VioletBlueVip),
                         modifier = Modifier.testTag("top_wallet_balance_chip")
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                            modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
                                 imageVector = Icons.Default.AccountBalanceWallet,
                                 contentDescription = null,
-                                tint = BrandChampagneGold,
+                                tint = VioletBlueVip,
                                 modifier = Modifier.size(15.dp)
                             )
                             Spacer(modifier = Modifier.width(5.dp))
                             Text(
                                 text = "$$walletBalanceUsd",
                                 style = MaterialTheme.typography.labelLarge,
-                                color = BrandChampagneGold,
+                                color = VioletBlueVip,
                                 fontWeight = FontWeight.Bold
                             )
                         }
+                    }
+
+                    // Quick Bookings Icon Button
+                    IconButton(
+                        onClick = onOpenBookingsTab,
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .testTag("top_bookings_shortcut_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CalendarMonth,
+                            contentDescription = "حجوزاتي",
+                            tint = SovereignGold,
+                            modifier = Modifier.size(19.dp)
+                        )
                     }
 
                     IconButton(
@@ -1264,13 +1311,13 @@ private fun ExploreTabContent(
                         Icon(
                             imageVector = if (isSoftRoseLightTheme) Icons.Default.DarkMode else Icons.Default.LightMode,
                             contentDescription = "تبديل المظهر الفاتح/الداكن",
-                            tint = BrandChampagneGold,
+                            tint = SovereignGold,
                             modifier = Modifier.size(19.dp)
                         )
                     }
                 }
 
-                // Center/Right Title "الرئيسية" + Profile Avatar
+                // Center/Right Title "الرئيسية" + Username + Framed Profile Avatar
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -1284,38 +1331,35 @@ private fun ExploreTabContent(
                         )
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = userDisplayName.ifBlank { "زائر • سجل دخولك" },
-                                style = MaterialTheme.typography.labelMedium,
-                                color = BrandChampagneGold,
+                                text = "@${userProfile.username.removePrefix("@")} • Lv.${userProfile.level}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = SovereignGold,
+                                fontWeight = FontWeight.Bold,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
-                            if (userDisplayName.isNotBlank()) {
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Icon(
-                                    imageVector = Icons.Default.Verified,
-                                    contentDescription = null,
-                                    tint = EmeraldVerified,
-                                    modifier = Modifier.size(13.dp)
-                                )
-                            }
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(
+                                imageVector = Icons.Default.Verified,
+                                contentDescription = null,
+                                tint = EmeraldVerified,
+                                modifier = Modifier.size(13.dp)
+                            )
                         }
                     }
 
                     Box(
                         modifier = Modifier
-                            .size(46.dp)
-                            .clip(CircleShape)
-                            .border(1.5.dp, BrandChampagneGold, CircleShape)
                             .clickable { onOpenProfileTab() }
                             .testTag("open_profile_top_button")
                     ) {
-                        SmartServiceMediaView(
-                            imageUrl = userAvatarUri,
-                            accentHex = 0xFFD6789B,
-                            secondaryHex = 0xFF47256B,
-                            category = "سبا ومساج",
-                            modifier = Modifier.fillMaxSize()
+                        FramedUserAvatar(
+                            avatarUri = userAvatarUri,
+                            fallbackInitial = userProfile.displayName.take(1).ifBlank { "ل" },
+                            frameId = userProfile.selectedFrameId,
+                            level = userProfile.level,
+                            avatarSize = 50.dp,
+                            showLevelBadge = true
                         )
                     }
                 }
@@ -1323,7 +1367,7 @@ private fun ExploreTabContent(
         }
 
         // 2. Top Search & Filter Bar (Screen 2 of UI/UX Case Study)
-        item {
+        item(key = "explore_search_bar", contentType = "search") {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1378,7 +1422,7 @@ private fun ExploreTabContent(
         }
 
         // 3. Smooth Horizontal Category Cards with Emblems & Gold Borders (Screen 2 of UI/UX Case Study)
-        item {
+        item(key = "explore_categories_row", contentType = "categories") {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1425,7 +1469,7 @@ private fun ExploreTabContent(
                     contentPadding = PaddingValues(horizontal = 20.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(LayaliCatalog.categories) { category ->
+                    items(LayaliCatalog.categories, key = { it }) { category ->
                         val isSelected = selectedCategory == category
                         LuxuryCategoryCard(
                             category = category,
@@ -1438,7 +1482,7 @@ private fun ExploreTabContent(
         }
 
         // 3b. Horizontal 4K Reels Preview Strip for Web & App
-        item {
+        item(key = "explore_reels_strip", contentType = "reels_strip") {
             HomeReelsPreviewStrip(
                 venues = venues,
                 publishedServices = publishedServices,
@@ -1449,7 +1493,7 @@ private fun ExploreTabContent(
 
         // 4. Collapsible Country & City Filter Strip
         if (showFiltersRow) {
-            item {
+            item(key = "explore_city_filters", contentType = "city_filters") {
                 Column(modifier = Modifier.padding(top = 6.dp, bottom = 8.dp)) {
                     Row(
                         modifier = Modifier
@@ -1517,7 +1561,7 @@ private fun ExploreTabContent(
         }
 
         // 5. Section Header: "الخدمات" + Sort Pills + Admin/Reviews Quick Access
-        item {
+        item(key = "explore_sort_header", contentType = "sort_header") {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1592,7 +1636,7 @@ private fun ExploreTabContent(
 
         // 7. Live Published Services & Offers Showcase (Zero Admin UI for Customers)
         if (publishedServices.isNotEmpty()) {
-            item {
+            item(key = "explore_published_offers", contentType = "published_offers") {
                 Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -1698,7 +1742,7 @@ private fun ExploreTabContent(
                 }
             }
         } else {
-            item {
+            item(key = "explore_all_venues_header", contentType = "venues_header") {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1725,7 +1769,11 @@ private fun ExploreTabContent(
                 }
             }
 
-            items(venues, key = { it.id }) { venue ->
+            items(
+                items = displayedVenues,
+                key = { it.id },
+                contentType = { "venue_card" }
+            ) { venue ->
                 VenueCard(
                     venue = venue,
                     isFavorite = favoriteIds.contains(venue.id),
@@ -1738,6 +1786,34 @@ private fun ExploreTabContent(
                     onBlockProvider = { onBlockVenueProvider(venue) },
                     onToggleFavorite = { onToggleFavorite(venue) }
                 )
+            }
+
+            if (venues.size > visibleVenuesCount) {
+                item(key = "explore_load_more_venues", contentType = "load_more") {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        OutlinedButton(
+                            onClick = { visibleVenuesCount += 8 },
+                            shape = RoundedCornerShape(50),
+                            border = BorderStroke(1.2.dp, BrandChampagneGold),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .testTag("load_more_venues_button")
+                        ) {
+                            Text(
+                                text = "عرض المزيد من المراكز والسهرات (${venues.size - visibleVenuesCount} متبقية)",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = BrandChampagneGold,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -1821,11 +1897,11 @@ private fun CompactServiceGridCard(
         modifier = modifier
             .clickable { onOpenDetails() }
             .testTag("grid_venue_card_${venue.id}"),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.90f)
+            containerColor = MaterialTheme.colorScheme.surface
         ),
-        border = BorderStroke(1.2.dp, BrandChampagneGold.copy(alpha = 0.42f))
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
     ) {
         Column {
             Box(
@@ -1841,7 +1917,7 @@ private fun CompactServiceGridCard(
                     modifier = Modifier.fillMaxSize()
                 )
 
-                // Top-left Favorite Heart Icon (matches Screen 2 of UI/UX Case Study)
+                // Top-left Favorite Heart Icon
                 IconButton(
                     onClick = onToggleFavorite,
                     modifier = Modifier
@@ -1849,20 +1925,19 @@ private fun CompactServiceGridCard(
                         .padding(8.dp)
                         .size(34.dp)
                         .clip(CircleShape)
-                        .background(ObsidianNight.copy(alpha = 0.72f))
-                        .border(0.8.dp, BrandChampagneGold.copy(alpha = 0.6f), CircleShape)
+                        .background(CharcoalNight.copy(alpha = 0.65f))
                 ) {
                     Icon(
                         imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                         contentDescription = "المفضلة",
-                        tint = if (isFavorite) WarmCoral else Color.White,
+                        tint = if (isFavorite) CoralPinkPrimary else Color.White,
                         modifier = Modifier.size(17.dp)
                     )
                 }
 
                 // Bottom-end Price Badge
                 Surface(
-                    color = BrandChampagneGold,
+                    color = CharcoalNight.copy(alpha = 0.85f),
                     shape = RoundedCornerShape(50),
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
@@ -1871,9 +1946,9 @@ private fun CompactServiceGridCard(
                     Text(
                         text = "$${venue.startingPriceUsd}",
                         style = MaterialTheme.typography.labelMedium,
-                        color = ObsidianNight,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
                     )
                 }
             }
@@ -1887,7 +1962,7 @@ private fun CompactServiceGridCard(
                     text = venue.name,
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.SemiBold,
                     maxLines = 2,
                     minLines = 2,
                     overflow = TextOverflow.Ellipsis,
@@ -1903,17 +1978,17 @@ private fun CompactServiceGridCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Star,
+                        imageVector = Icons.Default.Verified,
                         contentDescription = null,
-                        tint = BrandChampagneGold,
-                        modifier = Modifier.size(15.dp)
+                        tint = VioletBlueVip,
+                        modifier = Modifier.size(14.dp)
                     )
-                    Spacer(modifier = Modifier.width(3.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = "${venue.ratingAverage} • ${venue.cityName}",
                         style = MaterialTheme.typography.labelMedium,
-                        color = SoftGold,
-                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Medium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -1921,13 +1996,13 @@ private fun CompactServiceGridCard(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Wide Clear Action Button (No narrow vertical buttons or truncated text)
+                // Capsule Action Button
                 Button(
                     onClick = onOpenDetails,
                     shape = RoundedCornerShape(50),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = BrandChampagneGold,
-                        contentColor = ObsidianNight
+                        containerColor = CoralPinkPrimary,
+                        contentColor = Color.White
                     ),
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                     modifier = Modifier
@@ -1937,7 +2012,7 @@ private fun CompactServiceGridCard(
                     Text(
                         text = "التفاصيل والحجز",
                         style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.SemiBold,
                         maxLines = 1
                     )
                 }
@@ -2211,11 +2286,11 @@ private fun VenueCard(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                FlowRow(
+                Row(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    venue.badges.forEach { badge ->
+                    venue.badges.take(3).forEach { badge ->
                         Surface(
                             color = MaterialTheme.colorScheme.surfaceVariant,
                             shape = RoundedCornerShape(8.dp)
@@ -2224,6 +2299,8 @@ private fun VenueCard(
                                 text = badge,
                                 style = MaterialTheme.typography.labelMedium,
                                 color = SoftGold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                             )
                         }
@@ -2316,25 +2393,32 @@ private fun VenueCard(
                 ) {
                     OutlinedButton(
                         onClick = onClick,
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, RoyalGold.copy(alpha = 0.55f)),
-                        modifier = Modifier.weight(1f)
+                        shape = RoundedCornerShape(50),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp)
                     ) {
-                        Text("التفاصيل والعرض", color = SoftGold)
+                        Text(
+                            text = "التفاصيل والعرض",
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontWeight = FontWeight.Medium
+                        )
                     }
 
                     Button(
                         onClick = onQuickBook,
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(50),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = RoyalGold,
-                            contentColor = ObsidianNight
+                            containerColor = CoralPinkPrimary,
+                            contentColor = Color.White
                         ),
                         modifier = Modifier
                             .weight(1f)
+                            .height(44.dp)
                             .testTag("quick_book_${venue.id}")
                     ) {
-                        Text("حجز مباشر الآن", fontWeight = FontWeight.Bold)
+                        Text("حجز مباشر الآن", fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -3211,7 +3295,7 @@ private fun FavoritesTabContent(
                                 colors = CardDefaults.cardColors(
                                     containerColor = MaterialTheme.colorScheme.surface
                                 ),
-                                border = BorderStroke(1.dp, RoyalGold.copy(alpha = 0.3f))
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
                             ) {
                                 Row(
                                     modifier = Modifier
@@ -3229,7 +3313,7 @@ private fun FavoritesTabContent(
                                         Text(
                                             text = "${fav.cityName} • ${fav.category}",
                                             style = MaterialTheme.typography.bodyMedium,
-                                            color = SoftGold
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
 
@@ -3237,7 +3321,7 @@ private fun FavoritesTabContent(
                                         Icon(
                                             imageVector = Icons.Default.Favorite,
                                             contentDescription = "إزالة من المفضلة",
-                                            tint = WarmCoral
+                                            tint = CoralPinkPrimary
                                         )
                                     }
                                 }
@@ -3249,3 +3333,118 @@ private fun FavoritesTabContent(
         }
     }
 }
+
+@Composable
+private fun ReviewItemCard(
+    authorName: String,
+    cityBadge: String,
+    serviceTitle: String,
+    rating: Int,
+    comment: String,
+    dateLabel: String,
+    isCurrentUser: Boolean,
+    onBlockAuthor: (() -> Unit)? = null
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(18.dp),
+        border = BorderStroke(
+            width = 1.dp,
+            color = if (isCurrentUser) VioletBlueVip else MaterialTheme.colorScheme.outline
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 6.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        color = VioletBlueVip.copy(alpha = 0.12f),
+                        shape = RoundedCornerShape(50)
+                    ) {
+                        Text(
+                            text = dateLabel,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = VioletBlueVip,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        )
+                    }
+                    if (onBlockAuthor != null) {
+                        IconButton(
+                            onClick = onBlockAuthor,
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Block,
+                                contentDescription = "حظر المستخدم",
+                                tint = ErrorCrimson,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(horizontalAlignment = Alignment.End) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Verified,
+                                contentDescription = null,
+                                tint = VioletBlueVip,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = authorName,
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        Text(
+                            text = "$cityBadge • $serviceTitle",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                repeat(rating.coerceIn(1, 5)) {
+                    Icon(
+                        imageVector = Icons.Default.Star,
+                        contentDescription = null,
+                        tint = CoralPinkPrimary,
+                        modifier = Modifier.size(15.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Text(
+                text = comment,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.End,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+

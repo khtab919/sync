@@ -4,7 +4,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,18 +22,17 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.CreditCard
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.PhoneIphone
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.QrCode2
+import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -42,12 +40,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -57,29 +53,47 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.ServicePackage
 import com.example.data.model.Venue
-import com.example.ui.components.SmartServiceMediaView
-import com.example.ui.theme.BrandChampagneGold
-import com.example.ui.theme.BrandDeepViolet
-import com.example.ui.theme.BrandDustyRose
+import com.example.ui.components.FramedUserAvatar
+import com.example.ui.components.LuxuryGradientButton
+import com.example.ui.components.MandatoryReceiptAttachmentCard
+import com.example.ui.components.ShamCashOfficialCard
+import com.example.ui.components.UsdtBep20OfficialCard
+import com.example.ui.theme.CharcoalNight
+import com.example.ui.theme.CoralPinkPrimary
 import com.example.ui.theme.EmeraldVerified
-import com.example.ui.theme.ObsidianNight
-import com.example.ui.theme.RoyalGold
-import com.example.ui.theme.SoftGold
+import com.example.ui.theme.ErrorCrimson
+import com.example.ui.theme.PureWhite
+import com.example.ui.theme.ShamCashTeal
+import com.example.ui.theme.SovereignGold
+import com.example.ui.theme.SubtitleGrayText
+import com.example.ui.theme.UsdtTetherGreen
+import com.example.ui.theme.VioletBlueVip
+import java.util.Locale
 
-enum class PaymentMethodType(val titleAr: String, val subtitleAr: String) {
-    WALLET("رصيد المحفظة", "الرصيد المشحون مسبقاً"),
-    CREDIT_CARD("بطاقة ائتمانية", "Visa / Mastercard • دفع مشفر"),
-    APPLE_GOOGLE_PAY("Apple Pay / Google Pay", "دفع سريع بلمسة واحدة")
+enum class PaymentMethodType(val titleAr: String, val subtitleAr: String, val methodKey: String) {
+    USDT_BEP20(
+        "USDT (BEP-20) Tether",
+        "إيداع فوري عبر باركود + رمز QR مع إرفاق الإيصال",
+        "USDT_BEP20"
+    ),
+    SHAM_CASH(
+        "شام كاش السوري (Sham Cash)",
+        "تحويل مباشر عبر رمز QR شام كاش مع إرفاق الإيصال",
+        "SHAM_CASH"
+    ),
+    WALLET(
+        "الدفع من رصيد المحفظة الموثق",
+        "خصم فوري من رصيد محفظتك المشحون مسبقاً",
+        "WALLET"
+    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -89,186 +103,318 @@ fun CheckoutScreen(
     selectedPackage: ServicePackage,
     walletBalanceUsd: Int,
     isSubmitting: Boolean,
+    onBack: () -> Unit,
     onOpenWalletTopUp: () -> Unit,
+    onShowMessage: (String) -> Unit = {},
     onConfirmCheckout: (
-        date: String,
+        bookingDate: String,
         timeSlot: String,
         guestCount: Int,
         notes: String,
-        paymentMethod: PaymentMethodType
-    ) -> Unit,
-    onBack: () -> Unit
+        paymentMethod: PaymentMethodType,
+        receiptImageUri: String,
+        transactionRef: String
+    ) -> Unit
 ) {
-    BackHandler(onBack = onBack)
+    BackHandler { onBack() }
 
-    val dateOptions = remember {
-        listOf(
-            "اليوم - المساء",
-            "غداً - المساء",
-            "الخميس القادم",
-            "الجمعة القادمة",
-            "السبت القادم"
-        )
+    val planOptions = remember(venue) { buildVipPlanOptions(venue) }
+    var selectedPlanIndex by remember(selectedPackage.id) {
+        val idx = planOptions.indexOfFirst { it.id == selectedPackage.id || it.priceUsd == selectedPackage.priceUsd }
+        mutableIntStateOf(if (idx >= 0) idx else 0)
     }
+    val activePlan = planOptions.getOrElse(selectedPlanIndex) { planOptions.first() }
 
-    var currentStep by remember { mutableIntStateOf(3) } // 1: التفاصيل, 2: الوقت, 3: الدفع
-    var selectedDate by remember { mutableStateOf(dateOptions.first()) }
+    val availableDates = remember {
+        listOf("الليلة (حجز فوري)", "غداً مساءً", "الجمعة القادمة", "السبت القادم")
+    }
+    var selectedDate by remember { mutableStateOf(availableDates.first()) }
     var selectedTimeSlot by remember {
-        mutableStateOf(venue.availableTimeSlots.firstOrNull() ?: "08:30 مساءً")
+        mutableStateOf(venue.availableTimeSlots.firstOrNull() ?: "09:00 مساءً")
     }
     var guestCount by remember { mutableIntStateOf(1) }
     var notes by remember { mutableStateOf("") }
+    var selectedPaymentMethod by remember { mutableStateOf(PaymentMethodType.USDT_BEP20) }
+    var attachedReceiptUri by remember { mutableStateOf("") }
+    var transactionRef by remember { mutableStateOf("") }
 
-    var selectedPaymentMethod by remember {
-        mutableStateOf(PaymentMethodType.WALLET)
-    }
-
-    // Credit Card Inputs when CREDIT_CARD is selected
-    var cardNumber by remember { mutableStateOf("4532 •••• •••• 8891") }
-    var cardExpiry by remember { mutableStateOf("08/28") }
-    var cardCvv by remember { mutableStateOf("942") }
-
-    val unitPriceUsd = selectedPackage.priceUsd
-    val serviceFeeUsd = 0
-    val totalPriceUsd = unitPriceUsd * guestCount + serviceFeeUsd
-
-    val goldButtonGradient = Brush.horizontalGradient(
-        colors = listOf(
-            Color(0xFFE7C77C),
-            Color(0xFFC49746)
-        )
-    )
+    val totalPriceUsd = (activePlan.priceUsd * guestCount).coerceAtLeast(5)
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFF230D30),
-                        Color(0xFF170821),
-                        Color(0xFF12061A)
-                    )
-                )
-            )
+            .background(MaterialTheme.colorScheme.background)
     ) {
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(
-                start = 22.dp,
-                end = 22.dp,
-                top = 18.dp,
-                bottom = 115.dp
-            ),
+            modifier = Modifier
+                .fillMaxSize()
+                .testTag("checkout_screen_list"),
+            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 175.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Top Header: "خطوات الدفع"
+            // 1. Header: Framed Provider Avatar + Name + @username + Close Button
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Spacer(modifier = Modifier.size(44.dp))
-                    Text(
-                        text = "خطوات الدفع",
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
-                    )
                     IconButton(
                         onClick = onBack,
                         modifier = Modifier
-                            .size(44.dp)
+                            .size(40.dp)
                             .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.08f))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
                             .testTag("checkout_back_button")
                     ) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "رجوع",
-                            tint = BrandChampagneGold
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "إغلاق",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(18.dp)
                         )
                     }
-                }
-            }
 
-            // Step Progress Indicator (التفاصيل > الوقت > الدفع)
-            item {
-                Surface(
-                    color = Color(0xFF2E143D),
-                    shape = RoundedCornerShape(18.dp),
-                    border = BorderStroke(1.dp, BrandChampagneGold.copy(alpha = 0.35f)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 12.dp, horizontal = 14.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        StepIndicatorPill(
-                            stepNumber = 1,
-                            label = "التفاصيل",
-                            isActive = currentStep == 1,
-                            isCompleted = currentStep > 1,
-                            onClick = { currentStep = 1 }
-                        )
-                        Text(">", color = BrandChampagneGold, fontWeight = FontWeight.Bold)
-                        StepIndicatorPill(
-                            stepNumber = 2,
-                            label = "الوقت",
-                            isActive = currentStep == 2,
-                            isCompleted = currentStep > 2,
-                            onClick = { currentStep = 2 }
-                        )
-                        Text(">", color = BrandChampagneGold, fontWeight = FontWeight.Bold)
-                        StepIndicatorPill(
-                            stepNumber = 3,
-                            label = "الدفع",
-                            isActive = currentStep == 3,
-                            isCompleted = false,
-                            onClick = { currentStep = 3 }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Verified,
+                                    contentDescription = "موثق",
+                                    tint = VioletBlueVip,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = venue.name,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Text(
+                                text = "${venue.providerUsername} • ${venue.cityName} • ${venue.category}",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = SovereignGold
+                            )
+                        }
+
+                        FramedUserAvatar(
+                            avatarUri = venue.visualPresetKey,
+                            fallbackInitial = venue.name.take(1),
+                            frameId = venue.providerFrameId,
+                            level = venue.providerLevel,
+                            avatarSize = 48.dp,
+                            isOnline = venue.isOnlineNow
                         )
                     }
                 }
             }
 
-            // Expandable Date & Time Customization when Step 1 or Step 2 is tapped
             item {
-                AnimatedVisibility(visible = currentStep == 1 || currentStep == 2) {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF2B133A)),
-                        border = BorderStroke(1.dp, BrandChampagneGold.copy(alpha = 0.45f))
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                Text(
+                    text = "تأكيد الحجز الملكي والباقة",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.ExtraBold,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            // 2. Tier Selection Cards
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    planOptions.forEachIndexed { index, plan ->
+                        val isSelected = selectedPlanIndex == index
+                        val borderColor = if (isSelected) {
+                            if (index == 2) SovereignGold else VioletBlueVip
+                        } else {
+                            MaterialTheme.colorScheme.outline
+                        }
+
+                        Surface(
+                            onClick = { selectedPlanIndex = index },
+                            shape = RoundedCornerShape(18.dp),
+                            color = if (isSelected) {
+                                borderColor.copy(alpha = 0.1f)
+                            } else {
+                                MaterialTheme.colorScheme.surface
+                            },
+                            border = BorderStroke(
+                                width = if (isSelected) 1.5.dp else 1.dp,
+                                color = borderColor
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("checkout_plan_tier_$index")
                         ) {
-                            Text(
-                                text = "تحديد الموعد وعدد الأشخاص:",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = BrandChampagneGold
-                            )
-                            FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                dateOptions.forEach { d ->
-                                    FilterChip(
-                                        selected = selectedDate == d,
-                                        onClick = { selectedDate = d },
-                                        label = { Text(d) },
-                                        colors = FilterChipDefaults.filterChipColors(
-                                            selectedContainerColor = BrandChampagneGold,
-                                            selectedLabelColor = ObsidianNight
-                                        )
+                                RadioButton(
+                                    selected = isSelected,
+                                    onClick = { selectedPlanIndex = index },
+                                    colors = RadioButtonDefaults.colors(
+                                        selectedColor = borderColor,
+                                        unselectedColor = SubtitleGrayText
                                     )
+                                )
+
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(horizontal = 8.dp),
+                                    horizontalAlignment = Alignment.End
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Surface(
+                                            color = if (isSelected) borderColor else MaterialTheme.colorScheme.surfaceVariant,
+                                            shape = RoundedCornerShape(50)
+                                        ) {
+                                            Text(
+                                                text = plan.discountBadge,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = if (isSelected) CharcoalNight else SubtitleGrayText,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                                maxLines = 1
+                                            )
+                                        }
+                                        Text(
+                                            text = plan.tierTitle,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(4.dp))
+
+                                    Row(
+                                        verticalAlignment = Alignment.Bottom,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(
+                                            text = "/ ${plan.durationLabel}",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = SubtitleGrayText
+                                        )
+                                        Text(
+                                            text = String.format(Locale.US, "$%d.00", plan.priceUsd),
+                                            fontSize = 22.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = SovereignGold
+                                        )
+                                    }
                                 }
                             }
+                        }
+                    }
+                }
+            }
+
+            // 3. Benefits List
+            item {
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("checkout_order_summary_card")
+                ) {
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                        Text(
+                            text = "مميزات الباقة المختارة",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = SovereignGold,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        activePlan.benefits.forEachIndexed { idx, benefit ->
+                            if (idx > 0) {
+                                HorizontalDivider(
+                                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
+                                    modifier = Modifier.padding(vertical = 8.dp)
+                                )
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = benefit,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .clip(CircleShape)
+                                        .background(if (idx % 2 == 0) SovereignGold else VioletBlueVip)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 4. Date, Time & Guest Count Selector
+            item {
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = "تحديد موعد الحجز والعدد",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontWeight = FontWeight.Bold
+                        )
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            availableDates.forEach { d ->
+                                FilterChip(
+                                    selected = selectedDate == d,
+                                    onClick = { selectedDate = d },
+                                    label = { Text(d, maxLines = 1) },
+                                    shape = RoundedCornerShape(50),
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = SovereignGold,
+                                        selectedLabelColor = CharcoalNight
+                                    )
+                                )
+                            }
+                        }
+
+                        if (venue.availableTimeSlots.isNotEmpty()) {
                             FlowRow(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                                 verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -277,430 +423,286 @@ fun CheckoutScreen(
                                     FilterChip(
                                         selected = selectedTimeSlot == slot,
                                         onClick = { selectedTimeSlot = slot },
-                                        label = { Text(slot) },
+                                        label = { Text(slot, maxLines = 1) },
+                                        shape = RoundedCornerShape(50),
                                         colors = FilterChipDefaults.filterChipColors(
-                                            selectedContainerColor = BrandDustyRose,
+                                            selectedContainerColor = VioletBlueVip,
                                             selectedLabelColor = Color.White
                                         )
                                     )
                                 }
                             }
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text("عدد الأشخاص / الليالي:", color = SoftGold)
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    IconButton(onClick = { if (guestCount > 1) guestCount-- }) {
-                                        Icon(Icons.Default.Remove, contentDescription = null, tint = BrandChampagneGold)
-                                    }
-                                    Text(
-                                        text = "$guestCount",
-                                        style = MaterialTheme.typography.titleLarge,
-                                        color = Color.White,
-                                        modifier = Modifier.padding(horizontal = 8.dp)
-                                    )
-                                    IconButton(onClick = { if (guestCount < 15) guestCount++ }) {
-                                        Icon(Icons.Default.Add, contentDescription = null, tint = BrandChampagneGold)
-                                    }
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(onClick = { if (guestCount > 1) guestCount-- }) {
+                                    Icon(Icons.Default.Remove, contentDescription = null, tint = SovereignGold)
+                                }
+                                Text(
+                                    text = "$guestCount",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 8.dp)
+                                )
+                                IconButton(onClick = { if (guestCount < 15) guestCount++ }) {
+                                    Icon(Icons.Default.Add, contentDescription = null, tint = SovereignGold)
                                 }
                             }
-                            OutlinedTextField(
-                                value = notes,
-                                onValueChange = { notes = it },
-                                label = { Text("ملاحظات خاصة للطلب (اختياري)") },
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth()
+                            Text(
+                                text = "عدد الأشخاص / الجلسات",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = SubtitleGrayText
                             )
                         }
+                        OutlinedTextField(
+                            value = notes,
+                            onValueChange = { notes = it },
+                            label = { Text("ملاحظات خاصة للحجز (اختياري)") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                 }
             }
 
-            // Order Summary Card ("ملخص الطلب" - Screen 5 of Case Study)
+            // 5. Real Payment Gateway Selection (USDT BEP-20, Sham Cash, or Verified Wallet)
             item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("checkout_order_summary_card"),
-                    shape = RoundedCornerShape(22.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = Color(0xFF2D143C)
-                    ),
-                    border = BorderStroke(1.2.dp, BrandChampagneGold.copy(alpha = 0.42f))
-                ) {
-                    Column(
-                        modifier = Modifier.padding(18.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // Thumbnail Image on the Left
-                            Box(
-                                modifier = Modifier
-                                    .size(72.dp)
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .border(1.dp, BrandChampagneGold, RoundedCornerShape(14.dp))
-                            ) {
-                                SmartServiceMediaView(
-                                    imageUrl = venue.visualPresetKey,
-                                    accentHex = venue.accentHex,
-                                    secondaryHex = venue.secondaryHex,
-                                    category = venue.category,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            }
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "وسيلة الدفع الحقيقي وتوثيق الإيصال:",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Bold
+                    )
 
-                            Spacer(modifier = Modifier.width(14.dp))
-
-                            Column(
-                                modifier = Modifier.weight(1f),
-                                horizontalAlignment = Alignment.End
-                            ) {
-                                Text(
-                                    text = "ملخص الطلب",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = venue.name,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = BrandChampagneGold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    text = "$selectedDate • $selectedTimeSlot",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = SoftGold,
-                                    modifier = Modifier.clickable { currentStep = 2 }
-                                )
-                            }
-                        }
-
-                        HorizontalDivider(color = Color.White.copy(alpha = 0.12f))
-
-                        // Invoice Breakdown Rows
-                        InvoiceRow(
-                            label = "الباقة (${selectedPackage.durationLabel} × $guestCount)",
-                            value = "$$unitPriceUsd"
-                        )
-                        InvoiceRow(
-                            label = "تفاصيل السعر والرسوم",
-                            value = "$$serviceFeeUsd مجاناً"
-                        )
-
-                        HorizontalDivider(color = BrandChampagneGold.copy(alpha = 0.25f))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "$$totalPriceUsd",
-                                fontSize = 22.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = BrandChampagneGold
-                            )
-                            Text(
-                                text = "السعر الإجمالي",
-                                style = MaterialTheme.typography.titleLarge,
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Payment Methods Header ("خيارات الدفع")
-            item {
-                Text(
-                    text = "خيارات الدفع",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-
-            // Payment Method Radio Option Cards
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     PaymentMethodType.entries.forEach { method ->
                         val isSelected = selectedPaymentMethod == method
                         val methodIcon = when (method) {
+                            PaymentMethodType.USDT_BEP20 -> Icons.Default.QrCode2
+                            PaymentMethodType.SHAM_CASH -> Icons.Default.ReceiptLong
                             PaymentMethodType.WALLET -> Icons.Default.AccountBalanceWallet
-                            PaymentMethodType.CREDIT_CARD -> Icons.Default.CreditCard
-                            PaymentMethodType.APPLE_GOOGLE_PAY -> Icons.Default.PhoneIphone
                         }
 
                         Surface(
                             onClick = { selectedPaymentMethod = method },
-                            color = if (isSelected) Color(0xFF391A4C) else Color(0xFF281136),
+                            color = if (isSelected) SovereignGold.copy(alpha = 0.1f) else MaterialTheme.colorScheme.surface,
                             shape = RoundedCornerShape(18.dp),
                             border = BorderStroke(
-                                width = if (isSelected) 1.6.dp else 1.dp,
-                                color = if (isSelected) BrandChampagneGold else Color.White.copy(alpha = 0.18f)
+                                width = if (isSelected) 1.5.dp else 1.dp,
+                                color = if (isSelected) SovereignGold else MaterialTheme.colorScheme.outline
                             ),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .testTag("payment_method_${method.name.lowercase()}")
                         ) {
-                            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    RadioButton(
-                                        selected = isSelected,
-                                        onClick = { selectedPaymentMethod = method },
-                                        colors = RadioButtonDefaults.colors(
-                                            selectedColor = BrandChampagneGold,
-                                            unselectedColor = Color.White.copy(alpha = 0.5f)
-                                        )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = isSelected,
+                                    onClick = { selectedPaymentMethod = method },
+                                    colors = RadioButtonDefaults.colors(
+                                        selectedColor = SovereignGold,
+                                        unselectedColor = SubtitleGrayText
                                     )
+                                )
 
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.End,
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        Column(horizontalAlignment = Alignment.End) {
-                                            Text(
-                                                text = method.titleAr,
-                                                style = MaterialTheme.typography.titleMedium,
-                                                color = Color.White,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                            Text(
-                                                text = if (method == PaymentMethodType.WALLET) {
-                                                    "الرصيد المتوفر حالياً: $$walletBalanceUsd"
-                                                } else {
-                                                    method.subtitleAr
-                                                },
-                                                style = MaterialTheme.typography.labelMedium,
-                                                color = if (method == PaymentMethodType.WALLET && walletBalanceUsd >= totalPriceUsd) {
-                                                    EmeraldVerified
-                                                } else {
-                                                    SoftGold
-                                                }
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.width(12.dp))
-                                        Icon(
-                                            imageVector = methodIcon,
-                                            contentDescription = method.titleAr,
-                                            tint = BrandChampagneGold,
-                                            modifier = Modifier.size(24.dp)
-                                        )
-                                    }
-                                }
-
-                                // If Wallet is selected and balance is insufficient, show a 1-tap Top-up shortcut
-                                if (method == PaymentMethodType.WALLET && isSelected && walletBalanceUsd < totalPriceUsd) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(top = 6.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        TextButton(onClick = onOpenWalletTopUp) {
-                                            Text(
-                                                text = "+ شحن رصيد المحفظة الآن",
-                                                color = BrandChampagneGold,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.End,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Column(horizontalAlignment = Alignment.End) {
                                         Text(
-                                            text = "الرصيد أقل من قيمة الطلب ($$totalPriceUsd)",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = BrandDustyRose
+                                            text = method.titleAr,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = if (method == PaymentMethodType.WALLET) {
+                                                String.format(Locale.US, "الرصيد المتوفر: $%d.00", walletBalanceUsd)
+                                            } else {
+                                                method.subtitleAr
+                                            },
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = if (method == PaymentMethodType.WALLET && walletBalanceUsd >= totalPriceUsd) {
+                                                EmeraldVerified
+                                            } else {
+                                                SubtitleGrayText
+                                            }
                                         )
                                     }
-                                }
-
-                                // If Credit Card is selected, expand card input fields
-                                AnimatedVisibility(visible = method == PaymentMethodType.CREDIT_CARD && isSelected) {
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(top = 10.dp),
-                                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        OutlinedTextField(
-                                            value = cardNumber,
-                                            onValueChange = { cardNumber = it },
-                                            label = { Text("رقم البطاقة (Visa / Mastercard)") },
-                                            singleLine = true,
-                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                            colors = OutlinedTextFieldDefaults.colors(
-                                                focusedBorderColor = BrandChampagneGold,
-                                                unfocusedBorderColor = BrandChampagneGold.copy(alpha = 0.4f)
-                                            ),
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            OutlinedTextField(
-                                                value = cardExpiry,
-                                                onValueChange = { cardExpiry = it },
-                                                label = { Text("تاريخ الانتهاء") },
-                                                singleLine = true,
-                                                modifier = Modifier.weight(1f)
-                                            )
-                                            OutlinedTextField(
-                                                value = cardCvv,
-                                                onValueChange = { cardCvv = it },
-                                                label = { Text("رمز CVV") },
-                                                singleLine = true,
-                                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                                modifier = Modifier.weight(1f)
-                                            )
-                                        }
-                                    }
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Icon(
+                                        imageVector = methodIcon,
+                                        contentDescription = method.titleAr,
+                                        tint = SovereignGold,
+                                        modifier = Modifier.size(24.dp)
+                                    )
                                 }
                             }
                         }
                     }
                 }
             }
+
+            // 6. Live Payment Gateway Card + Mandatory Receipt Attachment
+            if (selectedPaymentMethod == PaymentMethodType.USDT_BEP20) {
+                item {
+                    UsdtBep20OfficialCard(
+                        amountUsd = totalPriceUsd,
+                        onCopyMessage = onShowMessage
+                    )
+                }
+                item {
+                    MandatoryReceiptAttachmentCard(
+                        receiptImageUri = attachedReceiptUri,
+                        transactionRef = transactionRef,
+                        onReceiptSelected = { uri ->
+                            attachedReceiptUri = uri
+                            onShowMessage("تم إرفاق صورة إيصال USDT بنجاح ✓")
+                        },
+                        onTransactionRefChange = { transactionRef = it }
+                    )
+                }
+            } else if (selectedPaymentMethod == PaymentMethodType.SHAM_CASH) {
+                item {
+                    ShamCashOfficialCard(
+                        amountUsd = totalPriceUsd,
+                        onCopyMessage = onShowMessage
+                    )
+                }
+                item {
+                    MandatoryReceiptAttachmentCard(
+                        receiptImageUri = attachedReceiptUri,
+                        transactionRef = transactionRef,
+                        onReceiptSelected = { uri ->
+                            attachedReceiptUri = uri
+                            onShowMessage("تم إرفاق صورة إيصال شام كاش بنجاح ✓")
+                        },
+                        onTransactionRefChange = { transactionRef = it }
+                    )
+                }
+            }
         }
 
-        // Bottom Wide CTA Bar: "تأكيد وإتمام الدفع الآمن"
+        // 7. Sticky Bottom Confirmation Bar
         Surface(
             modifier = Modifier.align(Alignment.BottomCenter),
-            color = Color(0xFF1B0A26).copy(alpha = 0.96f),
-            tonalElevation = 12.dp,
-            border = BorderStroke(1.dp, BrandChampagneGold.copy(alpha = 0.35f))
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 10.dp,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 22.dp, vertical = 14.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Box(
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "شحن المحفظة عبر شام كاش / USDT +",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = SovereignGold,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .clickable { onOpenWalletTopUp() }
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                            .testTag("checkout_topup_wallet_link")
+                    )
+
+                    Text(
+                        text = String.format(Locale.US, "رصيدك: $%d.00", walletBalanceUsd),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                LuxuryGradientButton(
+                    text = if (isSubmitting) {
+                        "جارٍ توثيق الحجز والإيصال..."
+                    } else if (selectedPaymentMethod != PaymentMethodType.WALLET && attachedReceiptUri.isBlank()) {
+                        "أرفق إيصال الدفع لتأكيد الحجز ($$totalPriceUsd)"
+                    } else {
+                        "تأكيد الحجز وإرسال الإيصال • $$totalPriceUsd"
+                    },
+                    icon = Icons.Default.CheckCircle,
+                    enabled = !isSubmitting,
+                    isEmeraldStyle = attachedReceiptUri.isNotBlank() ||
+                        (selectedPaymentMethod == PaymentMethodType.WALLET && walletBalanceUsd >= totalPriceUsd),
+                    onClick = {
+                        if (selectedPaymentMethod == PaymentMethodType.WALLET) {
+                            if (walletBalanceUsd < totalPriceUsd) {
+                                onShowMessage("رصيد المحفظة ($$walletBalanceUsd) غير كافٍ لطلب ($$totalPriceUsd). اختر شام كاش أو USDT وأرفق الإيصال.")
+                            } else {
+                                onConfirmCheckout(
+                                    selectedDate,
+                                    selectedTimeSlot,
+                                    guestCount,
+                                    notes,
+                                    selectedPaymentMethod,
+                                    "",
+                                    "WALLET_DEDUCT"
+                                )
+                            }
+                        } else {
+                            if (attachedReceiptUri.isBlank()) {
+                                onShowMessage("يرجى إرفاق صورة إيصال التحويل (${selectedPaymentMethod.titleAr}) أولاً لإتمام الحجز!")
+                            } else {
+                                onConfirmCheckout(
+                                    selectedDate,
+                                    selectedTimeSlot,
+                                    guestCount,
+                                    notes,
+                                    selectedPaymentMethod,
+                                    attachedReceiptUri,
+                                    transactionRef
+                                )
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    testTag = "confirm_secure_checkout_button"
+                )
+
+                Button(
+                    onClick = onBack,
+                    shape = RoundedCornerShape(50),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = MaterialTheme.colorScheme.onSurface
+                    ),
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(56.dp)
-                        .clip(RoundedCornerShape(30.dp))
-                        .background(goldButtonGradient)
-                        .clickable(enabled = !isSubmitting) {
-                            onConfirmCheckout(
-                                selectedDate,
-                                selectedTimeSlot,
-                                guestCount,
-                                notes,
-                                selectedPaymentMethod
-                            )
-                        }
-                        .testTag("confirm_secure_checkout_button"),
-                    contentAlignment = Alignment.Center
+                        .height(42.dp)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Lock,
-                            contentDescription = null,
-                            tint = Color(0xFF1E0B28),
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = if (isSubmitting) {
-                                "جارٍ تأكيد الحجز والدفع..."
-                            } else {
-                                "تأكيد وإتمام الدفع الآمن ($$totalPriceUsd)"
-                            },
-                            style = MaterialTheme.typography.titleLarge,
-                            color = Color(0xFF1E0B28),
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                    Text(
+                        text = "إلغاء والعودة",
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun StepIndicatorPill(
-    stepNumber: Int,
-    label: String,
-    isActive: Boolean,
-    isCompleted: Boolean,
-    onClick: () -> Unit
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .clip(RoundedCornerShape(50))
-            .clickable { onClick() }
-            .padding(horizontal = 6.dp, vertical = 4.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(24.dp)
-                .clip(CircleShape)
-                .background(
-                    when {
-                        isActive -> BrandChampagneGold
-                        isCompleted -> EmeraldVerified
-                        else -> Color.White.copy(alpha = 0.15f)
-                    }
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            if (isCompleted) {
-                Icon(
-                    imageVector = Icons.Default.CheckCircle,
-                    contentDescription = null,
-                    tint = ObsidianNight,
-                    modifier = Modifier.size(16.dp)
-                )
-            } else {
-                Text(
-                    text = "$stepNumber",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (isActive) ObsidianNight else Color.White,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        }
-        Spacer(modifier = Modifier.width(6.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelLarge,
-            color = if (isActive) BrandChampagneGold else Color.White.copy(alpha = 0.8f),
-            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
-        )
-    }
-}
-
-@Composable
-private fun InvoiceRow(label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyLarge,
-            color = SoftGold,
-            fontWeight = FontWeight.SemiBold
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color.White.copy(alpha = 0.85f)
-        )
     }
 }

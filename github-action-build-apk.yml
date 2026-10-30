@@ -1,3 +1,6 @@
+# انسخ هذا الكود وضعه داخل موقع GitHub في المسار:
+# .github/workflows/build-apk.yml
+
 name: Build Layali APK
 
 on:
@@ -96,13 +99,23 @@ jobs:
           EOF
           fi
 
-      - name: Prepare Debug Keystore
+      - name: Fix SDK Compatibility and Standard Signing for Real Android Phones
         run: |
-          if [ -f debug.keystore.base64 ]; then
-            base64 -d debug.keystore.base64 > debug.keystore
-          elif [ ! -f debug.keystore ]; then
-            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          python3 -c '
+          import re
+          with open("app/build.gradle.kts", "r") as f:
+              c = f.read()
+          c = re.sub(r"compileSdk\s*\{[^}]*\{[^}]*\}[^}]*\}", "compileSdk = 35", c)
+          c = re.sub(r"targetSdk\s*=\s*36", "targetSdk = 34", c)
+          c = re.sub(r"signingConfig\s*=\s*signingConfigs\.getByName\(\"debugConfig\"\)", "// uses standard Android debug signing", c)
+          with open("app/build.gradle.kts", "w") as f:
+              f.write(c)
+          '
+          mkdir -p ~/.android
+          if [ ! -f ~/.android/debug.keystore ]; then
+            keytool -genkey -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           fi
+          cp ~/.android/debug.keystore debug.keystore
 
       - name: Build Debug APK
         run: gradle assembleDebug --no-daemon --stacktrace
@@ -126,5 +139,4 @@ jobs:
           draft: false
           prerelease: false
         env:
-      
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

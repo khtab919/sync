@@ -7,6 +7,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -46,7 +47,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun AppNavigation(auth: FirebaseAuth = Firebase.auth) {
     val context = LocalContext.current
-    val currentUser by auth.authStateFlow().collectAsStateWithLifecycle(initialValue = auth.currentUser)
+    val authFlow = remember(auth) { auth.authStateFlow() }
+    val currentUser by authFlow.collectAsStateWithLifecycle(initialValue = auth.currentUser)
     var showAuthScreen by rememberSaveable { mutableStateOf(true) }
     var guestModeBrowsing by rememberSaveable { mutableStateOf(false) }
     var traditionalUserDisplayName by rememberSaveable { mutableStateOf("") }
