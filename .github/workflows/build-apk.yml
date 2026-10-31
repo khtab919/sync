@@ -98,22 +98,13 @@ jobs:
           EOF
           fi
 
-      - name: Fix SDK Compatibility and Standard Signing for Real Android Phones
+      - name: Prepare Debug Keystore
         run: |
-          python3 -c '
-          with open("app/build.gradle.kts", "r") as f:
-              content = f.read()
-          content = content.replace("compileSdk { version = release(36) { minorApiLevel = 1 } }", "compileSdk = 35")
-          content = content.replace("targetSdk = 36", "targetSdk = 34")
-          content = content.replace("signingConfig = signingConfigs.getByName(\"debugConfig\")", "// standard debug signing")
-          with open("app/build.gradle.kts", "w") as f:
-              f.write(content)
-          '
-          mkdir -p ~/.android
-          if [ ! -f ~/.android/debug.keystore ]; then
-            keytool -genkey -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          if [ -f debug.keystore.base64 ]; then
+            base64 -d debug.keystore.base64 > debug.keystore
+          elif [ ! -f debug.keystore ]; then
+            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           fi
-          cp ~/.android/debug.keystore debug.keystore
 
       - name: Build Debug APK
         run: gradle assembleDebug --no-daemon --stacktrace
