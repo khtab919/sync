@@ -2,9 +2,7 @@ name: Build Layali APK
 
 on:
   push:
-    branches: [ "**" ]
-  pull_request:
-    branches: [ "**" ]
+    branches: [ "main", "master" ]
   workflow_dispatch:
 
 permissions:
@@ -98,43 +96,25 @@ jobs:
           EOF
           fi
 
-      - name: Fix SDK Compatibility and Standard Signing for Real Android Phones
-        run: |
-          python3 -c '
-          import re
-          with open("app/build.gradle.kts", "r") as f:
-              c = f.read()
-          c = re.sub(r"compileSdk\s*\{[^}]*\{[^}]*\}[^}]*\}", "compileSdk = 35", c)
-          c = re.sub(r"targetSdk\s*=\s*36", "targetSdk = 34", c)
-          c = re.sub(r"signingConfig\s*=\s*signingConfigs\.getByName\(\"debugConfig\"\)", "// uses standard Android debug signing", c)
-          with open("app/build.gradle.kts", "w") as f:
-              f.write(c)
-          '
-          mkdir -p ~/.android
-          if [ ! -f ~/.android/debug.keystore ]; then
-            keytool -genkey -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-          fi
-          cp ~/.android/debug.keystore debug.keystore
-
       - name: Build Debug APK
         run: gradle assembleDebug --no-daemon --stacktrace
 
       - name: Copy APK with Friendly Name
-        run: cp app/build/outputs/apk/debug/app-debug.apk Layali-Lounge-v5.0.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk Layali-Lounge-v4.0.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Layali-Lounge-v5.0-APK
-          path: Layali-Lounge-v5.0.apk
+          name: Layali-Lounge-APK
+          path: Layali-Lounge-v4.0.apk
 
       - name: Publish Direct APK to GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v5.0.${{ github.run_number }}
-          name: "تطبيق ليالي - إصدار 5.0 المحدث (APK جاهز للتثبيت)"
-          body: "اضغط على ملف **Layali-Lounge-v5.0.apk** بالأسفل لتحميل وتثبيت النسخة المحدثة (الإصدار 5.0) مباشرة على هاتفك."
-          files: Layali-Lounge-v5.0.apk
+          tag_name: v4.0.${{ github.run_number }}
+          name: "تطبيق ليالي - إصدار 4.0 (APK جاهز للتثبيت)"
+          body: "اضغط على ملف **Layali-Lounge-v4.0.apk** بالأسفل لتحميل وتثبيت التطبيق مباشرة على هاتفك."
+          files: Layali-Lounge-v4.0.apk
           draft: false
           prerelease: false
         env:
