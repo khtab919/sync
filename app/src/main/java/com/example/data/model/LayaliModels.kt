@@ -84,6 +84,31 @@ data class BlockedUser(
     @ServerTimestamp val updatedAt: Timestamp? = null
 )
 
+@IgnoreExtraProperties
+data class UserAccount(
+    @DocumentId val id: String = "",
+    val userId: String = "",
+    val username: String = "@layali_vip",
+    val displayName: String = "",
+    val email: String = "",
+    val bio: String = "",
+    val cityName: String = "دمشق",
+    val country: String = "سوريا",
+    val avatarUri: String = "",
+    val selectedFrameId: String = "emerald_crown",
+    val level: Long = 1L,
+    val xpPoints: Long = 150L,
+    val nextLevelXp: Long = 2500L,
+    val walletBalanceUsd: Long = 0L,
+    val chatPriceUsd: Long = 15L,
+    val isPaidChatEnabled: Boolean = true,
+    val passwordSaltHex: String = "",
+    val passwordHashHex: String = "",
+    val role: String = "customer",
+    @ServerTimestamp val createdAt: Timestamp? = null,
+    @ServerTimestamp val updatedAt: Timestamp? = null
+)
+
 data class UserProfile(
     val displayName: String = "",
     val username: String = "@layali_vip",
@@ -95,9 +120,9 @@ data class UserProfile(
     val avatarUri: String = "",
     val isAvailableNow: Boolean = true,
     val customPhotos: List<String> = emptyList(),
-    val level: Int = 12,
-    val xpPoints: Int = 2450,
-    val nextLevelXp: Int = 3000,
+    val level: Int = 1,
+    val xpPoints: Int = 150,
+    val nextLevelXp: Int = 2500,
     val selectedFrameId: String = "emerald_crown",
     val chatPriceUsd: Int = 15,
     val isPaidChatEnabled: Boolean = true
@@ -118,61 +143,61 @@ object AvatarFrameCatalog {
     val frames: List<AvatarFrameStyle> = listOf(
         AvatarFrameStyle(
             id = "emerald_crown",
-            nameAr = "التاج الزمردي الملكي",
-            subtitleAr = "إطار زمردي مذهب مع تاج السلاطين",
+            nameAr = "التاج الزمردي البلاتيني",
+            subtitleAr = "إطار زمردي مرصع بالبلاتين والياقوت",
             minLevel = 1,
             primaryHex = 0xFF10B981L,
-            secondaryHex = 0xFFF59E0BL,
-            accentHex = 0xFF34D399L,
+            secondaryHex = 0xFF0EA5E9L,
+            accentHex = 0xFF6EE7B7L,
             badgeLabel = "ROYAL"
         ),
         AvatarFrameStyle(
             id = "amber_sovereign",
-            nameAr = "وهج العنبر الذهبي",
-            subtitleAr = "هالة ذهبية مزدوجة لكبار الشخصيات",
+            nameAr = "تاج الروز كوارتز الملكي",
+            subtitleAr = "هالة وردية إمبراطورية مزدوجة لكبار الشخصيات",
             minLevel = 5,
-            primaryHex = 0xFFF59E0BL,
-            secondaryHex = 0xFFD97706L,
-            accentHex = 0xFFFDE68AL,
-            badgeLabel = "GOLD VIP"
+            primaryHex = 0xFFEC4899L,
+            secondaryHex = 0xFFA855F7L,
+            accentHex = 0xFFF9A8D4L,
+            badgeLabel = "ROSE VIP"
         ),
         AvatarFrameStyle(
             id = "sapphire_neon",
-            nameAr = "نيون الياقوت الأزرق",
-            subtitleAr = "إطار سيان مضيء بتصميم هندسي",
-            minLevel = 10,
+            nameAr = "نيون السافير الأزرق",
+            subtitleAr = "إطار كريستالي مضيء بتصميم هندسي فاخر",
+            minLevel = 12,
             primaryHex = 0xFF0EA5E9L,
-            secondaryHex = 0xFF3B82F6L,
-            accentHex = 0xFF38BDF8L,
+            secondaryHex = 0xFF6366F1L,
+            accentHex = 0xFF7DD3FCL,
             badgeLabel = "SAPPHIRE"
         ),
         AvatarFrameStyle(
             id = "amethyst_vip",
-            nameAr = "الجمشت الإمبراطوري",
-            subtitleAr = "إطار أرجواني ملكي مرصع بالماسات",
-            minLevel = 15,
-            primaryHex = 0xFF8B5CF6L,
+            nameAr = "الجمشت الإمبراطوري الفاخر",
+            subtitleAr = "إطار أرجواني ملكي مرصع بـ 12 ماسة",
+            minLevel = 20,
+            primaryHex = 0xFFA855F7L,
             secondaryHex = 0xFFEC4899L,
-            accentHex = 0xFFC084FCL,
+            accentHex = 0xFFD8B4FEL,
             badgeLabel = "IMPERIAL"
         ),
         AvatarFrameStyle(
             id = "crimson_flame",
-            nameAr = "لهيب الياقوت الأحمر",
-            subtitleAr = "إطار ناري متوهج للنخبة الحصرية",
-            minLevel = 20,
-            primaryHex = 0xFFEF4444L,
-            secondaryHex = 0xFFF59E0BL,
-            accentHex = 0xFFFCA5A5L,
+            nameAr = "تاج الروبي القرمزي",
+            subtitleAr = "إطار ياقوتي متوهج لنخبة الداعمين",
+            minLevel = 35,
+            primaryHex = 0xFFF43F5EL,
+            secondaryHex = 0xFF9333EAL,
+            accentHex = 0xFFFDA4AFL,
             badgeLabel = "LEGEND"
         ),
         AvatarFrameStyle(
             id = "obsidian_elite",
             nameAr = "النخبة الألماسية السوداء",
-            subtitleAr = "إطار بلاتيني داكن فائق الفخامة",
-            minLevel = 25,
+            subtitleAr = "إطار ألماسي بلاتيني حصري للمستويات العليا",
+            minLevel = 50,
             primaryHex = 0xFFE2E8F0L,
-            secondaryHex = 0xFF0EA5E9L,
+            secondaryHex = 0xFFA855F7L,
             accentHex = 0xFFFFFFFFL,
             badgeLabel = "DIAMOND"
         )

@@ -40,6 +40,30 @@ beforeEach(async () => {
   }
 });
 
+function validUserAccountPayload(uid) {
+  const now = new Date();
+  return {
+    userId: uid,
+    username: "@alice_vip",
+    displayName: "أليس الملكية",
+    email: "alice@layali.vip",
+    bio: "عضو نادي ليالي الملكي",
+    cityName: "دمشق",
+    country: "سوريا",
+    selectedFrameId: "emerald_crown",
+    level: 1,
+    xpPoints: 150,
+    nextLevelXp: 2500,
+    walletBalanceUsd: 250,
+    chatPriceUsd: 15,
+    isPaidChatEnabled: true,
+    passwordSaltHex: "0123456789abcdef0123456789abcdef",
+    passwordHashHex: "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
 function validBookingPayload(uid) {
   const now = new Date();
   return {
@@ -93,8 +117,29 @@ function validBlockedUserPayload(uid) {
   };
 }
 
-test("Unauthenticated user: cannot read or create bookings or published services", async () => {
+test("UserAccount: owner can create account, update password hash, and cross-user read is blocked", async () => {
+  const aliceDb = testEnv.authenticatedContext(ALICE_UID).firestore();
+  const aliceDoc = aliceDb.collection("users").doc(ALICE_UID);
+
+  await assertSucceeds(aliceDoc.set(validUserAccountPayload(ALICE_UID)));
+
+  // Update password hash and salt
+  await assertSucceeds(
+    aliceDoc.update({
+      passwordSaltHex: "fedcba9876543210fedcba9876543210",
+      passwordHashHex: "9999999999999999999999999999999999999999999999999999999999999999",
+      updatedAt: new Date(),
+    })
+  );
+
+  // Cross-user read is blocked (PII and password hash isolation)
+  const bobDb = testEnv.authenticatedContext(BOB_UID).firestore();
+  await assertFails(bobDb.collection("users").doc(ALICE_UID).get());
+});
+
+test("Unauthenticated user: cannot read or create accounts, bookings, or published services", async () => {
   const unauthDb = testEnv.unauthenticatedContext().firestore();
+  await assertFails(unauthDb.collection("users").doc(ALICE_UID).get());
   await assertFails(
     unauthDb.collection("users").doc(ALICE_UID).collection("bookings").get()
   );

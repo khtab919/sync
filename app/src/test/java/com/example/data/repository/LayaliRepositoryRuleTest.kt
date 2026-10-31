@@ -134,6 +134,61 @@ class LayaliRepositoryRuleTest : FirestoreEmulatorTestBase() {
         }
     }
 
+    @Test
+    fun saveUserAccount_andUpdatePasswordHash_ownerSucceeds_crossUserBlocked() = runBlocking {
+        val aliceUid = signInTestUser(ALICE_EMAIL)
+        val aliceRepo = LayaliRepository(firestore)
+
+        val saveResult = withTimeout(DEFAULT_TIMEOUT_MS) {
+            aliceRepo.saveOrUpdateUserAccount(
+                username = "@layla_vip",
+                displayName = "ليلى الملكية",
+                email = ALICE_EMAIL,
+                bio = "صانعة محتوى وسهرات VIP حصرية",
+                cityName = "دمشق",
+                country = "سوريا",
+                avatarUri = "aleppo_palace_nights",
+                selectedFrameId = "amethyst_vip",
+                level = 1,
+                xpPoints = 150,
+                nextLevelXp = 2500,
+                walletBalanceUsd = 250,
+                chatPriceUsd = 20,
+                isPaidChatEnabled = true,
+                passwordSaltHex = "a1b2c3d4e5f60718293a4b5c6d7e8f90",
+                passwordHashHex = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+                role = "customer"
+            )
+        }
+        assertTrue("Expected saveOrUpdateUserAccount to succeed", saveResult.isSuccess)
+
+        val updatePassResult = withTimeout(DEFAULT_TIMEOUT_MS) {
+            aliceRepo.updateUserAccountPasswordHash(
+                newSaltHex = "f0e1d2c3b4a5968778695a4b3c2d1e0f",
+                newHashHex = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            )
+        }
+        assertTrue("Expected updateUserAccountPasswordHash to succeed", updatePassResult.isSuccess)
+
+        val loadedAccount = withTimeout(DEFAULT_TIMEOUT_MS) {
+            aliceRepo.getUserAccountById(aliceUid).getOrThrow()
+        }
+        assertNotNull(loadedAccount)
+        assertEquals("@layla_vip", loadedAccount?.username)
+        assertEquals("f0e1d2c3b4a5968778695a4b3c2d1e0f", loadedAccount?.passwordSaltHex)
+
+        // Cross-user read of Alice's UserAccount document (which contains email & passwordHashHex) must be blocked
+        signInTestUser(BOB_EMAIL)
+        val bobRepo = LayaliRepository(firestore)
+        val crossRead = withTimeout(DEFAULT_TIMEOUT_MS) {
+            bobRepo.getUserAccountById(aliceUid)
+        }
+        assertTrue("Cross-user read of UserAccount must fail", crossRead.isFailure)
+        val firestoreEx = crossRead.exceptionOrNull()?.unwrapFirestoreException()
+        assertNotNull(firestoreEx)
+        assertEquals(FirebaseFirestoreException.Code.PERMISSION_DENIED, firestoreEx?.code)
+    }
+
     private companion object {
         const val ALICE_EMAIL = "alice@layali.test"
         const val BOB_EMAIL = "bob@layali.test"

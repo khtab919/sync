@@ -56,4 +56,55 @@ class ExampleRobolectricTest {
         val snapshot = SuperAdminSecurityManager.getCredentialSnapshot(context)
         assertTrue(snapshot.passwordHashPreview.startsWith("\$2b\$12\$"))
     }
+
+    @Test
+    fun `customer account database registration and password change verification`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+
+        // 1. Register a customer account in Room SQLite Database
+        val initialLogin = SuperAdminSecurityManager.authenticate(
+            context = context,
+            emailOrUsername = "@layla_royal",
+            passwordInput = "SecretPass123",
+            fullNameOverride = "ليلى الملكية"
+        )
+        assertTrue(initialLogin is AuthResult.CustomerSuccess)
+
+        // 2. Wrong password for the saved customer account is rejected
+        val wrongCustomerPass = SuperAdminSecurityManager.authenticate(
+            context = context,
+            emailOrUsername = "@layla_royal",
+            passwordInput = "WrongPass999"
+        )
+        assertTrue(wrongCustomerPass is AuthResult.InvalidSuperAdminPassword)
+
+        // 3. Change customer password with current password verification
+        val changeResult = SuperAdminSecurityManager.changeAccountPassword(
+            context = context,
+            identifier = "@layla_royal",
+            currentPassword = "SecretPass123",
+            newPassword = "NewRoyalPass2026",
+            requireCurrentPassword = true
+        )
+        assertTrue(changeResult.isSuccess)
+
+        // 4. Old password now fails, new password succeeds
+        val oldPassAttempt = SuperAdminSecurityManager.authenticate(
+            context = context,
+            emailOrUsername = "@layla_royal",
+            passwordInput = "SecretPass123"
+        )
+        assertTrue(oldPassAttempt is AuthResult.InvalidSuperAdminPassword)
+
+        val newPassAttempt = SuperAdminSecurityManager.authenticate(
+            context = context,
+            emailOrUsername = "@layla_royal",
+            passwordInput = "NewRoyalPass2026"
+        )
+        assertTrue(newPassAttempt is AuthResult.CustomerSuccess)
+
+        // 5. Saved accounts list in Room SQLite includes the registered account
+        val savedAccounts = SuperAdminSecurityManager.getSavedAccounts(context)
+        assertTrue(savedAccounts.any { it.username == "@layla_royal" })
+    }
 }

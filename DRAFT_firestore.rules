@@ -34,6 +34,45 @@ service cloud.firestore {
       );
     }
 
+    // Validation Blueprint: UserAccount
+    function isValidUserAccount(data) {
+      return data.keys().hasAll([
+               'userId', 'username', 'displayName', 'email', 'bio',
+               'cityName', 'country', 'selectedFrameId', 'level',
+               'xpPoints', 'nextLevelXp', 'walletBalanceUsd',
+               'chatPriceUsd', 'isPaidChatEnabled',
+               'passwordSaltHex', 'passwordHashHex',
+               'createdAt', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'userId', 'username', 'displayName', 'email', 'bio',
+               'cityName', 'country', 'selectedFrameId', 'level',
+               'xpPoints', 'nextLevelXp', 'walletBalanceUsd',
+               'chatPriceUsd', 'isPaidChatEnabled',
+               'passwordSaltHex', 'passwordHashHex',
+               'createdAt', 'updatedAt'
+             ]) &&
+             data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.userId == request.auth.uid &&
+             data.username is string && data.username.size() >= 2 && data.username.size() <= 60 &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100 &&
+             data.email is string && data.email.size() >= 3 && data.email.size() <= 150 &&
+             data.bio is string && data.bio.size() <= 300 &&
+             data.cityName is string && data.cityName.size() >= 1 && data.cityName.size() <= 80 &&
+             data.country is string && data.country in ['سوريا', 'تركيا'] &&
+             data.selectedFrameId is string && data.selectedFrameId.size() >= 1 && data.selectedFrameId.size() <= 60 &&
+             data.level is int && data.level >= 1 && data.level <= 100 &&
+             data.xpPoints is int && data.xpPoints >= 0 && data.xpPoints <= 10000000 &&
+             data.nextLevelXp is int && data.nextLevelXp >= 100 && data.nextLevelXp <= 50000000 &&
+             data.walletBalanceUsd is int && data.walletBalanceUsd >= 0 && data.walletBalanceUsd <= 1000000 &&
+             data.chatPriceUsd is int && data.chatPriceUsd >= 1 && data.chatPriceUsd <= 5000 &&
+             data.isPaidChatEnabled is bool &&
+             data.passwordSaltHex is string && data.passwordSaltHex.size() >= 8 && data.passwordSaltHex.size() <= 128 &&
+             data.passwordHashHex is string && data.passwordHashHex.size() >= 16 && data.passwordHashHex.size() <= 256 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
     // Validation Blueprint: Booking
     function isValidBooking(data) {
       return data.keys().hasAll([
@@ -152,6 +191,42 @@ service cloud.firestore {
              data.status is string && data.status in ['active', 'unblocked'] &&
              data.createdAt is timestamp && data.createdAt <= request.time &&
              data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    // Collection: User Account & Encrypted Password Hash Document
+    match /users/{userId} {
+      allow get: if isSignedIn() &&
+                    isValidId(userId) &&
+                    (request.auth.uid == userId || isAdmin());
+
+      allow list: if isSignedIn() &&
+                     request.auth.uid == userId &&
+                     existing().userId == request.auth.uid;
+
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       isValidUserAccount(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       isValidUserAccount(incoming()) &&
+                       existing().userId == request.auth.uid &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'username', 'displayName', 'email', 'bio',
+                         'cityName', 'country', 'selectedFrameId', 'level',
+                         'xpPoints', 'nextLevelXp', 'walletBalanceUsd',
+                         'chatPriceUsd', 'isPaidChatEnabled',
+                         'passwordSaltHex', 'passwordHashHex', 'updatedAt'
+                       ]);
+
+      allow delete: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       existing().userId == request.auth.uid;
     }
 
     // Collection: User Bookings

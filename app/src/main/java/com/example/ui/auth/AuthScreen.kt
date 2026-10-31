@@ -34,12 +34,15 @@ import androidx.compose.material.icons.filled.SupportAgent
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -223,8 +226,16 @@ fun AuthScreen(
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var statusNotice by remember { mutableStateOf<String?>(null) }
+    var showChangePasswordDialog by rememberSaveable { mutableStateOf(false) }
+    var savedAccountsRefreshTick by remember { mutableStateOf(0) }
+
+    val savedAccounts = remember(savedAccountsRefreshTick) {
+        SuperAdminSecurityManager.getSavedAccounts(context)
+    }
 
     LaunchedEffect(Unit) {
+        SuperAdminSecurityManager.ensureInitialized(context)
+        savedAccountsRefreshTick += 1
         attemptAutoSignIn(
             context = context,
             credentialManager = credentialManager,
@@ -426,7 +437,7 @@ fun AuthScreen(
                             .testTag("auth_password_input")
                     )
 
-                    // Forgot Password Link
+                    // Change / Reset Password Link
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -436,20 +447,20 @@ fun AuthScreen(
                     ) {
                         TextButton(
                             onClick = {
-                                statusNotice = "تم إرسال رابط استعادة كلمة المرور والتواصل الفوري عبر الدعم @RamaNUR"
+                                showChangePasswordDialog = true
                                 errorMessage = null
                             },
                             modifier = Modifier.testTag("forgot_password_button")
                         ) {
                             Text(
-                                text = "نسيت كلمة المرور؟",
+                                text = "تغيير / نسيت كلمة المرور؟",
                                 style = MaterialTheme.typography.labelLarge,
                                 color = CoralPinkPrimary
                             )
                         }
 
                         Text(
-                            text = "حماية مشفرة VIP",
+                            text = "قاعدة بيانات مشفرة PBKDF2",
                             style = MaterialTheme.typography.labelSmall,
                             color = EmeraldVerified
                         )
@@ -494,7 +505,7 @@ fun AuthScreen(
                         }
                     }
 
-                    // Primary Capsule CTA Button (#FF3B6B)
+                    // Primary Capsule CTA Button
                     Button(
                         onClick = {
                             errorMessage = null
@@ -509,7 +520,14 @@ fun AuthScreen(
                                 errorMessage = "يرجى إدخال كلمة مرور مكونة من 4 خانات على الأقل"
                                 return@Button
                             }
-                            when (val authResult = SuperAdminSecurityManager.authenticate(context, cleanUser, cleanPass)) {
+                            val authResult = SuperAdminSecurityManager.authenticate(
+                                context = context,
+                                emailOrUsername = cleanUser,
+                                passwordInput = cleanPass,
+                                fullNameOverride = if (isCreateAccountMode) fullNameInput.trim() else ""
+                            )
+                            savedAccountsRefreshTick += 1
+                            when (authResult) {
                                 is AuthResult.SuperAdminSuccess -> {
                                     onSuperAdminLoginSuccess(authResult.email, authResult.sessionToken)
                                 }
@@ -707,6 +725,86 @@ fun AuthScreen(
                                 .testTag("toggle_create_account_link")
                         )
                     }
+
+                    // Saved Accounts in Room SQLite Database Strip
+                    if (savedAccounts.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(14.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "${savedAccounts.size} حساب محفوظ",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = EmeraldVerified
+                            )
+                            Text(
+                                text = "الحسابات المحفوظة في قاعدة البيانات (SQLite)",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        savedAccounts.take(4).forEach { acc ->
+                            Surface(
+                                onClick = {
+                                    usernameOrEmail = if (acc.role == "super_admin") acc.email else acc.username
+                                    isCreateAccountMode = false
+                                    statusNotice = "تم اختيار الحساب المحفوظ (${acc.username} • LEVEL ${acc.level}). أدخل كلمة المرور أو اضغط «تغيير كلمة المرور»."
+                                    errorMessage = null
+                                },
+                                color = MaterialTheme.colorScheme.background,
+                                shape = RoundedCornerShape(12.dp),
+                                border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.outline),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 3.dp)
+                                    .testTag("saved_account_row_${acc.accountId}")
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    TextButton(
+                                        onClick = {
+                                            usernameOrEmail = if (acc.role == "super_admin") acc.email else acc.username
+                                            showChangePasswordDialog = true
+                                        },
+                                        modifier = Modifier.height(30.dp)
+                                    ) {
+                                        Text(
+                                            text = "تغيير كلمة السر",
+                                            fontSize = 10.sp,
+                                            color = CoralPinkPrimary,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+
+                                    Column(horizontalAlignment = Alignment.End) {
+                                        Text(
+                                            text = "${acc.displayName} (${acc.username})",
+                                            fontSize = 12.sp,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        Text(
+                                            text = "LEVEL ${acc.level} • رصيد $${acc.walletBalanceUsd} • مشفر PBKDF2",
+                                            fontSize = 10.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -758,5 +856,189 @@ fun AuthScreen(
                 )
             }
         )
+
+        // Interactive Change / Reset Password Dialog backed by Room SQLite + PBKDF2-HMAC-SHA256
+        if (showChangePasswordDialog) {
+            var targetIdentifier by rememberSaveable { mutableStateOf(usernameOrEmail) }
+            var currentPasswordInput by rememberSaveable { mutableStateOf("") }
+            var newPasswordInput by rememberSaveable { mutableStateOf("") }
+            var confirmNewPasswordInput by rememberSaveable { mutableStateOf("") }
+            var useDirectRecoveryMode by rememberSaveable { mutableStateOf(false) }
+            var dialogError by remember { mutableStateOf<String?>(null) }
+
+            AlertDialog(
+                onDismissRequest = { showChangePasswordDialog = false },
+                containerColor = MaterialTheme.colorScheme.surface,
+                title = {
+                    Text(
+                        text = "تغيير أو استعادة كلمة المرور",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.End
+                    )
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            text = "يتم تشفير كلمة المرور الجديدة بخوارزمية PBKDF2-HMAC-SHA256 وحفظها مباشرة في قاعدة بيانات الحسابات (Room SQLite).",
+                            fontSize = 11.sp,
+                            lineHeight = 16.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.End,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            FilterChip(
+                                selected = !useDirectRecoveryMode,
+                                onClick = {
+                                    useDirectRecoveryMode = false
+                                    dialogError = null
+                                },
+                                label = { Text("بكلمة السر الحالية", fontSize = 11.sp) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = VioletBlueVip,
+                                    selectedLabelColor = Color.White
+                                ),
+                                modifier = Modifier.weight(1f)
+                            )
+                            FilterChip(
+                                selected = useDirectRecoveryMode,
+                                onClick = {
+                                    useDirectRecoveryMode = true
+                                    dialogError = null
+                                },
+                                label = { Text("استعادة فورية للحساب", fontSize = 11.sp) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = CoralPinkPrimary,
+                                    selectedLabelColor = Color.White
+                                ),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        OutlinedTextField(
+                            value = targetIdentifier,
+                            onValueChange = {
+                                targetIdentifier = it
+                                dialogError = null
+                            },
+                            label = { Text("اسم المستخدم أو البريد الإلكتروني", fontSize = 11.sp) },
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("change_password_identifier_input")
+                        )
+
+                        if (!useDirectRecoveryMode) {
+                            OutlinedTextField(
+                                value = currentPasswordInput,
+                                onValueChange = {
+                                    currentPasswordInput = it
+                                    dialogError = null
+                                },
+                                label = { Text("كلمة المرور الحالية", fontSize = 11.sp) },
+                                singleLine = true,
+                                visualTransformation = PasswordVisualTransformation(),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("change_password_current_input")
+                            )
+                        }
+
+                        OutlinedTextField(
+                            value = newPasswordInput,
+                            onValueChange = {
+                                newPasswordInput = it
+                                dialogError = null
+                            },
+                            label = { Text("كلمة المرور الجديدة (6 خانات فأكثر)", fontSize = 11.sp) },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("change_password_new_input")
+                        )
+
+                        OutlinedTextField(
+                            value = confirmNewPasswordInput,
+                            onValueChange = {
+                                confirmNewPasswordInput = it
+                                dialogError = null
+                            },
+                            label = { Text("تأكيد كلمة المرور الجديدة", fontSize = 11.sp) },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("change_password_confirm_input")
+                        )
+
+                        if (dialogError != null) {
+                            Text(
+                                text = dialogError ?: "",
+                                color = MaterialTheme.colorScheme.error,
+                                fontSize = 11.sp,
+                                textAlign = TextAlign.End,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            if (newPasswordInput != confirmNewPasswordInput) {
+                                dialogError = "كلمتا المرور الجديدتان غير متطابقتين"
+                                return@Button
+                            }
+                            val result = SuperAdminSecurityManager.changeAccountPassword(
+                                context = context,
+                                identifier = targetIdentifier,
+                                currentPassword = currentPasswordInput,
+                                newPassword = newPasswordInput,
+                                requireCurrentPassword = !useDirectRecoveryMode
+                            )
+                            result.onSuccess { record ->
+                                usernameOrEmail = if (record.email.equals(SuperAdminSecurityManager.INITIAL_SUPER_ADMIN_EMAIL, ignoreCase = true)) {
+                                    record.email
+                                } else {
+                                    record.username
+                                }
+                                password = newPasswordInput
+                                savedAccountsRefreshTick += 1
+                                statusNotice = "تم تحديث وحفظ كلمة المرور في قاعدة البيانات بنجاح للحساب (${record.username}) ✓"
+                                errorMessage = null
+                                showChangePasswordDialog = false
+                            }.onFailure { err ->
+                                dialogError = err.message ?: "تعذر تغيير كلمة المرور"
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = VioletBlueVip,
+                            contentColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(50),
+                        modifier = Modifier.testTag("confirm_change_password_button")
+                    ) {
+                        Text("حفظ كلمة المرور الجديدة", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showChangePasswordDialog = false }) {
+                        Text("إلغاء", fontSize = 12.sp)
+                    }
+                }
+            )
+        }
     }
 }

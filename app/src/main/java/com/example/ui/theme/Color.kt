@@ -3,75 +3,95 @@ package com.example.ui.theme
 import androidx.compose.ui.graphics.Color
 
 // ============================================================================
-// Royal Emerald, Warm Amber Gold & Midnight Sapphire Luxury Identity
-// (Replaces previous Coral Pink / Violet palette as requested)
+// Layali Lounge — Modern Royal Amethyst, Electric Sapphire & Diamond Platinum
+// (Zero Yellow / Gold — Pure Luxury Nightlife & Creator Club Palette)
 // ============================================================================
 
 // 1. Core Backgrounds & Surfaces
-val PureWhite = Color(0xFFFAF8F5)          // Warm Pearl Ivory
-val SnowGraySurface = Color(0xFFF1EDE6)    // Soft Alabaster Champagne Surface
-val LightCardSurface = Color(0xFFFFFFFF)   // Crisp Ivory Card
+val RoyalNavyBackground = Color(0xFF080C16) // خلفية ليلية داكنة فاخرة
+val RoyalNavyCard = Color(0xFF101726)       // بطاقات كحلي/أوبسيديان أنيقة
+val ElevatedNavySurface = Color(0xFF172136) // سطح فرعي مرفوع
 
-val CharcoalNight = Color(0xFF09111E)      // Deep Midnight Sapphire
-val DarkCardSurface = Color(0xFF111D30)    // Obsidian Navy Card Surface
-val ElevatedDarkSurface = Color(0xFF182842)// Elevated Sapphire Slate
+val CharcoalNight = RoyalNavyBackground
+val DarkCardSurface = RoyalNavyCard
+val ElevatedDarkSurface = ElevatedNavySurface
 
-// 2. Primary Interactive Accents (Amber Gold, Emerald Teal & Cyan Sapphire)
-val CoralPinkPrimary = Color(0xFFD97706)   // Rich Sovereign Amber Gold (Primary CTA)
-val CoralSoftAccent = Color(0xFFF59E0B)    // Radiant Champagne Gold Accent
-val VioletBlueVip = Color(0xFF0D9488)      // Royal Emerald Teal (VIP & Badges)
-val CharcoalButton = Color(0xFF0B172A)     // Deep Sapphire Button
+// Light Mode Soft Surfaces (when toggled)
+val PureWhite = Color(0xFFF8FAFC)           // النص الأساسي - أبيض ناعم
+val SnowGraySurface = Color(0xFF101726)
+val LightCardSurface = Color(0xFF101726)
 
-// Additional New Luxury Palette Tokens
-val SovereignGold = Color(0xFFF59E0B)
-val DeepAmberGold = Color(0xFFB45309)
+// 2. Primary Interactive Accent (أزرق ياقوتي / سيان للأزرار والتفاعل)
+val DeepTealPrimary = Color(0xFF0EA5E9)     // اللون الأساسي للأزرار والتفاعل
+val DeepTealBright = Color(0xFF38BDF8)      // تدرج سيان مضيء
+val DeepTealDark = Color(0xFF0284C7)        // أزرق ياقوتي عميق
+
+// 3. Royal Amethyst & Platinum Rose (بديل اللون الأصفر بالكامل للـ VIP والـ LEVEL)
+val RoyalAmethystVip = Color(0xFFA855F7)    // بنفسجي ملكي فاخر للـ VIP والـ LEVEL
+val LuminousLavender = Color(0xFFC084FC)    // لافندر بلاتيني مضيء
+val ImperialRosePink = Color(0xFFEC4899)    // وردي ياقوتي فاخر
+
+// Semantic aliases (replacing yellow/gold tokens with Royal Amethyst & Lavender)
+val MutedLuxuryGold = RoyalAmethystVip
+val SoftChampagneGold = LuminousLavender
+
+val CoralPinkPrimary = DeepTealPrimary
+val CoralSoftAccent = DeepTealBright
+val VioletBlueVip = RoyalAmethystVip
+val CharcoalButton = RoyalNavyCard
+
+val SovereignGold = RoyalAmethystVip
+val DeepAmberGold = Color(0xFF9333EA)
 val ShamCashTeal = Color(0xFF0EA5E9)
-val ShamCashIndigo = Color(0xFF3B82F6)
+val ShamCashIndigo = Color(0xFF6366F1)
 val UsdtTetherGreen = Color(0xFF10B981)
-val MidnightSapphire = Color(0xFF09111E)
+val MidnightSapphire = RoyalNavyBackground
 
-// 3. Typography & Hierarchy Colors
-val TitleDarkText = Color(0xFF0F172A)
-val SubtitleGrayText = Color(0xFF475569)
-val MutedLightText = Color(0xFF94A3B8)
+// 4. Typography & Hierarchy Colors
+val SoftWhiteText = Color(0xFFF8FAFC)
+val SlateSecondaryText = Color(0xFF94A3B8)
 
-// 4. Borders & Dividers (1.dp Crisp Hairlines)
-val LightBorderGray = Color(0xFFE2DDD3)
-val DarkBorderGray = Color(0xFF243552)
+val TitleDarkText = SoftWhiteText
+val SubtitleGrayText = SlateSecondaryText
+val MutedLightText = SlateSecondaryText
 
-// 5. Status & Semantic Accents
+// 5. Subtle Borders & Dividers
+val DarkBorderGray = Color(0xFF1E293B)
+val LightBorderGray = Color(0xFF1E293B)
+
+// 6. Status & Semantic Accents
 val EmeraldVerified = Color(0xFF10B981)
-val TelegramBlue = Color(0xFF0284C7)
-val ErrorCrimson = Color(0xFFEF4444)
+val TelegramBlue = Color(0xFF0EA5E9)
+val ErrorCrimson = Color(0xFFF43F5E)
 
 // ============================================================================
-// Compatibility Aliases (Mapped to New Royal Gold & Emerald Sapphire Tokens)
+// Compatibility Aliases
 // ============================================================================
-val ObsidianNight = CharcoalNight
-val VelvetPlum = DarkCardSurface
-val ElevatedPlumCard = ElevatedDarkSurface
-val DeepRoyalViolet = Color(0xFF16253D)
+val ObsidianNight = RoyalNavyBackground
+val VelvetPlum = RoyalNavyCard
+val ElevatedPlumCard = ElevatedNavySurface
+val DeepRoyalViolet = ElevatedNavySurface
 
-val DustyRose = CoralPinkPrimary
-val SoftRosePink = CoralSoftAccent
-val WarmCoral = CoralSoftAccent
+val DustyRose = DeepTealPrimary
+val SoftRosePink = DeepTealBright
+val WarmCoral = Color(0xFFF43F5E)
 
-val RoyalGold = SovereignGold
-val SoftGold = Color(0xFFFDE68A)
+val RoyalGold = RoyalAmethystVip
+val SoftGold = LuminousLavender
 
-val IvoryCream = PureWhite
-val SoftBlushBackground = PureWhite
-val SoftRoseSurface = SnowGraySurface
-val SoftRoseCard = LightCardSurface
-val DeepPlumText = TitleDarkText
-val MutedPlumText = SubtitleGrayText
+val IvoryCream = SoftWhiteText
+val SoftBlushBackground = RoyalNavyBackground
+val SoftRoseSurface = RoyalNavyCard
+val SoftRoseCard = RoyalNavyCard
+val DeepPlumText = SoftWhiteText
+val MutedPlumText = SlateSecondaryText
 
-val MutedLavender = MutedLightText
+val MutedLavender = SlateSecondaryText
 val DeepWineOutline = DarkBorderGray
-val SoftRoseOutline = LightBorderGray
+val SoftRoseOutline = DarkBorderGray
 
-val BrandChampagneGold = SovereignGold
-val BrandDeepViolet = CharcoalNight
-val BrandDustyRose = CoralPinkPrimary
-val BrandRoyalPlum = DarkCardSurface
-val BrandSoftPearl = PureWhite
+val BrandChampagneGold = RoyalAmethystVip
+val BrandDeepViolet = RoyalNavyCard
+val BrandDustyRose = DeepTealPrimary
+val BrandRoyalPlum = RoyalNavyCard
+val BrandSoftPearl = SoftWhiteText

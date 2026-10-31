@@ -11,7 +11,6 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -20,7 +19,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -34,23 +32,14 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AddCircleOutline
-import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.HighQuality
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.PauseCircleFilled
-import androidx.compose.material.icons.filled.PlayCircleFilled
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.SupportAgent
-import androidx.compose.material.icons.filled.Verified
-import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.AlertDialog
@@ -60,7 +49,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -72,15 +60,14 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -91,20 +78,15 @@ import androidx.compose.ui.unit.sp
 import com.example.data.model.PublishedService
 import com.example.data.model.Venue
 import com.example.ui.components.FramedUserAvatar
-import com.example.ui.components.LuxuryGradientButton
 import com.example.ui.components.SmartServiceMediaView
-import com.example.ui.theme.BrandChampagneGold
-import com.example.ui.theme.BrandDeepViolet
-import com.example.ui.theme.BrandDustyRose
-import com.example.ui.theme.EmeraldVerified
-import com.example.ui.theme.ObsidianNight
-import com.example.ui.theme.RoyalGold
-import com.example.ui.theme.SoftGold
-import com.example.ui.theme.VioletBlueVip
+import com.example.ui.theme.DeepTealPrimary
+import com.example.ui.theme.MutedLuxuryGold
+import com.example.ui.theme.RoyalNavyBackground
+import com.example.ui.theme.RoyalNavyCard
+import com.example.ui.theme.SlateSecondaryText
+import com.example.ui.theme.SoftWhiteText
 import com.example.ui.theme.WarmCoral
-import com.example.util.LayaliNotificationHelper
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 data class ReelItemUiModel(
     val id: String,
@@ -149,9 +131,7 @@ fun ReelsScreen(
     onShowMessage: (String) -> Unit
 ) {
     val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
 
-    var selectedFilter by remember { mutableStateOf("الكل") }
     var isMuted by remember { mutableStateOf(false) }
     var isPlaying by remember { mutableStateOf(true) }
     var activeCommentReel by remember { mutableStateOf<ReelItemUiModel?>(null) }
@@ -164,7 +144,7 @@ fun ReelsScreen(
             ReelItemUiModel(
                 id = "reel_pub_${pub.id}",
                 title = pub.title,
-                subtitle = pub.videoUrl.ifBlank { "ريلز 4K مباشر • ${pub.cityName}" },
+                subtitle = pub.cityName,
                 cityName = pub.cityName,
                 country = pub.country,
                 category = pub.category,
@@ -174,11 +154,11 @@ fun ReelsScreen(
                 reviewsCount = 140 + (idx * 27),
                 baseLikes = 620 + (idx * 115),
                 imageUrl = pub.imageUrl,
-                audioTrackTitle = "موسيقى وأجواء ملكية حية • ${pub.cityName}",
-                durationLabel = "00:45 4K",
-                badges = listOf("ريلز موثق", pub.category, "حجز فوري VIP"),
-                accentHex = 0xFFD6789BL,
-                secondaryHex = 0xFF47256BL,
+                audioTrackTitle = pub.cityName,
+                durationLabel = "00:45",
+                badges = listOf("VIP", pub.category),
+                accentHex = 0xFF0D9488L,
+                secondaryHex = 0xFF09111EL,
                 sourcePublished = pub
             )
         }
@@ -186,7 +166,7 @@ fun ReelsScreen(
             ReelItemUiModel(
                 id = "reel_venue_${venue.id}",
                 title = venue.name,
-                subtitle = venue.showcaseVideoTitle,
+                subtitle = venue.cityName,
                 cityName = venue.cityName,
                 country = venue.country,
                 category = venue.category,
@@ -196,9 +176,9 @@ fun ReelsScreen(
                 reviewsCount = venue.reviewCount,
                 baseLikes = 480 + (idx * 95),
                 imageUrl = venue.visualPresetKey,
-                audioTrackTitle = "أجواء ${venue.cityName} الملكية • ${venue.category}",
+                audioTrackTitle = venue.cityName,
                 durationLabel = venue.showcaseDuration,
-                badges = venue.badges.take(3),
+                badges = venue.badges.take(2),
                 accentHex = venue.accentHex,
                 secondaryHex = venue.secondaryHex,
                 sourceVenue = venue
@@ -207,17 +187,9 @@ fun ReelsScreen(
         pubReels + venueReels
     }
 
-    val filteredReels = remember(allReels, selectedFilter) {
-        when (selectedFilter) {
-            "الكل" -> allReels
-            "سوريا", "تركيا" -> allReels.filter { it.country == selectedFilter }
-            else -> allReels.filter { it.category == selectedFilter }
-        }.ifEmpty { allReels }
-    }
-
-    val initialPageIndex = remember(filteredReels, initialReelId) {
+    val initialPageIndex = remember(allReels, initialReelId) {
         if (initialReelId == null) 0
-        else filteredReels.indexOfFirst {
+        else allReels.indexOfFirst {
             it.id == initialReelId ||
                 it.sourceVenue?.id == initialReelId ||
                 it.sourcePublished?.id == initialReelId
@@ -226,12 +198,12 @@ fun ReelsScreen(
 
     val pagerState = rememberPagerState(
         initialPage = initialPageIndex,
-        pageCount = { filteredReels.size.coerceAtLeast(1) }
+        pageCount = { allReels.size.coerceAtLeast(1) }
     )
 
-    LaunchedEffect(initialReelId, filteredReels.size) {
-        if (initialReelId != null && filteredReels.isNotEmpty()) {
-            val targetIdx = filteredReels.indexOfFirst {
+    LaunchedEffect(initialReelId, allReels.size) {
+        if (initialReelId != null && allReels.isNotEmpty()) {
+            val targetIdx = allReels.indexOfFirst {
                 it.id == initialReelId ||
                     it.sourceVenue?.id == initialReelId ||
                     it.sourcePublished?.id == initialReelId
@@ -242,65 +214,44 @@ fun ReelsScreen(
         }
     }
 
-    val filterOptions = remember {
-        listOf("الكل", "سهرات فنية", "سبا ومساج", "زيارات خارجية", "سوريا", "تركيا")
-    }
-
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(ObsidianNight)
+            .background(RoyalNavyBackground)
             .testTag("reels_screen_root")
     ) {
-        if (filteredReels.isEmpty()) {
+        if (allReels.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
-                    text = "لا توجد مقاطع ريلز متاحة حالياً",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = BrandChampagneGold
+                    text = "لا توجد مقاطع ريلز حالياً",
+                    fontSize = 14.sp,
+                    color = SlateSecondaryText
                 )
             }
         } else {
             VerticalPager(
                 state = pagerState,
                 beyondViewportPageCount = 0,
-                key = { filteredReels[it].id },
+                key = { allReels[it].id },
                 modifier = Modifier
                     .fillMaxSize()
                     .testTag("reels_vertical_pager")
             ) { pageIndex ->
-                val reel = filteredReels[pageIndex]
+                val reel = allReels[pageIndex]
                 val isLiked = likedReelIds[reel.id] == true
-                val isFavorite = reel.sourceVenue?.let { favoriteVenueIds.contains(it.id) } ?: isLiked
                 val extraCommentsCount = customCommentsByReel[reel.id]?.size ?: 0
 
                 SingleReelFullPage(
                     reel = reel,
                     reelIndex = pageIndex + 1,
-                    totalReels = filteredReels.size,
                     isPlaying = isPlaying && pagerState.currentPage == pageIndex,
-                    isMuted = isMuted,
                     isLiked = isLiked,
-                    isFavorite = isFavorite,
                     extraCommentsCount = extraCommentsCount,
                     isSuperAdmin = isSuperAdmin,
                     onTogglePlay = { isPlaying = !isPlaying },
-                    onDoubleTapLike = {
-                        likedReelIds[reel.id] = true
-                    },
+                    onDoubleTapLike = { likedReelIds[reel.id] = true },
                     onToggleLike = {
-                        val next = !(likedReelIds[reel.id] ?: false)
-                        likedReelIds[reel.id] = next
-                    },
-                    onToggleFavorite = {
-                        val venue = reel.sourceVenue
-                        if (venue != null) {
-                            onToggleFavoriteVenue(venue)
-                        } else {
-                            val next = !(likedReelIds[reel.id] ?: false)
-                            likedReelIds[reel.id] = next
-                            onShowMessage(if (next) "تم حفظ الريلز في المفضلة" else "تمت الإزالة من المفضلة")
-                        }
+                        likedReelIds[reel.id] = !(likedReelIds[reel.id] ?: false)
                     },
                     onOpenComments = { activeCommentReel = reel },
                     onShareReel = {
@@ -314,248 +265,101 @@ fun ReelsScreen(
                         reel.sourceVenue?.let(onBookVenue)
                         reel.sourcePublished?.let(onBookPublished)
                     },
-                    onOpenDetailsFromReel = {
-                        reel.sourceVenue?.let(onOpenVenueDetails)
-                        reel.sourcePublished?.let(onOpenPublishedMedia)
-                    },
                     onOpenCreatorChat = onOpenCreatorChat,
                     onEditPrice = { onEditReelPrice(reel) }
                 )
             }
         }
 
-        // Top Floating Reels Header & Category Filter Strip
-        Column(
+        // Ultra-Clean Minimal Top Bar (Only Mute icon + subtle title, zero clutter)
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.TopCenter)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            ObsidianNight.copy(alpha = 0.88f),
-                            ObsidianNight.copy(alpha = 0.45f),
-                            Color.Transparent
-                        )
-                    )
-                )
-                .padding(top = 12.dp, bottom = 14.dp)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                IconButton(
+                    onClick = { isMuted = !isMuted },
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(RoyalNavyBackground.copy(alpha = 0.45f))
+                        .testTag("reel_toggle_sound_button")
                 ) {
-                    // Sound Mute/Unmute Pill
+                    Icon(
+                        imageVector = if (isMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
+                        contentDescription = "الصوت",
+                        tint = SoftWhiteText,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+
+                if (isSuperAdmin) {
                     IconButton(
-                        onClick = { isMuted = !isMuted },
+                        onClick = onOpenAdminPublishReel,
                         modifier = Modifier
-                            .size(40.dp)
+                            .size(34.dp)
                             .clip(CircleShape)
-                            .background(ObsidianNight.copy(alpha = 0.72f))
-                            .border(1.dp, BrandChampagneGold.copy(alpha = 0.5f), CircleShape)
-                            .testTag("reel_toggle_sound_button")
+                            .background(DeepTealPrimary.copy(alpha = 0.85f))
+                            .testTag("admin_add_reel_top_button")
                     ) {
                         Icon(
-                            imageVector = if (isMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
-                            contentDescription = "الصوت",
-                            tint = BrandChampagneGold,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-
-                    // Web Link Share Pill
-                    Surface(
-                        onClick = {
-                            copyWebLinkToClipboard(context, onShowMessage)
-                        },
-                        color = BrandDeepViolet.copy(alpha = 0.85f),
-                        shape = RoundedCornerShape(50),
-                        border = BorderStroke(1.dp, BrandChampagneGold),
-                        modifier = Modifier.testTag("reels_share_web_link_button")
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Share,
-                                contentDescription = null,
-                                tint = BrandChampagneGold,
-                                modifier = Modifier.size(15.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "نسخ رابط الويب",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = BrandChampagneGold,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-
-                    if (isSuperAdmin) {
-                        Surface(
-                            onClick = onOpenAdminPublishReel,
-                            color = BrandDustyRose,
-                            shape = RoundedCornerShape(50),
-                            border = BorderStroke(1.dp, BrandChampagneGold),
-                            modifier = Modifier.testTag("admin_add_reel_top_button")
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.AddCircleOutline,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(15.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "نشر ريلز",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Right Title: "ريلز 4K"
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Surface(
-                        color = BrandDustyRose,
-                        shape = RoundedCornerShape(50)
-                    ) {
-                        Text(
-                            text = "LIVE 4K",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                        )
-                    }
-                    Text(
-                        text = "ريلز السهرات والسبا",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Icon(
-                        imageVector = Icons.Default.Videocam,
-                        contentDescription = null,
-                        tint = BrandChampagneGold,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Filter Pills Row
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(filterOptions) { filter ->
-                    val selected = selectedFilter == filter
-                    Surface(
-                        onClick = {
-                            selectedFilter = filter
-                            coroutineScope.launch {
-                                pagerState.scrollToPage(0)
-                            }
-                        },
-                        color = if (selected) BrandChampagneGold else ObsidianNight.copy(alpha = 0.72f),
-                        shape = RoundedCornerShape(50),
-                        border = BorderStroke(
-                            1.dp,
-                            if (selected) BrandChampagneGold else BrandChampagneGold.copy(alpha = 0.35f)
-                        )
-                    ) {
-                        Text(
-                            text = filter,
-                            style = MaterialTheme.typography.labelLarge,
-                            color = if (selected) ObsidianNight else Color.White,
-                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "نشر ريلز",
+                            tint = SoftWhiteText,
+                            modifier = Modifier.size(16.dp)
                         )
                     }
                 }
             }
+
+            Text(
+                text = "Reels",
+                fontSize = 14.sp,
+                color = SoftWhiteText.copy(alpha = 0.9f),
+                fontWeight = FontWeight.SemiBold
+            )
         }
     }
 
-    // Comments / Quick Review Modal for the Active Reel
+    // Compact Comments Dialog
     activeCommentReel?.let { reel ->
         var newCommentText by remember { mutableStateOf("") }
         val customList = customCommentsByReel[reel.id] ?: emptyList()
 
         AlertDialog(
             onDismissRequest = { activeCommentReel = null },
-            containerColor = MaterialTheme.colorScheme.surface,
+            containerColor = RoyalNavyCard,
             title = {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Surface(
-                        color = BrandChampagneGold.copy(alpha = 0.2f),
-                        shape = RoundedCornerShape(50)
-                    ) {
-                        Text(
-                            text = "★ ${reel.rating}",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = BrandChampagneGold,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                        )
-                    }
-                    Text(
-                        text = "تعليقات وتقييمات الريلز",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = BrandChampagneGold,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+                Text(
+                    text = "التعليقات (${reel.reviewsCount + customList.size})",
+                    fontSize = 15.sp,
+                    color = SoftWhiteText,
+                    fontWeight = FontWeight.Bold
+                )
             },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(
-                        text = "${reel.title} (${reel.cityName})",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    // Curated + User Comments
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     val sampleComments = listOf(
-                        "أجواء راقية جداً وخدمة VIP ممتازة في ${reel.cityName} ✨",
-                        "حجزت مباشرة من الريلز وكان الاستقبال في قمة الفخامة والخصوصية."
+                        "أجواء راقية جداً في ${reel.cityName} ✨",
+                        "تجربة مميزة وحجز سريع."
                     )
-                    (customList + sampleComments).take(5).forEach { comment ->
+                    (customList + sampleComments).take(4).forEach { comment ->
                         Surface(
-                            color = MaterialTheme.colorScheme.surfaceVariant,
-                            shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(0.8.dp, BrandChampagneGold.copy(alpha = 0.25f)),
+                            color = RoyalNavyBackground.copy(alpha = 0.6f),
+                            shape = RoundedCornerShape(10.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(
                                 text = comment,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface,
+                                fontSize = 12.sp,
+                                color = SoftWhiteText,
                                 modifier = Modifier.padding(10.dp)
                             )
                         }
@@ -564,7 +368,7 @@ fun ReelsScreen(
                     OutlinedTextField(
                         value = newCommentText,
                         onValueChange = { newCommentText = it },
-                        label = { Text("أضف تعليقك على هذا الريلز...") },
+                        placeholder = { Text("أضف تعليقاً...", fontSize = 12.sp) },
                         singleLine = true,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -576,25 +380,25 @@ fun ReelsScreen(
                 Button(
                     onClick = {
                         if (newCommentText.isNotBlank()) {
-                            val updated = listOf(newCommentText.trim()) + customList
-                            customCommentsByReel[reel.id] = updated
+                            customCommentsByReel[reel.id] = listOf(newCommentText.trim()) + customList
                             newCommentText = ""
-                            onShowMessage("تم نشر تعليقك على الريلز بنجاح!")
+                            onShowMessage("تم إضافة تعليقك")
                         } else {
                             activeCommentReel = null
                         }
                     },
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = BrandChampagneGold,
-                        contentColor = ObsidianNight
-                    )
+                        containerColor = DeepTealPrimary,
+                        contentColor = SoftWhiteText
+                    ),
+                    shape = RoundedCornerShape(50)
                 ) {
-                    Text("إرسال التعليق", fontWeight = FontWeight.Bold)
+                    Text("إرسال", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { activeCommentReel = null }) {
-                    Text("إغلاق", color = BrandDustyRose)
+                    Text("إغلاق", fontSize = 12.sp, color = SlateSecondaryText)
                 }
             }
         )
@@ -605,31 +409,25 @@ fun ReelsScreen(
 private fun SingleReelFullPage(
     reel: ReelItemUiModel,
     reelIndex: Int,
-    totalReels: Int,
     isPlaying: Boolean,
-    isMuted: Boolean,
     isLiked: Boolean,
-    isFavorite: Boolean,
     extraCommentsCount: Int,
     isSuperAdmin: Boolean,
     onTogglePlay: () -> Unit,
     onDoubleTapLike: () -> Unit,
     onToggleLike: () -> Unit,
-    onToggleFavorite: () -> Unit,
     onOpenComments: () -> Unit,
     onShareReel: () -> Unit,
     onBookFromReel: () -> Unit,
-    onOpenDetailsFromReel: () -> Unit,
     onOpenCreatorChat: () -> Unit,
     onEditPrice: () -> Unit
 ) {
-    val context = LocalContext.current
     var showHeartBurst by remember { mutableStateOf(false) }
-    var progress by remember { mutableFloatStateOf(0.15f) }
+    var progress by remember { mutableFloatStateOf(0.2f) }
 
     LaunchedEffect(showHeartBurst) {
         if (showHeartBurst) {
-            delay(850)
+            delay(750)
             showHeartBurst = false
         }
     }
@@ -650,13 +448,11 @@ private fun SingleReelFullPage(
                         onDoubleTapLike()
                         showHeartBurst = true
                     },
-                    onTap = {
-                        onTogglePlay()
-                    }
+                    onTap = { onTogglePlay() }
                 )
             }
     ) {
-        // 1. Full-Screen Visual Media Background
+        // 1. Full-Screen Video / Visual Media Canvas
         SmartServiceMediaView(
             imageUrl = reel.imageUrl,
             accentHex = reel.accentHex,
@@ -665,55 +461,41 @@ private fun SingleReelFullPage(
             modifier = Modifier.fillMaxSize()
         )
 
-        // 2. Cached Vignette & Luxury Ambient Overlay (zero per-frame allocations during swipe)
+        // 2. Subtle Bottom Gradient Scrim (Clean, light, unobtrusive)
         Spacer(
             modifier = Modifier
                 .fillMaxSize()
                 .drawWithCache {
-                    val w = size.width
-                    val h = size.height
-                    val glowRadius = (w * 0.65f).coerceAtLeast(1f)
-                    val glowCenter = Offset(w * 0.5f, h * 0.42f)
-                    val glowBrush = Brush.radialGradient(
-                        colors = listOf(
-                            BrandChampagneGold.copy(alpha = 0.12f),
-                            BrandDustyRose.copy(alpha = 0.08f),
-                            Color.Transparent
-                        ),
-                        center = glowCenter,
-                        radius = glowRadius
-                    )
                     val vignetteBrush = Brush.verticalGradient(
                         colors = listOf(
-                            ObsidianNight.copy(alpha = 0.55f),
+                            RoyalNavyBackground.copy(alpha = 0.2f),
                             Color.Transparent,
-                            ObsidianNight.copy(alpha = 0.68f),
-                            ObsidianNight.copy(alpha = 0.95f)
+                            Color.Transparent,
+                            RoyalNavyBackground.copy(alpha = 0.55f),
+                            RoyalNavyBackground.copy(alpha = 0.88f)
                         )
                     )
                     onDrawBehind {
-                        drawCircle(brush = glowBrush, radius = glowRadius, center = glowCenter)
                         drawRect(brush = vignetteBrush)
                     }
                 }
         )
 
-        // 4. Center Play/Pause Indicator or Double-Tap Heart Burst
+        // 3. Minimal Center Play Icon when paused
         if (!isPlaying) {
             Surface(
-                color = ObsidianNight.copy(alpha = 0.72f),
+                color = RoyalNavyBackground.copy(alpha = 0.55f),
                 shape = CircleShape,
-                border = BorderStroke(2.dp, BrandChampagneGold),
                 modifier = Modifier
-                    .size(78.dp)
+                    .size(56.dp)
                     .align(Alignment.Center)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
-                        imageVector = Icons.Default.PlayCircleFilled,
+                        imageVector = Icons.Default.PlayArrow,
                         contentDescription = "تشغيل",
-                        tint = BrandChampagneGold,
-                        modifier = Modifier.size(48.dp)
+                        tint = SoftWhiteText,
+                        modifier = Modifier.size(30.dp)
                     )
                 }
             }
@@ -729,67 +511,46 @@ private fun SingleReelFullPage(
                 imageVector = Icons.Default.Favorite,
                 contentDescription = null,
                 tint = WarmCoral,
-                modifier = Modifier.size(112.dp)
+                modifier = Modifier.size(84.dp)
             )
         }
 
-        // 5. Left/Start Vertical Social & Action Rail (Like, Comment, Favorite, Share, Support)
+        // 4. Clean 3-Icon Side Rail: ONLY Like, Comment, Share (Small & Uniform)
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(start = 16.dp, bottom = 130.dp),
+                .padding(start = 14.dp, bottom = 56.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // Like Button
             ReelActionCircleButton(
                 icon = if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                iconTint = if (isLiked) WarmCoral else Color.White,
-                label = "${reel.baseLikes + (if (isLiked) 1 else 0)}",
+                iconTint = if (isLiked) WarmCoral else SoftWhiteText,
+                label = formatCompactMetric(reel.baseLikes + (if (isLiked) 1 else 0)),
                 onClick = onToggleLike,
                 testTag = "reel_like_button_${reel.id}"
             )
 
-            // Comments / Verified Reviews Button
             ReelActionCircleButton(
                 icon = Icons.Default.ChatBubbleOutline,
-                iconTint = BrandChampagneGold,
-                label = "${reel.reviewsCount + extraCommentsCount}",
+                iconTint = SoftWhiteText,
+                label = formatCompactMetric(reel.reviewsCount + extraCommentsCount),
                 onClick = onOpenComments,
                 testTag = "reel_comments_button_${reel.id}"
             )
 
-            // Save / Favorite Button
-            ReelActionCircleButton(
-                icon = if (isFavorite) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                iconTint = if (isFavorite) BrandChampagneGold else Color.White,
-                label = if (isFavorite) "محفوظ" else "حفظ",
-                onClick = onToggleFavorite,
-                testTag = "reel_favorite_button_${reel.id}"
-            )
-
-            // Share Web & App Link Button
             ReelActionCircleButton(
                 icon = Icons.Default.Share,
-                iconTint = Color.White,
+                iconTint = SoftWhiteText,
                 label = "مشاركة",
                 onClick = onShareReel,
                 testTag = "reel_share_button_${reel.id}"
             )
 
-            // Telegram Support @RamaNUR Quick Button
-            ReelActionCircleButton(
-                icon = Icons.Default.SupportAgent,
-                iconTint = BrandDustyRose,
-                label = "@RamaNUR",
-                onClick = { LayaliNotificationHelper.openTelegramSupport(context) },
-                testTag = "reel_telegram_button_${reel.id}"
-            )
-
             if (isSuperAdmin) {
                 ReelActionCircleButton(
                     icon = Icons.Default.Edit,
-                    iconTint = BrandChampagneGold,
+                    iconTint = MutedLuxuryGold,
                     label = "$${reel.priceUsd}",
                     onClick = onEditPrice,
                     testTag = "reel_admin_edit_price_${reel.id}"
@@ -797,236 +558,113 @@ private fun SingleReelFullPage(
             }
         }
 
-        // 6. Bottom Right/Center Info Overlay & Direct Booking Bar
+        // 5. Minimal Bottom Creator Identity Only (65% less text — No bulky paragraphs or multi-buttons)
+        val creatorLevel = 12 + ((reelIndex * 3) % 18)
+        val creatorDisplayName = reel.sourceVenue?.providerDisplayName?.ifBlank { reel.title }
+            ?: reel.title
+
         Column(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .fillMaxWidth()
-                .padding(start = 82.dp, end = 16.dp, bottom = 18.dp),
+                .padding(start = 68.dp, end = 16.dp, bottom = 12.dp),
             horizontalAlignment = Alignment.End
         ) {
-            // Reel Counter + City + Rating Row
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                // Sleek Compact Booking Pill
                 Surface(
-                    color = ObsidianNight.copy(alpha = 0.78f),
+                    onClick = onBookFromReel,
+                    color = DeepTealPrimary,
                     shape = RoundedCornerShape(50),
-                    border = BorderStroke(0.8.dp, BrandChampagneGold.copy(alpha = 0.5f))
-                ) {
-                    Text(
-                        text = "$reelIndex / $totalReels • ${reel.durationLabel}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = SoftGold,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
-
-                Surface(
-                    color = EmeraldVerified.copy(alpha = 0.9f),
-                    shape = RoundedCornerShape(50)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Verified,
-                            contentDescription = null,
-                            tint = ObsidianNight,
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Spacer(modifier = Modifier.width(3.dp))
-                        Text(
-                            text = "متاح الآن",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = ObsidianNight,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                Surface(
-                    color = BrandDeepViolet.copy(alpha = 0.9f),
-                    shape = RoundedCornerShape(50),
-                    border = BorderStroke(1.dp, BrandChampagneGold)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.LocationOn,
-                            contentDescription = null,
-                            tint = BrandChampagneGold,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(modifier = Modifier.width(3.dp))
-                        Text(
-                            text = "${reel.cityName} • ${reel.country}",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = BrandChampagneGold,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
-
-            // Creator Framed Avatar + @username + Level Badge Strip
-            val creatorFrames = listOf("emerald_crown", "amber_sovereign", "sapphire_neon", "amethyst_vip", "crimson_flame", "obsidian_elite")
-            val creatorFrameId = creatorFrames[(reelIndex - 1) % creatorFrames.size]
-            val creatorLevel = 16 + ((reelIndex * 3) % 20)
-            val creatorUsername = reel.sourceVenue?.providerUsername ?: "@layali_${reel.cityName.hashCode().let { kotlin.math.abs(it) % 99 }}"
-
-            Surface(
-                onClick = onOpenCreatorChat,
-                color = ObsidianNight.copy(alpha = 0.82f),
-                shape = RoundedCornerShape(20.dp),
-                border = BorderStroke(1.dp, BrandChampagneGold.copy(alpha = 0.6f)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                        .height(32.dp)
+                        .testTag("reel_book_now_button_${reel.id}")
                 ) {
-                    Surface(
-                        color = VioletBlueVip,
-                        shape = RoundedCornerShape(50)
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.padding(horizontal = 12.dp)
                     ) {
                         Text(
-                            text = "دردشة VIP ($15)",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = Color.White,
-                            fontWeight = FontWeight.ExtraBold,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                            text = "حجز • $${reel.priceUsd}",
+                            fontSize = 11.sp,
+                            color = SoftWhiteText,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1
                         )
                     }
+                }
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Column(horizontalAlignment = Alignment.End) {
+                // Creator Name + Golden LEVEL Badge + Small Avatar
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.clickable { onOpenCreatorChat() }
+                ) {
+                    Column(horizontalAlignment = Alignment.End) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            // Golden LEVEL badge instead of cluttered icons
+                            Surface(
+                                color = MutedLuxuryGold.copy(alpha = 0.18f),
+                                shape = RoundedCornerShape(50),
+                                border = BorderStroke(0.7.dp, MutedLuxuryGold.copy(alpha = 0.7f))
+                            ) {
+                                Text(
+                                    text = "LV.$creatorLevel",
+                                    fontSize = 9.sp,
+                                    color = MutedLuxuryGold,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
+                                )
+                            }
+
                             Text(
-                                text = creatorUsername,
-                                style = MaterialTheme.typography.labelLarge,
-                                color = BrandChampagneGold,
-                                fontWeight = FontWeight.ExtraBold
-                            )
-                            Text(
-                                text = "المستوى الملكي Lv.$creatorLevel • متصل الآن",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = EmeraldVerified
+                                text = creatorDisplayName,
+                                fontSize = 13.sp,
+                                color = SoftWhiteText,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
 
-                        FramedUserAvatar(
-                            avatarUri = reel.imageUrl,
-                            fallbackInitial = reel.title.take(1),
-                            frameId = creatorFrameId,
-                            level = creatorLevel,
-                            avatarSize = 42.dp,
-                            showLevelBadge = true,
-                            isOnline = true
+                        Text(
+                            text = reel.cityName,
+                            fontSize = 11.sp,
+                            color = SlateSecondaryText,
+                            maxLines = 1
                         )
                     }
-                }
-            }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Reel Title
-            Text(
-                text = reel.title,
-                style = MaterialTheme.typography.headlineSmall,
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            // Description
-            Text(
-                text = reel.description,
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.White.copy(alpha = 0.88f),
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Audio Track & Badges Strip
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.MusicNote,
-                    contentDescription = null,
-                    tint = BrandChampagneGold,
-                    modifier = Modifier.size(15.dp)
-                )
-                Text(
-                    text = if (isMuted) "الصوت مكتوم • ${reel.audioTrackTitle}" else reel.audioTrackTitle,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = BrandChampagneGold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Price + Direct Booking CTA Row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedButton(
-                    onClick = onOpenDetailsFromReel,
-                    shape = RoundedCornerShape(50),
-                    border = BorderStroke(1.2.dp, BrandChampagneGold),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-                    modifier = Modifier
-                        .weight(0.42f)
-                        .height(50.dp)
-                ) {
-                    Text(
-                        text = "التفاصيل والصور",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = BrandChampagneGold,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1
+                    FramedUserAvatar(
+                        avatarUri = reel.imageUrl,
+                        fallbackInitial = creatorDisplayName.take(1),
+                        frameId = "amber_sovereign",
+                        level = creatorLevel,
+                        avatarSize = 34.dp,
+                        showLevelBadge = false,
+                        isOnline = true
                     )
                 }
-
-                LuxuryGradientButton(
-                    text = "احجز الآن • $${reel.priceUsd}",
-                    onClick = onBookFromReel,
-                    modifier = Modifier.weight(0.58f),
-                    testTag = "reel_book_now_button_${reel.id}"
-                )
             }
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Animated 4K Video Progress Bar
+            // Hairline Progress Bar
             LinearProgressIndicator(
                 progress = { if (isPlaying) progress else 0.45f },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(3.dp)
+                    .height(1.5.dp)
                     .clip(RoundedCornerShape(50)),
-                color = BrandChampagneGold,
-                trackColor = Color.White.copy(alpha = 0.25f)
+                color = DeepTealPrimary,
+                trackColor = SoftWhiteText.copy(alpha = 0.16f)
             )
         }
     }
@@ -1034,7 +672,7 @@ private fun SingleReelFullPage(
 
 @Composable
 private fun ReelActionCircleButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     iconTint: Color,
     label: String,
     onClick: () -> Unit,
@@ -1047,34 +685,40 @@ private fun ReelActionCircleButton(
             .testTag(testTag)
     ) {
         Surface(
-            color = ObsidianNight.copy(alpha = 0.72f),
+            color = RoyalNavyBackground.copy(alpha = 0.48f),
             shape = CircleShape,
-            border = BorderStroke(1.dp, BrandChampagneGold.copy(alpha = 0.45f)),
-            modifier = Modifier.size(46.dp)
+            modifier = Modifier.size(38.dp)
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     imageVector = icon,
                     contentDescription = label,
                     tint = iconTint,
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(18.dp)
                 )
             }
         }
-        Spacer(modifier = Modifier.height(3.dp))
+        Spacer(modifier = Modifier.height(2.dp))
         Text(
             text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = Color.White,
-            fontWeight = FontWeight.Bold,
+            fontSize = 10.sp,
+            color = SoftWhiteText.copy(alpha = 0.92f),
+            fontWeight = FontWeight.Medium,
             maxLines = 1
         )
     }
 }
 
+private fun formatCompactMetric(count: Int): String {
+    return if (count >= 1000) {
+        String.format("%.1fK", count / 1000.0)
+    } else {
+        count.toString()
+    }
+}
+
 /**
- * Horizontal Reels preview strip displayed on the Home/Explore screen so users on Web & Android
- * can see live 4K Reels stories and jump straight into the full-screen vertical Reels player.
+ * Clean, compact Horizontal Reels preview strip displayed on the Home/Explore screen.
  */
 @Composable
 fun HomeReelsPreviewStrip(
@@ -1086,80 +730,55 @@ fun HomeReelsPreviewStrip(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 8.dp, bottom = 10.dp)
+            .padding(top = 4.dp, bottom = 8.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp),
+                .padding(horizontal = 18.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             TextButton(
                 onClick = onOpenAllReels,
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                 modifier = Modifier.testTag("home_open_all_reels_button")
             ) {
-                Icon(
-                    imageVector = Icons.Default.PlayCircleFilled,
-                    contentDescription = null,
-                    tint = BrandChampagneGold,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
                 Text(
-                    text = "مشاهدة كل الريلز 4K",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = BrandChampagneGold,
-                    fontWeight = FontWeight.Bold
+                    text = "عرض الكل",
+                    fontSize = 12.sp,
+                    color = DeepTealPrimary,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(
-                    color = BrandDustyRose,
-                    shape = RoundedCornerShape(50)
-                ) {
-                    Text(
-                        text = "جديد • REELS",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "ريلز السهرات والسبا",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    fontWeight = FontWeight.Bold
-                )
-            }
+            Text(
+                text = "الريلز",
+                fontSize = 15.sp,
+                color = SoftWhiteText,
+                fontWeight = FontWeight.Bold
+            )
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            contentPadding = PaddingValues(horizontal = 18.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             items(publishedServices.take(4), key = { "home_reel_pub_${it.id}" }) { pub ->
                 HomeReelStoryCard(
                     title = pub.title,
-                    cityName = pub.cityName,
-                    priceUsd = pub.priceUsd.toInt(),
                     imageUrl = pub.imageUrl,
                     category = pub.category,
-                    accentHex = 0xFFD6789BL,
-                    secondaryHex = 0xFF47256BL,
+                    accentHex = 0xFF0D9488L,
+                    secondaryHex = 0xFF09111EL,
                     onClick = { onOpenReelItem(pub.id) }
                 )
             }
             items(venues.take(6), key = { "home_reel_venue_${it.id}" }) { venue ->
                 HomeReelStoryCard(
                     title = venue.name,
-                    cityName = venue.cityName,
-                    priceUsd = venue.startingPriceUsd,
                     imageUrl = venue.visualPresetKey,
                     category = venue.category,
                     accentHex = venue.accentHex,
@@ -1171,23 +790,17 @@ fun HomeReelsPreviewStrip(
     }
 }
 
-private val ReelStoryBorderBrush = Brush.linearGradient(
-    colors = listOf(BrandChampagneGold, BrandDustyRose, BrandChampagneGold)
-)
-
 private val ReelStoryVignetteBrush = Brush.verticalGradient(
     colors = listOf(
-        ObsidianNight.copy(alpha = 0.35f),
         Color.Transparent,
-        ObsidianNight.copy(alpha = 0.90f)
+        Color.Transparent,
+        RoyalNavyBackground.copy(alpha = 0.88f)
     )
 )
 
 @Composable
 private fun HomeReelStoryCard(
     title: String,
-    cityName: String,
-    priceUsd: Int,
     imageUrl: String,
     category: String,
     accentHex: Long,
@@ -1196,14 +809,11 @@ private fun HomeReelStoryCard(
 ) {
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(20.dp),
-        border = BorderStroke(
-            width = 2.dp,
-            brush = ReelStoryBorderBrush
-        ),
+        shape = RoundedCornerShape(14.dp),
+        color = RoyalNavyCard,
         modifier = Modifier
-            .width(122.dp)
-            .height(178.dp)
+            .width(102.dp)
+            .height(146.dp)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             SmartServiceMediaView(
@@ -1220,74 +830,19 @@ private fun HomeReelStoryCard(
                     .background(ReelStoryVignetteBrush)
             )
 
-            // Top Play 4K Badge
-            Surface(
-                color = ObsidianNight.copy(alpha = 0.75f),
-                shape = RoundedCornerShape(50),
-                border = BorderStroke(0.8.dp, BrandChampagneGold),
+            Text(
+                text = title,
+                fontSize = 11.sp,
+                lineHeight = 14.sp,
+                color = SoftWhiteText,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(8.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PlayCircleFilled,
-                        contentDescription = null,
-                        tint = BrandChampagneGold,
-                        modifier = Modifier.size(12.dp)
-                    )
-                    Spacer(modifier = Modifier.width(3.dp))
-                    Text(
-                        text = "ريلز",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-
-            // Bottom Title + City + Price
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .padding(8.dp),
-                horizontalAlignment = Alignment.End
-            ) {
-                Surface(
-                    color = BrandChampagneGold,
-                    shape = RoundedCornerShape(50)
-                ) {
-                    Text(
-                        text = "$cityName • $$priceUsd",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = ObsidianNight,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+                    .align(Alignment.BottomEnd)
+                    .padding(horizontal = 8.dp, vertical = 7.dp)
+            )
         }
-    }
-}
-
-private fun copyWebLinkToClipboard(context: Context, onMessage: (String) -> Unit) {
-    runCatching {
-        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        clipboard.setPrimaryClip(ClipData.newPlainText("رابط موقع وتطبيق ليالي", SHARED_WEB_APP_URL))
-        onMessage("تم نسخ رابط الويب الرسمي: $SHARED_WEB_APP_URL")
     }
 }
 
@@ -1297,9 +852,8 @@ private fun shareOrCopyReelLink(
     onCopiedMessage: (String) -> Unit
 ) {
     val shareText = buildString {
-        append("شاهد ريلز: ${reel.title} (${reel.cityName} - ${reel.country})\n")
-        append("السعر: $${reel.priceUsd} • حجز مباشر VIP\n")
-        append("الرابط المباشر للويب والتطبيق:\n$SHARED_WEB_APP_URL")
+        append("${reel.title} (${reel.cityName})\n")
+        append(SHARED_WEB_APP_URL)
     }
     runCatching {
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -1311,10 +865,10 @@ private fun shareOrCopyReelLink(
             putExtra(Intent.EXTRA_TEXT, shareText)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
-        context.startActivity(Intent.createChooser(sendIntent, "مشاركة الريلز والرابط").apply {
+        context.startActivity(Intent.createChooser(sendIntent, "مشاركة").apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         })
     }.onFailure {
-        onCopiedMessage("تم نسخ رابط الريلز والويب إلى الحافظة!")
+        onCopiedMessage("تم نسخ الرابط إلى الحافظة")
     }
 }

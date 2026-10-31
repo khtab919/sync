@@ -118,40 +118,44 @@ fun FramedUserAvatar(
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier
-            .size(avatarSize + 18.dp)
+            .size(avatarSize + 22.dp)
             .let { base ->
                 if (onClick != null) base.clickable { onClick() } else base
             }
     ) {
-        // Outer Ornamental Frame Canvas (Rings, Corner Gems, Crown Crest)
+        // Ultra-Luxury Multi-Layered Jewel Frame Canvas (Aura, Braided Rings, 12 Diamond Gems, 5-Peak Imperial Crown)
         Canvas(modifier = Modifier.fillMaxSize()) {
             val center = Offset(size.width / 2f, size.height / 2f)
-            val outerRadius = (size.minDimension / 2f) - 4.dp.toPx()
-            val innerRadius = outerRadius - 5.dp.toPx()
+            val outerRadius = (size.minDimension / 2f) - 5.dp.toPx()
+            val midRadius = outerRadius - 3.2.dp.toPx()
+            val innerRadius = outerRadius - 6.2.dp.toPx()
 
-            // Soft outer aura
+            // 1. Deep multi-stop royal radial aura
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        primaryColor.copy(alpha = 0.35f),
-                        secondaryColor.copy(alpha = 0.14f),
+                        primaryColor.copy(alpha = 0.45f),
+                        secondaryColor.copy(alpha = 0.24f),
+                        accentColor.copy(alpha = 0.08f),
                         Color.Transparent
                     ),
                     center = center,
-                    radius = outerRadius + 6.dp.toPx()
+                    radius = outerRadius + 8.dp.toPx()
                 ),
-                radius = outerRadius + 6.dp.toPx(),
+                radius = outerRadius + 8.dp.toPx(),
                 center = center
             )
 
-            // Outer gradient ring
+            // 2. Outer sculpted jewel bezel ring
             drawCircle(
                 brush = Brush.sweepGradient(
                     colors = listOf(
                         primaryColor,
                         accentColor,
                         secondaryColor,
+                        Color.White.copy(alpha = 0.9f),
                         primaryColor,
+                        secondaryColor,
                         accentColor,
                         primaryColor
                     ),
@@ -159,48 +163,100 @@ fun FramedUserAvatar(
                 ),
                 radius = outerRadius,
                 center = center,
-                style = Stroke(width = 3.5.dp.toPx())
+                style = Stroke(width = 3.8.dp.toPx())
             )
 
-            // Inner metallic hairline ring
+            // 3. Middle dark obsidian contrast groove
             drawCircle(
-                color = accentColor.copy(alpha = 0.85f),
+                color = Color(0xFF080C16).copy(alpha = 0.9f),
+                radius = midRadius,
+                center = center,
+                style = Stroke(width = 1.6.dp.toPx())
+            )
+
+            // 4. Inner crystalline platinum filigree ring
+            drawCircle(
+                brush = Brush.sweepGradient(
+                    colors = listOf(
+                        accentColor,
+                        secondaryColor,
+                        primaryColor,
+                        accentColor
+                    ),
+                    center = center
+                ),
                 radius = innerRadius,
                 center = center,
-                style = Stroke(width = 1.4.dp.toPx())
+                style = Stroke(width = 1.5.dp.toPx())
             )
 
-            // 8 Ornamental Studs around the frame
-            for (i in 0 until 8) {
-                val angleRad = Math.toRadians((i * 45.0) - 90.0)
+            // 5. 12 Faceted Diamond-Cut Gemstones around the bezel
+            for (i in 0 until 12) {
+                if (i == 0) continue // Top position is reserved for the Imperial Crown
+                val angleRad = Math.toRadians((i * 30.0) - 90.0)
                 val px = center.x + (outerRadius * cos(angleRad)).toFloat()
                 val py = center.y + (outerRadius * sin(angleRad)).toFloat()
+                val isCardinal = i % 3 == 0
+                val gemSize = if (isCardinal) 4.4.dp.toPx() else 2.8.dp.toPx()
+
+                val diamondPath = Path().apply {
+                    moveTo(px, py - gemSize)
+                    lineTo(px + gemSize * 0.85f, py)
+                    lineTo(px, py + gemSize)
+                    lineTo(px - gemSize * 0.85f, py)
+                    close()
+                }
+                drawPath(
+                    path = diamondPath,
+                    color = if (isCardinal) accentColor else secondaryColor
+                )
+                // Inner specular diamond highlight
                 drawCircle(
-                    color = if (i % 2 == 0) accentColor else secondaryColor,
-                    radius = if (i == 0) 4.2.dp.toPx() else 2.6.dp.toPx(),
+                    color = Color.White.copy(alpha = 0.9f),
+                    radius = gemSize * 0.32f,
                     center = Offset(px, py)
                 )
             }
 
-            // Top Royal Crown / Diamond Crest
-            val crownCenterY = center.y - outerRadius - 1.dp.toPx()
-            val crownWidth = 18.dp.toPx()
-            val crownHeight = 9.dp.toPx()
+            // 6. Top 5-Peak Imperial Royal Crown with Jewel Tips
+            val crownBaseY = center.y - outerRadius + 1.5.dp.toPx()
+            val crownWidth = 22.dp.toPx()
+            val crownHeight = 11.dp.toPx()
             val crownPath = Path().apply {
-                moveTo(center.x - crownWidth / 2f, crownCenterY + crownHeight / 2f)
-                lineTo(center.x - crownWidth * 0.38f, crownCenterY - crownHeight * 0.4f)
-                lineTo(center.x - crownWidth * 0.15f, crownCenterY + crownHeight * 0.1f)
-                lineTo(center.x, crownCenterY - crownHeight * 0.7f)
-                lineTo(center.x + crownWidth * 0.15f, crownCenterY + crownHeight * 0.1f)
-                lineTo(center.x + crownWidth * 0.38f, crownCenterY - crownHeight * 0.4f)
-                lineTo(center.x + crownWidth / 2f, crownCenterY + crownHeight / 2f)
+                moveTo(center.x - crownWidth * 0.44f, crownBaseY)
+                lineTo(center.x - crownWidth * 0.52f, crownBaseY - crownHeight * 0.55f)
+                lineTo(center.x - crownWidth * 0.28f, crownBaseY - crownHeight * 0.22f)
+                lineTo(center.x - crownWidth * 0.22f, crownBaseY - crownHeight * 0.82f)
+                lineTo(center.x - crownWidth * 0.08f, crownBaseY - crownHeight * 0.32f)
+                lineTo(center.x, crownBaseY - crownHeight * 1.12f)
+                lineTo(center.x + crownWidth * 0.08f, crownBaseY - crownHeight * 0.32f)
+                lineTo(center.x + crownWidth * 0.22f, crownBaseY - crownHeight * 0.82f)
+                lineTo(center.x + crownWidth * 0.28f, crownBaseY - crownHeight * 0.22f)
+                lineTo(center.x + crownWidth * 0.52f, crownBaseY - crownHeight * 0.55f)
+                lineTo(center.x + crownWidth * 0.44f, crownBaseY)
                 close()
             }
             drawPath(
                 path = crownPath,
                 brush = Brush.linearGradient(
-                    colors = listOf(accentColor, primaryColor, secondaryColor)
+                    colors = listOf(accentColor, primaryColor, secondaryColor, accentColor)
                 )
+            )
+            // Crown top center diamond pearl
+            drawCircle(
+                color = Color.White,
+                radius = 2.2.dp.toPx(),
+                center = Offset(center.x, crownBaseY - crownHeight * 1.15f)
+            )
+            drawCircle(
+                color = accentColor,
+                radius = 1.6.dp.toPx(),
+                center = Offset(center.x - crownWidth * 0.22f, crownBaseY - crownHeight * 0.85f)
+            )
+            drawCircle(
+                color = accentColor,
+                radius = 1.6.dp.toPx(),
+                center = Offset(center.x + crownWidth * 0.22f, crownBaseY - crownHeight * 0.85f)
             )
         }
 
@@ -227,7 +283,8 @@ fun FramedUserAvatar(
                         .background(
                             Brush.linearGradient(
                                 colors = listOf(
-                                    primaryColor.copy(alpha = 0.28f),
+                                    primaryColor.copy(alpha = 0.34f),
+                                    secondaryColor.copy(alpha = 0.2f),
                                     CharcoalNight
                                 )
                             )
@@ -259,26 +316,35 @@ fun FramedUserAvatar(
             )
         }
 
-        // Bottom Level Pill Badge (Lv. X)
+        // Bottom Royal Level Crest Badge (LEVEL X)
         if (showLevelBadge) {
             Surface(
                 color = CharcoalNight,
                 shape = RoundedCornerShape(50),
-                border = BorderStroke(1.2.dp, primaryColor),
+                border = BorderStroke(1.3.dp, accentColor),
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .offset(y = 2.dp)
+                    .offset(y = 3.dp)
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                    modifier = Modifier
+                        .background(
+                            Brush.horizontalGradient(
+                                colors = listOf(
+                                    primaryColor.copy(alpha = 0.35f),
+                                    secondaryColor.copy(alpha = 0.35f)
+                                )
+                            )
+                        )
+                        .padding(horizontal = 8.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
                     Text(
-                        text = "Lv.$level",
+                        text = "LV.$level",
                         style = MaterialTheme.typography.labelSmall,
-                        fontSize = 10.sp,
-                        color = accentColor,
+                        fontSize = 9.sp,
+                        color = Color.White,
                         fontWeight = FontWeight.ExtraBold
                     )
                 }
@@ -1282,37 +1348,36 @@ fun LuxuryGradientButton(
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
     enabled: Boolean = true,
-    isEmeraldStyle: Boolean = false,
+    isEmeraldStyle: Boolean = true,
     testTag: String? = null
 ) {
     val brush = if (!enabled) {
         Brush.horizontalGradient(
-            colors = listOf(Color(0xFF475569), Color(0xFF334155))
+            colors = listOf(Color(0xFF334155), Color(0xFF1E293B))
         )
     } else if (isEmeraldStyle) {
+        // Electric Sapphire (#0EA5E9) interactive gradient
         Brush.horizontalGradient(
-            colors = listOf(Color(0xFF0D9488), Color(0xFF10B981), Color(0xFF059669))
+            colors = listOf(Color(0xFF0EA5E9), Color(0xFF38BDF8))
         )
     } else {
+        // Royal Amethyst & Imperial Rose for exclusive VIP membership actions (No Yellow)
         Brush.horizontalGradient(
-            colors = listOf(Color(0xFFD97706), Color(0xFFF59E0B), Color(0xFFB45309))
+            colors = listOf(Color(0xFFA855F7), Color(0xFFEC4899))
         )
     }
 
-    val borderBrush = Brush.horizontalGradient(
-        colors = if (isEmeraldStyle) {
-            listOf(Color(0xFF6EE7B7), Color(0xFFF59E0B))
-        } else {
-            listOf(Color(0xFFFDE68A), Color(0xFFF59E0B))
-        }
-    )
+    val contentColor = if (!enabled) {
+        Color(0xFF94A3B8)
+    } else {
+        Color(0xFFF8FAFC)
+    }
 
     Box(
         modifier = modifier
             .height(52.dp)
             .clip(RoundedCornerShape(50))
             .background(brush)
-            .border(1.2.dp, borderBrush, RoundedCornerShape(50))
             .clickable(enabled = enabled) { onClick() }
             .let { m -> if (testTag != null) m.testTag(testTag) else m }
             .padding(horizontal = 20.dp),
@@ -1326,7 +1391,7 @@ fun LuxuryGradientButton(
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = Color.White,
+                    tint = contentColor,
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -1334,8 +1399,8 @@ fun LuxuryGradientButton(
             Text(
                 text = text,
                 style = MaterialTheme.typography.titleMedium,
-                color = Color.White,
-                fontWeight = FontWeight.ExtraBold,
+                color = contentColor,
+                fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )

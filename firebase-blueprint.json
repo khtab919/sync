@@ -1,5 +1,107 @@
 {
   "entities": {
+    "UserAccount": {
+      "title": "UserAccount",
+      "description": "Persistent user account, profile, prestige level, wallet balance, and salted PBKDF2 password hash record.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "UID of the authenticated user who owns this account."
+        },
+        "username": {
+          "type": "string",
+          "description": "Unique handle of the user (e.g. @layali_vip)."
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Display name of the user."
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address associated with the account."
+        },
+        "bio": {
+          "type": "string",
+          "description": "User bio text."
+        },
+        "cityName": {
+          "type": "string",
+          "description": "Selected city in Syria or Turkey."
+        },
+        "country": {
+          "type": "string",
+          "enum": ["سوريا", "تركيا"],
+          "description": "Country name."
+        },
+        "selectedFrameId": {
+          "type": "string",
+          "description": "Equipped luxury avatar frame ID."
+        },
+        "level": {
+          "type": "integer",
+          "description": "Current prestige level (starts at 1)."
+        },
+        "xpPoints": {
+          "type": "integer",
+          "description": "Current accumulated XP points."
+        },
+        "nextLevelXp": {
+          "type": "integer",
+          "description": "XP threshold required for the next level."
+        },
+        "walletBalanceUsd": {
+          "type": "integer",
+          "description": "Verified wallet balance in USD."
+        },
+        "chatPriceUsd": {
+          "type": "integer",
+          "description": "Session price in USD for paid chat with this user."
+        },
+        "isPaidChatEnabled": {
+          "type": "boolean",
+          "description": "Whether paid chat is enabled for this user."
+        },
+        "passwordSaltHex": {
+          "type": "string",
+          "description": "Hex-encoded 16-byte cryptographic salt for PBKDF2-HMAC-SHA256."
+        },
+        "passwordHashHex": {
+          "type": "string",
+          "description": "Hex-encoded PBKDF2-HMAC-SHA256 password hash."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when account was created (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when account was last updated (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "userId",
+        "username",
+        "displayName",
+        "email",
+        "bio",
+        "cityName",
+        "country",
+        "selectedFrameId",
+        "level",
+        "xpPoints",
+        "nextLevelXp",
+        "walletBalanceUsd",
+        "chatPriceUsd",
+        "isPaidChatEnabled",
+        "passwordSaltHex",
+        "passwordHashHex",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
     "Booking": {
       "title": "Booking",
       "description": "A direct reservation for a wellness spa, massage therapy, or evening lounge event in a Syrian or Turkish city.",
@@ -317,6 +419,10 @@
     }
   },
   "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserAccount" },
+      "description": "Persistent user account, profile, level, wallet balance, and salted PBKDF2 password hash document."
+    },
     "/users/{userId}/bookings/{bookingId}": {
       "schema": { "$ref": "#/entities/Booking" },
       "description": "Direct service and evening reservations scoped to the authenticated user."

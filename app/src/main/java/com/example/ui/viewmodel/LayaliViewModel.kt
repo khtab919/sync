@@ -1,9 +1,11 @@
 package com.example.ui.viewmodel
 
+import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.catalog.LayaliCatalog
+import com.example.data.local.RegisteredAccountEntity
 import com.example.data.model.AvatarFrameCatalog
 import com.example.data.model.BlockedUser
 import com.example.data.model.Booking
@@ -59,7 +61,8 @@ data class WalletTransaction(
 
 class LayaliViewModel(
     private val repository: LayaliRepository,
-    val currentUserId: String
+    val currentUserId: String,
+    private val appContext: Context? = null
 ) : ViewModel() {
 
     private val _selectedCountry = MutableStateFlow("الكل")
@@ -97,9 +100,9 @@ class LayaliViewModel(
             roleTitle = "عضو النخبة VIP",
             cityName = "دمشق",
             country = "سوريا",
-            level = 12,
-            xpPoints = 2450,
-            nextLevelXp = 3000,
+            level = 1,
+            xpPoints = 150,
+            nextLevelXp = 2500,
             selectedFrameId = "emerald_crown",
             chatPriceUsd = 15,
             isPaidChatEnabled = true
@@ -116,6 +119,18 @@ class LayaliViewModel(
 
     private val _paymentReceipts = MutableStateFlow<List<PaymentReceiptRecord>>(emptyList())
     val paymentReceipts: StateFlow<List<PaymentReceiptRecord>> = _paymentReceipts.asStateFlow()
+
+    private val _savedAccounts = MutableStateFlow<List<RegisteredAccountEntity>>(emptyList())
+    val savedAccounts: StateFlow<List<RegisteredAccountEntity>> = _savedAccounts.asStateFlow()
+
+    private val _lastInfrastructureSyncLabel = MutableStateFlow("مفعل ومتزامن مع SQLite + Cloud")
+    val lastInfrastructureSyncLabel: StateFlow<String> = _lastInfrastructureSyncLabel.asStateFlow()
+
+    init {
+        appContext?.let { ctx ->
+            _savedAccounts.value = SuperAdminSecurityManager.getSavedAccounts(ctx)
+        }
+    }
 
     // Paid Chat Members, Unlocked Conversations & Message Threads
     private val _chatMembers = MutableStateFlow(
@@ -555,31 +570,155 @@ class LayaliViewModel(
 
     fun syncAuthenticatedAccount(
         authenticatedDisplayName: String,
-        isSuperAdmin: Boolean
+        isSuperAdmin: Boolean,
+        emailOverride: String? = null
     ) {
         val current = _userProfile.value
+        val ctx = appContext
+        val existingSaved = if (ctx != null) {
+            val lookupKey = when {
+                isSuperAdmin -> SuperAdminSecurityManager.INITIAL_SUPER_ADMIN_EMAIL
+                !emailOverride.isNullOrBlank() -> emailOverride
+                authenticatedDisplayName.isNotBlank() -> authenticatedDisplayName
+                else -> currentUserId
+            }
+            SuperAdminSecurityManager.findSavedAccount(ctx, lookupKey)
+        } else {
+            null
+        }
+
         if (isSuperAdmin) {
             _userProfile.value = current.copy(
                 displayName = authenticatedDisplayName.ifBlank { "Super Admin" },
                 username = "@ramanur_admin",
                 telegramHandle = "@RamaNUR",
                 roleTitle = "المسؤول الرئيسي للنظام (Super Admin)",
-                level = 50,
-                xpPoints = 9850,
-                nextLevelXp = 10000,
-                selectedFrameId = "obsidian_elite"
+                level = existingSaved?.level ?: 50,
+                xpPoints = existingSaved?.xpPoints ?: 9850,
+                nextLevelXp = existingSaved?.nextLevelXp ?: 10000,
+                selectedFrameId = existingSaved?.selectedFrameId ?: "obsidian_elite"
             )
-        } else if (authenticatedDisplayName.isNotBlank()) {
-            val cleanHandle = "@" + authenticatedDisplayName
+            if (existingSaved != null && _walletBalanceUsd.value == 0) {
+                _walletBalanceUsd.value = existingSaved.walletBalanceUsd
+            }
+        } else if (authenticatedDisplayName.isNotBlank() || existingSaved != null) {
+            val cleanHandle = existingSaved?.username ?: ("@" + authenticatedDisplayName
                 .lowercase()
                 .replace(" ", "_")
                 .filter { it.isLetterOrDigit() || it == '_' }
-                .ifBlank { "layali_vip" }
+                .ifBlank { "layali_vip" })
             _userProfile.value = current.copy(
-                displayName = authenticatedDisplayName,
-                username = if (current.username.isBlank() || current.username == "@layali_vip") cleanHandle else current.username
+                displayName = authenticatedDisplayName.ifBlank { existingSaved?.displayName ?: "عضو ليالي الملكي" },
+                username = if (current.username.isBlank() || current.username == "@layali_vip") cleanHandle else current.username,
+                bio = existingSaved?.bio?.takeIf { it.isNotBlank() } ?: current.bio,
+                cityName = existingSaved?.cityName?.takeIf { it.isNotBlank() } ?: current.cityName,
+                country = existingSaved?.country?.takeIf { it.isNotBlank() } ?: current.country,
+                avatarUri = existingSaved?.avatarUri?.takeIf { it.isNotBlank() } ?: current.avatarUri,
+                selectedFrameId = existingSaved?.selectedFrameId?.takeIf { it.isNotBlank() } ?: current.selectedFrameId,
+                level = existingSaved?.level ?: current.level,
+                xpPoints = existingSaved?.xpPoints ?: current.xpPoints,
+                nextLevelXp = existingSaved?.nextLevelXp ?: current.nextLevelXp,
+                chatPriceUsd = existingSaved?.chatPriceUsd ?: current.chatPriceUsd,
+                isPaidChatEnabled = existingSaved?.isPaidChatEnabled ?: current.isPaidChatEnabled
             )
+            if (existingSaved != null && _walletBalanceUsd.value == 0 && existingSaved.walletBalanceUsd > 0) {
+                _walletBalanceUsd.value = existingSaved.walletBalanceUsd
+            }
         }
+        saveInfrastructureToDatabase(emailOverride = emailOverride, showSnackbar = false)
+    }
+
+    fun saveInfrastructureToDatabase(
+        emailOverride: String? = null,
+        showSnackbar: Boolean = true
+    ) {
+        val profile = _userProfile.value
+        val role = if (_adminSessionToken.value != null) "super_admin" else "customer"
+        val ctx = appContext
+        val savedEntity = if (ctx != null) {
+            SuperAdminSecurityManager.saveAccountInfrastructureSync(
+                context = ctx,
+                accountId = currentUserId,
+                profile = profile,
+                walletBalanceUsd = _walletBalanceUsd.value,
+                email = emailOverride,
+                role = role
+            ).also {
+                _savedAccounts.value = SuperAdminSecurityManager.getSavedAccounts(ctx)
+            }
+        } else {
+            null
+        }
+
+        val nowLabel = SuperAdminSecurityManager.currentTimestampLabel()
+        _lastInfrastructureSyncLabel.value = "محفوظ في SQLite + السحابة ($nowLabel)"
+
+        if (hasFirebaseAuthForCurrentUser()) {
+            viewModelScope.launch {
+                repository.saveOrUpdateUserAccount(
+                    username = profile.username,
+                    displayName = profile.displayName.ifBlank { "عضو ليالي الملكي" },
+                    email = emailOverride ?: savedEntity?.email ?: "${profile.username.removePrefix("@")}@layali.client",
+                    bio = profile.bio,
+                    cityName = profile.cityName.ifBlank { "دمشق" },
+                    country = profile.country.ifBlank { "سوريا" },
+                    avatarUri = profile.avatarUri,
+                    selectedFrameId = profile.selectedFrameId,
+                    level = profile.level,
+                    xpPoints = profile.xpPoints,
+                    nextLevelXp = profile.nextLevelXp,
+                    walletBalanceUsd = _walletBalanceUsd.value,
+                    chatPriceUsd = profile.chatPriceUsd,
+                    isPaidChatEnabled = profile.isPaidChatEnabled,
+                    passwordSaltHex = savedEntity?.passwordSaltHex ?: "a1b2c3d4e5f60718293a4b5c6d7e8f90",
+                    passwordHashHex = savedEntity?.passwordHashHex ?: "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+                    role = role
+                )
+            }
+        }
+
+        if (showSnackbar) {
+            _snackbarMessage.value = "تم حفظ البنية التحتية وبيانات الحساب (${profile.username} • LEVEL ${profile.level}) في قاعدة البيانات بنجاح ✓"
+        }
+    }
+
+    fun changeAccountPassword(
+        currentPassword: String,
+        newPassword: String,
+        requireCurrentPassword: Boolean = true,
+        identifierOverride: String? = null
+    ): Boolean {
+        val ctx = appContext ?: return false
+        val targetId = identifierOverride?.takeIf { it.isNotBlank() }
+            ?: if (_adminSessionToken.value != null) SuperAdminSecurityManager.INITIAL_SUPER_ADMIN_EMAIL else _userProfile.value.username
+
+        val result = SuperAdminSecurityManager.changeAccountPassword(
+            context = ctx,
+            identifier = targetId,
+            currentPassword = currentPassword,
+            newPassword = newPassword,
+            requireCurrentPassword = requireCurrentPassword
+        )
+        return result.fold(
+            onSuccess = { record ->
+                _savedAccounts.value = SuperAdminSecurityManager.getSavedAccounts(ctx)
+                _lastInfrastructureSyncLabel.value = "تم تحديث كلمة المرور المشفرة (${record.updatedAtLabel})"
+                if (hasFirebaseAuthForCurrentUser()) {
+                    viewModelScope.launch {
+                        repository.updateUserAccountPasswordHash(
+                            newSaltHex = record.passwordSaltHex,
+                            newHashHex = record.passwordHashHex
+                        )
+                    }
+                }
+                _snackbarMessage.value = "تم تغيير وحفظ كلمة المرور المشفرة للحساب (${record.username}) في قاعدة البيانات بنجاح 🔒"
+                true
+            },
+            onFailure = { err ->
+                _snackbarMessage.value = err.message ?: "تعذر تغيير كلمة المرور"
+                false
+            }
+        )
     }
 
     fun clearAuthenticatedAccount() {
@@ -615,7 +754,8 @@ class LayaliViewModel(
             roleTitle = roleTitle.trim(),
             isAvailableNow = isAvailableNow
         )
-        _snackbarMessage.value = "تم تحديث الملف الشخصي بنجاح!"
+        saveInfrastructureToDatabase(showSnackbar = false)
+        _snackbarMessage.value = "تم تحديث الملف الشخصي وحفظه في قاعدة البيانات بنجاح!"
     }
 
     fun updateUsername(rawUsername: String) {
@@ -623,13 +763,20 @@ class LayaliViewModel(
         if (cleaned.isBlank()) return
         val formatted = if (cleaned.startsWith("@")) cleaned else "@$cleaned"
         _userProfile.value = _userProfile.value.copy(username = formatted)
-        _snackbarMessage.value = "تم اعتماد اسم المستخدم الجديد: $formatted"
+        saveInfrastructureToDatabase(showSnackbar = false)
+        _snackbarMessage.value = "تم اعتماد اسم المستخدم الجديد ($formatted) وحفظه في قاعدة البيانات"
     }
 
     fun selectAvatarFrame(frameId: String) {
         val frame = AvatarFrameCatalog.findById(frameId)
+        val currentLevel = _userProfile.value.level
+        if (currentLevel < frame.minLevel && _adminSessionToken.value == null) {
+            _snackbarMessage.value = "إطار «${frame.nameAr}» حصري ويتطلب الوصول إلى LEVEL ${frame.minLevel} (مستواك الحالي: LEVEL $currentLevel) 🔒"
+            return
+        }
         _userProfile.value = _userProfile.value.copy(selectedFrameId = frame.id)
-        _snackbarMessage.value = "تم تفعيل إطار الملف الشخصي: ${frame.nameAr} ✨"
+        saveInfrastructureToDatabase(showSnackbar = false)
+        _snackbarMessage.value = "تم تفعيل وحفظ الإطار الملكي الفاخر: ${frame.nameAr} ✨"
     }
 
     fun updateChatPricing(priceUsd: Int, isEnabled: Boolean) {
@@ -638,8 +785,9 @@ class LayaliViewModel(
             chatPriceUsd = validPrice,
             isPaidChatEnabled = isEnabled
         )
+        saveInfrastructureToDatabase(showSnackbar = false)
         _snackbarMessage.value = if (isEnabled) {
-            "تم ضبط تسعيرة الدردشة معك على $$validPrice للجلسة!"
+            "تم ضبط وحفظ تسعيرة الدردشة معك على $$validPrice للجلسة!"
         } else {
             "تم جعل الدردشة معك مجانية حالياً"
         }
@@ -648,14 +796,16 @@ class LayaliViewModel(
     fun gainProfileXp(xpDelta: Int) {
         if (xpDelta <= 0) return
         val current = _userProfile.value
-        var newXp = current.xpPoints + xpDelta
+        val awardedXp = xpDelta.coerceAtMost(120)
+        val newXp = current.xpPoints + awardedXp
         var newLevel = current.level
         var nextThreshold = current.nextLevelXp
         var leveledUp = false
 
         while (newXp >= nextThreshold) {
             newLevel += 1
-            nextThreshold += 600
+            // Steep exponential XP progression so each level is a rare prestige achievement
+            nextThreshold = (nextThreshold * 1.75).toInt() + (newLevel * 2000)
             leveledUp = true
         }
 
@@ -664,22 +814,25 @@ class LayaliViewModel(
             xpPoints = newXp,
             nextLevelXp = nextThreshold
         )
+        saveInfrastructureToDatabase(showSnackbar = false)
         if (leveledUp) {
-            _snackbarMessage.value = "تهانينا! ارتقى حسابك إلى المستوى الملكي Lv.$newLevel (+${xpDelta} XP) 🎉"
+            _snackbarMessage.value = "إنجاز نادر! ارتقى حسابك إلى المستوى الملكي LEVEL $newLevel 🎉"
         } else {
-            _snackbarMessage.value = "تمت إضافة +$xpDelta XP إلى ملفك الشخصي (Lv.$newLevel)"
+            val remaining = (nextThreshold - newXp).coerceAtLeast(0)
+            _snackbarMessage.value = "تمت إضافة +$awardedXp XP • متبقي $remaining XP للوصول إلى LEVEL ${newLevel + 1}"
         }
     }
 
     fun updateProfileAvatar(uriString: String) {
         _userProfile.value = _userProfile.value.copy(avatarUri = uriString)
-        gainProfileXp(100)
-        _snackbarMessage.value = "تم تحديث صورة الملف الشخصي (+100 XP)!"
+        gainProfileXp(15)
+        _snackbarMessage.value = "تم تحديث وحفظ صورة الملف الشخصي (+15 XP)!"
     }
 
     fun addCustomProfilePhoto(uriString: String) {
         val current = _userProfile.value.customPhotos
         _userProfile.value = _userProfile.value.copy(customPhotos = listOf(uriString) + current)
+        saveInfrastructureToDatabase(showSnackbar = false)
         _snackbarMessage.value = "تمت إضافة الصورة إلى ألبوم الملف الشخصي!"
     }
 
@@ -733,8 +886,8 @@ class LayaliViewModel(
             timestampLabel = "إيصال مرفق ✓"
         )
         _walletTransactions.value = listOf(tx) + _walletTransactions.value
-        gainProfileXp(250)
-        _snackbarMessage.value = "تم توثيق إيصال $methodTitleAr وإضافة $$totalCredit إلى محفظتك (+250 XP)!"
+        gainProfileXp(60)
+        _snackbarMessage.value = "تم توثيق إيصال $methodTitleAr وإضافة $$totalCredit إلى محفظتك (+60 XP)!"
     }
 
     // ========================================================================
@@ -792,7 +945,7 @@ class LayaliViewModel(
             timestampLabel = "الآن"
         )
         _walletTransactions.value = listOf(tx) + _walletTransactions.value
-        gainProfileXp(120)
+        gainProfileXp(25)
         _snackbarMessage.value = "تم فتح الدردشة الخاصة مع ${member.displayName} بنجاح!"
     }
 
@@ -828,8 +981,8 @@ class LayaliViewModel(
         _paymentReceipts.value = listOf(receipt) + _paymentReceipts.value
         _unlockedChatMemberIds.value = _unlockedChatMemberIds.value + member.id
         _activeChatMemberId.value = member.id
-        gainProfileXp(150)
-        _snackbarMessage.value = "تم توثيق إيصال $methodTitleAr وفتح الدردشة مع ${member.displayName} (+150 XP)!"
+        gainProfileXp(35)
+        _snackbarMessage.value = "تم توثيق إيصال $methodTitleAr وفتح الدردشة مع ${member.displayName} (+35 XP)!"
     }
 
     fun sendChatMessage(memberId: String, text: String) {
@@ -1237,8 +1390,8 @@ class LayaliViewModel(
             createdAt = Timestamp.now()
         )
         _localBookings.value = listOf(localBooking) + _localBookings.value
-        gainProfileXp(180)
-        _snackbarMessage.value = "تم توثيق الدفع وتأكيد حجزك في ${venue.name} (${venue.cityName}) (+180 XP)!"
+        gainProfileXp(40)
+        _snackbarMessage.value = "تم توثيق الدفع وتأكيد حجزك في ${venue.name} (${venue.cityName}) (+40 XP)!"
         onSuccess()
 
         if (hasFirebaseAuthForCurrentUser()) {
@@ -1348,8 +1501,8 @@ class LayaliViewModel(
             createdAt = Timestamp.now()
         )
         _localReviews.value = listOf(localRev) + _localReviews.value
-        gainProfileXp(80)
-        _snackbarMessage.value = "شكراً لك! تم نشر تقييمك الموثق لـ ${venue.name} (+80 XP)"
+        gainProfileXp(15)
+        _snackbarMessage.value = "شكراً لك! تم نشر تقييمك الموثق لـ ${venue.name} (+15 XP)"
         onSuccess()
 
         if (hasFirebaseAuthForCurrentUser()) {

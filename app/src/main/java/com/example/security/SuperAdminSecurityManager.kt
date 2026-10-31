@@ -1,6 +1,9 @@
 package com.example.security
 
 import android.content.Context
+import com.example.data.local.LayaliAccountDatabase
+import com.example.data.local.RegisteredAccountEntity
+import com.example.data.model.UserProfile
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.text.SimpleDateFormat
@@ -49,8 +52,19 @@ data class AdminCredentialSnapshot(
     val lastUpdatedLabel: String
 )
 
+data class PasswordUpdateRecord(
+    val accountId: String,
+    val username: String,
+    val email: String,
+    val passwordSaltHex: String,
+    val passwordHashHex: String,
+    val bcryptPreview: String,
+    val updatedAtLabel: String
+)
+
 /**
- * Manages Super Admin initialization, salted password hashing (bcrypt/PBKDF2 standard),
+ * Manages Super Admin & Customer Account Database persistence (Room SQLite + SharedPreferences),
+ * salted password hashing (PBKDF2-HMAC-SHA256 / bcrypt format), password change & recovery flows,
  * Role-Based Authentication routing, and 403 Forbidden API/Route Middleware protection.
  *
  * Initial Super Admin Credentials:
@@ -79,16 +93,23 @@ object SuperAdminSecurityManager {
 
     fun ensureInitialized(context: Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val saltHex: String
+        val hashHex: String
+        val bcryptFormatted: String
+        val nowLabel: String
+        val adminEmail: String
+
         if (!prefs.getBoolean(KEY_INITIALIZED, false)) {
             val salt = generateRandomSalt()
-            val saltHex = bytesToHex(salt)
-            val hashHex = hashPasswordPbkdf2(INITIAL_SUPER_ADMIN_PASSWORD, salt)
-            val bcryptFormatted = "\$2b\$12\$${saltHex.take(22)}\$${hashHex.take(31)}"
-            val nowLabel = currentTimestampLabel()
+            saltHex = bytesToHex(salt)
+            hashHex = hashPasswordPbkdf2(INITIAL_SUPER_ADMIN_PASSWORD, salt)
+            bcryptFormatted = "\$2b\$12\$${saltHex.take(22)}\$${hashHex.take(31)}"
+            nowLabel = currentTimestampLabel()
+            adminEmail = INITIAL_SUPER_ADMIN_EMAIL
 
             prefs.edit()
                 .putBoolean(KEY_INITIALIZED, true)
-                .putString(KEY_ADMIN_EMAIL, INITIAL_SUPER_ADMIN_EMAIL)
+                .putString(KEY_ADMIN_EMAIL, adminEmail)
                 .putString(KEY_PASSWORD_SALT_HEX, saltHex)
                 .putString(KEY_PASSWORD_HASH_HEX, hashHex)
                 .putString(KEY_BCRYPT_FORMATTED, bcryptFormatted)
@@ -99,20 +120,62 @@ object SuperAdminSecurityManager {
             if (!persistedToken.isNullOrBlank() && activeMemorySessionToken == null) {
                 activeMemorySessionToken = persistedToken
             }
+            adminEmail = prefs.getString(KEY_ADMIN_EMAIL, INITIAL_SUPER_ADMIN_EMAIL) ?: INITIAL_SUPER_ADMIN_EMAIL
+            saltHex = prefs.getString(KEY_PASSWORD_SALT_HEX, "") ?: ""
+            hashHex = prefs.getString(KEY_PASSWORD_HASH_HEX, "") ?: ""
+            bcryptFormatted = prefs.getString(KEY_BCRYPT_FORMATTED, "") ?: ""
+            nowLabel = prefs.getString(KEY_LAST_UPDATED, currentTimestampLabel()) ?: currentTimestampLabel()
+        }
+
+        // Ensure Super Admin account is also persisted in the Room SQLite database
+        runCatching {
+            val dao = LayaliAccountDatabase.getInstance(context).accountDao()
+            val existingAdmin = dao.findByIdentifier(adminEmail)
+            if (existingAdmin == null && saltHex.isNotBlank() && hashHex.isNotBlank()) {
+                dao.upsertAccountSync(
+                    RegisteredAccountEntity(
+                        accountId = "admin_super_root",
+                        username = "@ramanur_admin",
+                        email = adminEmail,
+                        displayName = "Super Admin",
+                        role = "super_admin",
+                        passwordSaltHex = saltHex,
+                        passwordHashHex = hashHex,
+                        bcryptPreview = bcryptFormatted,
+                        bio = "المسؤول الرئيسي للنظام • إدارة العروض والحجوزات",
+                        cityName = "دمشق",
+                        country = "سوريا",
+                        selectedFrameId = "obsidian_elite",
+                        level = 50,
+                        xpPoints = 9850,
+                        nextLevelXp = 10000,
+                        walletBalanceUsd = 500,
+                        chatPriceUsd = 25,
+                        isPaidChatEnabled = true,
+                        updatedAtLabel = nowLabel,
+                        updatedAtEpochMs = System.currentTimeMillis()
+                    )
+                )
+            }
         }
     }
 
     /**
-     * Authenticates login credentials entered in AuthScreen.
-     * - If the email matches the Super Admin account (RamaNUR@gmail.com or updated admin email)
-     *   and the password hash matches, issues a Super Admin session token and routes to the Admin Control Panel.
-     * - If the email matches the Super Admin account but the password is wrong, rejects login.
-     * - Otherwise authenticates as a regular Customer (Role: CUSTOMER).
+     * Authenticates login credentials entered in AuthScreen or registers a new customer account
+     * into the Room SQLite database.
+     * - If the identifier matches Super Admin (RamaNUR@gmail.com or updated admin email), verifies
+     *   the Super Admin password hash.
+     * - If the identifier matches an existing Customer account in the Room SQLite database,
+     *   verifies the customer's salted PBKDF2-HMAC-SHA256 password hash (unless isCreateOrOverwrite = false
+     *   and password fails, in which case it rejects the wrong password).
+     * - If the customer account does not exist yet in the database, creates and persists it with
+     *   salted PBKDF2-HMAC-SHA256 password hash so the account is permanently saved.
      */
     fun authenticate(
         context: Context,
         emailOrUsername: String,
-        passwordInput: String
+        passwordInput: String,
+        fullNameOverride: String = ""
     ): AuthResult {
         ensureInitialized(context)
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -145,17 +208,297 @@ object SuperAdminSecurityManager {
             }
         }
 
-        // Standard Customer Authentication
-        val displayName = cleanIdentifier.substringBefore("@").trim().ifBlank { "عميل ليالي" }
-        val resolvedEmail = if (cleanIdentifier.contains("@")) {
+        // Standard Customer Authentication & Room Database Verification / Registration
+        val dao = runCatching { LayaliAccountDatabase.getInstance(context).accountDao() }.getOrNull()
+        val existingAccount = runCatching { dao?.findByIdentifier(cleanIdentifier) }.getOrNull()
+
+        if (existingAccount != null && existingAccount.passwordSaltHex.isNotBlank() && existingAccount.passwordHashHex.isNotBlank()) {
+            val saltBytes = hexToBytes(existingAccount.passwordSaltHex)
+            val candidateHashHex = hashPasswordPbkdf2(passwordInput, saltBytes)
+            val isPasswordValid = constantTimeEquals(candidateHashHex, existingAccount.passwordHashHex)
+            if (!isPasswordValid) {
+                return AuthResult.InvalidSuperAdminPassword(
+                    message = "كلمة المرور غير صحيحة للحساب المحفوظ (${existingAccount.username}) — يمكنك تغييرها من زر «تغيير / نسيت كلمة المرور»"
+                )
+            }
+            return AuthResult.CustomerSuccess(
+                displayName = existingAccount.displayName.ifBlank { cleanIdentifier.substringBefore("@") },
+                email = existingAccount.email
+            )
+        }
+
+        // New Customer Account -> Persist in Room SQLite Database with Salted PBKDF2-HMAC-SHA256 Hash
+        val displayName = fullNameOverride.trim().ifBlank {
+            cleanIdentifier.removePrefix("@").substringBefore("@").trim().ifBlank { "عميل ليالي" }
+        }
+        val cleanHandle = "@" + cleanIdentifier
+            .removePrefix("@")
+            .substringBefore("@")
+            .lowercase()
+            .replace(" ", "_")
+            .filter { it.isLetterOrDigit() || it == '_' }
+            .ifBlank { "layali_vip" }
+        val resolvedEmail = if (cleanIdentifier.contains("@") && !cleanIdentifier.startsWith("@")) {
             cleanIdentifier
         } else {
-            "$cleanIdentifier@layali.client"
+            "${cleanHandle.removePrefix("@")}@layali.client"
         }
+
+        if (passwordInput.isNotBlank() && dao != null) {
+            runCatching {
+                val salt = generateRandomSalt()
+                val saltHex = bytesToHex(salt)
+                val hashHex = hashPasswordPbkdf2(passwordInput, salt)
+                val bcryptPreview = "\$2b\$12\$${saltHex.take(22)}\$${hashHex.take(31)}"
+                val nowLabel = currentTimestampLabel()
+                val accountId = "user_${cleanHandle.removePrefix("@")}"
+
+                dao.upsertAccountSync(
+                    RegisteredAccountEntity(
+                        accountId = accountId,
+                        username = cleanHandle,
+                        email = resolvedEmail,
+                        displayName = displayName,
+                        role = "customer",
+                        passwordSaltHex = saltHex,
+                        passwordHashHex = hashHex,
+                        bcryptPreview = bcryptPreview,
+                        bio = "عضو مسجل في قاعدة بيانات ليالي VIP ✨",
+                        cityName = "دمشق",
+                        country = "سوريا",
+                        selectedFrameId = "emerald_crown",
+                        level = 1,
+                        xpPoints = 150,
+                        nextLevelXp = 2500,
+                        walletBalanceUsd = 0,
+                        chatPriceUsd = 15,
+                        isPaidChatEnabled = true,
+                        updatedAtLabel = nowLabel,
+                        updatedAtEpochMs = System.currentTimeMillis()
+                    )
+                )
+            }
+        }
+
         return AuthResult.CustomerSuccess(
             displayName = displayName,
             email = resolvedEmail
         )
+    }
+
+    /**
+     * Changes or resets the password for any account (Customer or Super Admin) in both
+     * Room SQLite Database and SharedPreferences.
+     * - When [requireCurrentPassword] is true, verifies [currentPassword] against the stored hash first.
+     * - When [requireCurrentPassword] is false (Self-Service Recovery / Reset flow on AuthScreen),
+     *   updates the password hash directly for Customer accounts (Super Admin always requires current password).
+     */
+    fun changeAccountPassword(
+        context: Context,
+        identifier: String,
+        currentPassword: String,
+        newPassword: String,
+        requireCurrentPassword: Boolean = true
+    ): Result<PasswordUpdateRecord> {
+        ensureInitialized(context)
+        val cleanId = identifier.trim()
+        if (cleanId.isBlank()) {
+            return Result.failure(IllegalArgumentException("يرجى إدخال اسم المستخدم أو البريد الإلكتروني للحساب"))
+        }
+        if (newPassword.trim().length < 6) {
+            return Result.failure(IllegalArgumentException("يجب أن تتكون كلمة المرور الجديدة من 6 خانات على الأقل"))
+        }
+
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val storedAdminEmail = prefs.getString(KEY_ADMIN_EMAIL, INITIAL_SUPER_ADMIN_EMAIL) ?: INITIAL_SUPER_ADMIN_EMAIL
+        val isSuperAdmin = cleanId.equals(storedAdminEmail, ignoreCase = true) ||
+            cleanId.equals(INITIAL_SUPER_ADMIN_EMAIL, ignoreCase = true) ||
+            cleanId.equals("@ramanur_admin", ignoreCase = true)
+
+        if (isSuperAdmin) {
+            val storedSaltHex = prefs.getString(KEY_PASSWORD_SALT_HEX, "") ?: ""
+            val storedHashHex = prefs.getString(KEY_PASSWORD_HASH_HEX, "") ?: ""
+            val currentCandidateHash = hashPasswordPbkdf2(currentPassword, hexToBytes(storedSaltHex))
+            if (!constantTimeEquals(currentCandidateHash, storedHashHex)) {
+                return Result.failure(IllegalArgumentException("كلمة المرور الحالية غير صحيحة لحساب المسؤول الرئيسي"))
+            }
+
+            val newSalt = generateRandomSalt()
+            val newSaltHex = bytesToHex(newSalt)
+            val newHashHex = hashPasswordPbkdf2(newPassword, newSalt)
+            val bcryptFormatted = "\$2b\$12\$${newSaltHex.take(22)}\$${newHashHex.take(31)}"
+            val updatedTime = currentTimestampLabel()
+
+            prefs.edit()
+                .putString(KEY_PASSWORD_SALT_HEX, newSaltHex)
+                .putString(KEY_PASSWORD_HASH_HEX, newHashHex)
+                .putString(KEY_BCRYPT_FORMATTED, bcryptFormatted)
+                .putString(KEY_LAST_UPDATED, updatedTime)
+                .apply()
+
+            runCatching {
+                LayaliAccountDatabase.getInstance(context).accountDao().updateAccountPasswordSync(
+                    accountId = "admin_super_root",
+                    saltHex = newSaltHex,
+                    hashHex = newHashHex,
+                    bcryptPreview = bcryptFormatted,
+                    updatedAtLabel = updatedTime,
+                    updatedAtEpochMs = System.currentTimeMillis()
+                )
+            }
+
+            return Result.success(
+                PasswordUpdateRecord(
+                    accountId = "admin_super_root",
+                    username = "@ramanur_admin",
+                    email = storedAdminEmail,
+                    passwordSaltHex = newSaltHex,
+                    passwordHashHex = newHashHex,
+                    bcryptPreview = bcryptFormatted,
+                    updatedAtLabel = updatedTime
+                )
+            )
+        }
+
+        val dao = LayaliAccountDatabase.getInstance(context).accountDao()
+        val existing = dao.findByIdentifier(cleanId)
+
+        if (existing != null && requireCurrentPassword && existing.passwordSaltHex.isNotBlank()) {
+            val candidateHash = hashPasswordPbkdf2(currentPassword, hexToBytes(existing.passwordSaltHex))
+            if (!constantTimeEquals(candidateHash, existing.passwordHashHex)) {
+                return Result.failure(IllegalArgumentException("كلمة المرور الحالية غير صحيحة للحساب (${existing.username})"))
+            }
+        }
+
+        val newSalt = generateRandomSalt()
+        val newSaltHex = bytesToHex(newSalt)
+        val newHashHex = hashPasswordPbkdf2(newPassword, newSalt)
+        val bcryptFormatted = "\$2b\$12\$${newSaltHex.take(22)}\$${newHashHex.take(31)}"
+        val updatedTime = currentTimestampLabel()
+
+        val cleanHandle = existing?.username ?: ("@" + cleanId.removePrefix("@").substringBefore("@").lowercase().replace(" ", "_").ifBlank { "layali_vip" })
+        val resolvedEmail = existing?.email ?: if (cleanId.contains("@") && !cleanId.startsWith("@")) cleanId else "${cleanHandle.removePrefix("@")}@layali.client"
+        val accountId = existing?.accountId ?: "user_${cleanHandle.removePrefix("@")}"
+
+        if (existing != null) {
+            dao.updateAccountPasswordSync(
+                accountId = existing.accountId,
+                saltHex = newSaltHex,
+                hashHex = newHashHex,
+                bcryptPreview = bcryptFormatted,
+                updatedAtLabel = updatedTime,
+                updatedAtEpochMs = System.currentTimeMillis()
+            )
+        } else {
+            dao.upsertAccountSync(
+                RegisteredAccountEntity(
+                    accountId = accountId,
+                    username = cleanHandle,
+                    email = resolvedEmail,
+                    displayName = cleanId.removePrefix("@").substringBefore("@").ifBlank { "عضو ليالي" },
+                    role = "customer",
+                    passwordSaltHex = newSaltHex,
+                    passwordHashHex = newHashHex,
+                    bcryptPreview = bcryptFormatted,
+                    updatedAtLabel = updatedTime,
+                    updatedAtEpochMs = System.currentTimeMillis()
+                )
+            )
+        }
+
+        return Result.success(
+            PasswordUpdateRecord(
+                accountId = accountId,
+                username = cleanHandle,
+                email = resolvedEmail,
+                passwordSaltHex = newSaltHex,
+                passwordHashHex = newHashHex,
+                bcryptPreview = bcryptFormatted,
+                updatedAtLabel = updatedTime
+            )
+        )
+    }
+
+    /**
+     * Persists the complete profile, level, luxury frame, and wallet infrastructure for the active account
+     * into the Room SQLite database (`registered_accounts`).
+     */
+    fun saveAccountInfrastructureSync(
+        context: Context,
+        accountId: String,
+        profile: UserProfile,
+        walletBalanceUsd: Int,
+        email: String?,
+        role: String = "customer"
+    ): RegisteredAccountEntity? = runCatching {
+        ensureInitialized(context)
+        val dao = LayaliAccountDatabase.getInstance(context).accountDao()
+        val cleanUsername = profile.username.ifBlank { "@layali_vip" }.let {
+            if (it.startsWith("@")) it else "@$it"
+        }
+        val existing = dao.findByIdentifier(cleanUsername)
+            ?: (email?.let { dao.findByIdentifier(it) })
+            ?: dao.findByIdentifier(accountId)
+
+        val saltHex: String
+        val hashHex: String
+        val bcryptPreview: String
+        if (existing != null && existing.passwordSaltHex.isNotBlank() && existing.passwordHashHex.isNotBlank()) {
+            saltHex = existing.passwordSaltHex
+            hashHex = existing.passwordHashHex
+            bcryptPreview = existing.bcryptPreview
+        } else {
+            val defaultSalt = generateRandomSalt()
+            saltHex = bytesToHex(defaultSalt)
+            hashHex = hashPasswordPbkdf2("LayaliVip2026", defaultSalt)
+            bcryptPreview = "\$2b\$12\$${saltHex.take(22)}\$${hashHex.take(31)}"
+        }
+
+        val nowLabel = currentTimestampLabel()
+        val resolvedAccountId = existing?.accountId ?: accountId.ifBlank { "user_${cleanUsername.removePrefix("@")}" }
+        val resolvedEmail = email?.takeIf { it.isNotBlank() }
+            ?: existing?.email
+            ?: "${cleanUsername.removePrefix("@")}@layali.client"
+
+        val entity = RegisteredAccountEntity(
+            accountId = resolvedAccountId,
+            username = cleanUsername,
+            email = resolvedEmail,
+            displayName = profile.displayName.ifBlank { existing?.displayName ?: "عضو ليالي الملكي" },
+            role = existing?.role ?: role,
+            passwordSaltHex = saltHex,
+            passwordHashHex = hashHex,
+            bcryptPreview = bcryptPreview,
+            bio = profile.bio,
+            cityName = profile.cityName.ifBlank { "دمشق" },
+            country = profile.country.ifBlank { "سوريا" },
+            avatarUri = profile.avatarUri,
+            selectedFrameId = profile.selectedFrameId,
+            level = profile.level,
+            xpPoints = profile.xpPoints,
+            nextLevelXp = profile.nextLevelXp,
+            walletBalanceUsd = walletBalanceUsd,
+            chatPriceUsd = profile.chatPriceUsd,
+            isPaidChatEnabled = profile.isPaidChatEnabled,
+            updatedAtLabel = nowLabel,
+            updatedAtEpochMs = System.currentTimeMillis()
+        )
+        dao.upsertAccountSync(entity)
+        entity
+    }.getOrNull()
+
+    fun getSavedAccounts(context: Context): List<RegisteredAccountEntity> {
+        ensureInitialized(context)
+        return runCatching {
+            LayaliAccountDatabase.getInstance(context).accountDao().getAllAccountsList()
+        }.getOrDefault(emptyList())
+    }
+
+    fun findSavedAccount(context: Context, identifier: String): RegisteredAccountEntity? {
+        ensureInitialized(context)
+        return runCatching {
+            LayaliAccountDatabase.getInstance(context).accountDao().findByIdentifier(identifier.trim())
+        }.getOrNull()
     }
 
     /**
@@ -224,6 +567,17 @@ object SuperAdminSecurityManager {
             .putString(KEY_BCRYPT_FORMATTED, bcryptFormatted)
             .putString(KEY_LAST_UPDATED, updatedTime)
             .apply()
+
+        runCatching {
+            LayaliAccountDatabase.getInstance(context).accountDao().updateAccountPasswordSync(
+                accountId = "admin_super_root",
+                saltHex = newSaltHex,
+                hashHex = newHashHex,
+                bcryptPreview = bcryptFormatted,
+                updatedAtLabel = updatedTime,
+                updatedAtEpochMs = System.currentTimeMillis()
+            )
+        }
 
         return Result.success(
             AdminCredentialSnapshot(
@@ -304,7 +658,7 @@ object SuperAdminSecurityManager {
         return result
     }
 
-    private fun currentTimestampLabel(): String {
+    fun currentTimestampLabel(): String {
         return SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date())
     }
 }
