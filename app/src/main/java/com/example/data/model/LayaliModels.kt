@@ -231,7 +231,7 @@ data class PaymentReceiptRecord(
     val receiptImageUri: String,
     val transactionReference: String,
     val purposeAr: String,          // "شحن محفظة", "حجز خدمة", "فتح دردشة مدفوعة"
-    val status: String = "verified",// "verified" or "pending"
+    val status: String = "local_draft", // Never mark a client-created receipt verified
     val timestampLabel: String = "الآن"
 )
 

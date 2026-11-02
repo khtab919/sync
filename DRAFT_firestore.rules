@@ -34,6 +34,16 @@ service cloud.firestore {
       );
     }
 
+    // Frame visibility must never be elevated by a client-side profile edit.
+    function isFrameAllowed(frameId, level) {
+      return (frameId == 'emerald_crown' && level >= 1) ||
+             (frameId == 'amber_sovereign' && level >= 5) ||
+             (frameId == 'sapphire_neon' && level >= 12) ||
+             (frameId == 'amethyst_vip' && level >= 20) ||
+             (frameId == 'crimson_flame' && level >= 35) ||
+             (frameId == 'obsidian_elite' && level >= 50);
+    }
+
     // Validation Blueprint: UserAccount
     function isValidUserAccount(data) {
       return data.keys().hasAll([
@@ -60,7 +70,7 @@ service cloud.firestore {
              data.bio is string && data.bio.size() <= 300 &&
              data.cityName is string && data.cityName.size() >= 1 && data.cityName.size() <= 80 &&
              data.country is string && data.country in ['سوريا', 'تركيا'] &&
-             data.selectedFrameId is string && data.selectedFrameId.size() >= 1 && data.selectedFrameId.size() <= 60 &&
+             data.selectedFrameId is string && isFrameAllowed(data.selectedFrameId, data.level) &&
              data.level is int && data.level >= 1 && data.level <= 100 &&
              data.xpPoints is int && data.xpPoints >= 0 && data.xpPoints <= 10000000 &&
              data.nextLevelXp is int && data.nextLevelXp >= 100 && data.nextLevelXp <= 50000000 &&
@@ -100,7 +110,7 @@ service cloud.firestore {
              data.guestCount is int && data.guestCount >= 1 && data.guestCount <= 20 &&
              data.totalPriceUsd is int && data.totalPriceUsd >= 5 && data.totalPriceUsd <= 10000 &&
              data.notes is string && data.notes.size() <= 400 &&
-             data.status is string && data.status in ['confirmed', 'completed', 'cancelled'] &&
+             data.status is string && data.status in ['pending', 'confirmed', 'completed', 'cancelled'] &&
              data.createdAt is timestamp && data.createdAt <= request.time &&
              data.updatedAt is timestamp && data.updatedAt <= request.time;
     }
@@ -206,7 +216,12 @@ service cloud.firestore {
       allow create: if isSignedIn() &&
                        isValidId(userId) &&
                        request.auth.uid == userId &&
-                       isValidUserAccount(incoming());
+                       isValidUserAccount(incoming()) &&
+                       incoming().walletBalanceUsd == 0 &&
+                       incoming().level == 1 &&
+                       incoming().xpPoints == 150 &&
+                       incoming().nextLevelXp == 2500 &&
+                       incoming().selectedFrameId == 'emerald_crown';
 
       allow update: if isSignedIn() &&
                        isValidId(userId) &&
@@ -215,10 +230,13 @@ service cloud.firestore {
                        existing().userId == request.auth.uid &&
                        incoming().userId == existing().userId &&
                        incoming().createdAt == existing().createdAt &&
+                       incoming().walletBalanceUsd == existing().walletBalanceUsd &&
+                       incoming().level == existing().level &&
+                       incoming().xpPoints == existing().xpPoints &&
+                       incoming().nextLevelXp == existing().nextLevelXp &&
                        incoming().diff(existing()).affectedKeys().hasOnly([
                          'username', 'displayName', 'email', 'bio',
-                         'cityName', 'country', 'selectedFrameId', 'level',
-                         'xpPoints', 'nextLevelXp', 'walletBalanceUsd',
+                         'cityName', 'country', 'selectedFrameId',
                          'chatPriceUsd', 'isPaidChatEnabled',
                          'passwordSaltHex', 'passwordHashHex', 'updatedAt'
                        ]);
@@ -246,7 +264,7 @@ service cloud.firestore {
                        isValidId(bookingId) &&
                        request.auth.uid == userId &&
                        isValidBooking(incoming()) &&
-                       incoming().status == 'confirmed';
+                       incoming().status == 'pending';
 
       allow update: if isSignedIn() &&
                        isValidId(userId) &&
@@ -254,7 +272,8 @@ service cloud.firestore {
                        request.auth.uid == userId &&
                        isValidBooking(incoming()) &&
                        existing().userId == request.auth.uid &&
-                       existing().status == 'confirmed' &&
+                       existing().status in ['pending', 'confirmed'] &&
+                       incoming().status in ['pending', 'cancelled'] &&
                        incoming().userId == existing().userId &&
                        incoming().venueId == existing().venueId &&
                        incoming().venueName == existing().venueName &&

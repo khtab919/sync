@@ -539,11 +539,11 @@ fun WalletScreen(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     LuxuryGradientButton(
                         text = if (attachedReceiptUri.isBlank()) {
-                            "أرفق إيصال الدفع أولاً لتأكيد إيداع $$activeAmount"
+                            "أرفق صورة الإيصال لحفظ مسودة $$activeAmount"
                         } else if (activeBonus > 0) {
-                            "تأكيد الإيداع وإرسال الإيصال ($$activeAmount + $$activeBonus)"
+                            "حفظ مسودة الإيصال ($$activeAmount + $$activeBonus)"
                         } else {
-                            "تأكيد الإيداع وإرسال الإيصال ($$activeAmount)"
+                            "حفظ مسودة الإيصال ($$activeAmount)"
                         },
                         icon = Icons.Default.ReceiptLong,
                         isEmeraldStyle = attachedReceiptUri.isNotBlank(),
@@ -577,7 +577,7 @@ fun WalletScreen(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "جميع عمليات الدفع موثقة بإيصالات حقيقية عبر شام كاش و USDT BEP-20",
+                            text = "حفظ الإيصال محلياً لا يعني قبول الدفع أو إضافة رصيد. المراجعة على الخادم غير متاحة حالياً.",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -600,7 +600,7 @@ fun WalletScreen(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "سجل إيصالات الدفع المرفقة (${paymentReceipts.size})",
+                            text = "مسودات الإيصالات على هذا الجهاز (${paymentReceipts.size})",
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onBackground,
                             fontWeight = FontWeight.Bold
@@ -659,7 +659,7 @@ fun WalletScreen(
                                     )
                                 }
                                 Text(
-                                    text = "${receipt.timestampLabel} • إيصال مرفق وموثق ✓",
+                                    text = "${receipt.timestampLabel} • غير مُراجع • لم يُرسل للإدارة",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = EmeraldVerified
                                 )
@@ -668,7 +668,7 @@ fun WalletScreen(
                             Spacer(modifier = Modifier.width(10.dp))
 
                             Text(
-                                text = "+$${receipt.amountUsd + receipt.bonusUsd}",
+                                text = "قيمة الإيصال: $${receipt.amountUsd + receipt.bonusUsd}",
                                 style = MaterialTheme.typography.titleLarge,
                                 color = EmeraldVerified,
                                 fontWeight = FontWeight.ExtraBold

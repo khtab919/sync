@@ -9,6 +9,11 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -114,6 +119,22 @@ fun FramedUserAvatar(
     val primaryColor = Color(frame.primaryHex)
     val secondaryColor = Color(frame.secondaryHex)
     val accentColor = Color(frame.accentHex)
+    // Higher-tier frames get a restrained breathing glow; entry frames stay static.
+    val haloAlpha = if (frame.minLevel >= 20) {
+        val transition = rememberInfiniteTransition(label = "frame_halo_${frame.id}")
+        val glow by transition.animateFloat(
+            initialValue = 0.24f,
+            targetValue = if (frame.minLevel >= 50) 0.64f else 0.46f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 2400),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "halo_alpha"
+        )
+        glow
+    } else {
+        0.20f
+    }
 
     Box(
         contentAlignment = Alignment.Center,
@@ -134,7 +155,7 @@ fun FramedUserAvatar(
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        primaryColor.copy(alpha = 0.45f),
+                        primaryColor.copy(alpha = haloAlpha),
                         secondaryColor.copy(alpha = 0.24f),
                         accentColor.copy(alpha = 0.08f),
                         Color.Transparent
@@ -190,9 +211,15 @@ fun FramedUserAvatar(
                 style = Stroke(width = 1.5.dp.toPx())
             )
 
-            // 5. 12 Faceted Diamond-Cut Gemstones around the bezel
+            // Tiered ornaments: entry / silver / sapphire / crown / elite.
+            val gemStep = when {
+                frame.minLevel >= 35 -> 1
+                frame.minLevel >= 12 -> 2
+                frame.minLevel >= 5 -> 3
+                else -> 12
+            }
             for (i in 0 until 12) {
-                if (i == 0) continue // Top position is reserved for the Imperial Crown
+                if (frame.minLevel < 5 || i == 0 || i % gemStep != 0) continue
                 val angleRad = Math.toRadians((i * 30.0) - 90.0)
                 val px = center.x + (outerRadius * cos(angleRad)).toFloat()
                 val py = center.y + (outerRadius * sin(angleRad)).toFloat()
@@ -218,6 +245,8 @@ fun FramedUserAvatar(
                 )
             }
 
+            // The crown is reserved for upper-level frames.
+            if (frame.minLevel >= 12) {
             // 6. Top 5-Peak Imperial Royal Crown with Jewel Tips
             val crownBaseY = center.y - outerRadius + 1.5.dp.toPx()
             val crownWidth = 22.dp.toPx()
@@ -258,6 +287,19 @@ fun FramedUserAvatar(
                 radius = 1.6.dp.toPx(),
                 center = Offset(center.x + crownWidth * 0.22f, crownBaseY - crownHeight * 0.85f)
             )
+            }
+            // Elite-only halo streak, animated by the glow above.
+            if (frame.minLevel >= 35) {
+                drawArc(
+                    color = accentColor.copy(alpha = haloAlpha),
+                    startAngle = -70f,
+                    sweepAngle = if (frame.minLevel >= 50) 300f else 175f,
+                    useCenter = false,
+                    topLeft = Offset(center.x - outerRadius, center.y - outerRadius),
+                    size = Size(outerRadius * 2f, outerRadius * 2f),
+                    style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
+                )
+            }
         }
 
         // Inner Avatar Circle

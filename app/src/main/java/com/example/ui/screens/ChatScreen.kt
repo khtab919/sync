@@ -648,7 +648,7 @@ fun ChatScreen(
 
                     item {
                         Text(
-                            text = "اختر وسيلة الدفع لفتح المحادثة ($$${targetMember.chatPriceUsd}):",
+                            text = "سعر المحادثة: $${targetMember.chatPriceUsd}. لا يفتح الإيصال المحادثة دون مراجعة الخادم.",
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.onSurface
                         )
@@ -659,8 +659,7 @@ fun ChatScreen(
                         ) {
                             val methods = listOf(
                                 "SHAM_CASH" to "شام كاش",
-                                "USDT_BEP20" to "USDT BEP-20",
-                                "WALLET" to "المحفظة ($$walletBalanceUsd)"
+                                "USDT_BEP20" to "USDT BEP-20"
                             )
                             methods.forEach { (key, label) ->
                                 val selected = selectedMethodKey == key
@@ -748,7 +747,7 @@ fun ChatScreen(
                             }
                         } else {
                             if (receiptUri.isBlank()) {
-                                onShowMessage("يرجى إرفاق صورة إيصال الدفع (شام كاش أو USDT) أولاً لفتح الدردشة!")
+                                onShowMessage("يرجى إرفاق صورة الإيصال قبل حفظ المسودة.")
                             } else {
                                 onUnlockChatWithReceipt(
                                     targetMember,
@@ -770,7 +769,7 @@ fun ChatScreen(
                         text = if (selectedMethodKey == "WALLET") {
                             "خصم $${targetMember.chatPriceUsd} وفتح الدردشة"
                         } else {
-                            "إرسال الإيصال وفتح الدردشة"
+                            "حفظ مسودة الإيصال دون فتح الدردشة"
                         },
                         fontWeight = FontWeight.ExtraBold
                     )
@@ -799,7 +798,7 @@ private fun ChatConversationRoom(
     val quickReplies = listOf(
         "مرحباً، أود تنسيق حجز VIP الليلة ✨",
         "هل الجناح الملكي متاح حالياً في ${member.cityName}؟",
-        "تم إرفاق إيصال الدفع وتأكيد الموعد"
+        "أرغب بمعرفة تفاصيل الخدمة وشروط الحجز"
     )
 
     Column(
@@ -894,7 +893,7 @@ private fun ChatConversationRoom(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = "دردشة VIP مشفرة وموثقة مع ${member.displayName} (${member.username}) • تم تفعيل الجلسة بنجاح",
+                        text = "لن تُعد أي رسالة مُرسلة أو جلسة مدفوعة مؤكدة حتى تعمل خدمة المحادثات على الخادم.",
                         style = MaterialTheme.typography.labelMedium,
                         color = SovereignGold,
                         fontWeight = FontWeight.SemiBold,

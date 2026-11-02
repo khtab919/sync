@@ -323,7 +323,7 @@ class LayaliRepository(private val db: FirebaseFirestore) {
             "guestCount" to guestCount.toLong(),
             "totalPriceUsd" to totalPriceUsd.toLong(),
             "notes" to notes.trim().take(400),
-            "status" to "confirmed",
+            "status" to "pending",
             "createdAt" to FieldValue.serverTimestamp(),
             "updatedAt" to FieldValue.serverTimestamp()
         )
