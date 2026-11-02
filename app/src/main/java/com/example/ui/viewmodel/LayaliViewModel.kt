@@ -784,31 +784,14 @@ class LayaliViewModel(
     }
 
     fun openOrRequestChatWithVenueProvider(venue: Venue, onNavigateToChatTab: () -> Unit) {
-        val existing = _chatMembers.value.find {
-            it.cityName == venue.cityName || it.username == venue.providerUsername
+        // A catalog listing is not evidence of a registered chat account.
+        val realMember = _chatMembers.value.firstOrNull { it.username == venue.providerUsername }
+        if (realMember == null) {
+            _snackbarMessage.value = "لا يوجد حساب مراسلة موثّق ومربوط بالخادم لهذه الخدمة بعد."
+            return
         }
-        val targetMember = existing ?: ChatMemberProfile(
-            id = "chat_venue_${venue.id}",
-            displayName = venue.name,
-            username = venue.providerUsername,
-            cityName = venue.cityName,
-            country = venue.country,
-            category = venue.category,
-            bio = venue.shortDescription,
-            level = venue.providerLevel,
-            frameId = venue.providerFrameId,
-            chatPriceUsd = venue.providerChatPriceUsd,
-            isOnline = venue.isOnlineNow,
-            avatarPreset = venue.visualPresetKey
-        ).also { created ->
-            _chatMembers.value = listOf(created) + _chatMembers.value
-        }
-
-        if (_unlockedChatMemberIds.value.contains(targetMember.id)) {
-            _activeChatMemberId.value = targetMember.id
-        } else {
-            _activeChatMemberId.value = null
-        }
+        _activeChatMemberId.value =
+            realMember.id.takeIf { _unlockedChatMemberIds.value.contains(it) }
         onNavigateToChatTab()
     }
 
@@ -900,23 +883,8 @@ class LayaliViewModel(
     }
 
     fun topUpWallet(amountUsd: Int, bonusUsd: Int = 0, methodTitle: String = "شحن رصيد المحفظة") {
-        val validAmount = amountUsd.coerceIn(1, 100000)
-        val totalCredit = validAmount + bonusUsd
-        _walletBalanceUsd.value += totalCredit
-        val tx = WalletTransaction(
-            id = "tx_${System.currentTimeMillis()}",
-            title = if (bonusUsd > 0) "$methodTitle (شامل +$$bonusUsd هدية مجانية)" else methodTitle,
-            amountUsd = totalCredit,
-            bonusUsd = bonusUsd,
-            isCredit = true,
-            timestampLabel = "الآن"
-        )
-        _walletTransactions.value = listOf(tx) + _walletTransactions.value
-        _snackbarMessage.value = if (bonusUsd > 0) {
-            "تم شحن المحفظة بمبلغ $$validAmount + $$bonusUsd مجاناً! رصيدك الحالي: $${_walletBalanceUsd.value}"
-        } else {
-            "تم شحن المحفظة بمبلغ $$validAmount بنجاح! رصيدك الحالي: $${_walletBalanceUsd.value}"
-        }
+        // A client cannot credit real funds without server-side payment verification.
+        _snackbarMessage.value = "الشحن الفوري غير متاح: يجب أن يراجع الخادم الدفع قبل إضافة أي رصيد."
     }
 
     fun adminAdjustWalletBalance(amountDeltaUsd: Int, reasonNote: String) {
@@ -944,22 +912,8 @@ class LayaliViewModel(
     }
 
     fun deductWalletBalance(amountUsd: Int, orderTitle: String): Boolean {
-        val current = _walletBalanceUsd.value
-        if (current < amountUsd) {
-            _snackbarMessage.value = "رصيد المحفظة الحالي ($$current) غير كافٍ لإتمام الطلب ($$amountUsd). يرجى إرفاق إيصال شام كاش أو USDT."
-            return false
-        }
-        _walletBalanceUsd.value = current - amountUsd
-        val tx = WalletTransaction(
-            id = "tx_${System.currentTimeMillis()}",
-            title = "دفع حجز: $orderTitle",
-            amountUsd = amountUsd,
-            bonusUsd = 0,
-            isCredit = false,
-            timestampLabel = "الآن"
-        )
-        _walletTransactions.value = listOf(tx) + _walletTransactions.value
-        return true
+        _snackbarMessage.value = "الدفع بالمحفظة غير متاح حالياً؛ يلزم خصم ذَرّي وآمن على الخادم."
+        return false
     }
 
     fun consumeBroadcastAlert() {
@@ -1205,8 +1159,8 @@ class LayaliViewModel(
                 receiptImageUri = receiptImageUri,
                 transactionReference = transactionReference.ifBlank { "حجز ${venue.name}" },
                 purposeAr = "دفع حجز: ${venue.name}",
-                status = "verified",
-                timestampLabel = "الآن"
+                status = "local_draft",
+                timestampLabel = "مسودة محلية"
             )
             _paymentReceipts.value = listOf(receiptRecord) + _paymentReceipts.value
         }
@@ -1225,15 +1179,14 @@ class LayaliViewModel(
             guestCount = guestCount.toLong(),
             totalPriceUsd = totalUsd.toLong(),
             notes = notes,
-            status = "confirmed",
+            status = "pending",
             paymentMethodTitle = paymentMethodTitle,
             receiptImageUri = receiptImageUri,
             transactionReference = transactionReference,
             createdAt = Timestamp.now()
         )
         _localBookings.value = listOf(localBooking) + _localBookings.value
-        gainProfileXp(40)
-        _snackbarMessage.value = "تم توثيق الدفع وتأكيد حجزك في ${venue.name} (${venue.cityName}) (+40 XP)!"
+        _snackbarMessage.value = "تم إنشاء طلب حجز مبدئي في ${venue.name}. الحجز والدفع غير مؤكدين حتى يراجعهما المسؤول."
         onSuccess()
 
         if (hasFirebaseAuthForCurrentUser()) {
