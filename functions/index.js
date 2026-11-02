@@ -298,6 +298,20 @@ exports.recordWithdrawalPayout = onCall(options, async (req) => {
   return { status: "paid" };
 });
 
+exports.getCreatorChatQuote = onCall(options, async (req) => {
+  auth(req);
+  const creatorId = str(req.data?.creatorId, "creatorId", 6, 128);
+  const profile = await db.collection("users").doc(creatorId).get();
+  if (!profile.exists) throw new HttpsError("not-found", "Creator profile unavailable");
+  const priceUsd = profile.get("isPaidChatEnabled") === true
+    ? whole(profile.get("chatPriceUsd"), "chatPriceUsd", 1, 5000) : 0;
+  return {
+    creatorId, priceUsd, displayName: String(profile.get("displayName") || "مقدم الخدمة").slice(0, 100),
+    username: String(profile.get("username") || "").slice(0, 60),
+    level: 1
+  };
+});
+
 exports.unlockPaidChat = onCall(options, async (req) => {
   const uid = auth(req);
   const creatorId = str(req.data?.creatorId, "creatorId", 6, 128);
@@ -316,6 +330,9 @@ exports.unlockPaidChat = onCall(options, async (req) => {
     if (!profile.exists) throw new HttpsError("not-found", "Creator does not exist");
     const priceUsd = profile.get("isPaidChatEnabled") === true
       ? whole(profile.get("chatPriceUsd"), "chatPriceUsd", 1, 5000) : 0;
+    // Reject price changes between client quote and charge.
+    if (priceUsd !== whole(req.data?.expectedPriceUsd, "expectedPriceUsd", 0, 5000))
+      throw new HttpsError("failed-precondition", "Chat price has changed; request a new quote");
     const cost = priceUsd * 100;
     let currentBalance = 0;
     if (cost > 0) {
