@@ -54,7 +54,7 @@ function validUserAccountPayload(uid) {
     level: 1,
     xpPoints: 150,
     nextLevelXp: 2500,
-    walletBalanceUsd: 250,
+    walletBalanceUsd: 0,
     chatPriceUsd: 15,
     isPaidChatEnabled: true,
     passwordSaltHex: "0123456789abcdef0123456789abcdef",
@@ -135,6 +135,27 @@ test("UserAccount: owner can create account, update password hash, and cross-use
   // Cross-user read is blocked (PII and password hash isolation)
   const bobDb = testEnv.authenticatedContext(BOB_UID).firestore();
   await assertFails(bobDb.collection("users").doc(ALICE_UID).get());
+});
+
+test("Account: client cannot mint wallet credit or increase level", async () => {
+  const db = testEnv.authenticatedContext(ALICE_UID).firestore();
+  const account = db.collection("users").doc(ALICE_UID);
+  await assertSucceeds(account.set(validUserAccountPayload(ALICE_UID)));
+  await assertFails(account.update({ walletBalanceUsd: 999, updatedAt: new Date() }));
+  await assertFails(account.update({ level: 50, xpPoints: 9850, updatedAt: new Date() }));
+  await assertFails(db.collection("users").doc(BOB_UID).set(validUserAccountPayload(BOB_UID)));
+});
+
+test("Bookings: cannot self-confirm, only pending requests", async () => {
+  const db = testEnv.authenticatedContext(ALICE_UID).firestore();
+  const booking = db.collection("users").doc(ALICE_UID).collection("bookings").doc("bk_test");
+  await assertSucceeds(booking.set(validBookingPayload(ALICE_UID)));
+  await assertFails(booking.update({ status: "confirmed", updatedAt: new Date() }));
+  await assertSucceeds(booking.update({ status: "cancelled", updatedAt: new Date() }));
+  await assertFails(
+    db.collection("users").doc(ALICE_UID).collection("bookings").doc("bk_fake")
+      .set({ ...validBookingPayload(ALICE_UID), status: "confirmed" })
+  );
 });
 
 test("Unauthenticated user: cannot read or create accounts, bookings, or published services", async () => {
