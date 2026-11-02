@@ -108,6 +108,19 @@ class LayaliRepository(private val db: FirebaseFirestore) {
         result["receiptId"] as String
     }
 
+    fun observeCreatorEarnings(userId: String = requireUserId()): Flow<Pair<Int, Int>> = flow {
+        if (auth.currentUser?.uid != userId) {
+            emit(0 to 0)
+            return@flow
+        }
+        emitAll(db.collection("creator_wallets").document(userId).snapshots().map { doc ->
+            val available = (doc.getLong("availableCents") ?: 0L).coerceAtLeast(0L) / 100L
+            val reserved = (doc.getLong("reservedCents") ?: 0L).coerceAtLeast(0L) / 100L
+            available.coerceAtMost(Int.MAX_VALUE.toLong()).toInt() to
+                reserved.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+        })
+    }
+
     suspend fun requestCreatorWithdrawal(amountUsd: Int, destination: String): Result<String> = runCatching {
         requireUserId()
         @Suppress("UNCHECKED_CAST")
