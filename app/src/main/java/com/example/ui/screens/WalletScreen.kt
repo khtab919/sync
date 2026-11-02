@@ -113,23 +113,23 @@ fun WalletScreen(
             TopUpPackageOption(
                 id = "pkg_50",
                 amountUsd = 50,
-                bonusUsd = 5,
+                bonusUsd = 0,
                 titleAr = "باقة $50 الملكية",
-                subtitleAr = "(احصل على +$5 هدية VIP)"
+                subtitleAr = "(القيمة بدون إضافات غير موثقة)"
             ),
             TopUpPackageOption(
                 id = "pkg_100",
                 amountUsd = 100,
-                bonusUsd = 15,
+                bonusUsd = 0,
                 titleAr = "باقة $100 الماسية",
-                subtitleAr = "(احصل على +$15 هدية VIP)"
+                subtitleAr = "(القيمة بدون إضافات غير موثقة)"
             ),
             TopUpPackageOption(
                 id = "pkg_200",
                 amountUsd = 200,
-                bonusUsd = 35,
+                bonusUsd = 0,
                 titleAr = "باقة $200 الإمبراطورية",
-                subtitleAr = "(احصل على +$35 هدية VIP)"
+                subtitleAr = "(القيمة بدون إضافات غير موثقة)"
             )
         )
     }
@@ -148,7 +148,7 @@ fun WalletScreen(
         packages[selectedPackageIndex].amountUsd
     }
     val activeBonus = if (customParsed != null && customParsed > 0) {
-        if (customParsed >= 200) 35 else if (customParsed >= 100) 15 else if (customParsed >= 50) 5 else 0
+        0 // Only a server-managed promotion may grant a deposit bonus.
     } else {
         packages[selectedPackageIndex].bonusUsd
     }
