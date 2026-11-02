@@ -149,32 +149,8 @@ class LayaliViewModel(
     private val _activeChatMemberId = MutableStateFlow<String?>(null)
     val activeChatMemberId: StateFlow<String?> = _activeChatMemberId.asStateFlow()
 
-    private val _chatMessagesByMember = MutableStateFlow<Map<String, List<ChatMessageItem>>>(
-        mapOf(
-            "chat_mira_aleppo" to listOf(
-                ChatMessageItem(
-                    id = "msg_init_1",
-                    memberId = "chat_mira_aleppo",
-                    senderName = "الأميرة ميرا",
-                    senderUsername = "@mira_royal_vip",
-                    text = "أهلاً بك في جناح حلب الملكي VIP ✨ يسعدني تنسيق سهرتك الخاصة بكل خصوصية.",
-                    timestampLabel = "الآن",
-                    isFromCurrentUser = false
-                )
-            ),
-            "chat_nour_damascus" to listOf(
-                ChatMessageItem(
-                    id = "msg_init_2",
-                    memberId = "chat_nour_damascus",
-                    senderName = "نور الشام",
-                    senderUsername = "@nour_spa_vip",
-                    text = "مرحباً بك في جناح السبا الملكي بدمشق 🌿 أخبرني بالموعد المناسب لك لتجهيز الجناح.",
-                    timestampLabel = "الآن",
-                    isFromCurrentUser = false
-                )
-            )
-        )
-    )
+    private val _chatMessagesByMember =
+        MutableStateFlow<Map<String, List<ChatMessageItem>>>(emptyMap())
     val chatMessagesByMember: StateFlow<Map<String, List<ChatMessageItem>>> = _chatMessagesByMember.asStateFlow()
 
     // Admin custom price, photo, and deletion overrides for catalog venues
