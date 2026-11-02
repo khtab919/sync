@@ -357,7 +357,7 @@ class LayaliViewModel(
         val deletedIds = extraList[3] as Set<String>
 
         val trimmedQuery = query.trim()
-        LayaliCatalog.venues
+        emptyList<Venue>()
             .filterNot { deletedIds.contains(it.id) }
             .map { venue ->
                 val updatedPrice = priceMap[venue.id] ?: venue.startingPriceUsd
@@ -397,7 +397,7 @@ class LayaliViewModel(
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
-        initialValue = LayaliCatalog.venues
+        initialValue = emptyList()
     )
 
     fun setSuperAdminSessionToken(token: String?) {
