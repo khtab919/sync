@@ -389,13 +389,8 @@ fun MainFeatureScreen(
             category = pub.category,
             priceUsd = pub.priceUsd.toInt(),
             primaryImageUrl = pub.imageUrl,
-            videoTitle = pub.videoUrl.ifBlank { "عرض فيديو 4K للخدمة في ${pub.cityName}" },
-            galleryCaptions = listOf(
-                "الجناح الملكي الرئيسي • ${pub.cityName}",
-                "النسخة الفاتحة والناعمة VIP",
-                "تفاصيل الضيافة والشموع العطرية",
-                "صالة السهرات والموسيقى الحية"
-            ),
+            videoTitle = pub.videoUrl,
+            galleryCaptions = listOf(pub.title, "${pub.cityName} • ${pub.country}"),
             initialTabIsVideo = initialVideo,
             onBookNow = { helperBookPublishedService(pub) },
             onEditPrice = {
@@ -452,10 +447,10 @@ fun MainFeatureScreen(
     }
 
     val bottomNavigationTabs = remember {
+        // Four primary destinations; wallet, bookings and favorites are contextual or under Profile.
         listOf(
             MainTab.EXPLORE,
             MainTab.REELS,
-            MainTab.WALLET,
             MainTab.CHAT,
             MainTab.PROFILE
         )
@@ -468,43 +463,7 @@ fun MainFeatureScreen(
             Scaffold(
                 contentWindowInsets = WindowInsets.safeDrawing,
                 snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
-                floatingActionButton = {
-                    if (
-                        selectedVenue == null &&
-                        activeCheckoutOrder == null &&
-                        currentTab != MainTab.CHAT &&
-                        currentTab != MainTab.REELS &&
-                        currentTab != MainTab.PROFILE
-                    ) {
-                        Surface(
-                            onClick = { LayaliNotificationHelper.openTelegramSupport(context) },
-                            color = VioletBlueVip,
-                            shape = RoundedCornerShape(50),
-                            modifier = Modifier
-                                .height(36.dp)
-                                .testTag("telegram_support_fab")
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.SupportAgent,
-                                    contentDescription = "دعم تلجرام @RamaNUR",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(15.dp)
-                                )
-                                Spacer(modifier = Modifier.width(5.dp))
-                                Text(
-                                    text = "الدعم",
-                                    fontSize = 11.sp,
-                                    color = Color.White,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                        }
-                    }
-                },
+                floatingActionButton = {},
                 bottomBar = {
                     if (!isExpandedScreen && selectedVenue == null && activeCheckoutOrder == null) {
                         NavigationBar(
@@ -513,58 +472,40 @@ fun MainFeatureScreen(
                         ) {
                             bottomNavigationTabs.forEach { tab ->
                                 val selected = currentTab == tab
-                                val isWalletCenterTab = tab == MainTab.WALLET
                                 NavigationBarItem(
                                     selected = selected,
                                     onClick = { currentTab = tab },
                                     modifier = Modifier.testTag(tab.tag),
                                     icon = {
-                                        if (isWalletCenterTab) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(36.dp)
-                                                    .clip(CircleShape)
-                                                    .background(VioletBlueVip),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.AccountBalanceWallet,
-                                                    contentDescription = "شراء رصيد",
-                                                    tint = Color.White,
-                                                    modifier = Modifier.size(18.dp)
-                                                )
-                                            }
-                                        } else {
-                                            Icon(
-                                                imageVector = when (tab) {
-                                                    MainTab.EXPLORE -> Icons.Default.Home
-                                                    MainTab.REELS -> Icons.Default.PlayCircleFilled
-                                                    MainTab.CHAT -> Icons.Default.Chat
-                                                    MainTab.BOOKINGS -> Icons.Default.CalendarMonth
-                                                    MainTab.WALLET -> Icons.Default.AccountBalanceWallet
-                                                    MainTab.FAVORITES -> Icons.Default.FavoriteBorder
-                                                    MainTab.PROFILE -> Icons.Default.Person
-                                                    MainTab.REVIEWS -> Icons.Default.Verified
-                                                    MainTab.ADMIN -> Icons.Default.AdminPanelSettings
-                                                },
-                                                contentDescription = tab.titleAr,
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                        }
+                                        Icon(
+                                            imageVector = when (tab) {
+                                                MainTab.EXPLORE -> Icons.Default.Home
+                                                MainTab.REELS -> Icons.Default.PlayCircleFilled
+                                                MainTab.CHAT -> Icons.Default.Chat
+                                                MainTab.PROFILE -> Icons.Default.Person
+                                                MainTab.BOOKINGS -> Icons.Default.CalendarMonth
+                                                MainTab.WALLET -> Icons.Default.AccountBalanceWallet
+                                                MainTab.FAVORITES -> Icons.Default.FavoriteBorder
+                                                MainTab.REVIEWS -> Icons.Default.Verified
+                                                MainTab.ADMIN -> Icons.Default.AdminPanelSettings
+                                            },
+                                            contentDescription = tab.titleAr,
+                                            modifier = Modifier.size(23.dp)
+                                        )
                                     },
                                     label = {
                                         Text(
-                                            text = if (isWalletCenterTab) "المحفظة" else tab.titleAr,
-                                            fontSize = 10.sp,
+                                            text = tab.titleAr,
+                                            fontSize = 12.sp,
                                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
                                         )
                                     },
                                     colors = NavigationBarItemDefaults.colors(
-                                        selectedIconColor = VioletBlueVip,
-                                        selectedTextColor = VioletBlueVip,
-                                        indicatorColor = if (isWalletCenterTab) Color.Transparent else VioletBlueVip.copy(alpha = 0.14f),
+                                        selectedIconColor = MaterialTheme.colorScheme.primary,
+                                        selectedTextColor = MaterialTheme.colorScheme.primary,
+                                        indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
                                         unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                         unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -586,7 +527,7 @@ fun MainFeatureScreen(
                         ) {
                             Spacer(modifier = Modifier.height(16.dp))
                             val railTabs = remember(isSuperAdmin) {
-                                MainTab.entries.filter { isSuperAdmin || it != MainTab.ADMIN }
+                                bottomNavigationTabs + if (isSuperAdmin) listOf(MainTab.ADMIN) else emptyList()
                             }
                             railTabs.forEach { tab ->
                                 NavigationRailItem(
@@ -851,11 +792,9 @@ fun MainFeatureScreen(
                                     walletBalanceUsd = walletBalanceUsd,
                                     transactions = walletTransactions,
                                     paymentReceipts = paymentReceipts,
+                                    isSubmitting = isSubmitting,
                                     onBack = { currentTab = MainTab.EXPLORE },
                                     onSubmitRealDepositReceipt = viewModel::submitRealDepositReceipt,
-                                    onTopUpConfirm = { amount, bonus, pkgTitle ->
-                                        viewModel.topUpWallet(amount, bonus, pkgTitle)
-                                    },
                                     onShowMessage = viewModel::showInfoMessage
                                 )
 
@@ -865,7 +804,7 @@ fun MainFeatureScreen(
                                     walletTransactions = walletTransactions,
                                     isGoogleSignedIn = isGoogleSignedIn,
                                     userEmail = userEmail,
-                                    publishedServices = publishedServicesList,
+                                    publishedServices = publishedServicesList.filter { it.authorId == currentUserId },
                                     bookingsCount = bookingsList.size,
                                     reviewsCount = userReviewsList.size,
                                     favoritesCount = favoriteIds.size,
@@ -879,18 +818,8 @@ fun MainFeatureScreen(
                                     onGainProfileXp = viewModel::gainProfileXp,
                                     onUpdateAvatar = viewModel::updateProfileAvatar,
                                     onAddShowcasePhoto = { uriStr ->
+                                        // Media upload is not an authorization to create a priced offer.
                                         viewModel.addCustomProfilePhoto(uriStr)
-                                        viewModel.publishNewService(
-                                            title = "${userProfile.displayName.substringBefore("•").trim()} • عرض خاص جديد",
-                                            cityName = userProfile.cityName.substringBefore("•").trim().ifBlank { "دمشق" },
-                                            country = "سوريا",
-                                            category = "سبا ومساج",
-                                            description = "صورة عرض جديدة مضافة من الملف الشخصي مع إمكانية الحجز المباشر.",
-                                            priceUsd = 80,
-                                            imageUrl = uriStr,
-                                            videoUrl = "عرض فيديو 4K مرفق",
-                                            mediaType = "both"
-                                        )
                                     },
                                     onOpenMediaViewer = helperOpenPublishedMediaViewer,
                                     onEditServicePrice = { pub ->
@@ -1260,31 +1189,7 @@ private fun ExploreTabContent(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(
-                        onClick = {
-                            LayaliNotificationHelper.sendNewServiceBroadcastNotification(
-                                context = context,
-                                title = "عرض خاص VIP",
-                                cityName = selectedCity ?: "دمشق وإسطنبول",
-                                priceUsd = 50L,
-                                description = "احجز سهرتك الآن",
-                                mediaType = "both"
-                            )
-                        },
-                        modifier = Modifier
-                            .size(34.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surface)
-                            .testTag("home_notification_bell_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.NotificationsActive,
-                            contentDescription = "الإشعارات",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-
+                    // No fake, hard-coded broadcast from the customer home screen.
                     // Compact Wallet Balance Pill
                     Surface(
                         onClick = onOpenWalletTab,
@@ -1316,7 +1221,7 @@ private fun ExploreTabContent(
                     IconButton(
                         onClick = onOpenBookingsTab,
                         modifier = Modifier
-                            .size(34.dp)
+                            .size(44.dp)
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.surface)
                             .testTag("top_bookings_shortcut_button")
@@ -1337,8 +1242,8 @@ private fun ExploreTabContent(
                 ) {
                     Column(horizontalAlignment = Alignment.End) {
                         Text(
-                            text = "ليالي • Layali",
-                            fontSize = 15.sp,
+                            text = "ليالي",
+                            fontSize = 19.sp,
                             color = MaterialTheme.colorScheme.onBackground,
                             fontWeight = FontWeight.Bold
                         )
@@ -1388,8 +1293,8 @@ private fun ExploreTabContent(
                     onValueChange = onSearchChange,
                     placeholder = {
                         Text(
-                            text = "ابحث عن سهرة أو مدينة...",
-                            fontSize = 12.sp
+                            text = "ابحث عن خدمة أو مدينة",
+                            style = MaterialTheme.typography.bodyMedium
                         )
                     },
                     leadingIcon = {
@@ -1424,7 +1329,7 @@ private fun ExploreTabContent(
                     shape = CircleShape,
                     border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.outline),
                     modifier = Modifier
-                        .size(42.dp)
+                        .size(48.dp)
                         .testTag("toggle_filters_button")
                 ) {
                     Box(contentAlignment = Alignment.Center) {
@@ -1541,79 +1446,46 @@ private fun ExploreTabContent(
             }
         }
 
-        // 5. Section Header: "الخدمات" + Sort Pills + Admin/Reviews Quick Access
-        item(key = "explore_sort_header", contentType = "sort_header") {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 18.dp, vertical = 6.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+        // Sorting belongs to the optional filter panel, not a crowded service header.
+        if (showFiltersRow) {
+            item(key = "explore_sort_controls", contentType = "sort_controls") {
+                Column(
+                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        SortOption.entries.forEach { option ->
-                            val active = sortOption == option
-                            Surface(
-                                color = if (active) CoralPinkPrimary.copy(alpha = 0.2f) else Color.Transparent,
-                                shape = RoundedCornerShape(50),
-                                border = BorderStroke(
-                                    0.7.dp,
-                                    if (active) CoralPinkPrimary else MaterialTheme.colorScheme.outline
-                                ),
-                                modifier = Modifier.clickable { onSelectSort(option) }
-                            ) {
-                                Text(
-                                    text = option.labelAr,
-                                    fontSize = 11.sp,
-                                    color = if (active) PureWhite else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
-                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
-                                )
-                            }
+                    Text("ترتيب النتائج", style = MaterialTheme.typography.titleMedium)
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(SortOption.entries.toList()) { option ->
+                            FilterChip(
+                                selected = sortOption == option,
+                                onClick = { onSelectSort(option) },
+                                label = {
+                                    Text(option.labelAr, style = MaterialTheme.typography.labelLarge)
+                                }
+                            )
                         }
                     }
-
-                    Text(
-                        text = "السهرات (${venues.size})",
-                        fontSize = 15.sp,
-                        color = MaterialTheme.colorScheme.onBackground,
-                        fontWeight = FontWeight.Bold
-                    )
+                }
+            }
+        }
+        item(key = "explore_result_title", contentType = "result_title") {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "الخدمات المتاحة (${venues.size})",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                TextButton(onClick = { showFiltersRow = !showFiltersRow }) {
+                    Text(if (showFiltersRow) "إخفاء الخيارات" else "تصفية وترتيب")
                 }
             }
         }
 
-        // 6. 2-Column Featured Services Grid matching Screen 2 of the UI/UX Case Study
-        if (venues.isNotEmpty()) {
-            val gridVenues = venues.take(4)
-            val gridRows = gridVenues.chunked(2)
-            items(gridRows.size, key = { "grid_row_$it" }) { rowIndex ->
-                val pair = gridRows[rowIndex]
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    pair.forEach { venue ->
-                        CompactServiceGridCard(
-                            venue = venue,
-                            isFavorite = favoriteIds.contains(venue.id),
-                            onOpenDetails = { onOpenVenue(venue) },
-                            onBookNow = { onQuickBookVenue(venue) },
-                            onToggleFavorite = { onToggleFavorite(venue) },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    if (pair.size == 1) {
-                        Spacer(modifier = Modifier.weight(1f))
-                    }
-                }
-            }
-        }
+        // A service is shown only once in the results list.
 
         // 7. Live Published Services & Offers Showcase (Zero Admin UI for Customers)
         if (publishedServices.isNotEmpty()) {
@@ -1705,7 +1577,7 @@ private fun ExploreTabContent(
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = "لا توجد مراكز مطابقة للفلتر الحالي",
+                        text = "لا توجد خدمات مطابقة للبحث",
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -1742,7 +1614,7 @@ private fun ExploreTabContent(
                         Text("جميع التقييمات الموثوقة", color = BrandChampagneGold)
                     }
                     Text(
-                        text = "جميع المراكز والسهرات المتاحة",
+                        text = "تصفح جميع الخدمات",
                         style = MaterialTheme.typography.titleMedium,
                         color = SoftGold,
                         fontWeight = FontWeight.Bold

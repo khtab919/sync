@@ -32,6 +32,9 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -46,6 +49,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -88,6 +92,7 @@ fun WalletScreen(
     walletBalanceUsd: Int,
     transactions: List<WalletTransaction>,
     paymentReceipts: List<PaymentReceiptRecord> = emptyList(),
+    isSubmitting: Boolean = false,
     onSubmitRealDepositReceipt: (
         amountUsd: Int,
         bonusUsd: Int,
@@ -134,6 +139,8 @@ fun WalletScreen(
         )
     }
 
+    var currentStep by rememberSaveable { mutableIntStateOf(0) }
+    var showActivityHistory by rememberSaveable { mutableStateOf(false) }
     var selectedPackageIndex by remember { mutableIntStateOf(0) }
     var customAmountInput by remember { mutableStateOf("") }
     // "USDT_BEP20" or "SHAM_CASH"
@@ -292,6 +299,44 @@ fun WalletScreen(
                 }
             }
 
+            item(key = "wallet_progress") {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = "شحن المحفظة خطوة بخطوة",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf("المبلغ", "التحويل", "الإيصال").forEachIndexed { index, label ->
+                            Surface(
+                                color = if (currentStep == index)
+                                    MaterialTheme.colorScheme.primaryContainer
+                                else MaterialTheme.colorScheme.surface,
+                                shape = RoundedCornerShape(12.dp),
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (currentStep == index)
+                                        MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.outline
+                                ),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(
+                                    text = "${index + 1}. $label",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (currentStep == 0) {
             // 3. Payment Gateway Selector Tabs: USDT (BEP-20) vs شام كاش السوري
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -500,6 +545,20 @@ fun WalletScreen(
                 )
             }
 
+            item(key = "wallet_step_one_next") {
+                Button(
+                    onClick = {
+                        if (activeAmount in 10..100000) currentStep = 1
+                        else onShowMessage("اختر مبلغاً من 10 إلى 100000 دولار.")
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("التالي: تعليمات التحويل", style = MaterialTheme.typography.labelLarge)
+                }
+            }
+            } // End amount and payment-method selection
+
+            if (currentStep == 1) {
             // 5. Active Payment Gateway Card (USDT BEP-20 with Barcode + QR OR Sham Cash with QR)
             item {
                 if (selectedGatewayKey == "SHAM_CASH") {
@@ -515,6 +574,25 @@ fun WalletScreen(
                 }
             }
 
+            item(key = "wallet_step_two_actions") {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    OutlinedButton(onClick = { currentStep = 0 }, modifier = Modifier.weight(1f)) {
+                        Text("السابق")
+                    }
+                    Button(onClick = { currentStep = 2 }, modifier = Modifier.weight(1f)) {
+                        Text("التالي: إرفاق الإيصال")
+                    }
+                }
+            }
+            } // End transfer instructions
+
+            if (currentStep == 2) {
+            item(key = "wallet_step_three_back") {
+                OutlinedButton(onClick = { currentStep = 1 }) { Text("السابق: بيانات التحويل") }
+            }
             // 6. Mandatory Payment Receipt Attachment Section ("اي شخص يقوم بالدفع يرفق ايصال الدفع")
             item {
                 MandatoryReceiptAttachmentCard(
@@ -538,18 +616,22 @@ fun WalletScreen(
 
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     LuxuryGradientButton(
-                        text = if (attachedReceiptUri.isBlank()) {
-                            "أرفق إيصال الدفع أولاً لتأكيد إيداع $$activeAmount"
+                        text = if (isSubmitting) {
+                            "جارٍ رفع الإيصال وتسجيل الطلب..."
+                        } else if (attachedReceiptUri.isBlank()) {
+                            "أرفق الإيصال لإرسال طلب الإيداع"
                         } else if (activeBonus > 0) {
-                            "تأكيد الإيداع وإرسال الإيصال ($$activeAmount + $$activeBonus)"
+                            "إرسال طلب مراجعة الإيداع ($activeAmount + $activeBonus)"
                         } else {
-                            "تأكيد الإيداع وإرسال الإيصال ($$activeAmount)"
+                            "إرسال طلب مراجعة الإيداع ($activeAmount)"
                         },
                         icon = Icons.Default.ReceiptLong,
                         isEmeraldStyle = attachedReceiptUri.isNotBlank(),
                         onClick = {
-                            if (attachedReceiptUri.isBlank()) {
-                                onShowMessage("لا يوجد دفع وهمي! يرجى إرفاق صورة إيصال التحويل ($gatewayLabel) أولاً.")
+                            if (isSubmitting) {
+                                onShowMessage("طلب الإيداع قيد الإرسال.")
+                            } else if (attachedReceiptUri.isBlank()) {
+                                onShowMessage("يرجى إرفاق صورة إيصال التحويل ($gatewayLabel) أولاً.")
                             } else {
                                 onSubmitRealDepositReceipt(
                                     activeAmount,
@@ -558,9 +640,7 @@ fun WalletScreen(
                                     attachedReceiptUri,
                                     transactionReferenceInput
                                 )
-                                attachedReceiptUri = ""
-                                transactionReferenceInput = ""
-                                customAmountInput = ""
+                                // Preserve input until the backend reports the request was saved.
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
@@ -577,7 +657,7 @@ fun WalletScreen(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "جميع عمليات الدفع موثقة بإيصالات حقيقية عبر شام كاش و USDT BEP-20",
+                            text = "الإيصال يخضع للمراجعة. لا يُضاف الرصيد قبل الموافقة على الدفع.",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -585,6 +665,15 @@ fun WalletScreen(
                 }
             }
 
+            } // End receipt submission step
+
+            item(key = "wallet_history_toggle") {
+                TextButton(onClick = { showActivityHistory = !showActivityHistory }) {
+                    Text(if (showActivityHistory) "إخفاء سجل المعاملات" else "عرض سجل المعاملات")
+                }
+            }
+
+            if (showActivityHistory) {
             // 8. Attached Payment Receipts History
             if (paymentReceipts.isNotEmpty()) {
                 item {
@@ -600,7 +689,7 @@ fun WalletScreen(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "سجل إيصالات الدفع المرفقة (${paymentReceipts.size})",
+                            text = "طلبات الإيداع (${paymentReceipts.size})",
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onBackground,
                             fontWeight = FontWeight.Bold
@@ -659,7 +748,7 @@ fun WalletScreen(
                                     )
                                 }
                                 Text(
-                                    text = "${receipt.timestampLabel} • إيصال مرفق وموثق ✓",
+                                    text = "${receipt.timestampLabel} • " + if (receipt.status == "verified") "تم الاعتماد" else "قيد المراجعة",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = EmeraldVerified
                                 )
@@ -668,7 +757,7 @@ fun WalletScreen(
                             Spacer(modifier = Modifier.width(10.dp))
 
                             Text(
-                                text = "+$${receipt.amountUsd + receipt.bonusUsd}",
+                                text = "${receipt.amountUsd + receipt.bonusUsd}",
                                 style = MaterialTheme.typography.titleLarge,
                                 color = EmeraldVerified,
                                 fontWeight = FontWeight.ExtraBold
@@ -752,6 +841,7 @@ fun WalletScreen(
                     }
                 }
             }
+            } // End expandable activity history
         }
     }
 }

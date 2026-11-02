@@ -206,7 +206,8 @@ service cloud.firestore {
       allow create: if isSignedIn() &&
                        isValidId(userId) &&
                        request.auth.uid == userId &&
-                       isValidUserAccount(incoming());
+                       isValidUserAccount(incoming()) &&
+                       incoming().walletBalanceUsd == 0;
 
       allow update: if isSignedIn() &&
                        isValidId(userId) &&
@@ -218,7 +219,7 @@ service cloud.firestore {
                        incoming().diff(existing()).affectedKeys().hasOnly([
                          'username', 'displayName', 'email', 'bio',
                          'cityName', 'country', 'selectedFrameId', 'level',
-                         'xpPoints', 'nextLevelXp', 'walletBalanceUsd',
+                         'xpPoints', 'nextLevelXp',
                          'chatPriceUsd', 'isPaidChatEnabled',
                          'passwordSaltHex', 'passwordHashHex', 'updatedAt'
                        ]);
@@ -227,6 +228,40 @@ service cloud.firestore {
                        isValidId(userId) &&
                        request.auth.uid == userId &&
                        existing().userId == request.auth.uid;
+    }
+
+    // Deposit requests are immutable client submissions. Only the trusted server
+    // (Admin SDK) may later mark them verified and grant ledger credit.
+    match /users/{userId}/deposit_requests/{requestId} {
+      allow get, list: if isSignedIn() &&
+                         request.auth.uid == userId;
+
+      allow create: if isSignedIn() &&
+                       request.auth.uid == userId &&
+                       isValidId(requestId) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'amountUsd', 'bonusUsd', 'methodKey',
+                         'receiptStoragePath', 'transactionReference', 'status', 'createdAt'
+                       ]) &&
+                       incoming().keys().hasAll([
+                         'userId', 'amountUsd', 'bonusUsd', 'methodKey',
+                         'receiptStoragePath', 'transactionReference', 'status', 'createdAt'
+                       ]) &&
+                       incoming().userId == userId &&
+                       incoming().amountUsd is int &&
+                       incoming().amountUsd >= 10 &&
+                       incoming().amountUsd <= 100000 &&
+                       incoming().bonusUsd is int &&
+                       incoming().bonusUsd >= 0 &&
+                       incoming().bonusUsd <= 10000 &&
+                       incoming().methodKey in ['SHAM_CASH', 'USDT_BEP20'] &&
+                       incoming().status == 'pending' &&
+                       incoming().receiptStoragePath == 'payment-receipts/' + userId + '/' + requestId &&
+                       incoming().transactionReference is string &&
+                       incoming().transactionReference.size() <= 120 &&
+                       incoming().createdAt == request.time;
+
+      allow update, delete: if false;
     }
 
     // Collection: User Bookings

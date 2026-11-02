@@ -189,11 +189,11 @@ fun ProfileScreen(
     var isFollowing by rememberSaveable { mutableStateOf(false) }
     var isSubscribedVip by rememberSaveable { mutableStateOf(false) }
     var selectedTab by rememberSaveable { mutableStateOf(ProfileMediaTab.REELS) }
-    var coverImageUri by rememberSaveable { mutableStateOf("aleppo_palace_nights") }
+    var coverImageUri by rememberSaveable { mutableStateOf("") }
 
     val unlockedVideoIds = remember { mutableStateListOf<String>() }
     val pinnedClipIds = remember {
-        mutableStateListOf("media_reel_1", "media_reel_2", "media_vid_1")
+        mutableStateListOf<String>()
     }
 
     val avatarPickerLauncher = rememberLauncherForActivityResult(
@@ -228,8 +228,8 @@ fun ProfileScreen(
                 title = pub.title,
                 subtitle = pub.cityName,
                 tab = ProfileMediaTab.REELS,
-                viewsLabel = "${18 + (idx * 7)}.4K",
-                durationLabel = "00:45",
+                viewsLabel = "",
+                durationLabel = "",
                 imageUrl = pub.imageUrl,
                 category = pub.category,
                 singlePriceUsd = pub.priceUsd.toInt().coerceAtLeast(15),
@@ -240,240 +240,7 @@ fun ProfileScreen(
             )
         }
 
-        val defaultItems = listOf(
-            // REELS
-            ProfileMediaItem(
-                id = "media_reel_1",
-                title = "سهرة القصر الملكي • حلب",
-                subtitle = "حلب",
-                tab = ProfileMediaTab.REELS,
-                viewsLabel = "342K",
-                durationLabel = "00:38",
-                imageUrl = "aleppo_palace_nights",
-                category = "سهرات فنية",
-                singlePriceUsd = 15,
-                isExclusiveLocked = false,
-                accentHex = 0xFF0D9488L,
-                secondaryHex = 0xFF09111EL
-            ),
-            ProfileMediaItem(
-                id = "media_reel_2",
-                title = "جلسة لاونج البوسفور VIP",
-                subtitle = "إسطنبول",
-                tab = ProfileMediaTab.REELS,
-                viewsLabel = "218K",
-                durationLabel = "00:52",
-                imageUrl = "istanbul_bosphorus_vip",
-                category = "سهرات فنية",
-                singlePriceUsd = 15,
-                isExclusiveLocked = false,
-                accentHex = 0xFFA855F7L,
-                secondaryHex = 0xFF101726L
-            ),
-            ProfileMediaItem(
-                id = "media_reel_3",
-                title = "أجواء الياسمين الدمشقي",
-                subtitle = "دمشق",
-                tab = ProfileMediaTab.REELS,
-                viewsLabel = "164K",
-                durationLabel = "00:41",
-                imageUrl = "damascus_royal_spa",
-                category = "سبا ومساج",
-                singlePriceUsd = 12,
-                isExclusiveLocked = false,
-                accentHex = 0xFF0EA5E9L,
-                secondaryHex = 0xFF101726L
-            ),
-            ProfileMediaItem(
-                id = "media_reel_4",
-                title = "إطلالة البحر • اللاذقية",
-                subtitle = "اللاذقية",
-                tab = ProfileMediaTab.REELS,
-                viewsLabel = "95.2K",
-                durationLabel = "00:33",
-                imageUrl = "latakia_sunset_lounge",
-                category = "سهرات فنية",
-                singlePriceUsd = 12,
-                isExclusiveLocked = false,
-                accentHex = 0xFF0EA5E9L,
-                secondaryHex = 0xFF080C16L
-            ),
-
-            // VIDEOS
-            ProfileMediaItem(
-                id = "media_vid_1",
-                title = "عرض كامل: ليلة الطرب والقدود 4K",
-                subtitle = "حلب • 4K UHD",
-                tab = ProfileMediaTab.VIDEOS,
-                viewsLabel = "410K",
-                durationLabel = "12:40",
-                imageUrl = "aleppo_palace_nights",
-                category = "سهرات فنية",
-                singlePriceUsd = 15,
-                isExclusiveLocked = false,
-                accentHex = 0xFFA855F7L,
-                secondaryHex = 0xFF080C16L
-            ),
-            ProfileMediaItem(
-                id = "media_vid_2",
-                title = "جولة الجناح الملكي والسبا الخاص",
-                subtitle = "دمشق • 4K UHD",
-                tab = ProfileMediaTab.VIDEOS,
-                viewsLabel = "185K",
-                durationLabel = "08:15",
-                imageUrl = "damascus_royal_spa",
-                category = "سبا ومساج",
-                singlePriceUsd = 12,
-                isExclusiveLocked = true,
-                accentHex = 0xFF0EA5E9L,
-                secondaryHex = 0xFF101726L
-            ),
-            ProfileMediaItem(
-                id = "media_vid_3",
-                title = "سهرة يخت البوسفور الخاصة",
-                subtitle = "إسطنبول • VIP",
-                tab = ProfileMediaTab.VIDEOS,
-                viewsLabel = "276K",
-                durationLabel = "15:20",
-                imageUrl = "istanbul_bosphorus_vip",
-                category = "زيارات خارجية",
-                singlePriceUsd = 19,
-                isExclusiveLocked = true,
-                accentHex = 0xFFA855F7L,
-                secondaryHex = 0xFF101726L
-            ),
-            ProfileMediaItem(
-                id = "media_vid_4",
-                title = "أمسية موسيقية حية • طرطوس",
-                subtitle = "طرطوس • HD",
-                tab = ProfileMediaTab.VIDEOS,
-                viewsLabel = "88K",
-                durationLabel = "06:50",
-                imageUrl = "tartus_sea_breeze",
-                category = "سهرات فنية",
-                singlePriceUsd = 10,
-                isExclusiveLocked = false,
-                accentHex = 0xFF0EA5E9L,
-                secondaryHex = 0xFF080C16L
-            ),
-
-            // PHOTOS
-            ProfileMediaItem(
-                id = "media_photo_1",
-                title = "إطلالة الجناح الملكي",
-                subtitle = "دمشق",
-                tab = ProfileMediaTab.PHOTOS,
-                viewsLabel = "64K",
-                durationLabel = "صورة",
-                imageUrl = "damascus_royal_spa",
-                category = "سبا ومساج",
-                singlePriceUsd = 0,
-                isExclusiveLocked = false,
-                accentHex = 0xFF0EA5E9L,
-                secondaryHex = 0xFF080C16L
-            ),
-            ProfileMediaItem(
-                id = "media_photo_2",
-                title = "أجواء السهرة الملكية",
-                subtitle = "حلب",
-                tab = ProfileMediaTab.PHOTOS,
-                viewsLabel = "92K",
-                durationLabel = "صورة",
-                imageUrl = "aleppo_palace_nights",
-                category = "سهرات فنية",
-                singlePriceUsd = 0,
-                isExclusiveLocked = false,
-                accentHex = 0xFFA855F7L,
-                secondaryHex = 0xFF101726L
-            ),
-            ProfileMediaItem(
-                id = "media_photo_3",
-                title = "شرفة البوسفور الليلية",
-                subtitle = "إسطنبول",
-                tab = ProfileMediaTab.PHOTOS,
-                viewsLabel = "110K",
-                durationLabel = "صورة",
-                imageUrl = "istanbul_bosphorus_vip",
-                category = "سهرات فنية",
-                singlePriceUsd = 0,
-                isExclusiveLocked = false,
-                accentHex = 0xFF0EA5E9L,
-                secondaryHex = 0xFF101726L
-            ),
-            ProfileMediaItem(
-                id = "media_photo_4",
-                title = "لاونج الشاطئ الغربي",
-                subtitle = "اللاذقية",
-                tab = ProfileMediaTab.PHOTOS,
-                viewsLabel = "53K",
-                durationLabel = "صورة",
-                imageUrl = "latakia_sunset_lounge",
-                category = "سهرات فنية",
-                singlePriceUsd = 0,
-                isExclusiveLocked = false,
-                accentHex = 0xFF0EA5E9L,
-                secondaryHex = 0xFF080C16L
-            ),
-
-            // EXCLUSIVE (VIP & Pay-Per-View)
-            ProfileMediaItem(
-                id = "media_excl_1",
-                title = "سهرة خاصة VIP خلف الكواليس",
-                subtitle = "حصري • 4K كامل",
-                tab = ProfileMediaTab.EXCLUSIVE,
-                viewsLabel = "512K",
-                durationLabel = "18:30",
-                imageUrl = "istanbul_bosphorus_vip",
-                category = "سهرات فنية",
-                singlePriceUsd = 15,
-                isExclusiveLocked = true,
-                accentHex = 0xFFA855F7L,
-                secondaryHex = 0xFF080C16L
-            ),
-            ProfileMediaItem(
-                id = "media_excl_2",
-                title = "جلسة المساج الملكي الخاصة",
-                subtitle = "حصري • دمشق",
-                tab = ProfileMediaTab.EXCLUSIVE,
-                viewsLabel = "389K",
-                durationLabel = "14:15",
-                imageUrl = "damascus_royal_spa",
-                category = "سبا ومساج",
-                singlePriceUsd = 19,
-                isExclusiveLocked = true,
-                accentHex = 0xFFEC4899L,
-                secondaryHex = 0xFF101726L
-            ),
-            ProfileMediaItem(
-                id = "media_excl_3",
-                title = "سهرة الجناح الرئاسي • حلب",
-                subtitle = "حصري • VIP",
-                tab = ProfileMediaTab.EXCLUSIVE,
-                viewsLabel = "294K",
-                durationLabel = "21:00",
-                imageUrl = "aleppo_palace_nights",
-                category = "سهرات فنية",
-                singlePriceUsd = 25,
-                isExclusiveLocked = true,
-                accentHex = 0xFFA855F7L,
-                secondaryHex = 0xFF080C16L
-            ),
-            ProfileMediaItem(
-                id = "media_excl_4",
-                title = "ألبوم وتصوير السهرة الخاصة",
-                subtitle = "حصري • أنطاليا",
-                tab = ProfileMediaTab.EXCLUSIVE,
-                viewsLabel = "178K",
-                durationLabel = "11:40",
-                imageUrl = "antalya_resort_night",
-                category = "زيارات خارجية",
-                singlePriceUsd = 15,
-                isExclusiveLocked = true,
-                accentHex = 0xFFEC4899L,
-                secondaryHex = 0xFF101726L
-            )
-        )
-
+        // Only actual published services and user-selected media are displayed.
         val customPhotos = userProfile.customPhotos.mapIndexed { idx, uriStr ->
             ProfileMediaItem(
                 id = "custom_photo_$idx",
@@ -491,7 +258,7 @@ fun ProfileScreen(
             )
         }
 
-        dynamicReels + customPhotos + defaultItems
+        dynamicReels + customPhotos
     }
 
     val pinnedItems = remember(allProfileMedia, pinnedClipIds.toList()) {
