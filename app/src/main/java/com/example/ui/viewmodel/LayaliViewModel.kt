@@ -130,6 +130,12 @@ class LayaliViewModel(
         appContext?.let { ctx ->
             _savedAccounts.value = SuperAdminSecurityManager.getSavedAccounts(ctx)
         }
+        // The wallet ledger is server-backed; do not fabricate receipts on startup.
+        viewModelScope.launch {
+            repository.observeDepositRequests(currentUserId)
+                .catch { error -> Log.e("LayaliWallet", "Unable to read pending deposits", error) }
+                .collect { receipts -> _paymentReceipts.value = receipts }
+        }
     }
 
     // Paid Chat Members, Unlocked Conversations & Message Threads
@@ -847,50 +853,36 @@ class LayaliViewModel(
         receiptImageUri: String,
         transactionRef: String
     ) {
-        if (receiptImageUri.isBlank()) {
-            _snackbarMessage.value = "يرجى إرفاق صورة إيصال الدفع أولاً لإتمام عملية الشحن!"
+        if (_isSubmitting.value) {
+            _snackbarMessage.value = "يجري إرسال طلب الإيداع الحالي."
             return
         }
-        val validAmount = amountUsd.coerceIn(1, 100000)
-        val totalCredit = validAmount + bonusUsd
-        val methodTitleAr = if (methodKey == "SHAM_CASH") {
-            "شام كاش السوري (Sham Cash)"
-        } else {
-            "USDT (BEP-20) Tether"
+        if (receiptImageUri.isBlank() || amountUsd !in 10..100000) {
+            _snackbarMessage.value = "اختر مبلغاً صحيحاً وأرفق صورة الإيصال."
+            return
         }
-
-        val receiptRecord = PaymentReceiptRecord(
-            id = "rcpt_${System.currentTimeMillis()}",
-            userId = currentUserId,
-            userName = _userProfile.value.displayName.ifBlank { "عضو VIP" },
-            usernameHandle = _userProfile.value.username,
-            methodKey = methodKey,
-            methodTitleAr = methodTitleAr,
-            amountUsd = validAmount,
-            bonusUsd = bonusUsd,
-            receiptImageUri = receiptImageUri,
-            transactionReference = transactionRef.trim().ifBlank { "إيصال مرفق وموثق" },
-            purposeAr = "شحن رصيد المحفظة",
-            status = "verified",
-            timestampLabel = "الآن"
-        )
-        _paymentReceipts.value = listOf(receiptRecord) + _paymentReceipts.value
-        _walletBalanceUsd.value += totalCredit
-
-        val tx = WalletTransaction(
-            id = "tx_${System.currentTimeMillis()}",
-            title = "إيداع موثق بإيصال ($methodTitleAr)",
-            amountUsd = totalCredit,
-            bonusUsd = bonusUsd,
-            isCredit = true,
-            timestampLabel = "إيصال مرفق ✓"
-        )
-        _walletTransactions.value = listOf(tx) + _walletTransactions.value
-        gainProfileXp(60)
-        _snackbarMessage.value = "تم توثيق إيصال $methodTitleAr وإضافة $$totalCredit إلى محفظتك (+60 XP)!"
+        viewModelScope.launch {
+            _isSubmitting.value = true
+            try {
+                repository.submitDepositRequest(
+                    amountUsd = amountUsd,
+                    bonusUsd = bonusUsd,
+                    methodKey = methodKey,
+                    receiptImageUri = receiptImageUri,
+                    transactionReference = transactionRef
+                ).onSuccess { requestId ->
+                    _snackbarMessage.value = "تم إرسال طلب الإيداع للمراجعة (الرقم: $requestId). لن يُضاف الرصيد قبل التحقق."
+                }.onFailure { error ->
+                    Log.e("LayaliWallet", "Failed to submit pending deposit", error)
+                    _snackbarMessage.value = "تعذر حفظ طلب الإيداع. تحقق من تسجيل الدخول واتصال Firebase، ثم أعد المحاولة."
+                }
+            } finally {
+                _isSubmitting.value = false
+            }
+        }
     }
 
-    // ========================================================================
+        // ========================================================================
     // PAID CHAT UNLOCK & MESSAGING
     // ========================================================================
 
