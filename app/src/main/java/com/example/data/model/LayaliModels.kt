@@ -143,7 +143,7 @@ object AvatarFrameCatalog {
     val frames: List<AvatarFrameStyle> = listOf(
         AvatarFrameStyle(
             id = "emerald_crown",
-            nameAr = "التاج الزمردي البلاتيني",
+            nameAr = "الزمرد الكلاسيكي",
             subtitleAr = "إطار زمردي مرصع بالبلاتين والياقوت",
             minLevel = 1,
             primaryHex = 0xFF10B981L,
@@ -153,7 +153,7 @@ object AvatarFrameCatalog {
         ),
         AvatarFrameStyle(
             id = "amber_sovereign",
-            nameAr = "تاج الروز كوارتز الملكي",
+            nameAr = "بتلات الروز الملكي",
             subtitleAr = "هالة وردية إمبراطورية مزدوجة لكبار الشخصيات",
             minLevel = 5,
             primaryHex = 0xFFEC4899L,
@@ -163,7 +163,7 @@ object AvatarFrameCatalog {
         ),
         AvatarFrameStyle(
             id = "sapphire_neon",
-            nameAr = "نيون السافير الأزرق",
+            nameAr = "سداسي السافير",
             subtitleAr = "إطار كريستالي مضيء بتصميم هندسي فاخر",
             minLevel = 12,
             primaryHex = 0xFF0EA5E9L,
@@ -173,7 +173,7 @@ object AvatarFrameCatalog {
         ),
         AvatarFrameStyle(
             id = "amethyst_vip",
-            nameAr = "الجمشت الإمبراطوري الفاخر",
+            nameAr = "كوكبة الجمشت",
             subtitleAr = "إطار أرجواني ملكي مرصع بـ 12 ماسة",
             minLevel = 20,
             primaryHex = 0xFFA855F7L,
@@ -183,7 +183,7 @@ object AvatarFrameCatalog {
         ),
         AvatarFrameStyle(
             id = "crimson_flame",
-            nameAr = "تاج الروبي القرمزي",
+            nameAr = "شعلة الروبي",
             subtitleAr = "إطار ياقوتي متوهج لنخبة الداعمين",
             minLevel = 35,
             primaryHex = 0xFFF43F5EL,
@@ -193,7 +193,7 @@ object AvatarFrameCatalog {
         ),
         AvatarFrameStyle(
             id = "obsidian_elite",
-            nameAr = "النخبة الألماسية السوداء",
+            nameAr = "أوبسيديان ألماسي",
             subtitleAr = "إطار ألماسي بلاتيني حصري للمستويات العليا",
             minLevel = 50,
             primaryHex = 0xFFE2E8F0L,

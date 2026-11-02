@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -114,7 +115,8 @@ private enum class ProfileMediaTab(
     REELS("Reels", Icons.Default.PlayArrow),
     VIDEOS("Videos", Icons.Default.Videocam),
     PHOTOS("Photos", Icons.Default.GridOn),
-    EXCLUSIVE("Exclusive", Icons.Default.AutoAwesome)
+    EXCLUSIVE("Exclusive", Icons.Default.AutoAwesome),
+    POSTS("منشورات", Icons.Default.Lock)
 }
 
 private data class ProfileMediaItem(
@@ -170,7 +172,8 @@ fun ProfileScreen(
     onTriggerBroadcastNotification: () -> Unit,
     onOpenGoogleSignIn: () -> Unit,
     onSignOut: () -> Unit,
-    onPurchaseContentWithWallet: (amountUsd: Int, itemTitle: String) -> Boolean = { _, _ -> true },
+    onPurchaseContentWithWallet: (amountUsd: Int, itemTitle: String) -> Boolean = { _, _ -> false },
+    onPublishPaidPost: (title: String, preview: String, body: String, priceUsd: Int) -> Unit = { _, _, _, _ -> },
     onShowMessage: (String) -> Unit = {},
     isSuperAdmin: Boolean = false,
     savedAccounts: List<RegisteredAccountEntity> = emptyList(),
@@ -182,6 +185,7 @@ fun ProfileScreen(
 
     var showEditProfileDialog by remember { mutableStateOf(false) }
     var showSettingsModal by remember { mutableStateOf(false) }
+    var showPaidPostDialog by remember { mutableStateOf(false) }
     var showSubscribeVipModal by remember { mutableStateOf(false) }
     var showPasswordAndDbModal by remember { mutableStateOf(false) }
     var selectedLockedItemForPurchase by remember { mutableStateOf<ProfileMediaItem?>(null) }
@@ -193,7 +197,7 @@ fun ProfileScreen(
 
     val unlockedVideoIds = remember { mutableStateListOf<String>() }
     val pinnedClipIds = remember {
-        mutableStateListOf("media_reel_1", "media_reel_2", "media_vid_1")
+        mutableStateListOf<String>()
     }
 
     val avatarPickerLauncher = rememberLauncherForActivityResult(
@@ -222,13 +226,13 @@ fun ProfileScreen(
 
     // Build curated media items across Reels, Videos, Photos, and Exclusive tabs
     val allProfileMedia = remember(publishedServices, userProfile.customPhotos) {
-        val dynamicReels = publishedServices.mapIndexed { idx, pub ->
+        val dynamicReels = publishedServices.filter { it.category != "منشور مدفوع" }.mapIndexed { idx, pub ->
             ProfileMediaItem(
                 id = "pub_reel_${pub.id}",
                 title = pub.title,
                 subtitle = pub.cityName,
                 tab = ProfileMediaTab.REELS,
-                viewsLabel = "${18 + (idx * 7)}.4K",
+                viewsLabel = "—",
                 durationLabel = "00:45",
                 imageUrl = pub.imageUrl,
                 category = pub.category,
@@ -240,239 +244,23 @@ fun ProfileScreen(
             )
         }
 
-        val defaultItems = listOf(
-            // REELS
+        val paidPosts = publishedServices.filter { it.category == "منشور مدفوع" }.map { pub ->
             ProfileMediaItem(
-                id = "media_reel_1",
-                title = "سهرة القصر الملكي • حلب",
-                subtitle = "حلب",
-                tab = ProfileMediaTab.REELS,
-                viewsLabel = "342K",
-                durationLabel = "00:38",
-                imageUrl = "aleppo_palace_nights",
-                category = "سهرات فنية",
-                singlePriceUsd = 15,
-                isExclusiveLocked = false,
-                accentHex = 0xFF0D9488L,
-                secondaryHex = 0xFF09111EL
-            ),
-            ProfileMediaItem(
-                id = "media_reel_2",
-                title = "جلسة لاونج البوسفور VIP",
-                subtitle = "إسطنبول",
-                tab = ProfileMediaTab.REELS,
-                viewsLabel = "218K",
-                durationLabel = "00:52",
-                imageUrl = "istanbul_bosphorus_vip",
-                category = "سهرات فنية",
-                singlePriceUsd = 15,
-                isExclusiveLocked = false,
-                accentHex = 0xFFA855F7L,
-                secondaryHex = 0xFF101726L
-            ),
-            ProfileMediaItem(
-                id = "media_reel_3",
-                title = "أجواء الياسمين الدمشقي",
-                subtitle = "دمشق",
-                tab = ProfileMediaTab.REELS,
-                viewsLabel = "164K",
-                durationLabel = "00:41",
-                imageUrl = "damascus_royal_spa",
-                category = "سبا ومساج",
-                singlePriceUsd = 12,
-                isExclusiveLocked = false,
-                accentHex = 0xFF0EA5E9L,
-                secondaryHex = 0xFF101726L
-            ),
-            ProfileMediaItem(
-                id = "media_reel_4",
-                title = "إطلالة البحر • اللاذقية",
-                subtitle = "اللاذقية",
-                tab = ProfileMediaTab.REELS,
-                viewsLabel = "95.2K",
-                durationLabel = "00:33",
-                imageUrl = "latakia_sunset_lounge",
-                category = "سهرات فنية",
-                singlePriceUsd = 12,
-                isExclusiveLocked = false,
-                accentHex = 0xFF0EA5E9L,
-                secondaryHex = 0xFF080C16L
-            ),
-
-            // VIDEOS
-            ProfileMediaItem(
-                id = "media_vid_1",
-                title = "عرض كامل: ليلة الطرب والقدود 4K",
-                subtitle = "حلب • 4K UHD",
-                tab = ProfileMediaTab.VIDEOS,
-                viewsLabel = "410K",
-                durationLabel = "12:40",
-                imageUrl = "aleppo_palace_nights",
-                category = "سهرات فنية",
-                singlePriceUsd = 15,
-                isExclusiveLocked = false,
-                accentHex = 0xFFA855F7L,
-                secondaryHex = 0xFF080C16L
-            ),
-            ProfileMediaItem(
-                id = "media_vid_2",
-                title = "جولة الجناح الملكي والسبا الخاص",
-                subtitle = "دمشق • 4K UHD",
-                tab = ProfileMediaTab.VIDEOS,
-                viewsLabel = "185K",
-                durationLabel = "08:15",
-                imageUrl = "damascus_royal_spa",
-                category = "سبا ومساج",
-                singlePriceUsd = 12,
+                id = "paid_post_${pub.id}",
+                title = pub.title,
+                subtitle = "معاينة • ${pub.priceUsd}",
+                tab = ProfileMediaTab.POSTS,
+                viewsLabel = "خاص",
+                durationLabel = "مقفل",
+                imageUrl = pub.imageUrl,
+                category = pub.category,
+                singlePriceUsd = pub.priceUsd.toInt(),
                 isExclusiveLocked = true,
-                accentHex = 0xFF0EA5E9L,
-                secondaryHex = 0xFF101726L
-            ),
-            ProfileMediaItem(
-                id = "media_vid_3",
-                title = "سهرة يخت البوسفور الخاصة",
-                subtitle = "إسطنبول • VIP",
-                tab = ProfileMediaTab.VIDEOS,
-                viewsLabel = "276K",
-                durationLabel = "15:20",
-                imageUrl = "istanbul_bosphorus_vip",
-                category = "زيارات خارجية",
-                singlePriceUsd = 19,
-                isExclusiveLocked = true,
-                accentHex = 0xFFA855F7L,
-                secondaryHex = 0xFF101726L
-            ),
-            ProfileMediaItem(
-                id = "media_vid_4",
-                title = "أمسية موسيقية حية • طرطوس",
-                subtitle = "طرطوس • HD",
-                tab = ProfileMediaTab.VIDEOS,
-                viewsLabel = "88K",
-                durationLabel = "06:50",
-                imageUrl = "tartus_sea_breeze",
-                category = "سهرات فنية",
-                singlePriceUsd = 10,
-                isExclusiveLocked = false,
-                accentHex = 0xFF0EA5E9L,
-                secondaryHex = 0xFF080C16L
-            ),
-
-            // PHOTOS
-            ProfileMediaItem(
-                id = "media_photo_1",
-                title = "إطلالة الجناح الملكي",
-                subtitle = "دمشق",
-                tab = ProfileMediaTab.PHOTOS,
-                viewsLabel = "64K",
-                durationLabel = "صورة",
-                imageUrl = "damascus_royal_spa",
-                category = "سبا ومساج",
-                singlePriceUsd = 0,
-                isExclusiveLocked = false,
-                accentHex = 0xFF0EA5E9L,
-                secondaryHex = 0xFF080C16L
-            ),
-            ProfileMediaItem(
-                id = "media_photo_2",
-                title = "أجواء السهرة الملكية",
-                subtitle = "حلب",
-                tab = ProfileMediaTab.PHOTOS,
-                viewsLabel = "92K",
-                durationLabel = "صورة",
-                imageUrl = "aleppo_palace_nights",
-                category = "سهرات فنية",
-                singlePriceUsd = 0,
-                isExclusiveLocked = false,
-                accentHex = 0xFFA855F7L,
-                secondaryHex = 0xFF101726L
-            ),
-            ProfileMediaItem(
-                id = "media_photo_3",
-                title = "شرفة البوسفور الليلية",
-                subtitle = "إسطنبول",
-                tab = ProfileMediaTab.PHOTOS,
-                viewsLabel = "110K",
-                durationLabel = "صورة",
-                imageUrl = "istanbul_bosphorus_vip",
-                category = "سهرات فنية",
-                singlePriceUsd = 0,
-                isExclusiveLocked = false,
-                accentHex = 0xFF0EA5E9L,
-                secondaryHex = 0xFF101726L
-            ),
-            ProfileMediaItem(
-                id = "media_photo_4",
-                title = "لاونج الشاطئ الغربي",
-                subtitle = "اللاذقية",
-                tab = ProfileMediaTab.PHOTOS,
-                viewsLabel = "53K",
-                durationLabel = "صورة",
-                imageUrl = "latakia_sunset_lounge",
-                category = "سهرات فنية",
-                singlePriceUsd = 0,
-                isExclusiveLocked = false,
-                accentHex = 0xFF0EA5E9L,
-                secondaryHex = 0xFF080C16L
-            ),
-
-            // EXCLUSIVE (VIP & Pay-Per-View)
-            ProfileMediaItem(
-                id = "media_excl_1",
-                title = "سهرة خاصة VIP خلف الكواليس",
-                subtitle = "حصري • 4K كامل",
-                tab = ProfileMediaTab.EXCLUSIVE,
-                viewsLabel = "512K",
-                durationLabel = "18:30",
-                imageUrl = "istanbul_bosphorus_vip",
-                category = "سهرات فنية",
-                singlePriceUsd = 15,
-                isExclusiveLocked = true,
-                accentHex = 0xFFA855F7L,
-                secondaryHex = 0xFF080C16L
-            ),
-            ProfileMediaItem(
-                id = "media_excl_2",
-                title = "جلسة المساج الملكي الخاصة",
-                subtitle = "حصري • دمشق",
-                tab = ProfileMediaTab.EXCLUSIVE,
-                viewsLabel = "389K",
-                durationLabel = "14:15",
-                imageUrl = "damascus_royal_spa",
-                category = "سبا ومساج",
-                singlePriceUsd = 19,
-                isExclusiveLocked = true,
-                accentHex = 0xFFEC4899L,
-                secondaryHex = 0xFF101726L
-            ),
-            ProfileMediaItem(
-                id = "media_excl_3",
-                title = "سهرة الجناح الرئاسي • حلب",
-                subtitle = "حصري • VIP",
-                tab = ProfileMediaTab.EXCLUSIVE,
-                viewsLabel = "294K",
-                durationLabel = "21:00",
-                imageUrl = "aleppo_palace_nights",
-                category = "سهرات فنية",
-                singlePriceUsd = 25,
-                isExclusiveLocked = true,
-                accentHex = 0xFFA855F7L,
-                secondaryHex = 0xFF080C16L
-            ),
-            ProfileMediaItem(
-                id = "media_excl_4",
-                title = "ألبوم وتصوير السهرة الخاصة",
-                subtitle = "حصري • أنطاليا",
-                tab = ProfileMediaTab.EXCLUSIVE,
-                viewsLabel = "178K",
-                durationLabel = "11:40",
-                imageUrl = "antalya_resort_night",
-                category = "زيارات خارجية",
-                singlePriceUsd = 15,
-                isExclusiveLocked = true,
-                accentHex = 0xFFEC4899L,
-                secondaryHex = 0xFF101726L
+                accentHex = 0xFFB9A477L,
+                secondaryHex = 0xFF151A23L,
+                sourcePublished = pub
             )
-        )
+        }
 
         val customPhotos = userProfile.customPhotos.mapIndexed { idx, uriStr ->
             ProfileMediaItem(
@@ -480,7 +268,7 @@ fun ProfileScreen(
                 title = "صورة مضافة #${idx + 1}",
                 subtitle = userProfile.cityName,
                 tab = ProfileMediaTab.PHOTOS,
-                viewsLabel = "12.5K",
+                viewsLabel = "—",
                 durationLabel = "صورة",
                 imageUrl = uriStr,
                 category = "سهرات فنية",
@@ -491,7 +279,7 @@ fun ProfileScreen(
             )
         }
 
-        dynamicReels + customPhotos + defaultItems
+        dynamicReels + paidPosts + customPhotos
     }
 
     val pinnedItems = remember(allProfileMedia, pinnedClipIds.toList()) {
@@ -516,6 +304,10 @@ fun ProfileScreen(
     }
 
     val handleOpenOrUnlockMedia: (ProfileMediaItem) -> Unit = { item ->
+        if (item.tab == ProfileMediaTab.POSTS) {
+            // Never charge a wallet locally or expose private body data.
+            onShowMessage("هذه معاينة لمنشور مدفوع. فتح المحتوى متوقف حتى تفعيل التحقق من الدفع عبر الخادم.")
+        } else {
         val isUnlocked = !item.isExclusiveLocked || isSubscribedVip || unlockedVideoIds.contains(item.id)
         if (isUnlocked) {
             val pub = item.sourcePublished ?: PublishedService(
@@ -533,6 +325,7 @@ fun ProfileScreen(
             onOpenMediaViewer(pub, item.tab != ProfileMediaTab.PHOTOS)
         } else {
             selectedLockedItemForPurchase = item
+        }
         }
     }
 
@@ -1282,20 +1075,18 @@ fun ProfileScreen(
                     .fillMaxWidth()
                     .padding(top = 16.dp)
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    ProfileMediaTab.entries.forEach { tab ->
+                    items(ProfileMediaTab.entries) { tab ->
                         val isSelected = selectedTab == tab
                         val activeColor = if (tab == ProfileMediaTab.EXCLUSIVE) MutedLuxuryGold else DeepTealPrimary
 
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier
-                                .weight(1f)
+                                .width(88.dp)
                                 .clickable { selectedTab = tab }
                                 .padding(vertical = 8.dp)
                                 .testTag("profile_tab_${tab.name.lowercase()}")
@@ -1385,11 +1176,35 @@ fun ProfileScreen(
             }
         }
 
+        if (selectedTab == ProfileMediaTab.POSTS) {
+            item(key = "profile_paid_post_publish") {
+                Surface(
+                    onClick = { showPaidPostDialog = true },
+                    shape = RoundedCornerShape(14.dp),
+                    color = RoyalNavyCard,
+                    border = BorderStroke(1.dp, MutedLuxuryGold.copy(alpha = 0.5f)),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp).testTag("create_paid_post_button")
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, tint = MutedLuxuryGold)
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("إنشاء منشور مدفوع", fontSize = 15.sp, color = SoftWhiteText, fontWeight = FontWeight.Bold)
+                            Text("معاينة عامة ومحتوى خاص بسعر تختارينه", fontSize = 12.sp, color = SlateSecondaryText)
+                        }
+                    }
+                }
+            }
+        }
+
         // ====================================================================
         // 7. TAB CONTENT GRID (3-Column for Reels/Photos, 2-Column for Videos/Exclusive)
         // ====================================================================
         item(key = "profile_tab_grid_${selectedTab.name}") {
-            val columns = if (selectedTab == ProfileMediaTab.VIDEOS || selectedTab == ProfileMediaTab.EXCLUSIVE) 2 else 3
+            val columns = if (selectedTab == ProfileMediaTab.VIDEOS || selectedTab == ProfileMediaTab.EXCLUSIVE || selectedTab == ProfileMediaTab.POSTS) 2 else 3
             val rows = currentTabItems.chunked(columns)
 
             Column(
@@ -1436,6 +1251,24 @@ fun ProfileScreen(
                     }
                 }
 
+                if (rows.isEmpty()) {
+                    Surface(
+                        color = RoyalNavyCard,
+                        shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.outline),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(Icons.Default.GridOn, contentDescription = null, tint = SlateSecondaryText)
+                            Text("لا توجد منشورات في هذا القسم بعد", fontSize = 14.sp, color = SoftWhiteText)
+                            Text("ستظهر المنشورات الحقيقية هنا بعد نشرها.", fontSize = 12.sp, color = SlateSecondaryText)
+                        }
+                    }
+                }
                 rows.forEach { rowItems ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -1443,9 +1276,10 @@ fun ProfileScreen(
                     ) {
                         rowItems.forEach { mediaItem ->
                             val isPinned = pinnedClipIds.contains(mediaItem.id)
-                            val isLocked = mediaItem.isExclusiveLocked &&
+                            val isLocked = mediaItem.tab == ProfileMediaTab.POSTS ||
+                                (mediaItem.isExclusiveLocked &&
                                 !isSubscribedVip &&
-                                !unlockedVideoIds.contains(mediaItem.id)
+                                !unlockedVideoIds.contains(mediaItem.id))
 
                             ProfileMediaGridTile(
                                 item = mediaItem,
@@ -1914,160 +1748,102 @@ fun ProfileScreen(
         )
     }
 
-    // ====================================================================
-    // MODAL 3: CLEAN SETTINGS, CHAT PRICING, AVATAR FRAMES & WALLET HISTORY
-    // ====================================================================
-    if (showSettingsModal) {
-        var customChatPriceText by remember(userProfile.chatPriceUsd) {
-            mutableStateOf(userProfile.chatPriceUsd.toString())
-        }
-        val presetChatPrices = listOf(5, 10, 15, 25, 50, 100)
+    if (showPaidPostDialog) {
+        var postTitle by remember { mutableStateOf("") }
+        var postPreview by remember { mutableStateOf("") }
+        var postBody by remember { mutableStateOf("") }
+        var postPrice by remember { mutableStateOf("5") }
+        val parsedPrice = postPrice.toIntOrNull()
+        val canPublish = postTitle.trim().length in 3..150 &&
+            postPreview.trim().length in 10..300 &&
+            postBody.trim().length in 20..5000 &&
+            parsedPrice != null && parsedPrice in 1..1000
 
         AlertDialog(
-            onDismissRequest = { showSettingsModal = false },
+            onDismissRequest = { showPaidPostDialog = false },
             containerColor = RoyalNavyCard,
-            title = {
-                Text(
-                    text = "إعدادات الحساب وتسعير الدردشة",
-                    fontSize = 15.sp,
-                    color = SoftWhiteText,
-                    fontWeight = FontWeight.Bold
-                )
-            },
+            title = { Text("نشر محتوى مدفوع", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = SoftWhiteText) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    // 1. Chat Pricing
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Switch(
-                            checked = userProfile.isPaidChatEnabled,
-                            onCheckedChange = { enabled ->
-                                onUpdateChatPricing(userProfile.chatPriceUsd, enabled)
-                            },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = SoftWhiteText,
-                                checkedTrackColor = DeepTealPrimary
-                            )
-                        )
-                        Text(
-                            text = "تسعير الدردشة الخاصة ($${userProfile.chatPriceUsd})",
-                            fontSize = 12.sp,
-                            color = SoftWhiteText,
-                            fontWeight = FontWeight.SemiBold
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 460.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    item {
+                        Text("المعاينة متاحة للجميع، أما المحتوى الكامل فيُحفظ بسجل خاص لا يستطيع الزوار قراءته مباشرة.", color = SlateSecondaryText, fontSize = 13.sp)
+                    }
+                    item {
+                        OutlinedTextField(
+                            value = postTitle, onValueChange = { postTitle = it.take(150) },
+                            label = { Text("عنوان المنشور") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().testTag("paid_post_title")
                         )
                     }
-
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        presetChatPrices.forEach { price ->
-                            val isSelected = userProfile.chatPriceUsd == price
-                            FilterChip(
-                                selected = isSelected,
-                                onClick = {
-                                    customChatPriceText = price.toString()
-                                    onUpdateChatPricing(price, true)
-                                },
-                                label = { Text("$$price", fontSize = 11.sp) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = DeepTealPrimary,
-                                    selectedLabelColor = SoftWhiteText
-                                )
-                            )
-                        }
-                    }
-
-                    // 2. Avatar Frames Row
-                    Text(
-                        text = "إطار الصورة الشخصية",
-                        fontSize = 12.sp,
-                        color = MutedLuxuryGold,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.fillMaxWidth(),
-                        textAlign = TextAlign.End
-                    )
-
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(AvatarFrameCatalog.frames, key = { it.id }) { frameItem ->
-                            val isSelected = userProfile.selectedFrameId == frameItem.id
-                            Surface(
-                                onClick = { onSelectAvatarFrame(frameItem.id) },
-                                shape = RoundedCornerShape(10.dp),
-                                color = if (isSelected) DeepTealPrimary.copy(alpha = 0.2f) else RoyalNavyBackground,
-                                border = BorderStroke(
-                                    1.dp,
-                                    if (isSelected) DeepTealPrimary else MaterialTheme.colorScheme.outline
-                                ),
-                                modifier = Modifier.testTag("select_avatar_frame_${frameItem.id}")
-                            ) {
-                                Text(
-                                    text = frameItem.nameAr,
-                                    fontSize = 10.sp,
-                                    color = SoftWhiteText,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    // 3. Recent Transactions Summary
-                    if (walletTransactions.isNotEmpty()) {
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-                        Text(
-                            text = "آخر المعاملات: ${walletTransactions.first().title} ($${walletTransactions.first().amountUsd})",
-                            fontSize = 11.sp,
-                            color = SlateSecondaryText,
-                            modifier = Modifier.fillMaxWidth(),
-                            textAlign = TextAlign.End
+                    item {
+                        OutlinedTextField(
+                            value = postPreview, onValueChange = { postPreview = it.take(300) },
+                            label = { Text("المعاينة العامة") }, minLines = 2, maxLines = 4,
+                            modifier = Modifier.fillMaxWidth().testTag("paid_post_preview")
                         )
                     }
-
-                    // 4. Sign Out if signed in
-                    if (isGoogleSignedIn || isSuperAdmin) {
-                        OutlinedButton(
-                            onClick = {
-                                showSettingsModal = false
-                                onSignOut()
-                            },
-                            shape = RoundedCornerShape(50),
-                            border = BorderStroke(1.dp, ErrorCrimson),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ExitToApp,
-                                contentDescription = null,
-                                tint = ErrorCrimson,
-                                modifier = Modifier.size(15.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("تسجيل الخروج", fontSize = 12.sp, color = ErrorCrimson)
-                        }
+                    item {
+                        OutlinedTextField(
+                            value = postBody, onValueChange = { postBody = it.take(5000) },
+                            label = { Text("النص الكامل المدفوع") }, minLines = 4, maxLines = 8,
+                            modifier = Modifier.fillMaxWidth().testTag("paid_post_body")
+                        )
+                    }
+                    item {
+                        OutlinedTextField(
+                            value = postPrice, onValueChange = { postPrice = it.filter(Char::isDigit).take(4) },
+                            label = { Text("السعر بالدولار (1–1000)") }, singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            isError = parsedPrice == null || parsedPrice !in 1..1000,
+                            modifier = Modifier.fillMaxWidth().testTag("paid_post_price")
+                        )
+                    }
+                    item {
+                        Text("تنبيه: تحصيل المبلغ وفتح المحتوى للمشتري لن يُفعّلا قبل ربط تحقق الدفع والصلاحيات في الخادم.", color = MutedLuxuryGold, fontSize = 12.sp)
                     }
                 }
             },
             confirmButton = {
                 Button(
+                    enabled = canPublish,
                     onClick = {
-                        val parsed = (customChatPriceText.toIntOrNull() ?: userProfile.chatPriceUsd).coerceIn(1, 5000)
-                        onUpdateChatPricing(parsed, userProfile.isPaidChatEnabled)
-                        showSettingsModal = false
+                        onPublishPaidPost(postTitle.trim(), postPreview.trim(), postBody.trim(), parsedPrice ?: 5)
+                        showPaidPostDialog = false
                     },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = DeepTealPrimary,
-                        contentColor = SoftWhiteText
-                    ),
-                    shape = RoundedCornerShape(50)
-                ) {
-                    Text("تم", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                }
+                    colors = ButtonDefaults.buttonColors(containerColor = DeepTealPrimary)
+                ) { Text("نشر المعاينة", fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPaidPostDialog = false }) { Text("إلغاء") }
             }
         )
     }
 
+    // MODAL 3: Full, navigable settings; each category has its own screen.
+    // ============================================================================
+    if (showSettingsModal) {
+        ProfileSettingsDialog(
+            userProfile = userProfile,
+            lightTheme = isSoftRoseLightTheme,
+            isSignedIn = isGoogleSignedIn || isSuperAdmin,
+            isAdmin = isSuperAdmin,
+            walletBalanceUsd = walletBalanceUsd,
+            onDismiss = { showSettingsModal = false },
+            onEditProfile = { showEditProfileDialog = true },
+            onToggleTheme = onToggleThemeMode,
+            onUpdateChatPricing = onUpdateChatPricing,
+            onSelectFrame = onSelectAvatarFrame,
+            onOpenWallet = onOpenWalletTab,
+            onChangePassword = { showPasswordAndDbModal = true },
+            onSignOut = onSignOut
+        )
+    }
+
+    // ============================================================================
     // ====================================================================
     // MODAL 4: EDIT PROFILE DIALOG
     // ====================================================================
@@ -2486,7 +2262,7 @@ private fun PinnedClipCard(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "${item.viewsLabel} مشاهدة",
+                    text = if (item.viewsLabel == "—" || item.viewsLabel == "خاص") "" else "${item.viewsLabel} مشاهدة",
                     fontSize = 9.sp,
                     color = SlateSecondaryText
                 )
@@ -2602,7 +2378,7 @@ private fun ProfileMediaGridTile(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "فتح • $${item.singlePriceUsd}",
+                            text = if (item.tab == ProfileMediaTab.POSTS) "بسعر • ${item.singlePriceUsd}" else "فتح • ${item.singlePriceUsd}",
                             fontSize = 10.sp,
                             color = MutedLuxuryGold,
                             fontWeight = FontWeight.Bold
@@ -2655,7 +2431,7 @@ private fun ProfileMediaGridTile(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "${item.viewsLabel} مشاهدة",
+                    text = if (item.viewsLabel == "—" || item.viewsLabel == "خاص") "" else "${item.viewsLabel} مشاهدة",
                     fontSize = 9.sp,
                     color = SlateSecondaryText
                 )

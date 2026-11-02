@@ -928,25 +928,15 @@ class LayaliViewModel(
     }
 
     fun unlockChatWithWallet(member: ChatMemberProfile) {
-        val currentBalance = _walletBalanceUsd.value
-        if (currentBalance < member.chatPriceUsd) {
-            _snackbarMessage.value = "رصيد المحفظة ($$currentBalance) غير كافٍ لفتح دردشة ${member.displayName} ($${member.chatPriceUsd}). استخدم شام كاش أو USDT وأرفق الإيصال."
-            return
+        // Fail closed: local balance is not a payment authorization.
+        // Never debit the in-memory wallet or unlock a paid conversation until
+        // a trusted backend transaction confirms settlement and entitlement.
+        if (member.chatPriceUsd <= 0) {
+            _unlockedChatMemberIds.value = _unlockedChatMemberIds.value + member.id
+            _activeChatMemberId.value = member.id
+        } else {
+            _snackbarMessage.value = "الدردشة بسعر $${member.chatPriceUsd}. الدفع بالمحفظة يتطلب تحقق الخادم قبل فتح الرسائل."
         }
-        _walletBalanceUsd.value = currentBalance - member.chatPriceUsd
-        _unlockedChatMemberIds.value = _unlockedChatMemberIds.value + member.id
-        _activeChatMemberId.value = member.id
-
-        val tx = WalletTransaction(
-            id = "tx_chat_${System.currentTimeMillis()}",
-            title = "فتح دردشة VIP مع ${member.displayName} (${member.username})",
-            amountUsd = member.chatPriceUsd,
-            isCredit = false,
-            timestampLabel = "الآن"
-        )
-        _walletTransactions.value = listOf(tx) + _walletTransactions.value
-        gainProfileXp(25)
-        _snackbarMessage.value = "تم فتح الدردشة الخاصة مع ${member.displayName} بنجاح!"
     }
 
     fun unlockChatWithReceipt(
@@ -975,22 +965,24 @@ class LayaliViewModel(
             receiptImageUri = receiptUri,
             transactionReference = txRef.trim().ifBlank { "دردشة ${member.username}" },
             purposeAr = "فتح دردشة مع ${member.displayName}",
-            status = "verified",
+            status = "pending",
             timestampLabel = "الآن"
         )
         _paymentReceipts.value = listOf(receipt) + _paymentReceipts.value
-        _unlockedChatMemberIds.value = _unlockedChatMemberIds.value + member.id
-        _activeChatMemberId.value = member.id
-        gainProfileXp(35)
-        _snackbarMessage.value = "تم توثيق إيصال $methodTitleAr وفتح الدردشة مع ${member.displayName} (+35 XP)!"
+        _snackbarMessage.value = "تم استلام إيصال $methodTitleAr وهو قيد المراجعة. لن تُفتح الدردشة قبل اعتماد الدفع."
     }
 
     fun sendChatMessage(memberId: String, text: String) {
         val cleanText = text.trim()
         if (cleanText.isBlank()) return
         val member = _chatMembers.value.find { it.id == memberId } ?: return
+        if (member.chatPriceUsd > 0 &&
+            !member.isUnlocked &&
+            memberId !in _unlockedChatMemberIds.value) {
+            _snackbarMessage.value = "لا يمكن إرسال رسالة قبل فتح هذه المحادثة بدفع موثق."
+            return
+        }
         val profile = _userProfile.value
-
         val userMsg = ChatMessageItem(
             id = "msg_u_${System.currentTimeMillis()}",
             memberId = memberId,
@@ -1000,18 +992,12 @@ class LayaliViewModel(
             timestampLabel = "الآن",
             isFromCurrentUser = true
         )
-        val autoReply = ChatMessageItem(
-            id = "msg_r_${System.currentTimeMillis() + 1}",
-            memberId = memberId,
-            senderName = member.displayName,
-            senderUsername = member.username,
-            text = "شكراً لتواصلك معي في نادي ليالي VIP (${member.cityName}) ✨ تم استلام رسالتك وسأقوم بتأكيد كافة التفاصيل معك فوراً.",
-            timestampLabel = "الآن",
-            isFromCurrentUser = false
-        )
-
+        // No fabricated replies from the other person. A real chat transport
+        // must be connected before this is considered delivered.
         val existing = _chatMessagesByMember.value[memberId].orEmpty()
-        _chatMessagesByMember.value = _chatMessagesByMember.value + (memberId to (existing + userMsg + autoReply))
+        _chatMessagesByMember.value = _chatMessagesByMember.value +
+            (memberId to (existing + userMsg))
+        _snackbarMessage.value = "تم حفظ الرسالة على هذا الجهاز؛ لم يتم ربط التسليم المباشر بعد."
     }
 
     fun updateVenueStartingPrice(venueId: String, newPriceUsd: Int) {
@@ -1219,6 +1205,55 @@ class LayaliViewModel(
                 }.onFailure { err ->
                     Log.d(TAG, "Saved locally; remote sync skipped or failed: ${err.message}")
                 }
+            }
+        }
+    }
+
+    /** Creator publication requires real Firebase authentication and a successful write. */
+    fun publishCreatorPaidPost(title: String, preview: String, body: String, priceUsd: Int) {
+        if (!hasFirebaseAuth()) {
+            _snackbarMessage.value = "يجب تسجيل الدخول بحساب متصل قبل نشر منشور مدفوع"
+            return
+        }
+        if (title.trim().length < 3 || preview.trim().length < 10 || body.trim().length < 20 || priceUsd !in 1..1000) {
+            _snackbarMessage.value = "تحقق من العنوان والوصف والمحتوى والسعر (1–1000 دولار)"
+            return
+        }
+        viewModelScope.launch {
+            _isSubmitting.value = true
+            try {
+                repository.publishPaidPost(
+                    title = title,
+                    preview = preview,
+                    privateBody = body,
+                    priceUsd = priceUsd,
+                    cityName = _userProfile.value.cityName,
+                    country = _userProfile.value.country
+                ).onSuccess { postId ->
+                    val created = PublishedService(
+                        id = postId,
+                        authorId = currentUserId,
+                        title = title.trim(),
+                        cityName = _userProfile.value.cityName.ifBlank { "غير محدد" },
+                        country = _userProfile.value.country,
+                        category = "منشور مدفوع",
+                        description = preview.trim(),
+                        priceUsd = priceUsd.toLong(),
+                        imageUrl = "",
+                        videoUrl = "",
+                        mediaType = "photo",
+                        status = "active",
+                        createdAt = Timestamp.now()
+                    )
+                    seenPublishedIds.add(postId)
+                    _localPublishedServices.value = listOf(created) + _localPublishedServices.value
+                    _snackbarMessage.value = "تم نشر المعاينة وحفظ المحتوى الخاص بشكل محمي. الشراء متوقف حتى توثيق الدفع من الخادم."
+                }.onFailure { error ->
+                    Log.e(TAG, "Failed to publish private paid post", error)
+                    _snackbarMessage.value = "تعذر نشر المنشور المدفوع. تحقق من الاتصال وصلاحيات الحساب."
+                }
+            } finally {
+                _isSubmitting.value = false
             }
         }
     }
