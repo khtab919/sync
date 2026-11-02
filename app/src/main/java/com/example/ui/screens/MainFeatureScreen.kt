@@ -240,6 +240,8 @@ fun MainFeatureScreen(
     val isSoftRoseLightTheme by viewModel.isSoftRoseLightTheme.collectAsStateWithLifecycle()
     val userProfile by viewModel.userProfile.collectAsStateWithLifecycle()
     val walletBalanceUsd by viewModel.walletBalanceUsd.collectAsStateWithLifecycle()
+    val creatorAvailableUsd by viewModel.creatorAvailableUsd.collectAsStateWithLifecycle()
+    val creatorReservedUsd by viewModel.creatorReservedUsd.collectAsStateWithLifecycle()
     val walletTransactions by viewModel.walletTransactions.collectAsStateWithLifecycle()
     val paymentReceipts by viewModel.paymentReceipts.collectAsStateWithLifecycle()
     val savedAccounts by viewModel.savedAccounts.collectAsStateWithLifecycle()
@@ -863,6 +865,9 @@ fun MainFeatureScreen(
 
                                 MainTab.WALLET -> WalletScreen(
                                     walletBalanceUsd = walletBalanceUsd,
+                                    creatorAvailableUsd = creatorAvailableUsd,
+                                    creatorReservedUsd = creatorReservedUsd,
+                                    onRequestCreatorWithdrawal = viewModel::submitCreatorWithdrawal,
                                     transactions = walletTransactions,
                                     paymentReceipts = paymentReceipts,
                                     onBack = { currentTab = MainTab.EXPLORE },
