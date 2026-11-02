@@ -173,6 +173,55 @@ class LayaliViewModel(
     val chatMessagesByMember: StateFlow<Map<String, List<ChatMessageItem>>> = _chatMessagesByMember.asStateFlow()
     private val chatThreadByMember = mutableMapOf<String, String>()
     private val chatQuotesRequested = mutableSetOf<String>()
+    private val subscribedThreadIds = mutableSetOf<String>()
+
+    init {
+        if (hasFirebaseAuthForCurrentUser()) {
+            viewModelScope.launch {
+                repository.observeVerifiedChatThreads(currentUserId)
+                    .catch { error ->
+                        Log.e(TAG, "Verified chat membership unavailable", error)
+                        emit(emptyList())
+                    }
+                    .collect { threads ->
+                        threads.forEach { thread ->
+                            subscribeToVerifiedThread(thread.peerId, thread.threadId)
+                        }
+                    }
+            }
+        }
+    }
+
+    private fun subscribeToVerifiedThread(peerId: String, threadId: String) {
+        chatThreadByMember[peerId] = threadId
+        _unlockedChatMemberIds.value = _unlockedChatMemberIds.value + peerId
+        if (_chatMembers.value.none { it.id == peerId }) {
+            viewModelScope.launch {
+                repository.fetchCreatorChatQuote(peerId).onSuccess { quote ->
+                    if (_chatMembers.value.none { it.id == peerId }) {
+                        _chatMembers.value = _chatMembers.value + ChatMemberProfile(
+                            id = peerId, displayName = quote.displayName,
+                            username = quote.username, cityName = "", country = "",
+                            category = "محادثة خاصة", bio = "", level = 1,
+                            frameId = "emerald_crown", chatPriceUsd = 0,
+                            isOnline = false, avatarPreset = "", isUnlocked = true
+                        )
+                    }
+                }
+            }
+        }
+        if (!subscribedThreadIds.add(threadId)) return
+        viewModelScope.launch {
+            repository.observeVerifiedChatMessages(threadId, peerId)
+                .catch { error ->
+                    Log.e(TAG, "Verified chat message stream error", error)
+                    emit(emptyList())
+                }.collect { messages ->
+                    _chatMessagesByMember.value = _chatMessagesByMember.value + (peerId to messages)
+                }
+        }
+    }
+
 
 
     // Admin custom price, photo, and deletion overrides for catalog venues
@@ -808,21 +857,9 @@ class LayaliViewModel(
             try {
                 repository.unlockServerPaidChat(member.id, member.chatPriceUsd)
                     .onSuccess { threadId ->
-                        chatThreadByMember[member.id] = threadId
-                        _unlockedChatMemberIds.value = _unlockedChatMemberIds.value + member.id
+                        subscribeToVerifiedThread(member.id, threadId)
                         _activeChatMemberId.value = member.id
                         _snackbarMessage.value = "تم فتح المحادثة بواسطة الخادم."
-                        viewModelScope.launch {
-                            repository.observeVerifiedChatMessages(threadId, member.id)
-                                .catch { error ->
-                                    Log.e(TAG, "Verified chat stream error", error)
-                                    emit(emptyList())
-                                }
-                                .collect { messages ->
-                                    _chatMessagesByMember.value = _chatMessagesByMember.value +
-                                        (member.id to messages)
-                                }
-                        }
                     }.onFailure { error ->
                         _snackbarMessage.value = "لم تُفتح الدردشة: ${error.localizedMessage ?: "رفض الخادم الطلب"}"
                     }
