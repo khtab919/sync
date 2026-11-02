@@ -846,6 +846,24 @@ fun MainFeatureScreen(
                                     loading = publishedServicesState is UiState.Loading,
                                     error = (publishedServicesState as? UiState.Error)?.message,
                                     submittingId = submittingMarketplaceId,
+                                    canOfferServices = Firebase.auth.currentUser != null,
+                                    onSubmitOffer = { title, description, category, city, country, price, image, video ->
+                                        viewModel.publishNewService(
+                                            title = title,
+                                            cityName = city,
+                                            country = country,
+                                            category = category,
+                                            description = description,
+                                            priceUsd = price,
+                                            imageUrl = image,
+                                            videoUrl = video,
+                                            mediaType = when {
+                                                video.isNotBlank() && image.isNotBlank() -> "both"
+                                                video.isNotBlank() -> "video"
+                                                else -> "photo"
+                                            }
+                                        )
+                                    },
                                     onRequestBooking = helperBookPublishedService,
                                     onViewService = { service -> helperOpenPublishedMediaViewer(service, false) }
                                 )
@@ -1280,31 +1298,6 @@ private fun ExploreTabContent(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(
-                        onClick = {
-                            LayaliNotificationHelper.sendNewServiceBroadcastNotification(
-                                context = context,
-                                title = "عرض خاص VIP",
-                                cityName = selectedCity ?: "دمشق وإسطنبول",
-                                priceUsd = 50L,
-                                description = "احجز سهرتك الآن",
-                                mediaType = "both"
-                            )
-                        },
-                        modifier = Modifier
-                            .size(34.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surface)
-                            .testTag("home_notification_bell_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.NotificationsActive,
-                            contentDescription = "الإشعارات",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-
                     // Compact Wallet Balance Pill
                     Surface(
                         onClick = onOpenWalletTab,
