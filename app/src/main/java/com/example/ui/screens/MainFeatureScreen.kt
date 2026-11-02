@@ -64,6 +64,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Spa
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.SupportAgent
+import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.filled.Videocam
@@ -165,7 +166,8 @@ enum class MainTab(val titleAr: String, val tag: String) {
     REELS("الريلز", "tab_reels"),
     CHAT("الدردشة", "tab_chat"),
     WALLET("شراء رصيد", "tab_wallet"),
-    BOOKINGS("الحجوزات", "tab_bookings"),
+    BOOKINGS("حجوزاتي", "tab_bookings"),
+    MARKETPLACE("الحجز", "tab_marketplace"),
     FAVORITES("المفضلة", "tab_favorites"),
     PROFILE("الحساب", "tab_profile"),
     REVIEWS("التقييمات", "tab_reviews"),
@@ -201,6 +203,7 @@ fun MainFeatureScreen(
     userEmail: String? = null,
     adminSessionToken: String? = null,
     isSuperAdmin: Boolean = false,
+    onThemeModeChanged: (Boolean) -> Unit = {},
     onRequestGoogleSignIn: () -> Unit = {},
     onSuperAdminSignOut: () -> Unit = {},
     onSignedOut: () -> Unit
@@ -221,6 +224,7 @@ fun MainFeatureScreen(
 
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    var submittingMarketplaceId by remember { mutableStateOf<String?>(null) }
     val credentialManager = remember { CredentialManager.create(context) }
 
     val selectedCountry by viewModel.selectedCountry.collectAsStateWithLifecycle()
@@ -454,8 +458,8 @@ fun MainFeatureScreen(
     val bottomNavigationTabs = remember {
         listOf(
             MainTab.EXPLORE,
+            MainTab.MARKETPLACE,
             MainTab.REELS,
-            MainTab.WALLET,
             MainTab.CHAT,
             MainTab.PROFILE
         )
@@ -513,13 +517,13 @@ fun MainFeatureScreen(
                         ) {
                             bottomNavigationTabs.forEach { tab ->
                                 val selected = currentTab == tab
-                                val isWalletCenterTab = tab == MainTab.WALLET
+                                val isReelsCenterTab = tab == MainTab.REELS
                                 NavigationBarItem(
                                     selected = selected,
                                     onClick = { currentTab = tab },
                                     modifier = Modifier.testTag(tab.tag),
                                     icon = {
-                                        if (isWalletCenterTab) {
+                                        if (isReelsCenterTab) {
                                             Box(
                                                 modifier = Modifier
                                                     .size(36.dp)
@@ -528,8 +532,8 @@ fun MainFeatureScreen(
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 Icon(
-                                                    imageVector = Icons.Default.AccountBalanceWallet,
-                                                    contentDescription = "شراء رصيد",
+                                                    imageVector = Icons.Default.PlayCircleFilled,
+                                                    contentDescription = "مشاهدة الريلز",
                                                     tint = Color.White,
                                                     modifier = Modifier.size(18.dp)
                                                 )
@@ -538,6 +542,7 @@ fun MainFeatureScreen(
                                             Icon(
                                                 imageVector = when (tab) {
                                                     MainTab.EXPLORE -> Icons.Default.Home
+                                                    MainTab.MARKETPLACE -> Icons.Default.Storefront
                                                     MainTab.REELS -> Icons.Default.PlayCircleFilled
                                                     MainTab.CHAT -> Icons.Default.Chat
                                                     MainTab.BOOKINGS -> Icons.Default.CalendarMonth
@@ -554,7 +559,7 @@ fun MainFeatureScreen(
                                     },
                                     label = {
                                         Text(
-                                            text = if (isWalletCenterTab) "المحفظة" else tab.titleAr,
+                                            text = if (isReelsCenterTab) "المحفظة" else tab.titleAr,
                                             fontSize = 10.sp,
                                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                                             maxLines = 1,
@@ -564,7 +569,7 @@ fun MainFeatureScreen(
                                     colors = NavigationBarItemDefaults.colors(
                                         selectedIconColor = VioletBlueVip,
                                         selectedTextColor = VioletBlueVip,
-                                        indicatorColor = if (isWalletCenterTab) Color.Transparent else VioletBlueVip.copy(alpha = 0.14f),
+                                        indicatorColor = if (isReelsCenterTab) Color.Transparent else VioletBlueVip.copy(alpha = 0.14f),
                                         unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                         unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -597,6 +602,7 @@ fun MainFeatureScreen(
                                         Icon(
                                             imageVector = when (tab) {
                                                 MainTab.EXPLORE -> Icons.Default.Home
+                                                    MainTab.MARKETPLACE -> Icons.Default.Storefront
                                                 MainTab.REELS -> Icons.Default.PlayCircleFilled
                                                 MainTab.CHAT -> Icons.Default.Chat
                                                 MainTab.BOOKINGS -> Icons.Default.CalendarMonth
@@ -716,7 +722,7 @@ fun MainFeatureScreen(
                                     favoriteIds = favoriteIds,
                                     isSoftRoseLightTheme = isSoftRoseLightTheme,
                                     isSuperAdmin = isSuperAdmin,
-                                    onToggleThemeMode = viewModel::toggleThemeMode,
+                                    onToggleThemeMode = { viewModel.toggleThemeMode(); onThemeModeChanged(!isSoftRoseLightTheme) },
                                     onOpenLoginScreen = onRequestGoogleSignIn,
                                     onOpenWalletTab = { currentTab = MainTab.WALLET },
                                     onOpenChatTab = { currentTab = MainTab.CHAT },
@@ -831,6 +837,36 @@ fun MainFeatureScreen(
                                     onShowMessage = viewModel::showInfoMessage
                                 )
 
+                                MainTab.MARKETPLACE -> BookingMarketplaceScreen(
+                                    services = publishedServicesList,
+                                    loading = publishedServicesState is UiState.Loading,
+                                    error = (publishedServicesState as? UiState.Error)?.message,
+                                    submittingId = submittingMarketplaceId,
+                                    onRequestBooking = { service ->
+                                        if (Firebase.auth.currentUser == null) {
+                                            viewModel.showInfoMessage("يجب تسجيل الدخول بحساب متصل لطلب خدمة.")
+                                            onRequestGoogleSignIn()
+                                        } else {
+                                            coroutineScope.launch {
+                                                submittingMarketplaceId = service.id
+                                                try {
+                                                    val db = FirebaseFirestore.getInstance(context.getString(R.string.firestore_database_id))
+                                                    submitMarketplaceRequest(db, service)
+                                                        .onSuccess {
+                                                            viewModel.showInfoMessage("تم إرسال طلب الحجز للإدارة. لا يوجد خصم أو تأكيد دفع.")
+                                                        }
+                                                        .onFailure {
+                                                            viewModel.showInfoMessage("تعذر إرسال الطلب: ${it.localizedMessage}")
+                                                        }
+                                                } finally {
+                                                    submittingMarketplaceId = null
+                                                }
+                                            }
+                                        }
+                                    },
+                                    onViewService = { service -> helperOpenPublishedMediaViewer(service, false) }
+                                )
+
                                 MainTab.CHAT -> ChatScreen(
                                     userProfile = userProfile,
                                     walletBalanceUsd = walletBalanceUsd,
@@ -871,7 +907,7 @@ fun MainFeatureScreen(
                                     favoritesCount = favoriteIds.size,
                                     blockedUsers = blockedUsersList,
                                     isSoftRoseLightTheme = isSoftRoseLightTheme,
-                                    onToggleThemeMode = viewModel::toggleThemeMode,
+                                    onToggleThemeMode = { viewModel.toggleThemeMode(); onThemeModeChanged(!isSoftRoseLightTheme) },
                                     onUpdateProfile = viewModel::updateUserProfile,
                                     onUpdateUsername = viewModel::updateUsername,
                                     onSelectAvatarFrame = viewModel::selectAvatarFrame,
@@ -1021,7 +1057,11 @@ fun MainFeatureScreen(
                                     onExploreClick = { currentTab = MainTab.EXPLORE }
                                 )
 
-                                MainTab.ADMIN -> AdminManagementScreen(
+                                MainTab.ADMIN -> {
+                                    Column(modifier = Modifier.fillMaxSize()) {
+                                        AdminModerationInbox()
+                                        Box(modifier = Modifier.weight(1f)) {
+                                            AdminManagementScreen(
                                     adminSessionToken = adminSessionToken,
                                     publishedServicesState = publishedServicesState,
                                     catalogVenues = visibleVenues,
@@ -1032,7 +1072,7 @@ fun MainFeatureScreen(
                                     blockedUsersState = blockedUsersState,
                                     isSoftRoseLightTheme = isSoftRoseLightTheme,
                                     isSubmitting = isSubmitting,
-                                    onToggleThemeMode = viewModel::toggleThemeMode,
+                                    onToggleThemeMode = { viewModel.toggleThemeMode(); onThemeModeChanged(!isSoftRoseLightTheme) },
                                     onPublishService = { title, city, country, cat, price, desc, imgUri, vidUrl ->
                                         val mediaType = if (vidUrl.isNotBlank()) "both" else "image"
                                         viewModel.publishNewService(
@@ -1087,6 +1127,9 @@ fun MainFeatureScreen(
                                         currentTab = MainTab.EXPLORE
                                     }
                                 )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
