@@ -712,7 +712,7 @@ fun MainFeatureScreen(
                                     sortOption = sortOption,
                                     cities = filteredCities,
                                     venues = visibleVenues,
-                                    publishedServices = publishedServicesList,
+                                    publishedServices = publishedServicesList.filter { it.authorId == viewModel.currentUserId },
                                     favoriteIds = favoriteIds,
                                     isSoftRoseLightTheme = isSoftRoseLightTheme,
                                     isSuperAdmin = isSuperAdmin,
