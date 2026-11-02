@@ -54,6 +54,13 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -101,6 +108,7 @@ data class ReelItemUiModel(
     val reviewsCount: Int,
     val baseLikes: Int,
     val imageUrl: String,
+    val videoUrl: String = "",
     val audioTrackTitle: String,
     val durationLabel: String,
     val badges: List<String>,
@@ -139,52 +147,24 @@ fun ReelsScreen(
     val likedReelIds = remember { mutableStateMapOf<String, Boolean>() }
     val customCommentsByReel = remember { mutableStateMapOf<String, List<String>>() }
 
-    val allReels = remember(venues, publishedServices) {
-        val pubReels = publishedServices.mapIndexed { idx, pub ->
+    // Only real, remotely published playable video URLs become reels.
+    val allReels = remember(publishedServices) {
+        publishedServices.filter {
+            it.status == "active" && it.videoUrl.startsWith("https://") &&
+                (it.mediaType == "video" || it.mediaType == "both")
+        }.map { pub ->
             ReelItemUiModel(
-                id = "reel_pub_${pub.id}",
-                title = pub.title,
-                subtitle = pub.cityName,
-                cityName = pub.cityName,
-                country = pub.country,
-                category = pub.category,
-                description = pub.description,
-                priceUsd = pub.priceUsd.toInt(),
-                rating = 4.9,
-                reviewsCount = 140 + (idx * 27),
-                baseLikes = 620 + (idx * 115),
-                imageUrl = pub.imageUrl,
-                audioTrackTitle = pub.cityName,
-                durationLabel = "00:45",
-                badges = listOf("VIP", pub.category),
-                accentHex = 0xFF0D9488L,
-                secondaryHex = 0xFF09111EL,
-                sourcePublished = pub
+                id = "reel_pub_${pub.id}", title = pub.title,
+                subtitle = pub.cityName, cityName = pub.cityName,
+                country = pub.country, category = pub.category,
+                description = pub.description, priceUsd = pub.priceUsd.toInt(),
+                rating = 0.0, reviewsCount = 0, baseLikes = 0,
+                imageUrl = pub.imageUrl, videoUrl = pub.videoUrl,
+                audioTrackTitle = "", durationLabel = "",
+                badges = emptyList(), accentHex = 0xFF0D9488L,
+                secondaryHex = 0xFF09111EL, sourcePublished = pub
             )
         }
-        val venueReels = venues.mapIndexed { idx, venue ->
-            ReelItemUiModel(
-                id = "reel_venue_${venue.id}",
-                title = venue.name,
-                subtitle = venue.cityName,
-                cityName = venue.cityName,
-                country = venue.country,
-                category = venue.category,
-                description = venue.shortDescription,
-                priceUsd = venue.startingPriceUsd,
-                rating = venue.ratingAverage,
-                reviewsCount = venue.reviewCount,
-                baseLikes = 480 + (idx * 95),
-                imageUrl = venue.visualPresetKey,
-                audioTrackTitle = venue.cityName,
-                durationLabel = venue.showcaseDuration,
-                badges = venue.badges.take(2),
-                accentHex = venue.accentHex,
-                secondaryHex = venue.secondaryHex,
-                sourceVenue = venue
-            )
-        }
-        pubReels + venueReels
     }
 
     val initialPageIndex = remember(allReels, initialReelId) {
@@ -245,6 +225,7 @@ fun ReelsScreen(
                     reel = reel,
                     reelIndex = pageIndex + 1,
                     isPlaying = isPlaying && pagerState.currentPage == pageIndex,
+                    isMuted = isMuted,
                     isLiked = isLiked,
                     extraCommentsCount = extraCommentsCount,
                     isSuperAdmin = isSuperAdmin,
@@ -253,7 +234,7 @@ fun ReelsScreen(
                     onToggleLike = {
                         likedReelIds[reel.id] = !(likedReelIds[reel.id] ?: false)
                     },
-                    onOpenComments = { activeCommentReel = reel },
+                    onOpenComments = { onShowMessage("التعليقات ستتاح عند ربط خدمة التفاعل بالخادم.") },
                     onShareReel = {
                         shareOrCopyReelLink(
                             context = context,
@@ -328,88 +309,15 @@ fun ReelsScreen(
         }
     }
 
-    // Compact Comments Dialog
-    activeCommentReel?.let { reel ->
-        var newCommentText by remember { mutableStateOf("") }
-        val customList = customCommentsByReel[reel.id] ?: emptyList()
-
-        AlertDialog(
-            onDismissRequest = { activeCommentReel = null },
-            containerColor = RoyalNavyCard,
-            title = {
-                Text(
-                    text = "التعليقات (${reel.reviewsCount + customList.size})",
-                    fontSize = 15.sp,
-                    color = SoftWhiteText,
-                    fontWeight = FontWeight.Bold
-                )
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val sampleComments = listOf(
-                        "أجواء راقية جداً في ${reel.cityName} ✨",
-                        "تجربة مميزة وحجز سريع."
-                    )
-                    (customList + sampleComments).take(4).forEach { comment ->
-                        Surface(
-                            color = RoyalNavyBackground.copy(alpha = 0.6f),
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                text = comment,
-                                fontSize = 12.sp,
-                                color = SoftWhiteText,
-                                modifier = Modifier.padding(10.dp)
-                            )
-                        }
-                    }
-
-                    OutlinedTextField(
-                        value = newCommentText,
-                        onValueChange = { newCommentText = it },
-                        placeholder = { Text("أضف تعليقاً...", fontSize = 12.sp) },
-                        singleLine = true,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("reel_comment_input")
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        if (newCommentText.isNotBlank()) {
-                            customCommentsByReel[reel.id] = listOf(newCommentText.trim()) + customList
-                            newCommentText = ""
-                            onShowMessage("تم إضافة تعليقك")
-                        } else {
-                            activeCommentReel = null
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = DeepTealPrimary,
-                        contentColor = SoftWhiteText
-                    ),
-                    shape = RoundedCornerShape(50)
-                ) {
-                    Text("إرسال", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { activeCommentReel = null }) {
-                    Text("إغلاق", fontSize = 12.sp, color = SlateSecondaryText)
-                }
-            }
-        )
-    }
 }
 
 @Composable
+private fun SingleReelFullPage(@Composable
 private fun SingleReelFullPage(
     reel: ReelItemUiModel,
     reelIndex: Int,
     isPlaying: Boolean,
+    isMuted: Boolean,
     isLiked: Boolean,
     extraCommentsCount: Int,
     isSuperAdmin: Boolean,
@@ -423,21 +331,7 @@ private fun SingleReelFullPage(
     onEditPrice: () -> Unit
 ) {
     var showHeartBurst by remember { mutableStateOf(false) }
-    var progress by remember { mutableFloatStateOf(0.2f) }
-
-    LaunchedEffect(showHeartBurst) {
-        if (showHeartBurst) {
-            delay(750)
-            showHeartBurst = false
-        }
-    }
-
-    LaunchedEffect(isPlaying) {
-        while (isPlaying) {
-            delay(300L)
-            progress = if (progress >= 0.98f) 0.08f else progress + 0.025f
-        }
-    }
+    var progress by remember(reel.id) { mutableFloatStateOf(0f) }
 
     Box(
         modifier = Modifier
@@ -452,13 +346,12 @@ private fun SingleReelFullPage(
                 )
             }
     ) {
-        // 1. Full-Screen Video / Visual Media Canvas
-        SmartServiceMediaView(
-            imageUrl = reel.imageUrl,
-            accentHex = reel.accentHex,
-            secondaryHex = reel.secondaryHex,
-            category = reel.category,
-            modifier = Modifier.fillMaxSize()
+        // Actual media playback, with real seek progress and lifecycle release.
+        ReelVideoPlayer(
+            url = reel.videoUrl,
+            isPlaying = isPlaying,
+            isMuted = isMuted,
+            onProgress = { progress = it }
         )
 
         // 2. Subtle Bottom Gradient Scrim (Clean, light, unobtrusive)
@@ -559,7 +452,7 @@ private fun SingleReelFullPage(
         }
 
         // 5. Minimal Bottom Creator Identity Only (65% less text — No bulky paragraphs or multi-buttons)
-        val creatorLevel = 12 + ((reelIndex * 3) % 18)
+        val creatorLevel = 1 // No fabricated LEVEL is shown without a verified profile.
         val creatorDisplayName = reel.sourceVenue?.providerDisplayName?.ifBlank { reel.title }
             ?: reel.title
 
@@ -609,21 +502,6 @@ private fun SingleReelFullPage(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(5.dp)
                         ) {
-                            // Golden LEVEL badge instead of cluttered icons
-                            Surface(
-                                color = MutedLuxuryGold.copy(alpha = 0.18f),
-                                shape = RoundedCornerShape(50),
-                                border = BorderStroke(0.7.dp, MutedLuxuryGold.copy(alpha = 0.7f))
-                            ) {
-                                Text(
-                                    text = "LV.$creatorLevel",
-                                    fontSize = 9.sp,
-                                    color = MutedLuxuryGold,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
-                                )
-                            }
-
                             Text(
                                 text = creatorDisplayName,
                                 fontSize = 13.sp,
@@ -649,7 +527,7 @@ private fun SingleReelFullPage(
                         level = creatorLevel,
                         avatarSize = 34.dp,
                         showLevelBadge = false,
-                        isOnline = true
+                        isOnline = false
                     )
                 }
             }
@@ -658,7 +536,7 @@ private fun SingleReelFullPage(
 
             // Hairline Progress Bar
             LinearProgressIndicator(
-                progress = { if (isPlaying) progress else 0.45f },
+                progress = { progress },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(1.5.dp)
@@ -668,6 +546,49 @@ private fun SingleReelFullPage(
             )
         }
     }
+}
+
+@Composable
+private fun ReelVideoPlayer(
+    url: String,
+    isPlaying: Boolean,
+    isMuted: Boolean,
+    onProgress: (Float) -> Unit
+) {
+    val context = LocalContext.current
+    val player = remember(url) {
+        ExoPlayer.Builder(context).build().apply {
+            repeatMode = Player.REPEAT_MODE_ONE
+            setMediaItem(MediaItem.fromUri(url))
+            prepare()
+        }
+    }
+    DisposableEffect(player) {
+        onDispose {
+            player.pause()
+            player.release()
+        }
+    }
+    LaunchedEffect(player, isPlaying, isMuted) {
+        player.playWhenReady = isPlaying
+        player.volume = if (isMuted) 0f else 1f
+        while (isPlaying) {
+            val duration = player.duration
+            onProgress(if (duration > 0L) (player.currentPosition.toFloat() / duration).coerceIn(0f, 1f) else 0f)
+            delay(200L)
+        }
+    }
+    AndroidView(
+        modifier = Modifier.fillMaxSize(),
+        factory = { ctx ->
+            PlayerView(ctx).apply {
+                useController = false
+                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                this.player = player
+            }
+        },
+        update = { it.player = player }
+    )
 }
 
 @Composable
@@ -766,7 +687,7 @@ fun HomeReelsPreviewStrip(
             contentPadding = PaddingValues(horizontal = 18.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            items(publishedServices.take(4), key = { "home_reel_pub_${it.id}" }) { pub ->
+            items(publishedServices.filter { it.videoUrl.startsWith("https://") && (it.mediaType == "video" || it.mediaType == "both") }.take(6), key = { "home_reel_pub_${it.id}" }) { pub ->
                 HomeReelStoryCard(
                     title = pub.title,
                     imageUrl = pub.imageUrl,
@@ -774,16 +695,6 @@ fun HomeReelsPreviewStrip(
                     accentHex = 0xFF0D9488L,
                     secondaryHex = 0xFF09111EL,
                     onClick = { onOpenReelItem(pub.id) }
-                )
-            }
-            items(venues.take(6), key = { "home_reel_venue_${it.id}" }) { venue ->
-                HomeReelStoryCard(
-                    title = venue.name,
-                    imageUrl = venue.visualPresetKey,
-                    category = venue.category,
-                    accentHex = venue.accentHex,
-                    secondaryHex = venue.secondaryHex,
-                    onClick = { onOpenReelItem(venue.id) }
                 )
             }
         }
@@ -853,7 +764,7 @@ private fun shareOrCopyReelLink(
 ) {
     val shareText = buildString {
         append("${reel.title} (${reel.cityName})\n")
-        append(SHARED_WEB_APP_URL)
+        append(reel.videoUrl)
     }
     runCatching {
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
