@@ -17,5 +17,11 @@
     "ui": {
       "enabled": false
     }
+  },
+  "functions": {
+    "source": "functions"
+  },
+  "storage": {
+    "rules": "storage.rules"
   }
 }
