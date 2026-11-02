@@ -143,6 +143,7 @@ test("Account: client cannot mint wallet credit or increase level", async () => 
   await assertSucceeds(account.set(validUserAccountPayload(ALICE_UID)));
   await assertFails(account.update({ walletBalanceUsd: 999, updatedAt: new Date() }));
   await assertFails(account.update({ level: 50, xpPoints: 9850, updatedAt: new Date() }));
+  await assertFails(account.update({ selectedFrameId: "obsidian_elite", updatedAt: new Date() }));
   await assertFails(db.collection("users").doc(BOB_UID).set(validUserAccountPayload(BOB_UID)));
 });
 
