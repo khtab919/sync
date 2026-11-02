@@ -1,5 +1,7 @@
 package com.example.ui.viewmodel
 
+import com.example.ui.theme.LayaliAppearance
+
 import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
@@ -90,7 +92,7 @@ class LayaliViewModel(
     val isSubmitting: StateFlow<Boolean> = _isSubmitting.asStateFlow()
 
     // Default to Royal Dark Sapphire & Sovereign Gold theme
-    private val _isSoftRoseLightTheme = MutableStateFlow(false)
+    private val _isSoftRoseLightTheme = MutableStateFlow(appContext?.let { LayaliAppearance.isLightTheme(it) } ?: false)
     val isSoftRoseLightTheme: StateFlow<Boolean> = _isSoftRoseLightTheme.asStateFlow()
 
     private val _userProfile = MutableStateFlow(
@@ -738,6 +740,7 @@ class LayaliViewModel(
 
     fun toggleThemeMode() {
         _isSoftRoseLightTheme.value = !_isSoftRoseLightTheme.value
+        appContext?.let { LayaliAppearance.setLightTheme(it, _isSoftRoseLightTheme.value) }
     }
 
     fun updateUserProfile(
