@@ -156,6 +156,9 @@ class LayaliViewModel(
 
     private val _chatMessagesByMember = MutableStateFlow<Map<String, List<ChatMessageItem>>>(emptyMap())
     val chatMessagesByMember: StateFlow<Map<String, List<ChatMessageItem>>> = _chatMessagesByMember.asStateFlow()
+    private val chatThreadByMember = mutableMapOf<String, String>()
+    private val chatQuotesRequested = mutableSetOf<String>()
+
 
     // Admin custom price, photo, and deletion overrides for catalog venues
     private val _adminSessionToken = MutableStateFlow<String?>(null)
@@ -245,11 +248,43 @@ class LayaliViewModel(
                             }
                         }
                     }
+                    .onEach { list -> syncRealChatOffers(list) }
                     .catch { emit(emptyList()) }
             )
         } else {
             emit(emptyList())
         }
+    }
+
+    private fun syncRealChatOffers(offers: List<PublishedService>) {
+        if (!hasFirebaseAuthForCurrentUser()) return
+        offers.filter { it.authorId.isNotBlank() && it.authorId != currentUserId }
+            .distinctBy { it.authorId }.forEach { offer ->
+                if (!chatQuotesRequested.add(offer.authorId)) return@forEach
+                viewModelScope.launch {
+                    repository.fetchCreatorChatQuote(offer.authorId)
+                        .onSuccess { quote ->
+                            val member = ChatMemberProfile(
+                                id = offer.authorId,
+                                displayName = quote.displayName,
+                                username = quote.username,
+                                cityName = offer.cityName,
+                                country = offer.country,
+                                category = offer.category,
+                                bio = offer.description,
+                                level = 1,
+                                frameId = "emerald_crown",
+                                chatPriceUsd = quote.priceUsd,
+                                isOnline = false,
+                                avatarPreset = offer.imageUrl
+                            )
+                            _chatMembers.value = (_chatMembers.value.filterNot { it.id == member.id } + member)
+                        }.onFailure { error ->
+                            chatQuotesRequested.remove(offer.authorId)
+                            Log.w(TAG, "Creator chat quote unavailable: ${error.message}")
+                        }
+                }
+            }
     }
 
     private val remoteBlockedUsersFlow: Flow<List<BlockedUser>> = flow {
@@ -727,47 +762,58 @@ class LayaliViewModel(
     // ========================================================================
 
     fun selectActiveChatMember(memberId: String?) {
-        _activeChatMemberId.value = memberId
+        if (memberId == null) {
+            _activeChatMemberId.value = null
+            return
+        }
+        val member = _chatMembers.value.find { it.id == memberId } ?: return
+        if (memberId in _unlockedChatMemberIds.value) {
+            _activeChatMemberId.value = memberId
+        } else if (member.chatPriceUsd == 0) {
+            unlockChatWithWallet(member)
+        } else {
+            _snackbarMessage.value = "يلزم فتح الدردشة عبر الخادم أولاً."
+        }
     }
 
     fun openOrRequestChatWithVenueProvider(venue: Venue, onNavigateToChatTab: () -> Unit) {
-        val existing = _chatMembers.value.find {
-            it.cityName == venue.cityName || it.username == venue.providerUsername
-        }
-        val targetMember = existing ?: ChatMemberProfile(
-            id = "chat_venue_${venue.id}",
-            displayName = venue.name,
-            username = venue.providerUsername,
-            cityName = venue.cityName,
-            country = venue.country,
-            category = venue.category,
-            bio = venue.shortDescription,
-            level = venue.providerLevel,
-            frameId = venue.providerFrameId,
-            chatPriceUsd = venue.providerChatPriceUsd,
-            isOnline = venue.isOnlineNow,
-            avatarPreset = venue.visualPresetKey
-        ).also { created ->
-            _chatMembers.value = listOf(created) + _chatMembers.value
-        }
-
-        if (_unlockedChatMemberIds.value.contains(targetMember.id)) {
-            _activeChatMemberId.value = targetMember.id
-        } else {
-            _activeChatMemberId.value = null
-        }
+        // The creator is resolved from a real published offer, never by matching city.
+        _activeChatMemberId.value = _chatMembers.value
+            .firstOrNull { it.displayName == venue.providerDisplayName && it.id in _unlockedChatMemberIds.value }?.id
         onNavigateToChatTab()
     }
 
     fun unlockChatWithWallet(member: ChatMemberProfile) {
-        // Fail closed: local balance is not a payment authorization.
-        // Never debit the in-memory wallet or unlock a paid conversation until
-        // a trusted backend transaction confirms settlement and entitlement.
-        if (member.chatPriceUsd <= 0) {
-            _unlockedChatMemberIds.value = _unlockedChatMemberIds.value + member.id
-            _activeChatMemberId.value = member.id
-        } else {
-            _snackbarMessage.value = "الدردشة بسعر $${member.chatPriceUsd}. الدفع بالمحفظة يتطلب تحقق الخادم قبل فتح الرسائل."
+        if (!hasFirebaseAuthForCurrentUser()) {
+            _snackbarMessage.value = "يلزم تسجيل الدخول قبل فتح المحادثة."
+            return
+        }
+        viewModelScope.launch {
+            _isSubmitting.value = true
+            try {
+                repository.unlockServerPaidChat(member.id, member.chatPriceUsd)
+                    .onSuccess { threadId ->
+                        chatThreadByMember[member.id] = threadId
+                        _unlockedChatMemberIds.value = _unlockedChatMemberIds.value + member.id
+                        _activeChatMemberId.value = member.id
+                        _snackbarMessage.value = "تم فتح المحادثة بواسطة الخادم."
+                        viewModelScope.launch {
+                            repository.observeVerifiedChatMessages(threadId, member.id)
+                                .catch { error ->
+                                    Log.e(TAG, "Verified chat stream error", error)
+                                    emit(emptyList())
+                                }
+                                .collect { messages ->
+                                    _chatMessagesByMember.value = _chatMessagesByMember.value +
+                                        (member.id to messages)
+                                }
+                        }
+                    }.onFailure { error ->
+                        _snackbarMessage.value = "لم تُفتح الدردشة: ${error.localizedMessage ?: "رفض الخادم الطلب"}"
+                    }
+            } finally {
+                _isSubmitting.value = false
+            }
         }
     }
 
@@ -777,12 +823,23 @@ class LayaliViewModel(
         receiptUri: String,
         txRef: String
     ) {
-        _snackbarMessage.value = "فتح الدردشة مدفوعة يتطلب رفع الإيصال والتحقق منه عبر الخادم؛ لم يتم إرسال هذا الإيصال."
+        _snackbarMessage.value = "دفع المحادثة بإيصال خارجي غير مفعل حتى اكتمال مراجعة المدفوعات. استخدم محفظة موثقة."
     }
 
     fun sendChatMessage(memberId: String, text: String) {
-        // No local-only message is represented as delivered to a real recipient.
-        _snackbarMessage.value = "إرسال المحادثات متوقف حتى ربط حساب المستلم بخدمة الرسائل الموثقة."
+        val threadId = chatThreadByMember[memberId]
+        if (!hasFirebaseAuthForCurrentUser() || threadId == null || memberId !in _unlockedChatMemberIds.value) {
+            _snackbarMessage.value = "هذه المحادثة غير مفتوحة من الخادم."
+            return
+        }
+        val message = text.trim().take(2000)
+        if (message.isBlank()) return
+        viewModelScope.launch {
+            repository.sendServerChatMessage(threadId, message)
+                .onFailure { error ->
+                    _snackbarMessage.value = "لم تُرسل الرسالة: ${error.localizedMessage ?: "تعذر الوصول للخادم"}"
+                }
+        }
     }
 
     fun updateVenueStartingPrice(venueId: String, newPriceUsd: Int) {
