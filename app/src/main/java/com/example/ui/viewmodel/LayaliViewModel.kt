@@ -901,45 +901,40 @@ class LayaliViewModel(
         onPublished: (PublishedService) -> Unit = {}
     ) {
         if (!enforceSuperAdminMiddleware()) return
-        val localId = "local_pub_${System.currentTimeMillis()}"
-        val publishedItem = PublishedService(
-            id = localId,
-            authorId = currentUserId,
-            title = title,
-            cityName = cityName,
-            country = country,
-            category = category,
-            description = description,
-            priceUsd = priceUsd.toLong(),
-            imageUrl = imageUrl.ifBlank { "brand_dark_showcase" },
-            videoUrl = videoUrl,
-            mediaType = mediaType,
-            status = "active",
-            createdAt = Timestamp.now()
-        )
-        seenPublishedIds.add(localId)
-        _localPublishedServices.value = listOf(publishedItem) + _localPublishedServices.value
-        _snackbarMessage.value = "تم نشر الخدمة وإرسال إشعار أندرويد لجميع المستخدمين!"
-        onPublished(publishedItem)
-
-        if (hasFirebaseAuth()) {
-            viewModelScope.launch {
-                val result = repository.publishService(
+        if (!hasFirebaseAuthForCurrentUser()) {
+            _snackbarMessage.value = "يلزم حساب Firebase فعلي لنشر الخدمة."
+            return
+        }
+        viewModelScope.launch {
+            _isSubmitting.value = true
+            try {
+                repository.publishService(
                     title = title,
                     cityName = cityName,
                     country = country,
                     category = category,
                     description = description,
                     priceUsd = priceUsd,
-                    imageUrl = imageUrl.ifBlank { "brand_dark_showcase" },
+                    imageUrl = imageUrl,
                     videoUrl = videoUrl,
                     mediaType = mediaType
-                )
-                result.onSuccess { remoteId ->
+                ).onSuccess { remoteId ->
                     seenPublishedIds.add(remoteId)
-                }.onFailure { err ->
-                    Log.d(TAG, "Saved locally; remote sync skipped or failed: ${err.message}")
+                    _snackbarMessage.value = "تم نشر الخدمة في قاعدة البيانات بنجاح."
+                    onPublished(
+                        PublishedService(
+                            id = remoteId, authorId = currentUserId, title = title,
+                            cityName = cityName, country = country, category = category,
+                            description = description, priceUsd = priceUsd.toLong(),
+                            imageUrl = imageUrl, videoUrl = videoUrl,
+                            mediaType = mediaType, status = "active"
+                        )
+                    )
+                }.onFailure { error ->
+                    _snackbarMessage.value = "تعذر نشر الخدمة: ${error.localizedMessage ?: "خطأ بالخادم"}"
                 }
+            } finally {
+                _isSubmitting.value = false
             }
         }
     }
