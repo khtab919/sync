@@ -1,0 +1,17 @@
+{
+  "name": "layali-trusted-backend",
+  "private": true,
+  "version": "1.0.0",
+  "engines": {
+    "node": "22"
+  },
+  "main": "index.js",
+  "scripts": {
+    "check": "node --check index.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.5.0",
+    "firebase-functions": "^6.4.0"
+  }
+}
