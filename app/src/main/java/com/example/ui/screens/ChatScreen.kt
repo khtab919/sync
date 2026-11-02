@@ -326,7 +326,7 @@ fun ChatScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable {
-                        if (member.isUnlocked || member.chatPriceUsd <= 0) {
+                        if (member.isUnlocked || member.id in unlockedMemberIds || member.chatPriceUsd <= 0) {
                             onSelectConversationMember(member.id)
                         } else {
                             memberPendingUnlock = member
@@ -339,7 +339,7 @@ fun ChatScreen(
                 ),
                 border = BorderStroke(
                     width = 1.dp,
-                    color = if (member.isUnlocked) EmeraldVerified.copy(alpha = 0.6f) else MaterialTheme.colorScheme.outline
+                    color = if (member.isUnlocked || member.id in unlockedMemberIds) EmeraldVerified.copy(alpha = 0.6f) else MaterialTheme.colorScheme.outline
                 )
             ) {
                 Column(
@@ -378,7 +378,7 @@ fun ChatScreen(
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = if (member.isUnlocked) {
+                                    text = if (member.isUnlocked || member.id in unlockedMemberIds) {
                                         "مفتوحة ✓"
                                     } else {
                                         "$${member.chatPriceUsd} / دردشة"
@@ -449,15 +449,15 @@ fun ChatScreen(
                     )
 
                     LuxuryGradientButton(
-                        text = if (member.isUnlocked) {
+                        text = if (member.isUnlocked || member.id in unlockedMemberIds) {
                             "متابعة الدردشة المباشرة مع ${member.displayName}"
                         } else {
                             "فتح الدردشة الخاصة • $${member.chatPriceUsd}"
                         },
                         icon = Icons.Default.Chat,
-                        isEmeraldStyle = member.isUnlocked,
+                        isEmeraldStyle = member.isUnlocked || member.id in unlockedMemberIds,
                         onClick = {
-                            if (member.isUnlocked || member.chatPriceUsd <= 0) {
+                            if (member.isUnlocked || member.id in unlockedMemberIds || member.chatPriceUsd <= 0) {
                                 onSelectConversationMember(member.id)
                             } else {
                                 memberPendingUnlock = member
@@ -768,9 +768,9 @@ fun ChatScreen(
                 ) {
                     Text(
                         text = if (selectedMethodKey == "WALLET") {
-                            "خصم $${targetMember.chatPriceUsd} وفتح الدردشة"
+                            "طلب فتح الدردشة بعد تحقق الخادم • ${targetMember.chatPriceUsd}"
                         } else {
-                            "إرسال الإيصال وفتح الدردشة"
+                            "طلب مراجعة الإيصال (لن تُفتح الدردشة قبل التحقق)"
                         },
                         fontWeight = FontWeight.ExtraBold
                     )
