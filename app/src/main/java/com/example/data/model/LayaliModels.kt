@@ -319,3 +319,4 @@ data class Venue(
     val showcaseVideoTitle: String = "",
     val showcaseDuration: String = "",
     val galleryHighlights: List<String> = emptyList()
+)
