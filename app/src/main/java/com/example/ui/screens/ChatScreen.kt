@@ -320,6 +320,32 @@ fun ChatScreen(
             }
         }
 
+        // Do not render invented members as real online accounts.
+        if (filteredMembers.isEmpty()) {
+            item(key = "no_real_chat_members") {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 18.dp, vertical = 32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Chat,
+                        contentDescription = null,
+                        modifier = Modifier.size(36.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text("لا توجد محادثات متاحة", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "لن نعرض حسابات أو رسائل تجريبية على أنها حقيقية.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
         // 3. Members & Creators Chat Cards
         items(filteredMembers, key = { it.id }) { member ->
             Card(
