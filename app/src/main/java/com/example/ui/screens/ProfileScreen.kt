@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -114,7 +115,8 @@ private enum class ProfileMediaTab(
     REELS("Reels", Icons.Default.PlayArrow),
     VIDEOS("Videos", Icons.Default.Videocam),
     PHOTOS("Photos", Icons.Default.GridOn),
-    EXCLUSIVE("Exclusive", Icons.Default.AutoAwesome)
+    EXCLUSIVE("Exclusive", Icons.Default.AutoAwesome),
+    POSTS("منشورات", Icons.Default.Lock)
 }
 
 private data class ProfileMediaItem(
@@ -170,7 +172,8 @@ fun ProfileScreen(
     onTriggerBroadcastNotification: () -> Unit,
     onOpenGoogleSignIn: () -> Unit,
     onSignOut: () -> Unit,
-    onPurchaseContentWithWallet: (amountUsd: Int, itemTitle: String) -> Boolean = { _, _ -> true },
+    onPurchaseContentWithWallet: (amountUsd: Int, itemTitle: String) -> Boolean = { _, _ -> false },
+    onPublishPaidPost: (title: String, preview: String, body: String, priceUsd: Int) -> Unit = { _, _, _, _ -> },
     onShowMessage: (String) -> Unit = {},
     isSuperAdmin: Boolean = false,
     savedAccounts: List<RegisteredAccountEntity> = emptyList(),
@@ -182,6 +185,7 @@ fun ProfileScreen(
 
     var showEditProfileDialog by remember { mutableStateOf(false) }
     var showSettingsModal by remember { mutableStateOf(false) }
+    var showPaidPostDialog by remember { mutableStateOf(false) }
     var showSubscribeVipModal by remember { mutableStateOf(false) }
     var showPasswordAndDbModal by remember { mutableStateOf(false) }
     var selectedLockedItemForPurchase by remember { mutableStateOf<ProfileMediaItem?>(null) }
@@ -222,7 +226,7 @@ fun ProfileScreen(
 
     // Build curated media items across Reels, Videos, Photos, and Exclusive tabs
     val allProfileMedia = remember(publishedServices, userProfile.customPhotos) {
-        val dynamicReels = publishedServices.mapIndexed { idx, pub ->
+        val dynamicReels = publishedServices.filter { it.category != "منشور مدفوع" }.mapIndexed { idx, pub ->
             ProfileMediaItem(
                 id = "pub_reel_${pub.id}",
                 title = pub.title,
@@ -474,6 +478,24 @@ fun ProfileScreen(
             )
         )
 
+        val paidPosts = publishedServices.filter { it.category == "منشور مدفوع" }.map { pub ->
+            ProfileMediaItem(
+                id = "paid_post_${pub.id}",
+                title = pub.title,
+                subtitle = "معاينة • ${pub.priceUsd}",
+                tab = ProfileMediaTab.POSTS,
+                viewsLabel = "خاص",
+                durationLabel = "مقفل",
+                imageUrl = pub.imageUrl,
+                category = pub.category,
+                singlePriceUsd = pub.priceUsd.toInt(),
+                isExclusiveLocked = true,
+                accentHex = 0xFFB9A477L,
+                secondaryHex = 0xFF151A23L,
+                sourcePublished = pub
+            )
+        }
+
         val customPhotos = userProfile.customPhotos.mapIndexed { idx, uriStr ->
             ProfileMediaItem(
                 id = "custom_photo_$idx",
@@ -491,7 +513,7 @@ fun ProfileScreen(
             )
         }
 
-        dynamicReels + customPhotos + defaultItems
+        dynamicReels + paidPosts + customPhotos + defaultItems
     }
 
     val pinnedItems = remember(allProfileMedia, pinnedClipIds.toList()) {
@@ -516,6 +538,10 @@ fun ProfileScreen(
     }
 
     val handleOpenOrUnlockMedia: (ProfileMediaItem) -> Unit = { item ->
+        if (item.tab == ProfileMediaTab.POSTS) {
+            // Never charge a wallet locally or expose private body data.
+            onShowMessage("هذه معاينة لمنشور مدفوع. فتح المحتوى متوقف حتى تفعيل التحقق من الدفع عبر الخادم.")
+        } else {
         val isUnlocked = !item.isExclusiveLocked || isSubscribedVip || unlockedVideoIds.contains(item.id)
         if (isUnlocked) {
             val pub = item.sourcePublished ?: PublishedService(
@@ -533,6 +559,7 @@ fun ProfileScreen(
             onOpenMediaViewer(pub, item.tab != ProfileMediaTab.PHOTOS)
         } else {
             selectedLockedItemForPurchase = item
+        }
         }
     }
 
@@ -1282,20 +1309,18 @@ fun ProfileScreen(
                     .fillMaxWidth()
                     .padding(top = 16.dp)
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    ProfileMediaTab.entries.forEach { tab ->
+                    items(ProfileMediaTab.entries) { tab ->
                         val isSelected = selectedTab == tab
                         val activeColor = if (tab == ProfileMediaTab.EXCLUSIVE) MutedLuxuryGold else DeepTealPrimary
 
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier
-                                .weight(1f)
+                                .width(88.dp)
                                 .clickable { selectedTab = tab }
                                 .padding(vertical = 8.dp)
                                 .testTag("profile_tab_${tab.name.lowercase()}")
@@ -1385,11 +1410,35 @@ fun ProfileScreen(
             }
         }
 
+        if (selectedTab == ProfileMediaTab.POSTS) {
+            item(key = "profile_paid_post_publish") {
+                Surface(
+                    onClick = { showPaidPostDialog = true },
+                    shape = RoundedCornerShape(14.dp),
+                    color = RoyalNavyCard,
+                    border = BorderStroke(1.dp, MutedLuxuryGold.copy(alpha = 0.5f)),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp).testTag("create_paid_post_button")
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, tint = MutedLuxuryGold)
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("إنشاء منشور مدفوع", fontSize = 15.sp, color = SoftWhiteText, fontWeight = FontWeight.Bold)
+                            Text("معاينة عامة ومحتوى خاص بسعر تختارينه", fontSize = 12.sp, color = SlateSecondaryText)
+                        }
+                    }
+                }
+            }
+        }
+
         // ====================================================================
         // 7. TAB CONTENT GRID (3-Column for Reels/Photos, 2-Column for Videos/Exclusive)
         // ====================================================================
         item(key = "profile_tab_grid_${selectedTab.name}") {
-            val columns = if (selectedTab == ProfileMediaTab.VIDEOS || selectedTab == ProfileMediaTab.EXCLUSIVE) 2 else 3
+            val columns = if (selectedTab == ProfileMediaTab.VIDEOS || selectedTab == ProfileMediaTab.EXCLUSIVE || selectedTab == ProfileMediaTab.POSTS) 2 else 3
             val rows = currentTabItems.chunked(columns)
 
             Column(
@@ -1910,6 +1959,81 @@ fun ProfileScreen(
                 TextButton(onClick = { showSubscribeVipModal = false }) {
                     Text("إلغاء", fontSize = 12.sp, color = SlateSecondaryText)
                 }
+            }
+        )
+    }
+
+    if (showPaidPostDialog) {
+        var postTitle by remember { mutableStateOf("") }
+        var postPreview by remember { mutableStateOf("") }
+        var postBody by remember { mutableStateOf("") }
+        var postPrice by remember { mutableStateOf("5") }
+        val parsedPrice = postPrice.toIntOrNull()
+        val canPublish = postTitle.trim().length in 3..150 &&
+            postPreview.trim().length in 10..300 &&
+            postBody.trim().length in 20..5000 &&
+            parsedPrice != null && parsedPrice in 1..1000
+
+        AlertDialog(
+            onDismissRequest = { showPaidPostDialog = false },
+            containerColor = RoyalNavyCard,
+            title = { Text("نشر محتوى مدفوع", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = SoftWhiteText) },
+            text = {
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 460.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    item {
+                        Text("المعاينة متاحة للجميع، أما المحتوى الكامل فيُحفظ بسجل خاص لا يستطيع الزوار قراءته مباشرة.", color = SlateSecondaryText, fontSize = 13.sp)
+                    }
+                    item {
+                        OutlinedTextField(
+                            value = postTitle, onValueChange = { postTitle = it.take(150) },
+                            label = { Text("عنوان المنشور") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().testTag("paid_post_title")
+                        )
+                    }
+                    item {
+                        OutlinedTextField(
+                            value = postPreview, onValueChange = { postPreview = it.take(300) },
+                            label = { Text("المعاينة العامة") }, minLines = 2, maxLines = 4,
+                            modifier = Modifier.fillMaxWidth().testTag("paid_post_preview")
+                        )
+                    }
+                    item {
+                        OutlinedTextField(
+                            value = postBody, onValueChange = { postBody = it.take(5000) },
+                            label = { Text("النص الكامل المدفوع") }, minLines = 4, maxLines = 8,
+                            modifier = Modifier.fillMaxWidth().testTag("paid_post_body")
+                        )
+                    }
+                    item {
+                        OutlinedTextField(
+                            value = postPrice, onValueChange = { postPrice = it.filter(Char::isDigit).take(4) },
+                            label = { Text("السعر بالدولار (1–1000)") }, singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            isError = parsedPrice == null || parsedPrice !in 1..1000,
+                            modifier = Modifier.fillMaxWidth().testTag("paid_post_price")
+                        )
+                    }
+                    item {
+                        Text("تنبيه: تحصيل المبلغ وفتح المحتوى للمشتري لن يُفعّلا قبل ربط تحقق الدفع والصلاحيات في الخادم.", color = MutedLuxuryGold, fontSize = 12.sp)
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    enabled = canPublish,
+                    onClick = {
+                        onPublishPaidPost(postTitle.trim(), postPreview.trim(), postBody.trim(), parsedPrice ?: 5)
+                        showPaidPostDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = DeepTealPrimary)
+                ) { Text("نشر المعاينة", fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPaidPostDialog = false }) { Text("إلغاء") }
             }
         )
     }
