@@ -29,6 +29,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.SupportAgent
 import androidx.compose.material.icons.filled.VerifiedUser
@@ -209,6 +211,9 @@ fun signOut(
 @Composable
 fun AuthScreen(
     onAuthSuccess: () -> Unit,
+    startInCreateMode: Boolean = false,
+    isLightTheme: Boolean = false,
+    onToggleTheme: () -> Unit = {},
     onTraditionalLoginSuccess: (usernameOrEmail: String) -> Unit = { _ -> onAuthSuccess() },
     onSuperAdminLoginSuccess: (adminEmail: String, sessionToken: String) -> Unit = { _, _ -> },
     onDismiss: (() -> Unit)? = null
@@ -219,9 +224,10 @@ fun AuthScreen(
 
     var usernameOrEmail by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
+    var confirmPassword by rememberSaveable { mutableStateOf("") }
     var fullNameInput by rememberSaveable { mutableStateOf("") }
     var isPasswordVisible by rememberSaveable { mutableStateOf(false) }
-    var isCreateAccountMode by rememberSaveable { mutableStateOf(false) }
+    var isCreateAccountMode by rememberSaveable { mutableStateOf(startInCreateMode) }
 
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -260,9 +266,32 @@ fun AuthScreen(
                 .padding(horizontal = 24.dp, vertical = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Modern Creator & VIP Club Brand Header
-            WingedHeartLogo(modifier = Modifier.size(60.dp))
-            Spacer(modifier = Modifier.height(10.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "LAYALI",
+                    letterSpacing = 2.sp,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                IconButton(
+                    onClick = onToggleTheme,
+                    modifier = Modifier.testTag("auth_theme_toggle")
+                ) {
+                    Icon(
+                        imageVector = if (isLightTheme) Icons.Default.DarkMode else Icons.Default.LightMode,
+                        contentDescription = if (isLightTheme) "الوضع الليلي" else "الوضع النهاري",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(14.dp))
+            WingedHeartLogo(modifier = Modifier.size(72.dp))
+            Spacer(modifier = Modifier.height(18.dp))
 
             Text(
                 text = if (isCreateAccountMode) "إنشاء حساب جديد" else "تسجيل الدخول",
@@ -273,7 +302,7 @@ fun AuthScreen(
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "نادي Layali VIP • عروض السبا والسهرات في المدن السورية والتركية",
+                text = if (isCreateAccountMode) "أنشئ حسابك لتعرض الخدمات وتتواصل بأمان" else "مرحبًا بعودتك إلى عالم ليالي",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -316,13 +345,13 @@ fun AuthScreen(
                                 Icon(
                                     imageVector = Icons.Default.VerifiedUser,
                                     contentDescription = null,
-                                    tint = VioletBlueVip
+                                    tint = MaterialTheme.colorScheme.primary
                                 )
                             },
                             singleLine = true,
-                            shape = RoundedCornerShape(16.dp),
+                            shape = RoundedCornerShape(14.dp),
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = VioletBlueVip,
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
                                 unfocusedBorderColor = MaterialTheme.colorScheme.outline,
                                 focusedContainerColor = MaterialTheme.colorScheme.background,
                                 unfocusedContainerColor = MaterialTheme.colorScheme.background
@@ -355,14 +384,14 @@ fun AuthScreen(
                             Icon(
                                 imageVector = Icons.Default.Person,
                                 contentDescription = null,
-                                tint = VioletBlueVip
+                                tint = MaterialTheme.colorScheme.primary
                             )
                         },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(14.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = VioletBlueVip,
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
                             unfocusedBorderColor = MaterialTheme.colorScheme.outline,
                             focusedContainerColor = MaterialTheme.colorScheme.background,
                             unfocusedContainerColor = MaterialTheme.colorScheme.background
@@ -395,7 +424,7 @@ fun AuthScreen(
                             Icon(
                                 imageVector = Icons.Default.Lock,
                                 contentDescription = null,
-                                tint = VioletBlueVip
+                                tint = MaterialTheme.colorScheme.primary
                             )
                         },
                         trailingIcon = {
@@ -425,9 +454,9 @@ fun AuthScreen(
                         },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(14.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = VioletBlueVip,
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
                             unfocusedBorderColor = MaterialTheme.colorScheme.outline,
                             focusedContainerColor = MaterialTheme.colorScheme.background,
                             unfocusedContainerColor = MaterialTheme.colorScheme.background
@@ -437,33 +466,54 @@ fun AuthScreen(
                             .testTag("auth_password_input")
                     )
 
-                    // Change / Reset Password Link
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 6.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        TextButton(
-                            onClick = {
-                                showChangePasswordDialog = true
-                                errorMessage = null
-                            },
-                            modifier = Modifier.testTag("forgot_password_button")
-                        ) {
-                            Text(
-                                text = "تغيير / نسيت كلمة المرور؟",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = CoralPinkPrimary
-                            )
-                        }
-
+                    if (isCreateAccountMode) {
+                        Spacer(modifier = Modifier.height(14.dp))
                         Text(
-                            text = "قاعدة بيانات مشفرة PBKDF2",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = EmeraldVerified
+                            text = "تأكيد كلمة المرور",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.End
                         )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        OutlinedTextField(
+                            value = confirmPassword,
+                            onValueChange = { confirmPassword = it; errorMessage = null },
+                            placeholder = { Text("أعد إدخال كلمة المرور") },
+                            leadingIcon = { Icon(Icons.Default.Lock, null, tint = MaterialTheme.colorScheme.primary) },
+                            visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            isError = confirmPassword.isNotEmpty() && confirmPassword != password,
+                            singleLine = true,
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.fillMaxWidth().testTag("auth_confirm_password_input")
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "استخدم 8 أحرف على الأقل لحماية حسابك",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.End
+                        )
+                    }
+
+                    // Recovery is available only while signing in.
+                    if (!isCreateAccountMode) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            TextButton(
+                                onClick = {
+                                    showChangePasswordDialog = true
+                                    errorMessage = null
+                                },
+                                modifier = Modifier.testTag("forgot_password_button")
+                            ) {
+                                Text("نسيت كلمة المرور؟", color = MaterialTheme.colorScheme.primary)
+                            }
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(10.dp))
@@ -516,15 +566,28 @@ fun AuthScreen(
                                 errorMessage = "يرجى إدخال اسم المستخدم أو البريد الإلكتروني"
                                 return@Button
                             }
-                            if (cleanPass.length < 4) {
-                                errorMessage = "يرجى إدخال كلمة مرور مكونة من 4 خانات على الأقل"
+                            if (isCreateAccountMode && fullNameInput.trim().length < 2) {
+                                errorMessage = "أدخل اسمًا واضحًا مكونًا من حرفين على الأقل"
+                                return@Button
+                            }
+                            if (isCreateAccountMode && cleanUser.length < 3) {
+                                errorMessage = "اسم المستخدم يجب أن يتكون من 3 أحرف على الأقل"
+                                return@Button
+                            }
+                            if (cleanPass.length < if (isCreateAccountMode) 8 else 4) {
+                                errorMessage = if (isCreateAccountMode) "استخدم كلمة مرور من 8 أحرف على الأقل" else "يرجى إدخال كلمة المرور"
+                                return@Button
+                            }
+                            if (isCreateAccountMode && password != confirmPassword) {
+                                errorMessage = "كلمتا المرور غير متطابقتين"
                                 return@Button
                             }
                             val authResult = SuperAdminSecurityManager.authenticate(
                                 context = context,
                                 emailOrUsername = cleanUser,
                                 passwordInput = cleanPass,
-                                fullNameOverride = if (isCreateAccountMode) fullNameInput.trim() else ""
+                                fullNameOverride = if (isCreateAccountMode) fullNameInput.trim() else "",
+                                createAccount = isCreateAccountMode
                             )
                             savedAccountsRefreshTick += 1
                             when (authResult) {
@@ -575,7 +638,7 @@ fun AuthScreen(
                             color = MaterialTheme.colorScheme.outline
                         )
                         Text(
-                            text = "أو تسجيل الدخول عبر:",
+                            text = "أو المتابعة باستخدام",
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 12.dp)
@@ -661,39 +724,7 @@ fun AuthScreen(
                             }
                         }
 
-                        // Apple Sign-In Button
-                        Surface(
-                            onClick = {
-                                errorMessage = null
-                                onTraditionalLoginSuccess("عميل Apple VIP")
-                            },
-                            color = CharcoalButton,
-                            shape = RoundedCornerShape(50),
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(48.dp)
-                                .testTag("apple_sign_in_button")
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxSize(),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "",
-                                    color = Color.White,
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 16.sp
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "Apple",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = Color.White,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                        }
+
                     }
 
                     Spacer(modifier = Modifier.height(18.dp))
@@ -718,6 +749,7 @@ fun AuthScreen(
                             modifier = Modifier
                                 .clickable {
                                     isCreateAccountMode = !isCreateAccountMode
+                                    confirmPassword = ""
                                     errorMessage = null
                                     statusNotice = null
                                 }
