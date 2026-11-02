@@ -159,6 +159,8 @@ import com.example.ui.viewmodel.LayaliViewModel
 import com.example.ui.viewmodel.SortOption
 import com.example.ui.viewmodel.UiState
 import com.example.util.LayaliNotificationHelper
+import com.google.firebase.Firebase
+import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FirebaseFirestore
 
 enum class MainTab(val titleAr: String, val tag: String) {
@@ -363,27 +365,28 @@ fun MainFeatureScreen(
         }
     }
 
-    val helperBookPublishedService: (PublishedService) -> Unit = { pub ->
-        val matchingVenue = LayaliCatalog.venues.find { it.cityName == pub.cityName }
-            ?: LayaliCatalog.venues.first()
-        val pkg = ServicePackage(
-            id = "pub_${pub.id}",
-            title = pub.title,
-            durationLabel = "حجز مباشر VIP",
-            priceUsd = pub.priceUsd.toInt(),
-            description = pub.description,
-            isPopular = true
-        )
-        val updatedVenue = matchingVenue.copy(
-            name = pub.title,
-            cityName = pub.cityName,
-            country = pub.country,
-            category = pub.category,
-            startingPriceUsd = pub.priceUsd.toInt(),
-            visualPresetKey = pub.imageUrl,
-            packages = listOf(pkg)
-        )
-        activeCheckoutOrder = updatedVenue to pkg
+    // All entry points use the same audited pending request, never a synthetic venue checkout.
+    val helperBookPublishedService: (PublishedService) -> Unit = { service ->
+        if (Firebase.auth.currentUser == null) {
+            viewModel.showInfoMessage("يجب تسجيل الدخول بحساب Firebase لطلب حجز.")
+            onRequestGoogleSignIn()
+        } else {
+            coroutineScope.launch {
+                submittingMarketplaceId = service.id
+                try {
+                    val db = FirebaseFirestore.getInstance(context.getString(R.string.firestore_database_id))
+                    submitMarketplaceRequest(db, service)
+                        .onSuccess {
+                            viewModel.showInfoMessage("وصل طلبك للإدارة للمراجعة. لا يوجد دفع أو تأكيد موعد بعد.")
+                        }
+                        .onFailure { error ->
+                            viewModel.showInfoMessage("فشل إرسال الطلب: ${error.localizedMessage}")
+                        }
+                } finally {
+                    submittingMarketplaceId = null
+                }
+            }
+        }
     }
 
     val helperOpenPublishedMediaViewer: (PublishedService, Boolean) -> Unit = { pub, initialVideo ->
@@ -842,28 +845,7 @@ fun MainFeatureScreen(
                                     loading = publishedServicesState is UiState.Loading,
                                     error = (publishedServicesState as? UiState.Error)?.message,
                                     submittingId = submittingMarketplaceId,
-                                    onRequestBooking = { service ->
-                                        if (Firebase.auth.currentUser == null) {
-                                            viewModel.showInfoMessage("يجب تسجيل الدخول بحساب متصل لطلب خدمة.")
-                                            onRequestGoogleSignIn()
-                                        } else {
-                                            coroutineScope.launch {
-                                                submittingMarketplaceId = service.id
-                                                try {
-                                                    val db = FirebaseFirestore.getInstance(context.getString(R.string.firestore_database_id))
-                                                    submitMarketplaceRequest(db, service)
-                                                        .onSuccess {
-                                                            viewModel.showInfoMessage("تم إرسال طلب الحجز للإدارة. لا يوجد خصم أو تأكيد دفع.")
-                                                        }
-                                                        .onFailure {
-                                                            viewModel.showInfoMessage("تعذر إرسال الطلب: ${it.localizedMessage}")
-                                                        }
-                                                } finally {
-                                                    submittingMarketplaceId = null
-                                                }
-                                            }
-                                        }
-                                    },
+                                    onRequestBooking = helperBookPublishedService,
                                     onViewService = { service -> helperOpenPublishedMediaViewer(service, false) }
                                 )
 
@@ -977,16 +959,9 @@ fun MainFeatureScreen(
                                             scope = coroutineScope
                                         )
                                     },
-                                    onPurchaseContentWithWallet = { amountUsd, itemTitle ->
-                                        if (walletBalanceUsd >= amountUsd) {
-                                            viewModel.deductWalletBalance(
-                                                amountUsd = amountUsd,
-                                                orderTitle = itemTitle
-                                            )
-                                            true
-                                        } else {
-                                            false
-                                        }
+                                    onPurchaseContentWithWallet = { _, _ ->
+                                        viewModel.showInfoMessage("المحتوى المدفوع يتطلب إثبات دفع موثّق من الخادم.")
+                                        false
                                     },
                                     onShowMessage = viewModel::showInfoMessage,
                                     onPublishPaidPost = viewModel::publishCreatorPaidPost,
@@ -1118,7 +1093,7 @@ fun MainFeatureScreen(
                                             description = "عرض $cat جديد متاح الآن للحجز المباشر",
                                             mediaType = "both"
                                         )
-                                        viewModel.showInfoMessage("تم إرسال إشعار أندرويد الفوري إلى شريط الإشعارات!")
+                                        viewModel.showInfoMessage("تم إنشاء إشعار محلي على هذا الجهاز فقط؛ لم يُرسل للعملاء.")
                                     },
                                     onNavigateToPublicStore = { currentTab = MainTab.EXPLORE },
                                     onSuperAdminSignOut = {
