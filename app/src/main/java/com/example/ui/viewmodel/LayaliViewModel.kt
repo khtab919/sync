@@ -1,6 +1,7 @@
 package com.example.ui.viewmodel
 
 import android.content.Context
+import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -31,6 +32,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
@@ -130,6 +132,16 @@ class LayaliViewModel(
         appContext?.let { ctx ->
             _savedAccounts.value = SuperAdminSecurityManager.getSavedAccounts(ctx)
         }
+        if (hasFirebaseAuthForCurrentUser()) {
+            viewModelScope.launch {
+                repository.observeVerifiedWalletBalance(currentUserId)
+                    .catch { error ->
+                        Log.e(TAG, "Verified wallet stream unavailable", error)
+                        emit(0)
+                    }
+                    .collect { verifiedBalance -> _walletBalanceUsd.value = verifiedBalance }
+            }
+        }
     }
 
     // Paid Chat Members, Unlocked Conversations & Message Threads
@@ -158,79 +170,15 @@ class LayaliViewModel(
     private val _deletedCatalogVenueIds = MutableStateFlow<Set<String>>(emptySet())
     val deletedCatalogVenueIds: StateFlow<Set<String>> = _deletedCatalogVenueIds.asStateFlow()
 
-    // Initial curated published showcase offers
-    private val _localPublishedServices = MutableStateFlow(
-        listOf(
-            PublishedService(
-                id = "vip_showcase_mira",
-                authorId = "admin",
-                title = "قصر السهرات والقدود الحلبية • جناح VIP",
-                cityName = "حلب",
-                country = "سوريا",
-                category = "سهرات فنية",
-                description = "سهرة طرب وقدود حلبية أصيلة في القاعة الملكية المذهبة مع ضيافة فاخرة.",
-                priceUsd = 50L,
-                imageUrl = "palace_hall",
-                videoUrl = "عرض فيديو 4K لقصر السهرات والقدود الحلبية",
-                mediaType = "both",
-                status = "active"
-            ),
-            PublishedService(
-                id = "vip_showcase_lina",
-                authorId = "admin",
-                title = "قصر العزت الفام الحلبية • لاونج خاص",
-                cityName = "حلب",
-                country = "سوريا",
-                category = "سهرات فنية",
-                description = "جلسات لاونج مخملية وسهرة فنية خاصة بأجواء ملكية دافئة.",
-                priceUsd = 65L,
-                imageUrl = "card_lounge",
-                videoUrl = "فيديو حي من قصر العزت الفام الحلبية",
-                mediaType = "both",
-                status = "active"
-            ),
-            PublishedService(
-                id = "vip_showcase_nour",
-                authorId = "admin",
-                title = "سبا ومساج ملكي خاص • زيوت عطرية",
-                cityName = "دمشق",
-                country = "سوريا",
-                category = "سبا ومساج",
-                description = "جلسة مساج استرخائي بالزيوت العطرية الدافئة والأحجار البركانية.",
-                priceUsd = 45L,
-                imageUrl = "card_spa",
-                videoUrl = "جولة فيديو داخل جناح المساج والسبا الملكي",
-                mediaType = "both",
-                status = "active"
-            ),
-            PublishedService(
-                id = "vip_showcase_sara",
-                authorId = "admin",
-                title = "بطاقة فنية وزيارات خارجية VIP",
-                cityName = "إسطنبول",
-                country = "تركيا",
-                category = "زيارات خارجية",
-                description = "خدمة الزيارات الخارجية الملكية للفنادق والمنازل مع سرية وخصوصية تامة.",
-                priceUsd = 75L,
-                imageUrl = "card_vip_night",
-                videoUrl = "عرض فيديو HD لخدمة الزيارات الخارجية والسهرة الخاصة",
-                mediaType = "both",
-                status = "active"
-            )
-        )
-    )
+    // No fabricated showcase services in the production feed.
+    private val _localPublishedServices = MutableStateFlow<List<PublishedService>>(emptyList())
 
     private val _localBookings = MutableStateFlow<List<Booking>>(emptyList())
     private val _localReviews = MutableStateFlow<List<CustomerReview>>(emptyList())
     private val _localFavorites = MutableStateFlow<List<FavoriteVenue>>(emptyList())
     private val _localBlockedUsers = MutableStateFlow<List<BlockedUser>>(emptyList())
 
-    private val seenPublishedIds = mutableSetOf(
-        "vip_showcase_mira",
-        "vip_showcase_lina",
-        "vip_showcase_nour",
-        "vip_showcase_sara"
-    )
+    private val seenPublishedIds = mutableSetOf<String>()
     private var initialSnapshotLoaded = false
 
     private val _incomingBroadcastAlert = MutableStateFlow<PublishedService?>(null)
@@ -729,9 +677,48 @@ class LayaliViewModel(
         receiptImageUri: String,
         transactionRef: String
     ) {
-        // A local content:// image is NOT a verified payment or a server receipt.
-        // The upload + authenticated backend submission is required before recording it.
-        _snackbarMessage.value = "لا يمكن شحن الرصيد بإيصال محلي. يلزم رفع الإيصال للخادم ومراجعته أولاً."
+        if (!hasFirebaseAuthForCurrentUser()) {
+            _snackbarMessage.value = "سجل الدخول بحساب Firebase لرفع الإيصال."
+            return
+        }
+        if (receiptImageUri.isBlank() || transactionRef.trim().length < 6) {
+            _snackbarMessage.value = "أرفق إيصالاً وأدخل رقم تحويل صحيحاً (6 أحرف على الأقل)."
+            return
+        }
+        val type = receiptContentType(receiptImageUri) ?: run {
+            _snackbarMessage.value = "نوع الملف غير مدعوم. استخدم JPG أو PNG أو PDF."
+            return
+        }
+        viewModelScope.launch {
+            _isSubmitting.value = true
+            try {
+                repository.submitVerifiedReceipt(
+                    receiptUri = receiptImageUri,
+                    contentType = type,
+                    method = methodKey,
+                    transactionRef = transactionRef,
+                    purpose = "wallet",
+                    amountUsd = amountUsd
+                ).onSuccess {
+                    _snackbarMessage.value = "تم إرسال الإيصال للمراجعة. الرصيد لن يزيد قبل تحقق الإدارة من التحويل."
+                }.onFailure { error ->
+                    _snackbarMessage.value = "فشل رفع الإيصال: ${error.localizedMessage ?: "خطأ في الخادم"}"
+                }
+            } finally {
+                _isSubmitting.value = false
+            }
+        }
+    }
+
+    private fun receiptContentType(uri: String): String? {
+        val guessed = when (Uri.parse(uri).lastPathSegment?.substringAfterLast('.')?.lowercase()) {
+            "jpg", "jpeg" -> "image/jpeg"
+            "png" -> "image/png"
+            "pdf" -> "application/pdf"
+            else -> null
+        }
+        val resolved = appContext?.contentResolver?.getType(Uri.parse(uri)) ?: guessed
+        return resolved?.takeIf { it in setOf("image/jpeg", "image/png", "application/pdf") }
     }
 
     // ========================================================================
@@ -1132,9 +1119,56 @@ class LayaliViewModel(
         transactionReference: String = "",
         onSuccess: () -> Unit = {}
     ) {
-        // Booking price, availability and settlement must be validated by the backend.
-        // In particular, never call onSuccess or claim a confirmed booking here.
-        _snackbarMessage.value = "تعذر تأكيد الحجز: يلزم إنشاء طلب على الخادم والتحقق من الدفع أولاً."
+        if (!hasFirebaseAuthForCurrentUser()) {
+            _snackbarMessage.value = "يلزم تسجيل الدخول بحساب Firebase قبل طلب الحجز."
+            return
+        }
+        val payWithWallet = transactionReference == "WALLET_DEDUCT"
+        if (!payWithWallet && (receiptImageUri.isBlank() || transactionReference.trim().length < 6)) {
+            _snackbarMessage.value = "أرفق إيصال التحويل ورقم معاملته لإرسال طلب الحجز."
+            return
+        }
+        val contentType = if (payWithWallet) null else receiptContentType(receiptImageUri)
+        if (!payWithWallet && contentType == null) {
+            _snackbarMessage.value = "صيغة الإيصال غير مدعومة."
+            return
+        }
+        viewModelScope.launch {
+            _isSubmitting.value = true
+            try {
+                repository.createVerifiedBookingRequest(
+                    serviceId = venue.id,
+                    bookingDate = bookingDate,
+                    timeSlot = timeSlot,
+                    guestCount = guestCount,
+                    notes = notes,
+                    payWithWallet = payWithWallet
+                ).onSuccess { (bookingId, status) ->
+                    if (payWithWallet) {
+                        _snackbarMessage.value = "تم الحجز وخصم الرصيد من الخادم بنجاح."
+                        onSuccess()
+                    } else {
+                        repository.submitVerifiedReceipt(
+                            receiptUri = receiptImageUri,
+                            contentType = checkNotNull(contentType),
+                            method = if (paymentMethodTitle.contains("شام")) "SHAM_CASH" else "USDT_BEP20",
+                            transactionRef = transactionReference,
+                            purpose = "booking",
+                            bookingId = bookingId
+                        ).onSuccess {
+                            _snackbarMessage.value = "تم تسجيل طلب الحجز وإيصال الدفع. الحالة: بانتظار مراجعة التحويل."
+                            onSuccess()
+                        }.onFailure { error ->
+                            _snackbarMessage.value = "تم إنشاء الحجز ${bookingId} بحالة انتظار؛ تعذر إرسال الإيصال: ${error.localizedMessage}"
+                        }
+                    }
+                }.onFailure { error ->
+                    _snackbarMessage.value = "لم يتم إنشاء الحجز: ${error.localizedMessage ?: "تعذر الاتصال بالخادم"}"
+                }
+            } finally {
+                _isSubmitting.value = false
+            }
+        }
     }
 
     fun updateBookingStatus(bookingId: String, newStatus: String) {
