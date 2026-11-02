@@ -106,11 +106,15 @@ dependencies {
   // implementation(libs.androidx.navigation.compose)
   implementation(libs.androidx.room.ktx)
   implementation(libs.androidx.room.runtime)
-  // implementation(libs.coil.compose)
+  implementation(libs.coil.compose)
   // implementation(libs.converter.moshi)
   // implementation(libs.firebase.ai)
   // Uncomment to use Firestore:
   implementation(libs.firebase.firestore)
+  implementation("com.google.firebase:firebase-functions")
+  implementation("com.google.firebase:firebase-storage")
+  implementation("androidx.media3:media3-exoplayer:1.11.1")
+  implementation("androidx.media3:media3-ui:1.11.1")
 
   // Uncomment ALL FOUR of the following dependencies together to use Firebase Auth and Google
   // Sign-In via Credential Manager:

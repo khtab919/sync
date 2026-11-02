@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build-apk:
@@ -118,14 +118,3 @@ jobs:
           name: Layali-Lounge-v5.0-APK
           path: Layali-Lounge-v5.0.apk
 
-      - name: Publish Direct APK to GitHub Releases
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v5.0.${{ github.run_number }}
-          name: "تطبيق ليالي - إصدار 5.0 (APK جاهز للتثبيت)"
-          body: "اضغط على ملف **Layali-Lounge-v5.0.apk** بالأسفل لتحميل وتثبيت التطبيق مباشرة على هاتفك."
-          files: Layali-Lounge-v5.0.apk
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

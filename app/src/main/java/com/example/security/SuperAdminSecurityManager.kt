@@ -69,7 +69,7 @@ data class PasswordUpdateRecord(
  *
  * Initial Super Admin Credentials:
  * - Email: RamaNUR@gmail.com
- * - Initial Password: 2Macit.salma
+ * Legacy local authentication is retired. Use Firebase Auth and server-side admin claims.
  */
 object SuperAdminSecurityManager {
 
@@ -83,7 +83,8 @@ object SuperAdminSecurityManager {
     private const val KEY_ACTIVE_TOKEN = "super_admin_active_session_token"
 
     const val INITIAL_SUPER_ADMIN_EMAIL = "RamaNUR@gmail.com"
-    private const val INITIAL_SUPER_ADMIN_PASSWORD = "2Macit.salma"
+    private val INITIAL_SUPER_ADMIN_PASSWORD: String
+        get() = error("Local administrator authentication has been retired")
 
     private const val PBKDF2_ITERATIONS = 65536
     private const val KEY_LENGTH_BITS = 256
