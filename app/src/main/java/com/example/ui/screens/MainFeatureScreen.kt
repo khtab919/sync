@@ -359,12 +359,8 @@ fun MainFeatureScreen(
         blockedUsersList.filter { it.status == "active" }.map { it.blockedIdentifier.trim() }.toSet()
     }
 
-    val visibleVenues = remember(filteredVenues, blockedAuthorsSet) {
-        filteredVenues.filterNot { v ->
-            blockedAuthorsSet.contains(v.name.trim()) ||
-                blockedAuthorsSet.contains(v.providerDisplayName.trim())
-        }
-    }
+    // Retire unverified hard-coded venues. Only actual Firestore offers appear publicly.
+    val visibleVenues = remember { emptyList<Venue>() }
 
     // All entry points use the same audited pending request, never a synthetic venue checkout.
     val helperBookPublishedService: (PublishedService) -> Unit = { service ->
@@ -722,7 +718,7 @@ fun MainFeatureScreen(
                                     sortOption = sortOption,
                                     cities = filteredCities,
                                     venues = visibleVenues,
-                                    publishedServices = publishedServicesList.filter { it.authorId == viewModel.currentUserId },
+                                    publishedServices = publishedServicesList.filter { it.status == "active" && it.category != "منشور مدفوع" },
                                     favoriteIds = favoriteIds,
                                     isSoftRoseLightTheme = isSoftRoseLightTheme,
                                     isSuperAdmin = isSuperAdmin,
@@ -890,8 +886,8 @@ fun MainFeatureScreen(
                                     paymentReceipts = paymentReceipts,
                                     onBack = { currentTab = MainTab.EXPLORE },
                                     onSubmitRealDepositReceipt = viewModel::submitRealDepositReceipt,
-                                    onTopUpConfirm = { amount, bonus, pkgTitle ->
-                                        viewModel.topUpWallet(amount, bonus, pkgTitle)
+                                    onTopUpConfirm = { _, _, _ ->
+                                        viewModel.showInfoMessage("لا تُضاف أرصدة محلية. يُراجع الإيصال أولاً عبر الإدارة والخادم.")
                                     },
                                     onShowMessage = viewModel::showInfoMessage
                                 )
@@ -902,7 +898,7 @@ fun MainFeatureScreen(
                                     walletTransactions = walletTransactions,
                                     isGoogleSignedIn = isGoogleSignedIn,
                                     userEmail = userEmail,
-                                    publishedServices = publishedServicesList,
+                                    publishedServices = publishedServicesList.filter { it.authorId == viewModel.currentUserId },
                                     bookingsCount = bookingsList.size,
                                     reviewsCount = userReviewsList.size,
                                     favoritesCount = favoriteIds.size,
