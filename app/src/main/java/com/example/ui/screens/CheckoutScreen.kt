@@ -129,8 +129,9 @@ fun CheckoutScreen(
         listOf("الليلة (حجز فوري)", "غداً مساءً", "الجمعة القادمة", "السبت القادم")
     }
     var selectedDate by remember { mutableStateOf(availableDates.first()) }
-    var selectedTimeSlot by remember {
-        mutableStateOf(venue.availableTimeSlots.firstOrNull() ?: "09:00 مساءً")
+    // Never invent an appointment time when the provider has not published slots.
+    var selectedTimeSlot by remember(venue.id) {
+        mutableStateOf(venue.availableTimeSlots.firstOrNull().orEmpty())
     }
     var guestCount by remember { mutableIntStateOf(1) }
     var notes by remember { mutableStateOf("") }
@@ -649,7 +650,9 @@ fun CheckoutScreen(
                     isEmeraldStyle = attachedReceiptUri.isNotBlank() ||
                         (selectedPaymentMethod == PaymentMethodType.WALLET && walletBalanceUsd >= totalPriceUsd),
                     onClick = {
-                        if (selectedPaymentMethod == PaymentMethodType.WALLET) {
+                        if (selectedTimeSlot.isBlank()) {
+                            onShowMessage("هذه الخدمة ليس لديها موعد متاح موثق من الخادم حالياً.")
+                        } else if (selectedPaymentMethod == PaymentMethodType.WALLET) {
                             if (walletBalanceUsd < totalPriceUsd) {
                                 onShowMessage("رصيد المحفظة ($$walletBalanceUsd) غير كافٍ لطلب ($$totalPriceUsd). اختر شام كاش أو USDT وأرفق الإيصال.")
                             } else {
