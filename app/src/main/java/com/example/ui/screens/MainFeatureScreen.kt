@@ -1544,7 +1544,7 @@ private fun ExploreTabContent(
                         items(cities, key = { it.id }) { city ->
                             CityChipCard(
                                 cityName = city.nameAr,
-                                country = "${city.country} • ${city.activeVenuesCount} مركز",
+                                country = city.country,
                                 isSelected = selectedCity == city.nameAr,
                                 onClick = { onSelectCity(city.nameAr) }
                             )
@@ -2917,7 +2917,8 @@ private fun VerifiedReviewsTabContent(
                 }
 
                 Button(
-                    onClick = { venueToReview = LayaliCatalog.venues.first() },
+                    onClick = { venueToReview = LayaliCatalog.venues.firstOrNull() },
+                    enabled = LayaliCatalog.venues.isNotEmpty(),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = RoyalGold,
                         contentColor = ObsidianNight

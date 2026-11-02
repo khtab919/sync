@@ -605,17 +605,17 @@ fun WalletScreen(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     LuxuryGradientButton(
                         text = if (attachedReceiptUri.isBlank()) {
-                            "أرفق إيصال الدفع أولاً لتأكيد إيداع $$activeAmount"
+                            "أرفق إيصال الدفع لطلب مراجعة إيداع $$activeAmount"
                         } else if (activeBonus > 0) {
-                            "تأكيد الإيداع وإرسال الإيصال ($$activeAmount + $$activeBonus)"
+                            "إرسال الإيصال للمراجعة ($$activeAmount + $$activeBonus)"
                         } else {
-                            "تأكيد الإيداع وإرسال الإيصال ($$activeAmount)"
+                            "إرسال الإيصال للمراجعة ($$activeAmount)"
                         },
                         icon = Icons.Default.ReceiptLong,
                         isEmeraldStyle = attachedReceiptUri.isNotBlank(),
                         onClick = {
                             if (attachedReceiptUri.isBlank()) {
-                                onShowMessage("لا يوجد دفع وهمي! يرجى إرفاق صورة إيصال التحويل ($gatewayLabel) أولاً.")
+                                onShowMessage("يرجى إرفاق صورة إيصال التحويل للمراجعة ($gatewayLabel) أولاً.")
                             } else {
                                 onSubmitRealDepositReceipt(
                                     activeAmount,
