@@ -574,7 +574,7 @@ fun AuthScreen(
                                 errorMessage = "اسم المستخدم يجب أن يتكون من 3 أحرف على الأقل"
                                 return@Button
                             }
-                            if (cleanPass.length < if (isCreateAccountMode) 8 else 4) {
+                            if (cleanPass.length < (if (isCreateAccountMode) 8 else 4)) {
                                 errorMessage = if (isCreateAccountMode) "استخدم كلمة مرور من 8 أحرف على الأقل" else "يرجى إدخال كلمة المرور"
                                 return@Button
                             }
@@ -582,12 +582,28 @@ fun AuthScreen(
                                 errorMessage = "كلمتا المرور غير متطابقتين"
                                 return@Button
                             }
+                            // This legacy manager creates unknown usernames automatically.
+                            // Keep sign-in and registration distinct at the UI boundary.
+                            val accountExists = SuperAdminSecurityManager.getSavedAccounts(context).any { account ->
+                                account.email.equals(cleanUser, ignoreCase = true) ||
+                                account.username.removePrefix("@").equals(
+                                    cleanUser.removePrefix("@").substringBefore("@"),
+                                    ignoreCase = true
+                                )
+                            }
+                            if (!isCreateAccountMode && !accountExists) {
+                                errorMessage = "هذا الحساب غير مسجل. أنشئ حسابًا جديدًا أولًا"
+                                return@Button
+                            }
+                            if (isCreateAccountMode && accountExists) {
+                                errorMessage = "هذا الحساب موجود بالفعل. سجّل الدخول بدلًا من ذلك"
+                                return@Button
+                            }
                             val authResult = SuperAdminSecurityManager.authenticate(
                                 context = context,
                                 emailOrUsername = cleanUser,
                                 passwordInput = cleanPass,
-                                fullNameOverride = if (isCreateAccountMode) fullNameInput.trim() else "",
-                                createAccount = isCreateAccountMode
+                                fullNameOverride = if (isCreateAccountMode) fullNameInput.trim() else ""
                             )
                             savedAccountsRefreshTick += 1
                             when (authResult) {
