@@ -74,6 +74,8 @@ exports.createBookingRequest = onCall(options, async (req) => {
   if (!["wallet", "external"].includes(payment))
     throw new HttpsError("invalid-argument", "Invalid payment method");
   const serviceRef = db.collection("published_services").doc(serviceId);
+  const availabilityRef = db.collection("service_availability").doc(serviceId)
+    .collection("slots").doc(hash(bookingDate + ":" + timeSlot));
   const bookingRef = db.collection("users").doc(uid).collection("bookings").doc();
   const walletRef = db.collection("wallets").doc(uid);
   const ledgerRef = db.collection("wallet_ledger").doc("booking_" + bookingRef.id);
@@ -82,6 +84,12 @@ exports.createBookingRequest = onCall(options, async (req) => {
     const service = await tx.get(serviceRef);
     if (!service.exists || service.get("status") !== "active")
       throw new HttpsError("not-found", "Service is not active");
+    // Do not sell an unapproved date or oversell a limited service.
+    const available = await tx.get(availabilityRef);
+    if (!available.exists || available.get("status") !== "open" ||
+        !Number.isSafeInteger(available.get("remainingGuests")) ||
+        available.get("remainingGuests") < guests)
+      throw new HttpsError("failed-precondition", "Requested slot is unavailable");
     const priceUsd = whole(service.get("priceUsd"), "servicePrice", 1, 10000);
     totalCents = priceUsd * guests * 100;
     if (totalCents > 1000000) throw new HttpsError("invalid-argument", "Booking amount exceeds limit");
@@ -92,6 +100,7 @@ exports.createBookingRequest = onCall(options, async (req) => {
       balance = amount(await tx.get(walletRef));
       if (balance < totalCents) throw new HttpsError("failed-precondition", "Insufficient verified funds");
     }
+    tx.update(availabilityRef, { remainingGuests: available.get("remainingGuests") - guests });
     tx.create(bookingRef, {
       userId: uid, serviceId, venueId: serviceId, venueName: service.get("title"),
       cityName: service.get("cityName"), country: service.get("country"),
@@ -108,6 +117,31 @@ exports.createBookingRequest = onCall(options, async (req) => {
     }
   });
   return { bookingId: bookingRef.id, status: payment === "wallet" ? "confirmed" : "pending_payment", totalCents };
+});
+
+/**
+ * Administrative appointment inventory. Slots are created by a trusted admin
+ * and consumed transactionally, so a client cannot invent availability.
+ */
+exports.createServiceSlot = onCall(options, async (req) => {
+  admin(req);
+  const serviceId = str(req.data?.serviceId, "serviceId", 1, 128);
+  const bookingDate = str(req.data?.bookingDate, "bookingDate", 10, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(bookingDate))
+    throw new HttpsError("invalid-argument", "Use YYYY-MM-DD");
+  const timeSlot = str(req.data?.timeSlot, "timeSlot", 2, 50);
+  const capacity = whole(req.data?.capacity, "capacity", 1, 100);
+  const serviceRef = db.collection("published_services").doc(serviceId);
+  const service = await serviceRef.get();
+  if (!service.exists || service.get("status") !== "active")
+    throw new HttpsError("not-found", "Only active services can have slots");
+  const slotRef = db.collection("service_availability").doc(serviceId).collection("slots")
+    .doc(hash(bookingDate + ":" + timeSlot));
+  await slotRef.create({
+    serviceId, bookingDate, timeSlot, status: "open",
+    capacity, remainingGuests: capacity, createdAt: FieldValue.serverTimestamp()
+  });
+  return { slotId: slotRef.id };
 });
 
 exports.submitPaymentReceipt = onCall(options, async (req) => {
