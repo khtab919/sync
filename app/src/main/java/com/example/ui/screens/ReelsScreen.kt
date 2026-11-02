@@ -312,7 +312,6 @@ fun ReelsScreen(
 }
 
 @Composable
-private fun SingleReelFullPage(@Composable
 private fun SingleReelFullPage(
     reel: ReelItemUiModel,
     reelIndex: Int,
@@ -332,6 +331,13 @@ private fun SingleReelFullPage(
 ) {
     var showHeartBurst by remember { mutableStateOf(false) }
     var progress by remember(reel.id) { mutableFloatStateOf(0f) }
+
+    LaunchedEffect(showHeartBurst) {
+        if (showHeartBurst) {
+            delay(750L)
+            showHeartBurst = false
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -548,6 +554,7 @@ private fun SingleReelFullPage(
     }
 }
 
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
 private fun ReelVideoPlayer(
     url: String,
