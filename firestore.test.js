@@ -226,3 +226,35 @@ test("Blocked users: owner/admin can create, query, and unblock entries, cross-u
       .get()
   );
 });
+
+test("Paid posts: public preview works; owner-only body stays private", async () => {
+  const alice = testEnv.authenticatedContext(ALICE_UID).firestore();
+  const bob = testEnv.authenticatedContext(BOB_UID).firestore();
+  const id = "post_secure_1";
+  const preview = {
+    ...validPublishedServicePayload(ALICE_UID),
+    category: "منشور مدفوع",
+    priceUsd: 2,
+    description: "هذه معاينة عامة فقط ولا تضم محتوى مدفوعاً",
+    imageUrl: "",
+    videoUrl: "",
+    mediaType: "photo",
+  };
+  const body = {
+    authorId: ALICE_UID,
+    serviceId: id,
+    body: "هذا هو النص الكامل الذي يجب أن يظل مخفياً عن غير مالكة المنشور.",
+    createdAt: new Date(),
+  };
+
+  await assertSucceeds(alice.collection("published_services").doc(id).set(preview));
+  await assertSucceeds(alice.collection("creator_post_bodies").doc(id).set(body));
+  await assertSucceeds(bob.collection("published_services").doc(id).get());
+  await assertSucceeds(alice.collection("creator_post_bodies").doc(id).get());
+  await assertFails(bob.collection("creator_post_bodies").doc(id).get());
+  await assertFails(bob.collection("creator_post_bodies").get());
+  await assertFails(bob.collection("creator_post_bodies").doc("post_secure_2").set({
+    ...body, serviceId: "post_secure_2",
+  }));
+  await assertFails(alice.collection("creator_post_bodies").doc(id).update({ body: "modified" }));
+});
