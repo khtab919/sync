@@ -2,7 +2,8 @@
   "firestore": [
     {
       "database": "ai-studio-android-nightlyc-90974dd0-99e1-42a7-a4b5-a3bd95657476",
-      "rules": "firestore.rules"
+      "rules": "firestore.rules",
+      "indexes": "firestore.indexes.json"
     }
   ],
   "emulators": {
@@ -16,6 +17,27 @@
     },
     "ui": {
       "enabled": false
+    },
+    "functions": {
+      "port": 5001
+    },
+    "storage": {
+      "port": 9199
     }
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "layali",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "test",
+        "firebase-debug.log"
+      ]
+    }
+  ],
+  "storage": {
+    "rules": "storage.rules"
   }
 }

@@ -1,0 +1,14 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Uploads are immutable and private; backend checks account status and ownership
+    // before accepting a deposit, payout receipt or publishing a reel.
+    match /{folder}/{uid}/{file} {
+      allow create: if request.auth != null && request.auth.uid == uid
+        && ((folder == 'depositReceipts' && request.resource.size <= 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*'))
+          || (folder == 'payoutReceipts' && request.auth.token.admin == true && request.resource.size <= 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*'))
+          || (folder == 'reelUploads' && request.resource.size <= 100 * 1024 * 1024 && request.resource.contentType.matches('video/(mp4|webm)')));
+      allow read, update, delete: if false;
+    }
+  }
+}

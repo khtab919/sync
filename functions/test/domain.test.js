@@ -1,0 +1,6 @@
+const {test}=require('node:test');const assert=require('node:assert/strict');const D=require('../src/domain');
+test('80/20 split conserves every cent, including rounding',()=>{for(const n of [1,2,3,5,99,100,10001,100000000]){const s=D.splitRevenue(n);assert.equal(s.creatorCents+s.platformCents,n);assert.equal(s.creatorCents,Math.floor(n*.8));}});
+test('money rejects negatives, fractions, strings and overflow',()=>{for(const v of [0,-1,1.2,'100',NaN,Infinity,1e15])assert.throws(()=>D.money(v));});
+test('temporary suspensions expire at the server timestamp boundary',()=>{const a={status:'suspended',suspendedUntilMs:100};assert.throws(()=>D.active(a,99));assert.equal(D.active(a,100),a);assert.throws(()=>D.active({status:'banned'},100));assert.throws(()=>D.active({status:'deleted'},100));});
+test('withdrawal cannot be paid twice or rejected after processing',()=>{assert.equal(D.transition('pending','approve'),'processing');assert.equal(D.transition('processing','paid'),'paid');for(const s of ['paid','rejected','cancelled'])assert.throws(()=>D.transition(s,'paid'));assert.throws(()=>D.transition('processing','reject'));});
+test('document IDs cannot escape their collection',()=>{for(const s of ['../wallets','a/b','', 'a b'])assert.throws(()=>D.key(s));});
