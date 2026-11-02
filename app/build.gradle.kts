@@ -113,6 +113,8 @@ dependencies {
   implementation(libs.firebase.firestore)
   implementation(libs.firebase.functions)
   implementation(libs.firebase.storage)
+  implementation(libs.media3.exoplayer)
+  implementation(libs.media3.ui)
 
   // Uncomment ALL FOUR of the following dependencies together to use Firebase Auth and Google
   // Sign-In via Credential Manager:
