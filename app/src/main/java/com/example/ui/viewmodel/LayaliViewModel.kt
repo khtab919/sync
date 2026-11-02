@@ -928,25 +928,15 @@ class LayaliViewModel(
     }
 
     fun unlockChatWithWallet(member: ChatMemberProfile) {
-        val currentBalance = _walletBalanceUsd.value
-        if (currentBalance < member.chatPriceUsd) {
-            _snackbarMessage.value = "رصيد المحفظة ($$currentBalance) غير كافٍ لفتح دردشة ${member.displayName} ($${member.chatPriceUsd}). استخدم شام كاش أو USDT وأرفق الإيصال."
-            return
+        // Fail closed: local balance is not a payment authorization.
+        // Never debit the in-memory wallet or unlock a paid conversation until
+        // a trusted backend transaction confirms settlement and entitlement.
+        if (member.chatPriceUsd <= 0) {
+            _unlockedChatMemberIds.value = _unlockedChatMemberIds.value + member.id
+            _activeChatMemberId.value = member.id
+        } else {
+            _snackbarMessage.value = "الدردشة بسعر $${member.chatPriceUsd}. الدفع بالمحفظة يتطلب تحقق الخادم قبل فتح الرسائل."
         }
-        _walletBalanceUsd.value = currentBalance - member.chatPriceUsd
-        _unlockedChatMemberIds.value = _unlockedChatMemberIds.value + member.id
-        _activeChatMemberId.value = member.id
-
-        val tx = WalletTransaction(
-            id = "tx_chat_${System.currentTimeMillis()}",
-            title = "فتح دردشة VIP مع ${member.displayName} (${member.username})",
-            amountUsd = member.chatPriceUsd,
-            isCredit = false,
-            timestampLabel = "الآن"
-        )
-        _walletTransactions.value = listOf(tx) + _walletTransactions.value
-        gainProfileXp(25)
-        _snackbarMessage.value = "تم فتح الدردشة الخاصة مع ${member.displayName} بنجاح!"
     }
 
     fun unlockChatWithReceipt(
@@ -975,22 +965,24 @@ class LayaliViewModel(
             receiptImageUri = receiptUri,
             transactionReference = txRef.trim().ifBlank { "دردشة ${member.username}" },
             purposeAr = "فتح دردشة مع ${member.displayName}",
-            status = "verified",
+            status = "pending",
             timestampLabel = "الآن"
         )
         _paymentReceipts.value = listOf(receipt) + _paymentReceipts.value
-        _unlockedChatMemberIds.value = _unlockedChatMemberIds.value + member.id
-        _activeChatMemberId.value = member.id
-        gainProfileXp(35)
-        _snackbarMessage.value = "تم توثيق إيصال $methodTitleAr وفتح الدردشة مع ${member.displayName} (+35 XP)!"
+        _snackbarMessage.value = "تم استلام إيصال $methodTitleAr وهو قيد المراجعة. لن تُفتح الدردشة قبل اعتماد الدفع."
     }
 
     fun sendChatMessage(memberId: String, text: String) {
         val cleanText = text.trim()
         if (cleanText.isBlank()) return
         val member = _chatMembers.value.find { it.id == memberId } ?: return
+        if (member.chatPriceUsd > 0 &&
+            !member.isUnlocked &&
+            memberId !in _unlockedChatMemberIds.value) {
+            _snackbarMessage.value = "لا يمكن إرسال رسالة قبل فتح هذه المحادثة بدفع موثق."
+            return
+        }
         val profile = _userProfile.value
-
         val userMsg = ChatMessageItem(
             id = "msg_u_${System.currentTimeMillis()}",
             memberId = memberId,
@@ -1000,18 +992,12 @@ class LayaliViewModel(
             timestampLabel = "الآن",
             isFromCurrentUser = true
         )
-        val autoReply = ChatMessageItem(
-            id = "msg_r_${System.currentTimeMillis() + 1}",
-            memberId = memberId,
-            senderName = member.displayName,
-            senderUsername = member.username,
-            text = "شكراً لتواصلك معي في نادي ليالي VIP (${member.cityName}) ✨ تم استلام رسالتك وسأقوم بتأكيد كافة التفاصيل معك فوراً.",
-            timestampLabel = "الآن",
-            isFromCurrentUser = false
-        )
-
+        // No fabricated replies from the other person. A real chat transport
+        // must be connected before this is considered delivered.
         val existing = _chatMessagesByMember.value[memberId].orEmpty()
-        _chatMessagesByMember.value = _chatMessagesByMember.value + (memberId to (existing + userMsg + autoReply))
+        _chatMessagesByMember.value = _chatMessagesByMember.value +
+            (memberId to (existing + userMsg))
+        _snackbarMessage.value = "تم حفظ الرسالة على هذا الجهاز؛ لم يتم ربط التسليم المباشر بعد."
     }
 
     fun updateVenueStartingPrice(venueId: String, newPriceUsd: Int) {
