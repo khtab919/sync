@@ -4,6 +4,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -31,6 +33,27 @@ private val LuxuryNightlifeColorScheme = darkColorScheme(
     error = ErrorCrimson
 )
 
+private val LayaliDaylightColorScheme = lightColorScheme(
+    primary = Color(0xFF176B77),
+    onPrimary = Color.White,
+    primaryContainer = Color(0xFFDCEFF1),
+    onPrimaryContainer = Color(0xFF173C45),
+    secondary = Color(0xFF685591),
+    onSecondary = Color.White,
+    secondaryContainer = Color(0xFFEDE6F6),
+    onSecondaryContainer = Color(0xFF302844),
+    tertiary = Color(0xFF46776F),
+    onTertiary = Color.White,
+    background = Color(0xFFF7F8FA),
+    onBackground = Color(0xFF192330),
+    surface = Color(0xFFFFFFFF),
+    onSurface = Color(0xFF192330),
+    surfaceVariant = Color(0xFFEDF0F4),
+    onSurfaceVariant = Color(0xFF526171),
+    outline = Color(0xFFD2D9E2),
+    error = Color(0xFFB3263E)
+)
+
 val LayaliShapes = Shapes(
     small = RoundedCornerShape(14.dp),
     medium = RoundedCornerShape(20.dp),
@@ -44,7 +67,7 @@ fun MyApplicationTheme(
 ) {
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         MaterialTheme(
-            colorScheme = LuxuryNightlifeColorScheme,
+            colorScheme = if (isSoftRoseLightTheme) LayaliDaylightColorScheme else LuxuryNightlifeColorScheme,
             typography = Typography,
             shapes = LayaliShapes,
             content = content
