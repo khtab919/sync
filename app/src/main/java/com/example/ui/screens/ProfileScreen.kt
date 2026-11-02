@@ -8,6 +8,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -1935,7 +1937,28 @@ fun ProfileScreen(
                 )
             },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Appearance first, payment configuration second.
+                    Row(
+                        modifier = Modifier.fillMaxWidth().testTag("profile_theme_setting"),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Switch(
+                            checked = isSoftRoseLightTheme,
+                            onCheckedChange = { onToggleThemeMode() }
+                        )
+                        Text(
+                            text = if (isSoftRoseLightTheme) "الوضع النهاري" else "الوضع الليلي",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = SoftWhiteText
+                        )
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+
                     // 1. Chat Pricing
                     Row(
                         modifier = Modifier.fillMaxWidth(),
