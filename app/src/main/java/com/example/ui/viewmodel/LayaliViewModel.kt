@@ -133,94 +133,7 @@ class LayaliViewModel(
     }
 
     // Paid Chat Members, Unlocked Conversations & Message Threads
-    private val _chatMembers = MutableStateFlow(
-        listOf(
-            ChatMemberProfile(
-                id = "chat_mira_aleppo",
-                displayName = "الأميرة ميرا • جناح حلب الملكي",
-                username = "@mira_royal_vip",
-                cityName = "حلب",
-                country = "سوريا",
-                category = "سهرات فنية وقدود",
-                bio = "مضيفة جناح السهرات الملكية في حلب • حجز مباشر وتنسيق سهرات خاصة بكامل الخصوصية.",
-                level = 28,
-                frameId = "obsidian_elite",
-                chatPriceUsd = 20,
-                isOnline = true,
-                avatarPreset = "palace_hall"
-            ),
-            ChatMemberProfile(
-                id = "chat_nour_damascus",
-                displayName = "نور الشام • سبا ومساج ملكي",
-                username = "@nour_spa_vip",
-                cityName = "دمشق",
-                country = "سوريا",
-                category = "سبا ومساج",
-                bio = "جلسات مساج ملكي بالزيوت العطرية الدافئة والأحجار البركانية في أرقى أجنحة دمشق.",
-                level = 24,
-                frameId = "emerald_crown",
-                chatPriceUsd = 15,
-                isOnline = true,
-                avatarPreset = "card_spa"
-            ),
-            ChatMemberProfile(
-                id = "chat_lina_latakia",
-                displayName = "لينا الساحل • لاونج اللاذقية",
-                username = "@lina_coast_lounge",
-                cityName = "اللاذقية",
-                country = "سوريا",
-                category = "سهرات فنية",
-                bio = "إطلالة بحرية ساحرة وسهرات VIP خاصة على كورنيش اللاذقية وطرطوس.",
-                level = 19,
-                frameId = "sapphire_neon",
-                chatPriceUsd = 15,
-                isOnline = true,
-                avatarPreset = "card_lounge"
-            ),
-            ChatMemberProfile(
-                id = "chat_sara_istanbul",
-                displayName = "سارة البوسفور • زيارات VIP",
-                username = "@sara_istanbul_vip",
-                cityName = "إسطنبول",
-                country = "تركيا",
-                category = "زيارات خارجية",
-                bio = "تنسيق الزيارات الفندقية الملكية والسهرات الخاصة في إسطنبول وأنطاليا على مدار الساعة.",
-                level = 32,
-                frameId = "crimson_flame",
-                chatPriceUsd = 25,
-                isOnline = true,
-                avatarPreset = "card_vip_night"
-            ),
-            ChatMemberProfile(
-                id = "chat_reem_homs",
-                displayName = "ريم الميماس • جناح حمص الخاص",
-                username = "@reem_homs_royal",
-                cityName = "حمص",
-                country = "سوريا",
-                category = "سبا ومساج",
-                bio = "استرخاء ملكي وضيافة فاخرة في جناح الميماس الخاص • متاحة للرد الفوري.",
-                level = 16,
-                frameId = "amber_sovereign",
-                chatPriceUsd = 10,
-                isOnline = true,
-                avatarPreset = "brand_light_showcase"
-            ),
-            ChatMemberProfile(
-                id = "chat_dana_antalya",
-                displayName = "دانا الريفيرا • منتجع أنطاليا",
-                username = "@dana_antalya_club",
-                cityName = "أنطاليا",
-                country = "تركيا",
-                category = "سهرات فنية",
-                bio = "حفلات يخت خاصة وأجنحة منتجعات 5 نجوم في أنطاليا مع استقبال VIP.",
-                level = 22,
-                frameId = "amethyst_vip",
-                chatPriceUsd = 30,
-                isOnline = false,
-                avatarPreset = "brand_dark_showcase"
-            )
-        )
-    )
+    private val _chatMembers = MutableStateFlow<List<ChatMemberProfile>>(emptyList())
     val chatMembers: StateFlow<List<ChatMemberProfile>> = _chatMembers.asStateFlow()
 
     private val _unlockedChatMemberIds = MutableStateFlow<Set<String>>(emptySet())
@@ -229,32 +142,7 @@ class LayaliViewModel(
     private val _activeChatMemberId = MutableStateFlow<String?>(null)
     val activeChatMemberId: StateFlow<String?> = _activeChatMemberId.asStateFlow()
 
-    private val _chatMessagesByMember = MutableStateFlow<Map<String, List<ChatMessageItem>>>(
-        mapOf(
-            "chat_mira_aleppo" to listOf(
-                ChatMessageItem(
-                    id = "msg_init_1",
-                    memberId = "chat_mira_aleppo",
-                    senderName = "الأميرة ميرا",
-                    senderUsername = "@mira_royal_vip",
-                    text = "أهلاً بك في جناح حلب الملكي VIP ✨ يسعدني تنسيق سهرتك الخاصة بكل خصوصية.",
-                    timestampLabel = "الآن",
-                    isFromCurrentUser = false
-                )
-            ),
-            "chat_nour_damascus" to listOf(
-                ChatMessageItem(
-                    id = "msg_init_2",
-                    memberId = "chat_nour_damascus",
-                    senderName = "نور الشام",
-                    senderUsername = "@nour_spa_vip",
-                    text = "مرحباً بك في جناح السبا الملكي بدمشق 🌿 أخبرني بالموعد المناسب لك لتجهيز الجناح.",
-                    timestampLabel = "الآن",
-                    isFromCurrentUser = false
-                )
-            )
-        )
-    )
+    private val _chatMessagesByMember = MutableStateFlow<Map<String, List<ChatMessageItem>>>(emptyMap())
     val chatMessagesByMember: StateFlow<Map<String, List<ChatMessageItem>>> = _chatMessagesByMember.asStateFlow()
 
     // Admin custom price, photo, and deletion overrides for catalog venues
@@ -598,9 +486,6 @@ class LayaliViewModel(
                 nextLevelXp = existingSaved?.nextLevelXp ?: 10000,
                 selectedFrameId = existingSaved?.selectedFrameId ?: "obsidian_elite"
             )
-            if (existingSaved != null && _walletBalanceUsd.value == 0) {
-                _walletBalanceUsd.value = existingSaved.walletBalanceUsd
-            }
         } else if (authenticatedDisplayName.isNotBlank() || existingSaved != null) {
             val cleanHandle = existingSaved?.username ?: ("@" + authenticatedDisplayName
                 .lowercase()
@@ -621,9 +506,6 @@ class LayaliViewModel(
                 chatPriceUsd = existingSaved?.chatPriceUsd ?: current.chatPriceUsd,
                 isPaidChatEnabled = existingSaved?.isPaidChatEnabled ?: current.isPaidChatEnabled
             )
-            if (existingSaved != null && _walletBalanceUsd.value == 0 && existingSaved.walletBalanceUsd > 0) {
-                _walletBalanceUsd.value = existingSaved.walletBalanceUsd
-            }
         }
         saveInfrastructureToDatabase(emailOverride = emailOverride, showSnackbar = false)
     }
@@ -847,49 +729,12 @@ class LayaliViewModel(
         receiptImageUri: String,
         transactionRef: String
     ) {
-        if (receiptImageUri.isBlank()) {
-            _snackbarMessage.value = "يرجى إرفاق صورة إيصال الدفع أولاً لإتمام عملية الشحن!"
-            return
-        }
-        val validAmount = amountUsd.coerceIn(1, 100000)
-        val totalCredit = validAmount + bonusUsd
-        val methodTitleAr = if (methodKey == "SHAM_CASH") {
-            "شام كاش السوري (Sham Cash)"
-        } else {
-            "USDT (BEP-20) Tether"
-        }
-
-        val receiptRecord = PaymentReceiptRecord(
-            id = "rcpt_${System.currentTimeMillis()}",
-            userId = currentUserId,
-            userName = _userProfile.value.displayName.ifBlank { "عضو VIP" },
-            usernameHandle = _userProfile.value.username,
-            methodKey = methodKey,
-            methodTitleAr = methodTitleAr,
-            amountUsd = validAmount,
-            bonusUsd = bonusUsd,
-            receiptImageUri = receiptImageUri,
-            transactionReference = transactionRef.trim().ifBlank { "إيصال مرفق وموثق" },
-            purposeAr = "شحن رصيد المحفظة",
-            status = "verified",
-            timestampLabel = "الآن"
-        )
-        _paymentReceipts.value = listOf(receiptRecord) + _paymentReceipts.value
-        _walletBalanceUsd.value += totalCredit
-
-        val tx = WalletTransaction(
-            id = "tx_${System.currentTimeMillis()}",
-            title = "إيداع موثق بإيصال ($methodTitleAr)",
-            amountUsd = totalCredit,
-            bonusUsd = bonusUsd,
-            isCredit = true,
-            timestampLabel = "إيصال مرفق ✓"
-        )
-        _walletTransactions.value = listOf(tx) + _walletTransactions.value
-        gainProfileXp(60)
-        _snackbarMessage.value = "تم توثيق إيصال $methodTitleAr وإضافة $$totalCredit إلى محفظتك (+60 XP)!"
+        // A local content:// image is NOT a verified payment or a server receipt.
+        // The upload + authenticated backend submission is required before recording it.
+        _snackbarMessage.value = "لا يمكن شحن الرصيد بإيصال محلي. يلزم رفع الإيصال للخادم ومراجعته أولاً."
     }
 
+    // ========================================================================
     // ========================================================================
     // PAID CHAT UNLOCK & MESSAGING
     // ========================================================================
@@ -945,59 +790,12 @@ class LayaliViewModel(
         receiptUri: String,
         txRef: String
     ) {
-        if (receiptUri.isBlank()) {
-            _snackbarMessage.value = "يرجى إرفاق صورة إيصال الدفع لفتح الدردشة!"
-            return
-        }
-        val methodTitleAr = if (methodKey == "SHAM_CASH") {
-            "شام كاش السوري"
-        } else {
-            "USDT (BEP-20)"
-        }
-        val receipt = PaymentReceiptRecord(
-            id = "rcpt_chat_${System.currentTimeMillis()}",
-            userId = currentUserId,
-            userName = _userProfile.value.displayName.ifBlank { "عضو VIP" },
-            usernameHandle = _userProfile.value.username,
-            methodKey = methodKey,
-            methodTitleAr = methodTitleAr,
-            amountUsd = member.chatPriceUsd,
-            receiptImageUri = receiptUri,
-            transactionReference = txRef.trim().ifBlank { "دردشة ${member.username}" },
-            purposeAr = "فتح دردشة مع ${member.displayName}",
-            status = "pending",
-            timestampLabel = "الآن"
-        )
-        _paymentReceipts.value = listOf(receipt) + _paymentReceipts.value
-        _snackbarMessage.value = "تم استلام إيصال $methodTitleAr وهو قيد المراجعة. لن تُفتح الدردشة قبل اعتماد الدفع."
+        _snackbarMessage.value = "فتح الدردشة مدفوعة يتطلب رفع الإيصال والتحقق منه عبر الخادم؛ لم يتم إرسال هذا الإيصال."
     }
 
     fun sendChatMessage(memberId: String, text: String) {
-        val cleanText = text.trim()
-        if (cleanText.isBlank()) return
-        val member = _chatMembers.value.find { it.id == memberId } ?: return
-        if (member.chatPriceUsd > 0 &&
-            !member.isUnlocked &&
-            memberId !in _unlockedChatMemberIds.value) {
-            _snackbarMessage.value = "لا يمكن إرسال رسالة قبل فتح هذه المحادثة بدفع موثق."
-            return
-        }
-        val profile = _userProfile.value
-        val userMsg = ChatMessageItem(
-            id = "msg_u_${System.currentTimeMillis()}",
-            memberId = memberId,
-            senderName = profile.displayName.ifBlank { "أنا" },
-            senderUsername = profile.username,
-            text = cleanText,
-            timestampLabel = "الآن",
-            isFromCurrentUser = true
-        )
-        // No fabricated replies from the other person. A real chat transport
-        // must be connected before this is considered delivered.
-        val existing = _chatMessagesByMember.value[memberId].orEmpty()
-        _chatMessagesByMember.value = _chatMessagesByMember.value +
-            (memberId to (existing + userMsg))
-        _snackbarMessage.value = "تم حفظ الرسالة على هذا الجهاز؛ لم يتم ربط التسليم المباشر بعد."
+        // No local-only message is represented as delivered to a real recipient.
+        _snackbarMessage.value = "إرسال المحادثات متوقف حتى ربط حساب المستلم بخدمة الرسائل الموثقة."
     }
 
     fun updateVenueStartingPrice(venueId: String, newPriceUsd: Int) {
@@ -1044,66 +842,16 @@ class LayaliViewModel(
     }
 
     fun topUpWallet(amountUsd: Int, bonusUsd: Int = 0, methodTitle: String = "شحن رصيد المحفظة") {
-        val validAmount = amountUsd.coerceIn(1, 100000)
-        val totalCredit = validAmount + bonusUsd
-        _walletBalanceUsd.value += totalCredit
-        val tx = WalletTransaction(
-            id = "tx_${System.currentTimeMillis()}",
-            title = if (bonusUsd > 0) "$methodTitle (شامل +$$bonusUsd هدية مجانية)" else methodTitle,
-            amountUsd = totalCredit,
-            bonusUsd = bonusUsd,
-            isCredit = true,
-            timestampLabel = "الآن"
-        )
-        _walletTransactions.value = listOf(tx) + _walletTransactions.value
-        _snackbarMessage.value = if (bonusUsd > 0) {
-            "تم شحن المحفظة بمبلغ $$validAmount + $$bonusUsd مجاناً! رصيدك الحالي: $${_walletBalanceUsd.value}"
-        } else {
-            "تم شحن المحفظة بمبلغ $$validAmount بنجاح! رصيدك الحالي: $${_walletBalanceUsd.value}"
-        }
+        _snackbarMessage.value = "شحن الرصيد متوقف لحين تأكيد الدفع من الخادم."
     }
 
     fun adminAdjustWalletBalance(amountDeltaUsd: Int, reasonNote: String) {
-        if (!enforceSuperAdminMiddleware()) return
-        if (amountDeltaUsd == 0) return
-        val nextBalance = (_walletBalanceUsd.value + amountDeltaUsd).coerceAtLeast(0)
-        val isCredit = amountDeltaUsd > 0
-        val absAmount = kotlin.math.abs(amountDeltaUsd)
-        _walletBalanceUsd.value = nextBalance
-
-        val tx = WalletTransaction(
-            id = "admin_tx_${System.currentTimeMillis()}",
-            title = if (isCredit) {
-                "إضافة رصيد إداري (Super Admin): ${reasonNote.ifBlank { "شحن مباشر من الإدارة" }}"
-            } else {
-                "خصم/تسوية رصيد إداري (Super Admin): ${reasonNote.ifBlank { "تسوية رصيد" }}"
-            },
-            amountUsd = absAmount,
-            bonusUsd = 0,
-            isCredit = isCredit,
-            timestampLabel = "بواسطة الإدارة"
-        )
-        _walletTransactions.value = listOf(tx) + _walletTransactions.value
-        _snackbarMessage.value = "تم تحديث رصيد المحفظة من لوحة الإدارة إلى $$nextBalance"
+        _snackbarMessage.value = "لا يمكن تعديل الرصيد من الجهاز. يلزم تفويض الإدارة من الخادم وسجل تدقيق."
     }
 
     fun deductWalletBalance(amountUsd: Int, orderTitle: String): Boolean {
-        val current = _walletBalanceUsd.value
-        if (current < amountUsd) {
-            _snackbarMessage.value = "رصيد المحفظة الحالي ($$current) غير كافٍ لإتمام الطلب ($$amountUsd). يرجى إرفاق إيصال شام كاش أو USDT."
-            return false
-        }
-        _walletBalanceUsd.value = current - amountUsd
-        val tx = WalletTransaction(
-            id = "tx_${System.currentTimeMillis()}",
-            title = "دفع حجز: $orderTitle",
-            amountUsd = amountUsd,
-            bonusUsd = 0,
-            isCredit = false,
-            timestampLabel = "الآن"
-        )
-        _walletTransactions.value = listOf(tx) + _walletTransactions.value
-        return true
+        _snackbarMessage.value = "تأكيد دفع المحفظة يتطلب خصماً موثقاً من الخادم."
+        return false
     }
 
     fun consumeBroadcastAlert() {
@@ -1384,68 +1132,9 @@ class LayaliViewModel(
         transactionReference: String = "",
         onSuccess: () -> Unit = {}
     ) {
-        val totalUsd = (unitPriceUsd * guestCount).coerceIn(5, 10000)
-
-        if (receiptImageUri.isNotBlank()) {
-            val receiptRecord = PaymentReceiptRecord(
-                id = "rcpt_book_${System.currentTimeMillis()}",
-                userId = currentUserId,
-                userName = _userProfile.value.displayName.ifBlank { "عضو VIP" },
-                usernameHandle = _userProfile.value.username,
-                methodKey = if (paymentMethodTitle.contains("شام")) "SHAM_CASH" else "USDT_BEP20",
-                methodTitleAr = paymentMethodTitle,
-                amountUsd = totalUsd,
-                receiptImageUri = receiptImageUri,
-                transactionReference = transactionReference.ifBlank { "حجز ${venue.name}" },
-                purposeAr = "دفع حجز: ${venue.name}",
-                status = "verified",
-                timestampLabel = "الآن"
-            )
-            _paymentReceipts.value = listOf(receiptRecord) + _paymentReceipts.value
-        }
-
-        val localBooking = Booking(
-            id = "booking_${System.currentTimeMillis()}",
-            userId = currentUserId,
-            venueId = venue.id,
-            venueName = venue.name,
-            cityName = venue.cityName,
-            country = venue.country,
-            serviceTitle = serviceTitle,
-            category = venue.category,
-            bookingDate = bookingDate,
-            timeSlot = timeSlot,
-            guestCount = guestCount.toLong(),
-            totalPriceUsd = totalUsd.toLong(),
-            notes = notes,
-            status = "confirmed",
-            paymentMethodTitle = paymentMethodTitle,
-            receiptImageUri = receiptImageUri,
-            transactionReference = transactionReference,
-            createdAt = Timestamp.now()
-        )
-        _localBookings.value = listOf(localBooking) + _localBookings.value
-        gainProfileXp(40)
-        _snackbarMessage.value = "تم توثيق الدفع وتأكيد حجزك في ${venue.name} (${venue.cityName}) (+40 XP)!"
-        onSuccess()
-
-        if (hasFirebaseAuthForCurrentUser()) {
-            viewModelScope.launch {
-                repository.createBooking(
-                    venueId = venue.id,
-                    venueName = venue.name,
-                    cityName = venue.cityName,
-                    country = venue.country,
-                    serviceTitle = serviceTitle,
-                    category = venue.category,
-                    bookingDate = bookingDate,
-                    timeSlot = timeSlot,
-                    guestCount = guestCount,
-                    totalPriceUsd = totalUsd,
-                    notes = notes
-                )
-            }
-        }
+        // Booking price, availability and settlement must be validated by the backend.
+        // In particular, never call onSuccess or claim a confirmed booking here.
+        _snackbarMessage.value = "تعذر تأكيد الحجز: يلزم إنشاء طلب على الخادم والتحقق من الدفع أولاً."
     }
 
     fun updateBookingStatus(bookingId: String, newStatus: String) {
