@@ -1263,26 +1263,12 @@ class LayaliViewModel(
     }
 
     fun updateBookingStatus(bookingId: String, newStatus: String) {
-        _localBookings.value = _localBookings.value.map { item ->
-            if (item.id == bookingId) item.copy(status = newStatus) else item
-        }
-        val statusLabel = when (newStatus) {
-            "cancelled" -> "تم إلغاء الحجز"
-            "confirmed" -> "تم قبول وتأكيد الحجز بنجاح"
-            else -> "تم تحديث حالة الحجز إلى مكتمل"
-        }
-        _snackbarMessage.value = statusLabel
-
-        if (hasFirebaseAuthForCurrentUser()) {
-            viewModelScope.launch {
-                repository.updateBookingStatus(bookingId, newStatus)
-            }
-        }
+        _snackbarMessage.value = "تغيير حالة الحجز يتطلب مراجعة الخادم. لم يتم تعديل الحجز."
     }
 
     fun adminUpdateBookingStatus(bookingId: String, newStatus: String) {
-        if (!enforceSuperAdminMiddleware()) return
-        updateBookingStatus(bookingId, newStatus)
+        // Admin workflow uses a Firebase-authenticated claim, not a local session token.
+        _snackbarMessage.value = "تغيير حالات الحجوزات لا ينفذ من الجهاز قبل تحقق تفويض الإدارة من الخادم."
     }
 
     fun rescheduleBooking(
@@ -1292,41 +1278,11 @@ class LayaliViewModel(
         newGuestCount: Int,
         newNotes: String
     ) {
-        _localBookings.value = _localBookings.value.map { item ->
-            if (item.id == bookingId) {
-                item.copy(
-                    bookingDate = newDate,
-                    timeSlot = newTimeSlot,
-                    guestCount = newGuestCount.toLong(),
-                    notes = newNotes
-                )
-            } else {
-                item
-            }
-        }
-        _snackbarMessage.value = "تم تعديل موعد الحجز بنجاح"
-
-        if (hasFirebaseAuthForCurrentUser()) {
-            viewModelScope.launch {
-                repository.rescheduleBooking(
-                    bookingId = bookingId,
-                    newDate = newDate,
-                    newTimeSlot = newTimeSlot,
-                    newGuestCount = newGuestCount,
-                    newNotes = newNotes
-                )
-            }
-        }
+        _snackbarMessage.value = "إعادة الجدولة تتطلب تعديل السعة والحجز معاً من الخادم. لم يُعدّل الموعد."
     }
 
     fun deleteBooking(bookingId: String) {
-        _localBookings.value = _localBookings.value.filterNot { it.id == bookingId }
-        _snackbarMessage.value = "تم حذف السجل من حجوزاتك"
-        if (hasFirebaseAuthForCurrentUser()) {
-            viewModelScope.launch {
-                repository.deleteBooking(bookingId)
-            }
-        }
+        _snackbarMessage.value = "لا يمكن حذف سجل مالي من الجهاز. يمكن طلب الإلغاء من الإدارة."
     }
 
     fun submitCustomerReview(
