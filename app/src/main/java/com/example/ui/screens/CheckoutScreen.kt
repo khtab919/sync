@@ -482,7 +482,7 @@ fun CheckoutScreen(
                         fontWeight = FontWeight.Bold
                     )
 
-                    PaymentMethodType.entries.forEach { method ->
+                    PaymentMethodType.entries.filter { it != PaymentMethodType.WALLET }.forEach { method ->
                         val isSelected = selectedPaymentMethod == method
                         val methodIcon = when (method) {
                             PaymentMethodType.USDT_BEP20 -> Icons.Default.QrCode2
@@ -638,11 +638,11 @@ fun CheckoutScreen(
 
                 LuxuryGradientButton(
                     text = if (isSubmitting) {
-                        "جارٍ توثيق الحجز والإيصال..."
+                        "جارٍ تسجيل طلب الحجز..."
                     } else if (selectedPaymentMethod != PaymentMethodType.WALLET && attachedReceiptUri.isBlank()) {
-                        "أرفق إيصال الدفع لتأكيد الحجز ($$totalPriceUsd)"
+                        "أرفق الإيصال لحفظ طلب الحجز ($$totalPriceUsd)"
                     } else {
-                        "تأكيد الحجز وإرسال الإيصال • $$totalPriceUsd"
+                        "طلب حجز قيد المراجعة • $$totalPriceUsd"
                     },
                     icon = Icons.Default.CheckCircle,
                     enabled = !isSubmitting,
@@ -665,7 +665,7 @@ fun CheckoutScreen(
                             }
                         } else {
                             if (attachedReceiptUri.isBlank()) {
-                                onShowMessage("يرجى إرفاق صورة إيصال التحويل (${selectedPaymentMethod.titleAr}) أولاً لإتمام الحجز!")
+                                onShowMessage("أرفق الإيصال قبل تسجيل طلب الحجز؛ الدفع لم يُراجع بعد.")
                             } else {
                                 onConfirmCheckout(
                                     selectedDate,
