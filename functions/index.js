@@ -184,6 +184,66 @@ exports.submitPaymentReceipt = onCall(options, async (req) => {
   return { receiptId: receiptRef.id, status: "pending" };
 });
 
+/**
+ * A buyer may cancel only an unpaid booking. The remaining slot capacity is
+ * restored in the same transaction, without any local status write.
+ */
+exports.cancelPendingBooking = onCall(options, async (req) => {
+  const uid = auth(req);
+  const bookingId = str(req.data?.bookingId, "bookingId", 6, 128);
+  const bookingRef = db.collection("users").doc(uid).collection("bookings").doc(bookingId);
+  await db.runTransaction(async (tx) => {
+    const booking = await tx.get(bookingRef);
+    if (!booking.exists || booking.get("status") !== "pending_payment")
+      throw new HttpsError("failed-precondition", "Only unpaid bookings can be cancelled");
+    const slotRef = db.collection("service_availability").doc(booking.get("serviceId"))
+      .collection("slots").doc(hash(booking.get("bookingDate") + ":" + booking.get("timeSlot")));
+    const slot = await tx.get(slotRef);
+    if (slot.exists) {
+      const remaining = whole(slot.get("remainingGuests"), "remainingGuests", 0, 100);
+      const capacity = whole(slot.get("capacity"), "capacity", 1, 100);
+      const guests = whole(booking.get("guestCount"), "guestCount", 1, 20);
+      tx.update(slotRef, { remainingGuests: Math.min(capacity, remaining + guests) });
+    }
+    tx.update(bookingRef, { status: "cancelled", updatedAt: FieldValue.serverTimestamp() });
+  });
+  return { status: "cancelled" };
+});
+
+exports.rejectPaymentReceipt = onCall(options, async (req) => {
+  admin(req);
+  const receiptId = str(req.data?.receiptId, "receiptId", 9, 230);
+  const reason = str(req.data?.reason, "reason", 6, 200);
+  const receiptRef = db.collection("payment_receipts").doc(receiptId);
+  await db.runTransaction(async (tx) => {
+    const receipt = await tx.get(receiptRef);
+    if (!receipt.exists || receipt.get("status") !== "pending")
+      throw new HttpsError("failed-precondition", "Only pending receipts can be rejected");
+    if (receipt.get("purpose") === "booking") {
+      const bookingRef = db.collection("users").doc(receipt.get("userId"))
+        .collection("bookings").doc(receipt.get("bookingId"));
+      const booking = await tx.get(bookingRef);
+      if (booking.exists && booking.get("status") === "pending_payment") {
+        const slotRef = db.collection("service_availability").doc(booking.get("serviceId"))
+          .collection("slots").doc(hash(booking.get("bookingDate") + ":" + booking.get("timeSlot")));
+        const slot = await tx.get(slotRef);
+        if (slot.exists) {
+          const remaining = whole(slot.get("remainingGuests"), "remainingGuests", 0, 100);
+          const capacity = whole(slot.get("capacity"), "capacity", 1, 100);
+          const guests = whole(booking.get("guestCount"), "guestCount", 1, 20);
+          tx.update(slotRef, { remainingGuests: Math.min(capacity, remaining + guests) });
+        }
+        tx.update(bookingRef, { status: "cancelled", updatedAt: FieldValue.serverTimestamp() });
+      }
+    }
+    tx.update(receiptRef, {
+      status: "rejected", rejectionReason: reason,
+      reviewedBy: req.auth.uid, updatedAt: FieldValue.serverTimestamp()
+    });
+  });
+  return { status: "rejected" };
+});
+
 exports.approvePaymentReceipt = onCall(options, async (req) => {
   admin(req);
   const d = req.data || {};
@@ -284,12 +344,21 @@ exports.recordWithdrawalPayout = onCall(options, async (req) => {
     const withdraw = await tx.get(withdrawRef);
     if (!withdraw.exists || withdraw.get("status") !== "pending")
       throw new HttpsError("failed-precondition", "Withdrawal is not pending");
+    const payoutRef = db.collection("verified_payout_refs")
+      .doc(hash(externalReference.toLowerCase().replace(/\s+/g, "")));
+    if ((await tx.get(payoutRef)).exists) throw new HttpsError("already-exists", "Payout reference reused");
     const walletRef = db.collection("creator_wallets").doc(withdraw.get("userId"));
     const wallet = await tx.get(walletRef);
     const reserved = amount(wallet, "reservedCents");
     const withdrawalAmount = withdraw.get("amountCents");
     if (reserved < withdrawalAmount) throw new HttpsError("failed-precondition", "Insufficient reserved earnings");
     tx.update(walletRef, { reservedCents: reserved - withdrawalAmount, updatedAt: FieldValue.serverTimestamp() });
+    tx.create(payoutRef, { withdrawalId: id, createdAt: FieldValue.serverTimestamp() });
+    tx.create(db.collection("wallet_ledger").doc("withdrawal_" + id), {
+      userId: withdraw.get("userId"), amountCents: -withdrawalAmount,
+      type: "payout", externalReference, withdrawalId: id,
+      createdAt: FieldValue.serverTimestamp()
+    });
     tx.update(withdrawRef, {
       status: "paid", externalReference, paidAt: FieldValue.serverTimestamp(),
       paidBy: req.auth.uid, updatedAt: FieldValue.serverTimestamp()
