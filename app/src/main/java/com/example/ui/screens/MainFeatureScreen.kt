@@ -360,8 +360,6 @@ fun MainFeatureScreen(
     }
 
     val helperBookPublishedService: (PublishedService) -> Unit = { pub ->
-        val matchingVenue = LayaliCatalog.venues.find { it.cityName == pub.cityName }
-            ?: LayaliCatalog.venues.first()
         val pkg = ServicePackage(
             id = "pub_${pub.id}",
             title = pub.title,
@@ -370,15 +368,35 @@ fun MainFeatureScreen(
             description = pub.description,
             isPopular = true
         )
-        val updatedVenue = matchingVenue.copy(
+        val updatedVenue = Venue(
             id = pub.id,
             name = pub.title,
             cityName = pub.cityName,
             country = pub.country,
+            neighborhood = "",
             category = pub.category,
+            shortDescription = pub.description,
+            fullDescription = pub.description,
+            ratingAverage = 0.0,
+            reviewCount = 0,
             startingPriceUsd = pub.priceUsd.toInt(),
+            openingHours = "يُحدّد حسب الطلب",
+            badges = emptyList(),
+            accentHex = 0xFF0D9488L,
+            secondaryHex = 0xFF09111EL,
+            packages = listOf(pkg),
+            curatedReviews = emptyList(),
+            availableTimeSlots = emptyList(),
+            providerDisplayName = pub.title,
+            providerUsername = "",
+            providerLevel = 1,
+            providerFrameId = "emerald_crown",
+            providerChatPriceUsd = 0,
+            isOnlineNow = false,
             visualPresetKey = pub.imageUrl,
-            packages = listOf(pkg)
+            showcaseVideoTitle = "",
+            showcaseDuration = "",
+            galleryHighlights = emptyList()
         )
         activeCheckoutOrder = updatedVenue to pkg
     }
