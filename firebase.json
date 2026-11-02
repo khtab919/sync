@@ -29,12 +29,7 @@
     {
       "source": "functions",
       "codebase": "layali",
-      "ignore": [
-        "node_modules",
-        ".git",
-        "test",
-        "firebase-debug.log"
-      ]
+      "ignore": ["node_modules", ".git", "test", "firebase-debug.log"]
     }
   ],
   "storage": {
