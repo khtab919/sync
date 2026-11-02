@@ -124,11 +124,25 @@ class LayaliRepository(private val db: FirebaseFirestore) {
     }
 
 
-    suspend fun unlockServerPaidChat(creatorId: String): Result<String> = runCatching {
+    data class CreatorChatQuote(val displayName: String, val username: String, val priceUsd: Int)
+
+    suspend fun fetchCreatorChatQuote(creatorId: String): Result<CreatorChatQuote> = runCatching {
+        requireUserId()
+        @Suppress("UNCHECKED_CAST")
+        val result = Firebase.functions("europe-west1").getHttpsCallable("getCreatorChatQuote")
+            .call(mapOf("creatorId" to creatorId)).await().data as Map<String, Any?>
+        CreatorChatQuote(
+            displayName = result["displayName"] as String,
+            username = result["username"] as String,
+            priceUsd = (result["priceUsd"] as Number).toInt()
+        )
+    }
+
+    suspend fun unlockServerPaidChat(creatorId: String, expectedPriceUsd: Int): Result<String> = runCatching {
         requireUserId()
         @Suppress("UNCHECKED_CAST")
         val result = Firebase.functions("europe-west1").getHttpsCallable("unlockPaidChat")
-            .call(mapOf("creatorId" to creatorId)).await().data as Map<String, Any?>
+            .call(mapOf("creatorId" to creatorId, "expectedPriceUsd" to expectedPriceUsd)).await().data as Map<String, Any?>
         result["threadId"] as String
     }
 
