@@ -953,6 +953,7 @@ fun MainFeatureScreen(
                                         }
                                     },
                                     onShowMessage = viewModel::showInfoMessage,
+                                    onPublishPaidPost = viewModel::publishCreatorPaidPost,
                                     isSuperAdmin = isSuperAdmin,
                                     savedAccounts = savedAccounts,
                                     lastInfrastructureSyncLabel = lastInfrastructureSyncLabel,
