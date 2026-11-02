@@ -115,6 +115,10 @@ class LayaliViewModel(
     // Wallet Balance, Transactions & Verified Payment Receipts
     private val _walletBalanceUsd = MutableStateFlow(0)
     val walletBalanceUsd: StateFlow<Int> = _walletBalanceUsd.asStateFlow()
+    private val _creatorAvailableUsd = MutableStateFlow(0)
+    val creatorAvailableUsd: StateFlow<Int> = _creatorAvailableUsd.asStateFlow()
+    private val _creatorReservedUsd = MutableStateFlow(0)
+    val creatorReservedUsd: StateFlow<Int> = _creatorReservedUsd.asStateFlow()
 
     private val _walletTransactions = MutableStateFlow<List<WalletTransaction>>(emptyList())
     val walletTransactions: StateFlow<List<WalletTransaction>> = _walletTransactions.asStateFlow()
@@ -140,6 +144,17 @@ class LayaliViewModel(
                         emit(0)
                     }
                     .collect { verifiedBalance -> _walletBalanceUsd.value = verifiedBalance }
+            }
+            viewModelScope.launch {
+                repository.observeCreatorEarnings(currentUserId)
+                    .catch { error ->
+                        Log.e(TAG, "Creator earnings stream unavailable", error)
+                        emit(0 to 0)
+                    }
+                    .collect { (available, reserved) ->
+                        _creatorAvailableUsd.value = available
+                        _creatorReservedUsd.value = reserved
+                    }
             }
         }
     }
@@ -883,6 +898,30 @@ class LayaliViewModel(
         if (!enforceSuperAdminMiddleware()) return
         _deletedCatalogVenueIds.value = emptySet()
         _snackbarMessage.value = "تم استعادة جميع مراكز الدليل المحذوفة"
+    }
+
+    fun submitCreatorWithdrawal(amountUsd: Int, destination: String) {
+        if (!hasFirebaseAuthForCurrentUser()) {
+            _snackbarMessage.value = "سجل الدخول بحساب Firebase موثق لطلب السحب."
+            return
+        }
+        if (amountUsd < 1 || destination.trim().length < 8) {
+            _snackbarMessage.value = "أدخل مبلغاً صحيحاً ووجهة سحب صالحة."
+            return
+        }
+        viewModelScope.launch {
+            _isSubmitting.value = true
+            try {
+                repository.requestCreatorWithdrawal(amountUsd, destination.trim())
+                    .onSuccess { withdrawalId ->
+                        _snackbarMessage.value = "تم حجز مبلغ السحب وإرسال الطلب ${withdrawalId} للمراجعة. لم يتم التحويل بعد."
+                    }.onFailure { error ->
+                        _snackbarMessage.value = "تعذر طلب السحب: ${error.localizedMessage ?: "رفض الخادم"}"
+                    }
+            } finally {
+                _isSubmitting.value = false
+            }
+        }
     }
 
     fun topUpWallet(amountUsd: Int, bonusUsd: Int = 0, methodTitle: String = "شحن رصيد المحفظة") {
