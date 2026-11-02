@@ -274,31 +274,8 @@ service cloud.firestore {
       // No booking is confirmed by a client write; payment requires server verification.
       allow create: if false;
 
-      allow update: if isSignedIn() &&
-                       isValidId(userId) &&
-                       isValidId(bookingId) &&
-                       request.auth.uid == userId &&
-                       isValidBooking(incoming()) &&
-                       existing().userId == request.auth.uid &&
-                       existing().status == 'confirmed' &&
-                       incoming().userId == existing().userId &&
-                       incoming().venueId == existing().venueId &&
-                       incoming().venueName == existing().venueName &&
-                       incoming().cityName == existing().cityName &&
-                       incoming().country == existing().country &&
-                       incoming().serviceTitle == existing().serviceTitle &&
-                       incoming().category == existing().category &&
-                       incoming().totalPriceUsd == existing().totalPriceUsd &&
-                       incoming().createdAt == existing().createdAt &&
-                       incoming().diff(existing()).affectedKeys().hasOnly([
-                         'status', 'bookingDate', 'timeSlot', 'guestCount', 'notes', 'updatedAt'
-                       ]);
-
-      allow delete: if isSignedIn() &&
-                       isValidId(userId) &&
-                       isValidId(bookingId) &&
-                       request.auth.uid == userId &&
-                       existing().userId == request.auth.uid;
+      // Pending/confirmed/completed statuses must not be forged from the client.
+      allow update, delete: if false;
     }
 
     // Collection: User Verified Reviews
