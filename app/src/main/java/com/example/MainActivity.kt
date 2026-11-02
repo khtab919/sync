@@ -8,14 +8,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.core.view.WindowCompat
 import androidx.compose.ui.platform.LocalContext
 import com.example.security.SuperAdminSecurityManager
 import com.example.ui.auth.AuthScreen
+import com.example.ui.auth.LayaliWelcomeScreen
 import com.example.ui.screens.MainFeatureScreen
 import com.example.ui.theme.MyApplicationTheme
+import com.example.ui.theme.LayaliAppearance
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
@@ -37,19 +41,41 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            MyApplicationTheme {
-                AppNavigation()
+            val context = LocalContext.current
+            var isLightTheme by remember {
+                mutableStateOf(LayaliAppearance.isLightTheme(context))
+            }
+            SideEffect {
+                WindowCompat.getInsetsController(window, window.decorView).apply {
+                    isAppearanceLightStatusBars = isLightTheme
+                    isAppearanceLightNavigationBars = isLightTheme
+                }
+            }
+            MyApplicationTheme(isSoftRoseLightTheme = isLightTheme) {
+                AppNavigation(
+                    isLightTheme = isLightTheme,
+                    onToggleTheme = {
+                        isLightTheme = !isLightTheme
+                        LayaliAppearance.setLightTheme(context, isLightTheme)
+                    }
+                )
             }
         }
     }
 }
 
 @Composable
-fun AppNavigation(auth: FirebaseAuth = Firebase.auth) {
+fun AppNavigation(
+    auth: FirebaseAuth = Firebase.auth,
+    isLightTheme: Boolean = false,
+    onToggleTheme: () -> Unit = {}
+) {
     val context = LocalContext.current
     val authFlow = remember(auth) { auth.authStateFlow() }
     val currentUser by authFlow.collectAsStateWithLifecycle(initialValue = auth.currentUser)
     var showAuthScreen by rememberSaveable { mutableStateOf(true) }
+    var showWelcome by rememberSaveable { mutableStateOf(!LayaliAppearance.hasSeenWelcome(context)) }
+    var startInCreateMode by rememberSaveable { mutableStateOf(false) }
     var guestModeBrowsing by rememberSaveable { mutableStateOf(false) }
     var traditionalUserDisplayName by rememberSaveable { mutableStateOf("") }
     var adminSessionToken by rememberSaveable { mutableStateOf<String?>(null) }
@@ -58,8 +84,32 @@ fun AppNavigation(auth: FirebaseAuth = Firebase.auth) {
     val isSuperAdmin = !adminSessionToken.isNullOrBlank()
     val hasAuthenticatedUser = user != null || traditionalUserDisplayName.isNotBlank() || isSuperAdmin
 
-    if (showAuthScreen && !hasAuthenticatedUser && !guestModeBrowsing) {
+    if (showWelcome && !hasAuthenticatedUser && !guestModeBrowsing) {
+        LayaliWelcomeScreen(
+            isLightTheme = isLightTheme,
+            onToggleTheme = onToggleTheme,
+            onLogin = {
+                LayaliAppearance.markWelcomeSeen(context)
+                showWelcome = false
+                startInCreateMode = false
+            },
+            onCreateAccount = {
+                LayaliAppearance.markWelcomeSeen(context)
+                showWelcome = false
+                startInCreateMode = true
+            },
+            onBrowse = {
+                LayaliAppearance.markWelcomeSeen(context)
+                showWelcome = false
+                guestModeBrowsing = true
+                showAuthScreen = false
+            }
+        )
+    } else if (showAuthScreen && !hasAuthenticatedUser && !guestModeBrowsing) {
         AuthScreen(
+            startInCreateMode = startInCreateMode,
+            isLightTheme = isLightTheme,
+            onToggleTheme = onToggleTheme,
             onAuthSuccess = {
                 showAuthScreen = false
             },
@@ -84,6 +134,9 @@ fun AppNavigation(auth: FirebaseAuth = Firebase.auth) {
         )
     } else if (showAuthScreen) {
         AuthScreen(
+            startInCreateMode = startInCreateMode,
+            isLightTheme = isLightTheme,
+            onToggleTheme = onToggleTheme,
             onAuthSuccess = {
                 showAuthScreen = false
             },
@@ -119,6 +172,9 @@ fun AppNavigation(auth: FirebaseAuth = Firebase.auth) {
                 ?: if (traditionalUserDisplayName.isNotBlank()) "$traditionalUserDisplayName@layali.vip" else null,
             adminSessionToken = adminSessionToken,
             isSuperAdmin = isSuperAdmin,
+            onThemeModeChanged = { selectedLightTheme ->
+                if (selectedLightTheme != isLightTheme) onToggleTheme()
+            },
             onRequestGoogleSignIn = { showAuthScreen = true },
             onSuperAdminSignOut = {
                 SuperAdminSecurityManager.revokeSuperAdminSession(context)

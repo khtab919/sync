@@ -101,65 +101,47 @@ import kotlinx.coroutines.withContext
 
 private val DecodedUriBitmapCache = LruCache<String, ImageBitmap>(24)
 
+/**
+ * Minimal Layali mark: a conversation outline and a play symbol.
+ * Shared across welcome, sign-in, and profile surfaces; no decorative wings.
+ */
 @Composable
 fun WingedHeartLogo(modifier: Modifier = Modifier) {
+    val light = MaterialTheme.colorScheme.onPrimary
     Spacer(
         modifier = modifier.drawWithCache {
             val w = size.width
             val h = size.height
-            val centerOffset = Offset(w * 0.5f, h * 0.5f)
-            val glowRadius = (w * 0.52f).coerceAtLeast(1f)
-
-            val glowBrush = Brush.radialGradient(
-                colors = listOf(
-                    CoralPinkPrimary.copy(alpha = 0.45f),
-                    VioletBlueVip.copy(alpha = 0.28f),
-                    Color.Transparent
-                ),
-                center = centerOffset,
-                radius = glowRadius
-            )
-
-            val leftWing = Path().apply {
-                moveTo(w * 0.35f, h * 0.55f)
-                cubicTo(w * 0.12f, h * 0.45f, w * 0.08f, h * 0.25f, w * 0.16f, h * 0.18f)
-                cubicTo(w * 0.24f, h * 0.28f, w * 0.30f, h * 0.36f, w * 0.40f, h * 0.44f)
+            val outline = Path().apply {
+                moveTo(w * 0.25f, h * 0.37f)
+                cubicTo(w * 0.25f, h * 0.24f, w * 0.33f, h * 0.20f, w * 0.47f, h * 0.20f)
+                lineTo(w * 0.55f, h * 0.20f)
+                cubicTo(w * 0.69f, h * 0.20f, w * 0.76f, h * 0.29f, w * 0.76f, h * 0.41f)
+                lineTo(w * 0.76f, h * 0.54f)
+                cubicTo(w * 0.76f, h * 0.68f, w * 0.68f, h * 0.74f, w * 0.53f, h * 0.74f)
+                lineTo(w * 0.39f, h * 0.74f)
+                lineTo(w * 0.26f, h * 0.83f)
+                lineTo(w * 0.26f, h * 0.60f)
+            }
+            val play = Path().apply {
+                moveTo(w * 0.46f, h * 0.37f)
+                lineTo(w * 0.46f, h * 0.57f)
+                lineTo(w * 0.62f, h * 0.47f)
                 close()
             }
-            val rightWing = Path().apply {
-                moveTo(w * 0.65f, h * 0.55f)
-                cubicTo(w * 0.88f, h * 0.45f, w * 0.92f, h * 0.25f, w * 0.84f, h * 0.18f)
-                cubicTo(w * 0.76f, h * 0.28f, w * 0.70f, h * 0.36f, w * 0.60f, h * 0.44f)
-                close()
-            }
-
-            val wingBrush = Brush.linearGradient(
-                colors = listOf(VioletBlueVip, CoralPinkPrimary)
-            )
-
-            val heartPath = Path().apply {
-                moveTo(w * 0.5f, h * 0.82f)
-                cubicTo(w * 0.22f, h * 0.62f, w * 0.24f, h * 0.32f, w * 0.39f, h * 0.32f)
-                cubicTo(w * 0.45f, h * 0.32f, w * 0.48f, h * 0.37f, w * 0.5f, h * 0.42f)
-                cubicTo(w * 0.52f, h * 0.37f, w * 0.55f, h * 0.32f, w * 0.61f, h * 0.32f)
-                cubicTo(w * 0.76f, h * 0.32f, w * 0.78f, h * 0.62f, w * 0.5f, h * 0.82f)
-                close()
-            }
-            val heartBrush = Brush.verticalGradient(
-                colors = listOf(CoralSoftAccent, CoralPinkPrimary, VioletBlueVip)
-            )
-            val strokeStyle = Stroke(width = 2.2f)
-
             onDrawBehind {
-                drawCircle(
-                    brush = glowBrush,
-                    radius = glowRadius,
-                    center = centerOffset
+                drawRoundRect(
+                    brush = Brush.linearGradient(
+                        listOf(Color(0xFF156C79), Color(0xFF143A50))
+                    ),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.245f, h * 0.245f)
                 )
-                drawPath(leftWing, brush = wingBrush)
-                drawPath(rightWing, brush = wingBrush)
-                drawPath(path = heartPath, brush = heartBrush)
-                drawPath(path = heartPath, color = PureWhite.copy(alpha = 0.75f), style = strokeStyle)
+                drawPath(
+                    path = outline,
+                    color = light,
+                    style = Stroke(width = w * 0.049f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                )
+                drawPath(path = play, color = light)
             }
         }
     )

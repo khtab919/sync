@@ -201,6 +201,7 @@ fun MainFeatureScreen(
     userEmail: String? = null,
     adminSessionToken: String? = null,
     isSuperAdmin: Boolean = false,
+    onThemeModeChanged: (Boolean) -> Unit = {},
     onRequestGoogleSignIn: () -> Unit = {},
     onSuperAdminSignOut: () -> Unit = {},
     onSignedOut: () -> Unit
@@ -716,7 +717,7 @@ fun MainFeatureScreen(
                                     favoriteIds = favoriteIds,
                                     isSoftRoseLightTheme = isSoftRoseLightTheme,
                                     isSuperAdmin = isSuperAdmin,
-                                    onToggleThemeMode = viewModel::toggleThemeMode,
+                                    onToggleThemeMode = { viewModel.toggleThemeMode(); onThemeModeChanged(!isSoftRoseLightTheme) },
                                     onOpenLoginScreen = onRequestGoogleSignIn,
                                     onOpenWalletTab = { currentTab = MainTab.WALLET },
                                     onOpenChatTab = { currentTab = MainTab.CHAT },
@@ -871,7 +872,7 @@ fun MainFeatureScreen(
                                     favoritesCount = favoriteIds.size,
                                     blockedUsers = blockedUsersList,
                                     isSoftRoseLightTheme = isSoftRoseLightTheme,
-                                    onToggleThemeMode = viewModel::toggleThemeMode,
+                                    onToggleThemeMode = { viewModel.toggleThemeMode(); onThemeModeChanged(!isSoftRoseLightTheme) },
                                     onUpdateProfile = viewModel::updateUserProfile,
                                     onUpdateUsername = viewModel::updateUsername,
                                     onSelectAvatarFrame = viewModel::selectAvatarFrame,
@@ -1031,7 +1032,7 @@ fun MainFeatureScreen(
                                     blockedUsersState = blockedUsersState,
                                     isSoftRoseLightTheme = isSoftRoseLightTheme,
                                     isSubmitting = isSubmitting,
-                                    onToggleThemeMode = viewModel::toggleThemeMode,
+                                    onToggleThemeMode = { viewModel.toggleThemeMode(); onThemeModeChanged(!isSoftRoseLightTheme) },
                                     onPublishService = { title, city, country, cat, price, desc, imgUri, vidUrl ->
                                         val mediaType = if (vidUrl.isNotBlank()) "both" else "image"
                                         viewModel.publishNewService(
