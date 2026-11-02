@@ -114,9 +114,7 @@ fun AppNavigation(auth: FirebaseAuth = Firebase.auth) {
             currentUserId = user?.uid ?: if (traditionalUserDisplayName.isNotBlank()) "user_${traditionalUserDisplayName.hashCode()}" else "guest_session",
             userDisplayName = activeDisplayName,
             isGoogleSignedIn = user != null || traditionalUserDisplayName.isNotBlank(),
-            userEmail = superAdminEmail
-                ?: user?.email
-                ?: if (traditionalUserDisplayName.isNotBlank()) "$traditionalUserDisplayName@layali.vip" else null,
+            userEmail = superAdminEmail ?: user?.email,
             adminSessionToken = adminSessionToken,
             isSuperAdmin = isSuperAdmin,
             onRequestGoogleSignIn = { showAuthScreen = true },

@@ -93,21 +93,7 @@ class LayaliViewModel(
     private val _isSoftRoseLightTheme = MutableStateFlow(false)
     val isSoftRoseLightTheme: StateFlow<Boolean> = _isSoftRoseLightTheme.asStateFlow()
 
-    private val _userProfile = MutableStateFlow(
-        UserProfile(
-            displayName = "عضو ليالي الملكي",
-            username = "@layali_vip",
-            roleTitle = "عضو النخبة VIP",
-            cityName = "دمشق",
-            country = "سوريا",
-            level = 1,
-            xpPoints = 150,
-            nextLevelXp = 2500,
-            selectedFrameId = "emerald_crown",
-            chatPriceUsd = 15,
-            isPaidChatEnabled = true
-        )
-    )
+    private val _userProfile = MutableStateFlow(UserProfile())
     val userProfile: StateFlow<UserProfile> = _userProfile.asStateFlow()
 
     // Wallet Balance, Transactions & Verified Payment Receipts
@@ -123,7 +109,7 @@ class LayaliViewModel(
     private val _savedAccounts = MutableStateFlow<List<RegisteredAccountEntity>>(emptyList())
     val savedAccounts: StateFlow<List<RegisteredAccountEntity>> = _savedAccounts.asStateFlow()
 
-    private val _lastInfrastructureSyncLabel = MutableStateFlow("مفعل ومتزامن مع SQLite + Cloud")
+    private val _lastInfrastructureSyncLabel = MutableStateFlow("بانتظار المزامنة")
     val lastInfrastructureSyncLabel: StateFlow<String> = _lastInfrastructureSyncLabel.asStateFlow()
 
     init {
@@ -133,94 +119,7 @@ class LayaliViewModel(
     }
 
     // Paid Chat Members, Unlocked Conversations & Message Threads
-    private val _chatMembers = MutableStateFlow(
-        listOf(
-            ChatMemberProfile(
-                id = "chat_mira_aleppo",
-                displayName = "الأميرة ميرا • جناح حلب الملكي",
-                username = "@mira_royal_vip",
-                cityName = "حلب",
-                country = "سوريا",
-                category = "سهرات فنية وقدود",
-                bio = "مضيفة جناح السهرات الملكية في حلب • حجز مباشر وتنسيق سهرات خاصة بكامل الخصوصية.",
-                level = 28,
-                frameId = "obsidian_elite",
-                chatPriceUsd = 20,
-                isOnline = true,
-                avatarPreset = "palace_hall"
-            ),
-            ChatMemberProfile(
-                id = "chat_nour_damascus",
-                displayName = "نور الشام • سبا ومساج ملكي",
-                username = "@nour_spa_vip",
-                cityName = "دمشق",
-                country = "سوريا",
-                category = "سبا ومساج",
-                bio = "جلسات مساج ملكي بالزيوت العطرية الدافئة والأحجار البركانية في أرقى أجنحة دمشق.",
-                level = 24,
-                frameId = "emerald_crown",
-                chatPriceUsd = 15,
-                isOnline = true,
-                avatarPreset = "card_spa"
-            ),
-            ChatMemberProfile(
-                id = "chat_lina_latakia",
-                displayName = "لينا الساحل • لاونج اللاذقية",
-                username = "@lina_coast_lounge",
-                cityName = "اللاذقية",
-                country = "سوريا",
-                category = "سهرات فنية",
-                bio = "إطلالة بحرية ساحرة وسهرات VIP خاصة على كورنيش اللاذقية وطرطوس.",
-                level = 19,
-                frameId = "sapphire_neon",
-                chatPriceUsd = 15,
-                isOnline = true,
-                avatarPreset = "card_lounge"
-            ),
-            ChatMemberProfile(
-                id = "chat_sara_istanbul",
-                displayName = "سارة البوسفور • زيارات VIP",
-                username = "@sara_istanbul_vip",
-                cityName = "إسطنبول",
-                country = "تركيا",
-                category = "زيارات خارجية",
-                bio = "تنسيق الزيارات الفندقية الملكية والسهرات الخاصة في إسطنبول وأنطاليا على مدار الساعة.",
-                level = 32,
-                frameId = "crimson_flame",
-                chatPriceUsd = 25,
-                isOnline = true,
-                avatarPreset = "card_vip_night"
-            ),
-            ChatMemberProfile(
-                id = "chat_reem_homs",
-                displayName = "ريم الميماس • جناح حمص الخاص",
-                username = "@reem_homs_royal",
-                cityName = "حمص",
-                country = "سوريا",
-                category = "سبا ومساج",
-                bio = "استرخاء ملكي وضيافة فاخرة في جناح الميماس الخاص • متاحة للرد الفوري.",
-                level = 16,
-                frameId = "amber_sovereign",
-                chatPriceUsd = 10,
-                isOnline = true,
-                avatarPreset = "brand_light_showcase"
-            ),
-            ChatMemberProfile(
-                id = "chat_dana_antalya",
-                displayName = "دانا الريفيرا • منتجع أنطاليا",
-                username = "@dana_antalya_club",
-                cityName = "أنطاليا",
-                country = "تركيا",
-                category = "سهرات فنية",
-                bio = "حفلات يخت خاصة وأجنحة منتجعات 5 نجوم في أنطاليا مع استقبال VIP.",
-                level = 22,
-                frameId = "amethyst_vip",
-                chatPriceUsd = 30,
-                isOnline = false,
-                avatarPreset = "brand_dark_showcase"
-            )
-        )
-    )
+    private val _chatMembers = MutableStateFlow<List<ChatMemberProfile>>(emptyList())
     val chatMembers: StateFlow<List<ChatMemberProfile>> = _chatMembers.asStateFlow()
 
     private val _unlockedChatMemberIds = MutableStateFlow<Set<String>>(emptySet())
@@ -229,32 +128,7 @@ class LayaliViewModel(
     private val _activeChatMemberId = MutableStateFlow<String?>(null)
     val activeChatMemberId: StateFlow<String?> = _activeChatMemberId.asStateFlow()
 
-    private val _chatMessagesByMember = MutableStateFlow<Map<String, List<ChatMessageItem>>>(
-        mapOf(
-            "chat_mira_aleppo" to listOf(
-                ChatMessageItem(
-                    id = "msg_init_1",
-                    memberId = "chat_mira_aleppo",
-                    senderName = "الأميرة ميرا",
-                    senderUsername = "@mira_royal_vip",
-                    text = "أهلاً بك في جناح حلب الملكي VIP ✨ يسعدني تنسيق سهرتك الخاصة بكل خصوصية.",
-                    timestampLabel = "الآن",
-                    isFromCurrentUser = false
-                )
-            ),
-            "chat_nour_damascus" to listOf(
-                ChatMessageItem(
-                    id = "msg_init_2",
-                    memberId = "chat_nour_damascus",
-                    senderName = "نور الشام",
-                    senderUsername = "@nour_spa_vip",
-                    text = "مرحباً بك في جناح السبا الملكي بدمشق 🌿 أخبرني بالموعد المناسب لك لتجهيز الجناح.",
-                    timestampLabel = "الآن",
-                    isFromCurrentUser = false
-                )
-            )
-        )
-    )
+    private val _chatMessagesByMember = MutableStateFlow<Map<String, List<ChatMessageItem>>>(emptyMap())
     val chatMessagesByMember: StateFlow<Map<String, List<ChatMessageItem>>> = _chatMessagesByMember.asStateFlow()
 
     // Admin custom price, photo, and deletion overrides for catalog venues
@@ -271,78 +145,14 @@ class LayaliViewModel(
     val deletedCatalogVenueIds: StateFlow<Set<String>> = _deletedCatalogVenueIds.asStateFlow()
 
     // Initial curated published showcase offers
-    private val _localPublishedServices = MutableStateFlow(
-        listOf(
-            PublishedService(
-                id = "vip_showcase_mira",
-                authorId = "admin",
-                title = "قصر السهرات والقدود الحلبية • جناح VIP",
-                cityName = "حلب",
-                country = "سوريا",
-                category = "سهرات فنية",
-                description = "سهرة طرب وقدود حلبية أصيلة في القاعة الملكية المذهبة مع ضيافة فاخرة.",
-                priceUsd = 50L,
-                imageUrl = "palace_hall",
-                videoUrl = "عرض فيديو 4K لقصر السهرات والقدود الحلبية",
-                mediaType = "both",
-                status = "active"
-            ),
-            PublishedService(
-                id = "vip_showcase_lina",
-                authorId = "admin",
-                title = "قصر العزت الفام الحلبية • لاونج خاص",
-                cityName = "حلب",
-                country = "سوريا",
-                category = "سهرات فنية",
-                description = "جلسات لاونج مخملية وسهرة فنية خاصة بأجواء ملكية دافئة.",
-                priceUsd = 65L,
-                imageUrl = "card_lounge",
-                videoUrl = "فيديو حي من قصر العزت الفام الحلبية",
-                mediaType = "both",
-                status = "active"
-            ),
-            PublishedService(
-                id = "vip_showcase_nour",
-                authorId = "admin",
-                title = "سبا ومساج ملكي خاص • زيوت عطرية",
-                cityName = "دمشق",
-                country = "سوريا",
-                category = "سبا ومساج",
-                description = "جلسة مساج استرخائي بالزيوت العطرية الدافئة والأحجار البركانية.",
-                priceUsd = 45L,
-                imageUrl = "card_spa",
-                videoUrl = "جولة فيديو داخل جناح المساج والسبا الملكي",
-                mediaType = "both",
-                status = "active"
-            ),
-            PublishedService(
-                id = "vip_showcase_sara",
-                authorId = "admin",
-                title = "بطاقة فنية وزيارات خارجية VIP",
-                cityName = "إسطنبول",
-                country = "تركيا",
-                category = "زيارات خارجية",
-                description = "خدمة الزيارات الخارجية الملكية للفنادق والمنازل مع سرية وخصوصية تامة.",
-                priceUsd = 75L,
-                imageUrl = "card_vip_night",
-                videoUrl = "عرض فيديو HD لخدمة الزيارات الخارجية والسهرة الخاصة",
-                mediaType = "both",
-                status = "active"
-            )
-        )
-    )
+    private val _localPublishedServices = MutableStateFlow<List<PublishedService>>(emptyList())
 
     private val _localBookings = MutableStateFlow<List<Booking>>(emptyList())
     private val _localReviews = MutableStateFlow<List<CustomerReview>>(emptyList())
     private val _localFavorites = MutableStateFlow<List<FavoriteVenue>>(emptyList())
     private val _localBlockedUsers = MutableStateFlow<List<BlockedUser>>(emptyList())
 
-    private val seenPublishedIds = mutableSetOf(
-        "vip_showcase_mira",
-        "vip_showcase_lina",
-        "vip_showcase_nour",
-        "vip_showcase_sara"
-    )
+    private val seenPublishedIds = mutableSetOf<String>()
     private var initialSnapshotLoaded = false
 
     private val _incomingBroadcastAlert = MutableStateFlow<PublishedService?>(null)

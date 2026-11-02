@@ -360,8 +360,36 @@ fun MainFeatureScreen(
     }
 
     val helperBookPublishedService: (PublishedService) -> Unit = { pub ->
-        val matchingVenue = LayaliCatalog.venues.find { it.cityName == pub.cityName }
-            ?: LayaliCatalog.venues.first()
+        val matchingVenue = LayaliCatalog.venues.firstOrNull { it.cityName == pub.cityName }
+        val baseVenue = matchingVenue ?: Venue(
+            id = "published_${pub.id}",
+            name = pub.title,
+            cityName = pub.cityName,
+            country = pub.country,
+            neighborhood = "",
+            category = pub.category,
+            shortDescription = pub.description,
+            fullDescription = pub.description,
+            ratingAverage = 0.0,
+            reviewCount = 0,
+            startingPriceUsd = pub.priceUsd.toInt(),
+            openingHours = "",
+            badges = emptyList(),
+            accentHex = 0xFFB77A5C,
+            secondaryHex = 0xFF241D2B,
+            packages = emptyList(),
+            curatedReviews = emptyList(),
+            availableTimeSlots = emptyList(),
+            providerDisplayName = "",
+            providerUsername = "",
+            providerLevel = 0,
+            providerChatPriceUsd = 0,
+            isOnlineNow = false,
+            visualPresetKey = pub.imageUrl,
+            showcaseVideoTitle = pub.videoUrl,
+            showcaseDuration = "",
+            galleryHighlights = emptyList()
+        )
         val pkg = ServicePackage(
             id = "pub_${pub.id}",
             title = pub.title,
@@ -370,7 +398,7 @@ fun MainFeatureScreen(
             description = pub.description,
             isPopular = true
         )
-        val updatedVenue = matchingVenue.copy(
+        val updatedVenue = baseVenue.copy(
             name = pub.title,
             cityName = pub.cityName,
             country = pub.country,
@@ -389,13 +417,8 @@ fun MainFeatureScreen(
             category = pub.category,
             priceUsd = pub.priceUsd.toInt(),
             primaryImageUrl = pub.imageUrl,
-            videoTitle = pub.videoUrl.ifBlank { "عرض فيديو 4K للخدمة في ${pub.cityName}" },
-            galleryCaptions = listOf(
-                "الجناح الملكي الرئيسي • ${pub.cityName}",
-                "النسخة الفاتحة والناعمة VIP",
-                "تفاصيل الضيافة والشموع العطرية",
-                "صالة السهرات والموسيقى الحية"
-            ),
+            videoTitle = pub.videoUrl,
+            galleryCaptions = listOf(pub.title),
             initialTabIsVideo = initialVideo,
             onBookNow = { helperBookPublishedService(pub) },
             onEditPrice = {
@@ -918,15 +941,20 @@ fun MainFeatureScreen(
                                     },
                                     onToggleBlockStatus = viewModel::toggleBlockUserStatus,
                                     onTriggerBroadcastNotification = {
-                                        LayaliNotificationHelper.sendNewServiceBroadcastNotification(
-                                            context = context,
-                                            title = "عرض ملكي جديد من ${userProfile.displayName}",
-                                            cityName = userProfile.cityName,
-                                            priceUsd = 75L,
-                                            description = "جلسة مساج ملكي وسهرة VIP متاحة الآن للحجز المباشر!",
-                                            mediaType = "both"
-                                        )
-                                        viewModel.showInfoMessage("تم إرسال إشعار أندرويد الفوري إلى جميع المستخدمين!")
+                                        val service = publishedServicesList.firstOrNull { it.status == "active" }
+                                        if (service == null) {
+                                            viewModel.showInfoMessage("لا توجد خدمة منشورة لإرسال إشعار بها.")
+                                        } else {
+                                            LayaliNotificationHelper.sendNewServiceBroadcastNotification(
+                                                context = context,
+                                                title = service.title,
+                                                cityName = service.cityName,
+                                                priceUsd = service.priceUsd,
+                                                description = service.description,
+                                                mediaType = service.mediaType
+                                            )
+                                            viewModel.showInfoMessage("تم إنشاء إشعار محلي للخدمة المنشورة.")
+                                        }
                                     },
                                     onOpenGoogleSignIn = onRequestGoogleSignIn,
                                     onSignOut = {
@@ -1260,31 +1288,6 @@ private fun ExploreTabContent(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(
-                        onClick = {
-                            LayaliNotificationHelper.sendNewServiceBroadcastNotification(
-                                context = context,
-                                title = "عرض خاص VIP",
-                                cityName = selectedCity ?: "دمشق وإسطنبول",
-                                priceUsd = 50L,
-                                description = "احجز سهرتك الآن",
-                                mediaType = "both"
-                            )
-                        },
-                        modifier = Modifier
-                            .size(34.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surface)
-                            .testTag("home_notification_bell_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.NotificationsActive,
-                            contentDescription = "الإشعارات",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-
                     // Compact Wallet Balance Pill
                     Surface(
                         onClick = onOpenWalletTab,
@@ -1705,7 +1708,7 @@ private fun ExploreTabContent(
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = "لا توجد مراكز مطابقة للفلتر الحالي",
+                        text = "لا توجد خدمات منشورة بهذه المعايير",
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -1739,10 +1742,10 @@ private fun ExploreTabContent(
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("جميع التقييمات الموثوقة", color = BrandChampagneGold)
+                        Text("التقييمات", color = BrandChampagneGold)
                     }
                     Text(
-                        text = "جميع المراكز والسهرات المتاحة",
+                        text = "الخدمات المنشورة",
                         style = MaterialTheme.typography.titleMedium,
                         color = SoftGold,
                         fontWeight = FontWeight.Bold
@@ -3026,7 +3029,7 @@ private fun VenueSelectorReviewDialog(
     onSubmit: (Venue, String, String, Int, String) -> Unit
 ) {
     var chosenVenue by remember { mutableStateOf(initialVenue) }
-    var authorName by remember { mutableStateOf(defaultAuthorName.ifBlank { "عميل موثق" }) }
+    var authorName by remember { mutableStateOf(defaultAuthorName.ifBlank { "مستخدم" }) }
     var rating by remember { mutableIntStateOf(5) }
     var comment by remember { mutableStateOf("") }
 
