@@ -164,7 +164,7 @@ service cloud.firestore {
              data.country is string && data.country in ['سوريا', 'تركيا'] &&
              data.category is string && data.category.size() >= 2 && data.category.size() <= 80 &&
              data.description is string && data.description.size() >= 3 && data.description.size() <= 600 &&
-             data.priceUsd is int && data.priceUsd >= 5 && data.priceUsd <= 10000 &&
+             data.priceUsd is int && data.priceUsd >= (data.category == 'منشور مدفوع' ? 1 : 5) && data.priceUsd <= 10000 &&
              data.imageUrl is string && data.imageUrl.size() <= 500 &&
              data.videoUrl is string && data.videoUrl.size() <= 500 &&
              data.mediaType is string && data.mediaType in ['photo', 'video', 'both'] &&
@@ -374,6 +374,29 @@ service cloud.firestore {
       allow delete: if isSignedIn() &&
                        isValidId(serviceId) &&
                        (existing().authorId == request.auth.uid || isAdmin());
+    }
+
+    // Paid post bodies are NEVER readable from the public feed. A future trusted
+    // server can verify settlement and issue entitlements before granting access.
+    // Clients cannot grant themselves permissions or mark purchases as paid.
+    match /creator_post_bodies/{postId} {
+      allow get: if isSignedIn() &&
+                    isValidId(postId) &&
+                    existing().authorId == request.auth.uid;
+      allow list: if false;
+
+      allow create: if isSignedIn() &&
+                       isValidId(postId) &&
+                       incoming().keys().hasAll(['authorId', 'serviceId', 'body', 'createdAt']) &&
+                       incoming().keys().hasOnly(['authorId', 'serviceId', 'body', 'createdAt']) &&
+                       incoming().authorId == request.auth.uid &&
+                       incoming().serviceId == postId &&
+                       incoming().body is string &&
+                       incoming().body.size() >= 20 &&
+                       incoming().body.size() <= 5000 &&
+                       incoming().createdAt is timestamp &&
+                       incoming().createdAt <= request.time;
+      allow update, delete: if false;
     }
 
     // Collection: Blocked Users & Moderation
