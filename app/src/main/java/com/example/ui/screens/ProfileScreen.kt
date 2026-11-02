@@ -2028,7 +2028,11 @@ fun ProfileScreen(
                                 modifier = Modifier.testTag("select_avatar_frame_${frameItem.id}")
                             ) {
                                 Text(
-                                    text = frameItem.nameAr,
+                                    text = if (userProfile.level < frameItem.minLevel && !isSuperAdmin) {
+                                        "🔒 Lv.${frameItem.minLevel} • ${frameItem.nameAr}"
+                                    } else {
+                                        frameItem.nameAr
+                                    },
                                     fontSize = 10.sp,
                                     color = SoftWhiteText,
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
