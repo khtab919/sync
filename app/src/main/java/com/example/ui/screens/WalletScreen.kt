@@ -86,6 +86,9 @@ data class TopUpPackageOption(
 @Composable
 fun WalletScreen(
     walletBalanceUsd: Int,
+    creatorAvailableUsd: Int = 0,
+    creatorReservedUsd: Int = 0,
+    onRequestCreatorWithdrawal: (Int, String) -> Unit = { _, _ -> },
     transactions: List<WalletTransaction>,
     paymentReceipts: List<PaymentReceiptRecord> = emptyList(),
     onSubmitRealDepositReceipt: (
@@ -140,6 +143,8 @@ fun WalletScreen(
     var selectedGatewayKey by remember { mutableStateOf("USDT_BEP20") }
     var attachedReceiptUri by remember { mutableStateOf("") }
     var transactionReferenceInput by remember { mutableStateOf("") }
+    var withdrawalAmountText by remember { mutableStateOf("") }
+    var withdrawalDestination by remember { mutableStateOf("") }
 
     val customParsed = customAmountInput.toIntOrNull()
     val activeAmount = if (customParsed != null && customParsed > 0) {
@@ -200,6 +205,67 @@ fun WalletScreen(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "رجوع",
                             tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            }
+
+            // Server-authoritative creator funds; no local editing of balances.
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth().testTag("creator_withdrawal_card"),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = "أرباح المذيعة • سحب موثق",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "المتاح للسحب: ${creatorAvailableUsd} • قيد المراجعة: ${creatorReservedUsd}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "تُحسب نسبة المذيعة 80% بعد إتمام الخدمة من الخادم. طلب السحب ليس إشعاراً بتنفيذ التحويل.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        OutlinedTextField(
+                            value = withdrawalAmountText,
+                            onValueChange = { withdrawalAmountText = it.filter(Char::isDigit).take(6) },
+                            label = { Text("مبلغ السحب بالدولار") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().testTag("creator_withdraw_amount")
+                        )
+                        OutlinedTextField(
+                            value = withdrawalDestination,
+                            onValueChange = { withdrawalDestination = it.take(160) },
+                            label = { Text("عنوان أو وجهة استلام السحب") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().testTag("creator_withdraw_destination")
+                        )
+                        LuxuryGradientButton(
+                            text = "إرسال طلب سحب للمراجعة",
+                            icon = Icons.Default.AccountBalanceWallet,
+                            onClick = {
+                                val amount = withdrawalAmountText.toIntOrNull()
+                                if (amount == null || amount <= 0 || amount > creatorAvailableUsd || withdrawalDestination.trim().length < 8) {
+                                    onShowMessage("تحقق من مبلغ الأرباح المتاحة ووجهة الاستلام قبل تقديم الطلب.")
+                                } else {
+                                    onRequestCreatorWithdrawal(amount, withdrawalDestination.trim())
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            testTag = "request_creator_withdrawal_button"
                         )
                     }
                 }
