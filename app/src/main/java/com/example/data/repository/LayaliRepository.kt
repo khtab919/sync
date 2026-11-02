@@ -603,7 +603,7 @@ class LayaliRepository(private val db: FirebaseFirestore) {
                     "level" to level.coerceIn(1, 100).toLong(),
                     "xpPoints" to xpPoints.coerceIn(0, 10000000).toLong(),
                     "nextLevelXp" to nextLevelXp.coerceIn(100, 50000000).toLong(),
-                    "walletBalanceUsd" to walletBalanceUsd.coerceIn(0, 1000000).toLong(),
+
                     "chatPriceUsd" to chatPriceUsd.coerceIn(1, 5000).toLong(),
                     "isPaidChatEnabled" to isPaidChatEnabled,
                     "passwordSaltHex" to safeSaltHex,
@@ -624,7 +624,7 @@ class LayaliRepository(private val db: FirebaseFirestore) {
                     "level" to level.coerceIn(1, 100).toLong(),
                     "xpPoints" to xpPoints.coerceIn(0, 10000000).toLong(),
                     "nextLevelXp" to nextLevelXp.coerceIn(100, 50000000).toLong(),
-                    "walletBalanceUsd" to walletBalanceUsd.coerceIn(0, 1000000).toLong(),
+                    "walletBalanceUsd" to 0L,
                     "chatPriceUsd" to chatPriceUsd.coerceIn(1, 5000).toLong(),
                     "isPaidChatEnabled" to isPaidChatEnabled,
                     "passwordSaltHex" to safeSaltHex,
