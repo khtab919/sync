@@ -804,7 +804,7 @@ fun MainFeatureScreen(
                                     walletTransactions = walletTransactions,
                                     isGoogleSignedIn = isGoogleSignedIn,
                                     userEmail = userEmail,
-                                    publishedServices = publishedServicesList,
+                                    publishedServices = publishedServicesList.filter { it.authorId == currentUserId },
                                     bookingsCount = bookingsList.size,
                                     reviewsCount = userReviewsList.size,
                                     favoritesCount = favoriteIds.size,
