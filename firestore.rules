@@ -189,6 +189,11 @@ service cloud.firestore {
     }
 
 
+    match /service_availability/{serviceId}/slots/{slotId} {
+      allow get, list: if isSignedIn() && existing().status == 'open';
+      allow create, update, delete: if false;
+    }
+
     // Only trusted Admin SDK / Cloud Functions may change money or chat entitlements.
     match /wallets/{userId} {
       allow get: if isSignedIn() && request.auth.uid == userId;
