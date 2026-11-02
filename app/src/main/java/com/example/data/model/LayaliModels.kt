@@ -18,9 +18,9 @@ data class Booking(
     val bookingDate: String = "",
     val timeSlot: String = "",
     val guestCount: Long = 1L,
-    val totalPriceUsd: Long = 50L,
+    val totalPriceUsd: Long = 0L,
     val notes: String = "",
-    val status: String = "confirmed",
+    val status: String = "pending",
     val paymentMethodTitle: String = "شام كاش / USDT",
     val receiptImageUri: String = "",
     val transactionReference: String = "",
@@ -231,7 +231,7 @@ data class PaymentReceiptRecord(
     val receiptImageUri: String,
     val transactionReference: String,
     val purposeAr: String,          // "شحن محفظة", "حجز خدمة", "فتح دردشة مدفوعة"
-    val status: String = "verified",// "verified" or "pending"
+    val status: String = "pending", // Never assume receipt is verified by default
     val timestampLabel: String = "الآن"
 )
 

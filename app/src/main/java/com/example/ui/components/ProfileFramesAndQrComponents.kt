@@ -1245,7 +1245,7 @@ fun MandatoryReceiptAttachmentCard(
             }
 
             Text(
-                text = "الدفع في التطبيق حقيقي 100% وغير وهمي. بعد التحويل عبر شام كاش أو USDT، قم بإرفاق لقطة شاشة لإيصال التحويل ليتم توثيق دفعتك فوراً.",
+                text = "إرفاق الإيصال يرسل طلب مراجعة فقط. لا يُضاف الرصيد إلا بعد التحقق من وصول التحويل فعلياً، ولا تُعد صورة الإيصال تأكيداً للدفع.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

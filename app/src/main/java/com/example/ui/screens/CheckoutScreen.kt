@@ -45,6 +45,15 @@ import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalContext
+import com.example.R
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.snapshots
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.catch
+import java.text.SimpleDateFormat
+import java.util.Calendar
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -118,21 +127,54 @@ fun CheckoutScreen(
 ) {
     BackHandler { onBack() }
 
-    val planOptions = remember(venue) { buildVipPlanOptions(venue) }
+    // Never offer synthetic Silver/Gold tiers with prices absent from the backend.
+    val planOptions = remember(venue) {
+        buildVipPlanOptions(venue).take(1).map { plan ->
+            plan.copy(
+                tierTitle = venue.name,
+                discountBadge = "السعر المعلن",
+                priceUsd = venue.startingPriceUsd,
+                benefits = listOf(venue.shortDescription)
+            )
+        }
+    }
     var selectedPlanIndex by remember(selectedPackage.id) {
         val idx = planOptions.indexOfFirst { it.id == selectedPackage.id || it.priceUsd == selectedPackage.priceUsd }
         mutableIntStateOf(if (idx >= 0) idx else 0)
     }
     val activePlan = planOptions.getOrElse(selectedPlanIndex) { planOptions.first() }
 
+    // Canonical yyyy-MM-dd dates match server-side availability keys.
     val availableDates = remember {
-        listOf("الليلة (حجز فوري)", "غداً مساءً", "الجمعة القادمة", "السبت القادم")
+        val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        (0..13).map { offset ->
+            val calendar = Calendar.getInstance()
+            calendar.add(Calendar.DAY_OF_YEAR, offset)
+            formatter.format(calendar.time)
+        }
     }
-    var selectedDate by remember { mutableStateOf(availableDates.first()) }
-    var selectedTimeSlot by remember {
-        mutableStateOf(venue.availableTimeSlots.firstOrNull() ?: "09:00 مساءً")
-    }
+    var selectedDate by remember(venue.id) { mutableStateOf(availableDates.first()) }
+    var selectedTimeSlot by remember(venue.id) { mutableStateOf("") }
     var guestCount by remember { mutableIntStateOf(1) }
+    var availableSlots by remember(venue.id) { mutableStateOf<List<String>>(emptyList()) }
+    val context = LocalContext.current
+    LaunchedEffect(venue.id, selectedDate, guestCount) {
+        availableSlots = emptyList()
+        selectedTimeSlot = ""
+        val databaseId = context.getString(R.string.firestore_database_id)
+        FirebaseFirestore.getInstance(databaseId)
+            .collection("service_availability").document(venue.id).collection("slots")
+            .whereEqualTo("status", "open").snapshots()
+            .catch { availableSlots = emptyList() }
+            .collect { snapshot ->
+                val slots = snapshot.documents.filter { doc ->
+                    doc.getString("bookingDate") == selectedDate &&
+                        (doc.getLong("remainingGuests") ?: 0L) >= guestCount.toLong()
+                }.mapNotNull { it.getString("timeSlot") }.distinct().sorted()
+                availableSlots = slots
+                if (selectedTimeSlot !in slots) selectedTimeSlot = slots.firstOrNull().orEmpty()
+            }
+    }
     var notes by remember { mutableStateOf("") }
     var selectedPaymentMethod by remember { mutableStateOf(PaymentMethodType.USDT_BEP20) }
     var attachedReceiptUri by remember { mutableStateOf("") }
@@ -414,12 +456,12 @@ fun CheckoutScreen(
                             }
                         }
 
-                        if (venue.availableTimeSlots.isNotEmpty()) {
+                        if (availableSlots.isNotEmpty()) {
                             FlowRow(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                                 verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                venue.availableTimeSlots.forEach { slot ->
+                                availableSlots.forEach { slot ->
                                     FilterChip(
                                         selected = selectedTimeSlot == slot,
                                         onClick = { selectedTimeSlot = slot },
@@ -432,6 +474,12 @@ fun CheckoutScreen(
                                     )
                                 }
                             }
+                        } else {
+                            Text(
+                                text = "لا توجد مواعيد متاحة لهذا التاريخ حالياً.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
 
                         Row(
@@ -649,7 +697,9 @@ fun CheckoutScreen(
                     isEmeraldStyle = attachedReceiptUri.isNotBlank() ||
                         (selectedPaymentMethod == PaymentMethodType.WALLET && walletBalanceUsd >= totalPriceUsd),
                     onClick = {
-                        if (selectedPaymentMethod == PaymentMethodType.WALLET) {
+                        if (selectedTimeSlot.isBlank()) {
+                            onShowMessage("هذه الخدمة ليس لديها موعد متاح موثق من الخادم حالياً.")
+                        } else if (selectedPaymentMethod == PaymentMethodType.WALLET) {
                             if (walletBalanceUsd < totalPriceUsd) {
                                 onShowMessage("رصيد المحفظة ($$walletBalanceUsd) غير كافٍ لطلب ($$totalPriceUsd). اختر شام كاش أو USDT وأرفق الإيصال.")
                             } else {

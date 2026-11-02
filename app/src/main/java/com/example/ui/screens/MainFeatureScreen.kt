@@ -162,12 +162,13 @@ import com.google.firebase.firestore.FirebaseFirestore
 
 enum class MainTab(val titleAr: String, val tag: String) {
     EXPLORE("الرئيسية", "tab_explore"),
+    STORE("الحجز", "tab_store"),
     REELS("الريلز", "tab_reels"),
-    CHAT("الدردشة", "tab_chat"),
+    CHAT("الرسائل", "tab_chat"),
     WALLET("شراء رصيد", "tab_wallet"),
     BOOKINGS("الحجوزات", "tab_bookings"),
     FAVORITES("المفضلة", "tab_favorites"),
-    PROFILE("الحساب", "tab_profile"),
+    PROFILE("الملف", "tab_profile"),
     REVIEWS("التقييمات", "tab_reviews"),
     ADMIN("الإدارة", "tab_admin")
 }
@@ -240,6 +241,8 @@ fun MainFeatureScreen(
     val isSoftRoseLightTheme by viewModel.isSoftRoseLightTheme.collectAsStateWithLifecycle()
     val userProfile by viewModel.userProfile.collectAsStateWithLifecycle()
     val walletBalanceUsd by viewModel.walletBalanceUsd.collectAsStateWithLifecycle()
+    val creatorAvailableUsd by viewModel.creatorAvailableUsd.collectAsStateWithLifecycle()
+    val creatorReservedUsd by viewModel.creatorReservedUsd.collectAsStateWithLifecycle()
     val walletTransactions by viewModel.walletTransactions.collectAsStateWithLifecycle()
     val paymentReceipts by viewModel.paymentReceipts.collectAsStateWithLifecycle()
     val savedAccounts by viewModel.savedAccounts.collectAsStateWithLifecycle()
@@ -360,8 +363,6 @@ fun MainFeatureScreen(
     }
 
     val helperBookPublishedService: (PublishedService) -> Unit = { pub ->
-        val matchingVenue = LayaliCatalog.venues.find { it.cityName == pub.cityName }
-            ?: LayaliCatalog.venues.first()
         val pkg = ServicePackage(
             id = "pub_${pub.id}",
             title = pub.title,
@@ -370,14 +371,35 @@ fun MainFeatureScreen(
             description = pub.description,
             isPopular = true
         )
-        val updatedVenue = matchingVenue.copy(
+        val updatedVenue = Venue(
+            id = pub.id,
             name = pub.title,
             cityName = pub.cityName,
             country = pub.country,
+            neighborhood = "",
             category = pub.category,
+            shortDescription = pub.description,
+            fullDescription = pub.description,
+            ratingAverage = 0.0,
+            reviewCount = 0,
             startingPriceUsd = pub.priceUsd.toInt(),
+            openingHours = "يُحدّد حسب الطلب",
+            badges = emptyList(),
+            accentHex = 0xFF0D9488L,
+            secondaryHex = 0xFF09111EL,
+            packages = listOf(pkg),
+            curatedReviews = emptyList(),
+            availableTimeSlots = emptyList(),
+            providerDisplayName = pub.title,
+            providerUsername = "",
+            providerLevel = 1,
+            providerFrameId = "emerald_crown",
+            providerChatPriceUsd = 0,
+            isOnlineNow = false,
             visualPresetKey = pub.imageUrl,
-            packages = listOf(pkg)
+            showcaseVideoTitle = "",
+            showcaseDuration = "",
+            galleryHighlights = emptyList()
         )
         activeCheckoutOrder = updatedVenue to pkg
     }
@@ -454,8 +476,8 @@ fun MainFeatureScreen(
     val bottomNavigationTabs = remember {
         listOf(
             MainTab.EXPLORE,
+            MainTab.STORE,
             MainTab.REELS,
-            MainTab.WALLET,
             MainTab.CHAT,
             MainTab.PROFILE
         )
@@ -513,7 +535,7 @@ fun MainFeatureScreen(
                         ) {
                             bottomNavigationTabs.forEach { tab ->
                                 val selected = currentTab == tab
-                                val isWalletCenterTab = tab == MainTab.WALLET
+                                val isWalletCenterTab = tab == MainTab.REELS
                                 NavigationBarItem(
                                     selected = selected,
                                     onClick = { currentTab = tab },
@@ -522,21 +544,22 @@ fun MainFeatureScreen(
                                         if (isWalletCenterTab) {
                                             Box(
                                                 modifier = Modifier
-                                                    .size(36.dp)
+                                                    .size(52.dp)
                                                     .clip(CircleShape)
-                                                    .background(VioletBlueVip),
+                                                    .background(MaterialTheme.colorScheme.primary),
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 Icon(
-                                                    imageVector = Icons.Default.AccountBalanceWallet,
-                                                    contentDescription = "شراء رصيد",
-                                                    tint = Color.White,
-                                                    modifier = Modifier.size(18.dp)
+                                                    imageVector = Icons.Default.Add,
+                                                    contentDescription = "عرض الريلز",
+                                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                                    modifier = Modifier.size(28.dp)
                                                 )
                                             }
                                         } else {
                                             Icon(
                                                 imageVector = when (tab) {
+                                                    MainTab.STORE -> Icons.Default.CalendarMonth
                                                     MainTab.EXPLORE -> Icons.Default.Home
                                                     MainTab.REELS -> Icons.Default.PlayCircleFilled
                                                     MainTab.CHAT -> Icons.Default.Chat
@@ -554,17 +577,17 @@ fun MainFeatureScreen(
                                     },
                                     label = {
                                         Text(
-                                            text = if (isWalletCenterTab) "المحفظة" else tab.titleAr,
-                                            fontSize = 10.sp,
+                                            text = if (isWalletCenterTab) "الريلز" else tab.titleAr,
+                                            fontSize = 13.sp,
                                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
                                         )
                                     },
                                     colors = NavigationBarItemDefaults.colors(
-                                        selectedIconColor = VioletBlueVip,
-                                        selectedTextColor = VioletBlueVip,
-                                        indicatorColor = if (isWalletCenterTab) Color.Transparent else VioletBlueVip.copy(alpha = 0.14f),
+                                        selectedIconColor = MaterialTheme.colorScheme.primary,
+                                        selectedTextColor = MaterialTheme.colorScheme.primary,
+                                        indicatorColor = if (isWalletCenterTab) Color.Transparent else MaterialTheme.colorScheme.primaryContainer,
                                         unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                         unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -596,7 +619,8 @@ fun MainFeatureScreen(
                                     icon = {
                                         Icon(
                                             imageVector = when (tab) {
-                                                MainTab.EXPLORE -> Icons.Default.Home
+                                                MainTab.STORE -> Icons.Default.CalendarMonth
+                                                    MainTab.EXPLORE -> Icons.Default.Home
                                                 MainTab.REELS -> Icons.Default.PlayCircleFilled
                                                 MainTab.CHAT -> Icons.Default.Chat
                                                 MainTab.BOOKINGS -> Icons.Default.CalendarMonth
@@ -632,12 +656,7 @@ fun MainFeatureScreen(
                                     currentTab = MainTab.WALLET
                                 },
                                 onConfirmCheckout = { date, slot, guests, notes, paymentMethod, receiptUri, txRef ->
-                                    if (paymentMethod == PaymentMethodType.WALLET) {
-                                        viewModel.deductWalletBalance(
-                                            amountUsd = checkoutTarget.second.priceUsd * guests,
-                                            orderTitle = "${checkoutTarget.second.title} (${checkoutTarget.first.cityName})"
-                                        )
-                                    }
+                                    // The backend debits and confirms atomically; never pre-debit locally.
                                     viewModel.createDirectBooking(
                                         venue = checkoutTarget.first,
                                         serviceTitle = "${checkoutTarget.second.title} • ${paymentMethod.titleAr}",
@@ -700,7 +719,7 @@ fun MainFeatureScreen(
                             )
                         } else {
                             when (currentTab) {
-                                MainTab.EXPLORE -> ExploreTabContent(
+                                MainTab.EXPLORE, MainTab.STORE -> ExploreTabContent(
                                     userProfile = userProfile,
                                     userDisplayName = userProfile.displayName.ifBlank { userDisplayName },
                                     userAvatarUri = userProfile.avatarUri,
@@ -712,7 +731,7 @@ fun MainFeatureScreen(
                                     sortOption = sortOption,
                                     cities = filteredCities,
                                     venues = visibleVenues,
-                                    publishedServices = publishedServicesList.filter { it.authorId == viewModel.currentUserId },
+                                    publishedServices = publishedServicesList,
                                     favoriteIds = favoriteIds,
                                     isSoftRoseLightTheme = isSoftRoseLightTheme,
                                     isSuperAdmin = isSuperAdmin,
@@ -849,6 +868,9 @@ fun MainFeatureScreen(
 
                                 MainTab.WALLET -> WalletScreen(
                                     walletBalanceUsd = walletBalanceUsd,
+                                    creatorAvailableUsd = creatorAvailableUsd,
+                                    creatorReservedUsd = creatorReservedUsd,
+                                    onRequestCreatorWithdrawal = viewModel::submitCreatorWithdrawal,
                                     transactions = walletTransactions,
                                     paymentReceipts = paymentReceipts,
                                     onBack = { currentTab = MainTab.EXPLORE },
@@ -865,7 +887,7 @@ fun MainFeatureScreen(
                                     walletTransactions = walletTransactions,
                                     isGoogleSignedIn = isGoogleSignedIn,
                                     userEmail = userEmail,
-                                    publishedServices = publishedServicesList,
+                                    publishedServices = publishedServicesList.filter { it.authorId == viewModel.currentUserId },
                                     bookingsCount = bookingsList.size,
                                     reviewsCount = userReviewsList.size,
                                     favoritesCount = favoriteIds.size,
@@ -906,7 +928,7 @@ fun MainFeatureScreen(
                                     onOpenAdminTab = { currentTab = MainTab.ADMIN },
                                     onOpenBookingsTab = { currentTab = MainTab.BOOKINGS },
                                     onOpenFavoritesTab = { currentTab = MainTab.FAVORITES },
-                                    onOpenExploreTab = { currentTab = MainTab.EXPLORE },
+                                    onOpenExploreTab = { currentTab = MainTab.STORE },
                                     onOpenChatTab = { currentTab = MainTab.CHAT },
                                     onOpenWalletTab = { currentTab = MainTab.WALLET },
                                     onQuickBlockUser = { identifier, reason ->
@@ -942,15 +964,8 @@ fun MainFeatureScreen(
                                         )
                                     },
                                     onPurchaseContentWithWallet = { amountUsd, itemTitle ->
-                                        if (walletBalanceUsd >= amountUsd) {
-                                            viewModel.deductWalletBalance(
-                                                amountUsd = amountUsd,
-                                                orderTitle = itemTitle
-                                            )
-                                            true
-                                        } else {
-                                            false
-                                        }
+                                        viewModel.showInfoMessage("فتح المحتوى المدفوع يتطلب تأكيد عملية الشراء من الخادم.")
+                                        false
                                     },
                                     onShowMessage = viewModel::showInfoMessage,
                                     onPublishPaidPost = viewModel::publishCreatorPaidPost,
@@ -1532,7 +1547,7 @@ private fun ExploreTabContent(
                         items(cities, key = { it.id }) { city ->
                             CityChipCard(
                                 cityName = city.nameAr,
-                                country = "${city.country} • ${city.activeVenuesCount} مركز",
+                                country = city.country,
                                 isSelected = selectedCity == city.nameAr,
                                 onClick = { onSelectCity(city.nameAr) }
                             )
@@ -2905,7 +2920,8 @@ private fun VerifiedReviewsTabContent(
                 }
 
                 Button(
-                    onClick = { venueToReview = LayaliCatalog.venues.first() },
+                    onClick = { venueToReview = LayaliCatalog.venues.firstOrNull() },
+                    enabled = LayaliCatalog.venues.isNotEmpty(),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = RoyalGold,
                         contentColor = ObsidianNight

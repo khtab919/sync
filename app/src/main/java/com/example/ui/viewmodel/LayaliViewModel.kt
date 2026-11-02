@@ -1,6 +1,7 @@
 package com.example.ui.viewmodel
 
 import android.content.Context
+import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -31,6 +32,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
@@ -90,14 +92,15 @@ class LayaliViewModel(
     val isSubmitting: StateFlow<Boolean> = _isSubmitting.asStateFlow()
 
     // Default to Royal Dark Sapphire & Sovereign Gold theme
-    private val _isSoftRoseLightTheme = MutableStateFlow(false)
+    private val appearancePreferences = appContext?.getSharedPreferences("layali_appearance", Context.MODE_PRIVATE)
+    private val _isSoftRoseLightTheme = MutableStateFlow(appearancePreferences?.getBoolean("light_theme", true) ?: true)
     val isSoftRoseLightTheme: StateFlow<Boolean> = _isSoftRoseLightTheme.asStateFlow()
 
     private val _userProfile = MutableStateFlow(
         UserProfile(
-            displayName = "عضو ليالي الملكي",
-            username = "@layali_vip",
-            roleTitle = "عضو النخبة VIP",
+            displayName = "",
+            username = "",
+            roleTitle = "",
             cityName = "دمشق",
             country = "سوريا",
             level = 1,
@@ -113,6 +116,10 @@ class LayaliViewModel(
     // Wallet Balance, Transactions & Verified Payment Receipts
     private val _walletBalanceUsd = MutableStateFlow(0)
     val walletBalanceUsd: StateFlow<Int> = _walletBalanceUsd.asStateFlow()
+    private val _creatorAvailableUsd = MutableStateFlow(0)
+    val creatorAvailableUsd: StateFlow<Int> = _creatorAvailableUsd.asStateFlow()
+    private val _creatorReservedUsd = MutableStateFlow(0)
+    val creatorReservedUsd: StateFlow<Int> = _creatorReservedUsd.asStateFlow()
 
     private val _walletTransactions = MutableStateFlow<List<WalletTransaction>>(emptyList())
     val walletTransactions: StateFlow<List<WalletTransaction>> = _walletTransactions.asStateFlow()
@@ -130,97 +137,31 @@ class LayaliViewModel(
         appContext?.let { ctx ->
             _savedAccounts.value = SuperAdminSecurityManager.getSavedAccounts(ctx)
         }
+        if (hasFirebaseAuthForCurrentUser()) {
+            viewModelScope.launch {
+                repository.observeVerifiedWalletBalance(currentUserId)
+                    .catch { error ->
+                        Log.e(TAG, "Verified wallet stream unavailable", error)
+                        emit(0)
+                    }
+                    .collect { verifiedBalance -> _walletBalanceUsd.value = verifiedBalance }
+            }
+            viewModelScope.launch {
+                repository.observeCreatorEarnings(currentUserId)
+                    .catch { error ->
+                        Log.e(TAG, "Creator earnings stream unavailable", error)
+                        emit(0 to 0)
+                    }
+                    .collect { (available, reserved) ->
+                        _creatorAvailableUsd.value = available
+                        _creatorReservedUsd.value = reserved
+                    }
+            }
+        }
     }
 
     // Paid Chat Members, Unlocked Conversations & Message Threads
-    private val _chatMembers = MutableStateFlow(
-        listOf(
-            ChatMemberProfile(
-                id = "chat_mira_aleppo",
-                displayName = "الأميرة ميرا • جناح حلب الملكي",
-                username = "@mira_royal_vip",
-                cityName = "حلب",
-                country = "سوريا",
-                category = "سهرات فنية وقدود",
-                bio = "مضيفة جناح السهرات الملكية في حلب • حجز مباشر وتنسيق سهرات خاصة بكامل الخصوصية.",
-                level = 28,
-                frameId = "obsidian_elite",
-                chatPriceUsd = 20,
-                isOnline = true,
-                avatarPreset = "palace_hall"
-            ),
-            ChatMemberProfile(
-                id = "chat_nour_damascus",
-                displayName = "نور الشام • سبا ومساج ملكي",
-                username = "@nour_spa_vip",
-                cityName = "دمشق",
-                country = "سوريا",
-                category = "سبا ومساج",
-                bio = "جلسات مساج ملكي بالزيوت العطرية الدافئة والأحجار البركانية في أرقى أجنحة دمشق.",
-                level = 24,
-                frameId = "emerald_crown",
-                chatPriceUsd = 15,
-                isOnline = true,
-                avatarPreset = "card_spa"
-            ),
-            ChatMemberProfile(
-                id = "chat_lina_latakia",
-                displayName = "لينا الساحل • لاونج اللاذقية",
-                username = "@lina_coast_lounge",
-                cityName = "اللاذقية",
-                country = "سوريا",
-                category = "سهرات فنية",
-                bio = "إطلالة بحرية ساحرة وسهرات VIP خاصة على كورنيش اللاذقية وطرطوس.",
-                level = 19,
-                frameId = "sapphire_neon",
-                chatPriceUsd = 15,
-                isOnline = true,
-                avatarPreset = "card_lounge"
-            ),
-            ChatMemberProfile(
-                id = "chat_sara_istanbul",
-                displayName = "سارة البوسفور • زيارات VIP",
-                username = "@sara_istanbul_vip",
-                cityName = "إسطنبول",
-                country = "تركيا",
-                category = "زيارات خارجية",
-                bio = "تنسيق الزيارات الفندقية الملكية والسهرات الخاصة في إسطنبول وأنطاليا على مدار الساعة.",
-                level = 32,
-                frameId = "crimson_flame",
-                chatPriceUsd = 25,
-                isOnline = true,
-                avatarPreset = "card_vip_night"
-            ),
-            ChatMemberProfile(
-                id = "chat_reem_homs",
-                displayName = "ريم الميماس • جناح حمص الخاص",
-                username = "@reem_homs_royal",
-                cityName = "حمص",
-                country = "سوريا",
-                category = "سبا ومساج",
-                bio = "استرخاء ملكي وضيافة فاخرة في جناح الميماس الخاص • متاحة للرد الفوري.",
-                level = 16,
-                frameId = "amber_sovereign",
-                chatPriceUsd = 10,
-                isOnline = true,
-                avatarPreset = "brand_light_showcase"
-            ),
-            ChatMemberProfile(
-                id = "chat_dana_antalya",
-                displayName = "دانا الريفيرا • منتجع أنطاليا",
-                username = "@dana_antalya_club",
-                cityName = "أنطاليا",
-                country = "تركيا",
-                category = "سهرات فنية",
-                bio = "حفلات يخت خاصة وأجنحة منتجعات 5 نجوم في أنطاليا مع استقبال VIP.",
-                level = 22,
-                frameId = "amethyst_vip",
-                chatPriceUsd = 30,
-                isOnline = false,
-                avatarPreset = "brand_dark_showcase"
-            )
-        )
-    )
+    private val _chatMembers = MutableStateFlow<List<ChatMemberProfile>>(emptyList())
     val chatMembers: StateFlow<List<ChatMemberProfile>> = _chatMembers.asStateFlow()
 
     private val _unlockedChatMemberIds = MutableStateFlow<Set<String>>(emptySet())
@@ -229,33 +170,60 @@ class LayaliViewModel(
     private val _activeChatMemberId = MutableStateFlow<String?>(null)
     val activeChatMemberId: StateFlow<String?> = _activeChatMemberId.asStateFlow()
 
-    private val _chatMessagesByMember = MutableStateFlow<Map<String, List<ChatMessageItem>>>(
-        mapOf(
-            "chat_mira_aleppo" to listOf(
-                ChatMessageItem(
-                    id = "msg_init_1",
-                    memberId = "chat_mira_aleppo",
-                    senderName = "الأميرة ميرا",
-                    senderUsername = "@mira_royal_vip",
-                    text = "أهلاً بك في جناح حلب الملكي VIP ✨ يسعدني تنسيق سهرتك الخاصة بكل خصوصية.",
-                    timestampLabel = "الآن",
-                    isFromCurrentUser = false
-                )
-            ),
-            "chat_nour_damascus" to listOf(
-                ChatMessageItem(
-                    id = "msg_init_2",
-                    memberId = "chat_nour_damascus",
-                    senderName = "نور الشام",
-                    senderUsername = "@nour_spa_vip",
-                    text = "مرحباً بك في جناح السبا الملكي بدمشق 🌿 أخبرني بالموعد المناسب لك لتجهيز الجناح.",
-                    timestampLabel = "الآن",
-                    isFromCurrentUser = false
-                )
-            )
-        )
-    )
+    private val _chatMessagesByMember = MutableStateFlow<Map<String, List<ChatMessageItem>>>(emptyMap())
     val chatMessagesByMember: StateFlow<Map<String, List<ChatMessageItem>>> = _chatMessagesByMember.asStateFlow()
+    private val chatThreadByMember = mutableMapOf<String, String>()
+    private val chatQuotesRequested = mutableSetOf<String>()
+    private val subscribedThreadIds = mutableSetOf<String>()
+
+    init {
+        if (hasFirebaseAuthForCurrentUser()) {
+            viewModelScope.launch {
+                repository.observeVerifiedChatThreads(currentUserId)
+                    .catch { error ->
+                        Log.e(TAG, "Verified chat membership unavailable", error)
+                        emit(emptyList())
+                    }
+                    .collect { threads ->
+                        threads.forEach { thread ->
+                            subscribeToVerifiedThread(thread.peerId, thread.threadId)
+                        }
+                    }
+            }
+        }
+    }
+
+    private fun subscribeToVerifiedThread(peerId: String, threadId: String) {
+        chatThreadByMember[peerId] = threadId
+        _unlockedChatMemberIds.value = _unlockedChatMemberIds.value + peerId
+        if (_chatMembers.value.none { it.id == peerId }) {
+            viewModelScope.launch {
+                repository.fetchCreatorChatQuote(peerId).onSuccess { quote ->
+                    if (_chatMembers.value.none { it.id == peerId }) {
+                        _chatMembers.value = _chatMembers.value + ChatMemberProfile(
+                            id = peerId, displayName = quote.displayName,
+                            username = quote.username, cityName = "", country = "",
+                            category = "محادثة خاصة", bio = "", level = 1,
+                            frameId = "emerald_crown", chatPriceUsd = 0,
+                            isOnline = false, avatarPreset = "", isUnlocked = true
+                        )
+                    }
+                }
+            }
+        }
+        if (!subscribedThreadIds.add(threadId)) return
+        viewModelScope.launch {
+            repository.observeVerifiedChatMessages(threadId, peerId)
+                .catch { error ->
+                    Log.e(TAG, "Verified chat message stream error", error)
+                    emit(emptyList())
+                }.collect { messages ->
+                    _chatMessagesByMember.value = _chatMessagesByMember.value + (peerId to messages)
+                }
+        }
+    }
+
+
 
     // Admin custom price, photo, and deletion overrides for catalog venues
     private val _adminSessionToken = MutableStateFlow<String?>(null)
@@ -270,79 +238,15 @@ class LayaliViewModel(
     private val _deletedCatalogVenueIds = MutableStateFlow<Set<String>>(emptySet())
     val deletedCatalogVenueIds: StateFlow<Set<String>> = _deletedCatalogVenueIds.asStateFlow()
 
-    // Initial curated published showcase offers
-    private val _localPublishedServices = MutableStateFlow(
-        listOf(
-            PublishedService(
-                id = "vip_showcase_mira",
-                authorId = "admin",
-                title = "قصر السهرات والقدود الحلبية • جناح VIP",
-                cityName = "حلب",
-                country = "سوريا",
-                category = "سهرات فنية",
-                description = "سهرة طرب وقدود حلبية أصيلة في القاعة الملكية المذهبة مع ضيافة فاخرة.",
-                priceUsd = 50L,
-                imageUrl = "palace_hall",
-                videoUrl = "عرض فيديو 4K لقصر السهرات والقدود الحلبية",
-                mediaType = "both",
-                status = "active"
-            ),
-            PublishedService(
-                id = "vip_showcase_lina",
-                authorId = "admin",
-                title = "قصر العزت الفام الحلبية • لاونج خاص",
-                cityName = "حلب",
-                country = "سوريا",
-                category = "سهرات فنية",
-                description = "جلسات لاونج مخملية وسهرة فنية خاصة بأجواء ملكية دافئة.",
-                priceUsd = 65L,
-                imageUrl = "card_lounge",
-                videoUrl = "فيديو حي من قصر العزت الفام الحلبية",
-                mediaType = "both",
-                status = "active"
-            ),
-            PublishedService(
-                id = "vip_showcase_nour",
-                authorId = "admin",
-                title = "سبا ومساج ملكي خاص • زيوت عطرية",
-                cityName = "دمشق",
-                country = "سوريا",
-                category = "سبا ومساج",
-                description = "جلسة مساج استرخائي بالزيوت العطرية الدافئة والأحجار البركانية.",
-                priceUsd = 45L,
-                imageUrl = "card_spa",
-                videoUrl = "جولة فيديو داخل جناح المساج والسبا الملكي",
-                mediaType = "both",
-                status = "active"
-            ),
-            PublishedService(
-                id = "vip_showcase_sara",
-                authorId = "admin",
-                title = "بطاقة فنية وزيارات خارجية VIP",
-                cityName = "إسطنبول",
-                country = "تركيا",
-                category = "زيارات خارجية",
-                description = "خدمة الزيارات الخارجية الملكية للفنادق والمنازل مع سرية وخصوصية تامة.",
-                priceUsd = 75L,
-                imageUrl = "card_vip_night",
-                videoUrl = "عرض فيديو HD لخدمة الزيارات الخارجية والسهرة الخاصة",
-                mediaType = "both",
-                status = "active"
-            )
-        )
-    )
+    // No fabricated showcase services in the production feed.
+    private val _localPublishedServices = MutableStateFlow<List<PublishedService>>(emptyList())
 
     private val _localBookings = MutableStateFlow<List<Booking>>(emptyList())
     private val _localReviews = MutableStateFlow<List<CustomerReview>>(emptyList())
     private val _localFavorites = MutableStateFlow<List<FavoriteVenue>>(emptyList())
     private val _localBlockedUsers = MutableStateFlow<List<BlockedUser>>(emptyList())
 
-    private val seenPublishedIds = mutableSetOf(
-        "vip_showcase_mira",
-        "vip_showcase_lina",
-        "vip_showcase_nour",
-        "vip_showcase_sara"
-    )
+    private val seenPublishedIds = mutableSetOf<String>()
     private var initialSnapshotLoaded = false
 
     private val _incomingBroadcastAlert = MutableStateFlow<PublishedService?>(null)
@@ -409,11 +313,43 @@ class LayaliViewModel(
                             }
                         }
                     }
+                    .onEach { list -> syncRealChatOffers(list) }
                     .catch { emit(emptyList()) }
             )
         } else {
             emit(emptyList())
         }
+    }
+
+    private fun syncRealChatOffers(offers: List<PublishedService>) {
+        if (!hasFirebaseAuthForCurrentUser()) return
+        offers.filter { it.authorId.isNotBlank() && it.authorId != currentUserId }
+            .distinctBy { it.authorId }.forEach { offer ->
+                if (!chatQuotesRequested.add(offer.authorId)) return@forEach
+                viewModelScope.launch {
+                    repository.fetchCreatorChatQuote(offer.authorId)
+                        .onSuccess { quote ->
+                            val member = ChatMemberProfile(
+                                id = offer.authorId,
+                                displayName = quote.displayName,
+                                username = quote.username,
+                                cityName = offer.cityName,
+                                country = offer.country,
+                                category = offer.category,
+                                bio = offer.description,
+                                level = 1,
+                                frameId = "emerald_crown",
+                                chatPriceUsd = quote.priceUsd,
+                                isOnline = false,
+                                avatarPreset = offer.imageUrl
+                            )
+                            _chatMembers.value = (_chatMembers.value.filterNot { it.id == member.id } + member)
+                        }.onFailure { error ->
+                            chatQuotesRequested.remove(offer.authorId)
+                            Log.w(TAG, "Creator chat quote unavailable: ${error.message}")
+                        }
+                }
+            }
     }
 
     private val remoteBlockedUsersFlow: Flow<List<BlockedUser>> = flow {
@@ -521,7 +457,7 @@ class LayaliViewModel(
         val deletedIds = extraList[3] as Set<String>
 
         val trimmedQuery = query.trim()
-        LayaliCatalog.venues
+        emptyList<Venue>()
             .filterNot { deletedIds.contains(it.id) }
             .map { venue ->
                 val updatedPrice = priceMap[venue.id] ?: venue.startingPriceUsd
@@ -561,7 +497,7 @@ class LayaliViewModel(
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
-        initialValue = LayaliCatalog.venues
+        initialValue = emptyList()
     )
 
     fun setSuperAdminSessionToken(token: String?) {
@@ -598,9 +534,6 @@ class LayaliViewModel(
                 nextLevelXp = existingSaved?.nextLevelXp ?: 10000,
                 selectedFrameId = existingSaved?.selectedFrameId ?: "obsidian_elite"
             )
-            if (existingSaved != null && _walletBalanceUsd.value == 0) {
-                _walletBalanceUsd.value = existingSaved.walletBalanceUsd
-            }
         } else if (authenticatedDisplayName.isNotBlank() || existingSaved != null) {
             val cleanHandle = existingSaved?.username ?: ("@" + authenticatedDisplayName
                 .lowercase()
@@ -621,9 +554,6 @@ class LayaliViewModel(
                 chatPriceUsd = existingSaved?.chatPriceUsd ?: current.chatPriceUsd,
                 isPaidChatEnabled = existingSaved?.isPaidChatEnabled ?: current.isPaidChatEnabled
             )
-            if (existingSaved != null && _walletBalanceUsd.value == 0 && existingSaved.walletBalanceUsd > 0) {
-                _walletBalanceUsd.value = existingSaved.walletBalanceUsd
-            }
         }
         saveInfrastructureToDatabase(emailOverride = emailOverride, showSnackbar = false)
     }
@@ -738,6 +668,7 @@ class LayaliViewModel(
 
     fun toggleThemeMode() {
         _isSoftRoseLightTheme.value = !_isSoftRoseLightTheme.value
+        appearancePreferences?.edit()?.putBoolean("light_theme", _isSoftRoseLightTheme.value)?.apply()
     }
 
     fun updateUserProfile(
@@ -847,95 +778,96 @@ class LayaliViewModel(
         receiptImageUri: String,
         transactionRef: String
     ) {
-        if (receiptImageUri.isBlank()) {
-            _snackbarMessage.value = "يرجى إرفاق صورة إيصال الدفع أولاً لإتمام عملية الشحن!"
+        if (!hasFirebaseAuthForCurrentUser()) {
+            _snackbarMessage.value = "سجل الدخول بحساب Firebase لرفع الإيصال."
             return
         }
-        val validAmount = amountUsd.coerceIn(1, 100000)
-        val totalCredit = validAmount + bonusUsd
-        val methodTitleAr = if (methodKey == "SHAM_CASH") {
-            "شام كاش السوري (Sham Cash)"
-        } else {
-            "USDT (BEP-20) Tether"
+        if (receiptImageUri.isBlank() || transactionRef.trim().length < 6) {
+            _snackbarMessage.value = "أرفق إيصالاً وأدخل رقم تحويل صحيحاً (6 أحرف على الأقل)."
+            return
         }
-
-        val receiptRecord = PaymentReceiptRecord(
-            id = "rcpt_${System.currentTimeMillis()}",
-            userId = currentUserId,
-            userName = _userProfile.value.displayName.ifBlank { "عضو VIP" },
-            usernameHandle = _userProfile.value.username,
-            methodKey = methodKey,
-            methodTitleAr = methodTitleAr,
-            amountUsd = validAmount,
-            bonusUsd = bonusUsd,
-            receiptImageUri = receiptImageUri,
-            transactionReference = transactionRef.trim().ifBlank { "إيصال مرفق وموثق" },
-            purposeAr = "شحن رصيد المحفظة",
-            status = "verified",
-            timestampLabel = "الآن"
-        )
-        _paymentReceipts.value = listOf(receiptRecord) + _paymentReceipts.value
-        _walletBalanceUsd.value += totalCredit
-
-        val tx = WalletTransaction(
-            id = "tx_${System.currentTimeMillis()}",
-            title = "إيداع موثق بإيصال ($methodTitleAr)",
-            amountUsd = totalCredit,
-            bonusUsd = bonusUsd,
-            isCredit = true,
-            timestampLabel = "إيصال مرفق ✓"
-        )
-        _walletTransactions.value = listOf(tx) + _walletTransactions.value
-        gainProfileXp(60)
-        _snackbarMessage.value = "تم توثيق إيصال $methodTitleAr وإضافة $$totalCredit إلى محفظتك (+60 XP)!"
+        val type = receiptContentType(receiptImageUri) ?: run {
+            _snackbarMessage.value = "نوع الملف غير مدعوم. استخدم JPG أو PNG أو PDF."
+            return
+        }
+        viewModelScope.launch {
+            _isSubmitting.value = true
+            try {
+                repository.submitVerifiedReceipt(
+                    receiptUri = receiptImageUri,
+                    contentType = type,
+                    method = methodKey,
+                    transactionRef = transactionRef,
+                    purpose = "wallet",
+                    amountUsd = amountUsd
+                ).onSuccess {
+                    _snackbarMessage.value = "تم إرسال الإيصال للمراجعة. الرصيد لن يزيد قبل تحقق الإدارة من التحويل."
+                }.onFailure { error ->
+                    _snackbarMessage.value = "فشل رفع الإيصال: ${error.localizedMessage ?: "خطأ في الخادم"}"
+                }
+            } finally {
+                _isSubmitting.value = false
+            }
+        }
     }
 
+    private fun receiptContentType(uri: String): String? {
+        val guessed = when (Uri.parse(uri).lastPathSegment?.substringAfterLast('.')?.lowercase()) {
+            "jpg", "jpeg" -> "image/jpeg"
+            "png" -> "image/png"
+            "pdf" -> "application/pdf"
+            else -> null
+        }
+        val resolved = appContext?.contentResolver?.getType(Uri.parse(uri)) ?: guessed
+        return resolved?.takeIf { it in setOf("image/jpeg", "image/png", "application/pdf") }
+    }
+
+    // ========================================================================
     // ========================================================================
     // PAID CHAT UNLOCK & MESSAGING
     // ========================================================================
 
     fun selectActiveChatMember(memberId: String?) {
-        _activeChatMemberId.value = memberId
+        if (memberId == null) {
+            _activeChatMemberId.value = null
+            return
+        }
+        val member = _chatMembers.value.find { it.id == memberId } ?: return
+        if (memberId in _unlockedChatMemberIds.value) {
+            _activeChatMemberId.value = memberId
+        } else if (member.chatPriceUsd == 0) {
+            unlockChatWithWallet(member)
+        } else {
+            _snackbarMessage.value = "يلزم فتح الدردشة عبر الخادم أولاً."
+        }
     }
 
     fun openOrRequestChatWithVenueProvider(venue: Venue, onNavigateToChatTab: () -> Unit) {
-        val existing = _chatMembers.value.find {
-            it.cityName == venue.cityName || it.username == venue.providerUsername
-        }
-        val targetMember = existing ?: ChatMemberProfile(
-            id = "chat_venue_${venue.id}",
-            displayName = venue.name,
-            username = venue.providerUsername,
-            cityName = venue.cityName,
-            country = venue.country,
-            category = venue.category,
-            bio = venue.shortDescription,
-            level = venue.providerLevel,
-            frameId = venue.providerFrameId,
-            chatPriceUsd = venue.providerChatPriceUsd,
-            isOnline = venue.isOnlineNow,
-            avatarPreset = venue.visualPresetKey
-        ).also { created ->
-            _chatMembers.value = listOf(created) + _chatMembers.value
-        }
-
-        if (_unlockedChatMemberIds.value.contains(targetMember.id)) {
-            _activeChatMemberId.value = targetMember.id
-        } else {
-            _activeChatMemberId.value = null
-        }
+        // The creator is resolved from a real published offer, never by matching city.
+        _activeChatMemberId.value = _chatMembers.value
+            .firstOrNull { it.displayName == venue.providerDisplayName && it.id in _unlockedChatMemberIds.value }?.id
         onNavigateToChatTab()
     }
 
     fun unlockChatWithWallet(member: ChatMemberProfile) {
-        // Fail closed: local balance is not a payment authorization.
-        // Never debit the in-memory wallet or unlock a paid conversation until
-        // a trusted backend transaction confirms settlement and entitlement.
-        if (member.chatPriceUsd <= 0) {
-            _unlockedChatMemberIds.value = _unlockedChatMemberIds.value + member.id
-            _activeChatMemberId.value = member.id
-        } else {
-            _snackbarMessage.value = "الدردشة بسعر $${member.chatPriceUsd}. الدفع بالمحفظة يتطلب تحقق الخادم قبل فتح الرسائل."
+        if (!hasFirebaseAuthForCurrentUser()) {
+            _snackbarMessage.value = "يلزم تسجيل الدخول قبل فتح المحادثة."
+            return
+        }
+        viewModelScope.launch {
+            _isSubmitting.value = true
+            try {
+                repository.unlockServerPaidChat(member.id, member.chatPriceUsd)
+                    .onSuccess { threadId ->
+                        subscribeToVerifiedThread(member.id, threadId)
+                        _activeChatMemberId.value = member.id
+                        _snackbarMessage.value = "تم فتح المحادثة بواسطة الخادم."
+                    }.onFailure { error ->
+                        _snackbarMessage.value = "لم تُفتح الدردشة: ${error.localizedMessage ?: "رفض الخادم الطلب"}"
+                    }
+            } finally {
+                _isSubmitting.value = false
+            }
         }
     }
 
@@ -945,59 +877,23 @@ class LayaliViewModel(
         receiptUri: String,
         txRef: String
     ) {
-        if (receiptUri.isBlank()) {
-            _snackbarMessage.value = "يرجى إرفاق صورة إيصال الدفع لفتح الدردشة!"
-            return
-        }
-        val methodTitleAr = if (methodKey == "SHAM_CASH") {
-            "شام كاش السوري"
-        } else {
-            "USDT (BEP-20)"
-        }
-        val receipt = PaymentReceiptRecord(
-            id = "rcpt_chat_${System.currentTimeMillis()}",
-            userId = currentUserId,
-            userName = _userProfile.value.displayName.ifBlank { "عضو VIP" },
-            usernameHandle = _userProfile.value.username,
-            methodKey = methodKey,
-            methodTitleAr = methodTitleAr,
-            amountUsd = member.chatPriceUsd,
-            receiptImageUri = receiptUri,
-            transactionReference = txRef.trim().ifBlank { "دردشة ${member.username}" },
-            purposeAr = "فتح دردشة مع ${member.displayName}",
-            status = "pending",
-            timestampLabel = "الآن"
-        )
-        _paymentReceipts.value = listOf(receipt) + _paymentReceipts.value
-        _snackbarMessage.value = "تم استلام إيصال $methodTitleAr وهو قيد المراجعة. لن تُفتح الدردشة قبل اعتماد الدفع."
+        _snackbarMessage.value = "دفع المحادثة بإيصال خارجي غير مفعل حتى اكتمال مراجعة المدفوعات. استخدم محفظة موثقة."
     }
 
     fun sendChatMessage(memberId: String, text: String) {
-        val cleanText = text.trim()
-        if (cleanText.isBlank()) return
-        val member = _chatMembers.value.find { it.id == memberId } ?: return
-        if (member.chatPriceUsd > 0 &&
-            !member.isUnlocked &&
-            memberId !in _unlockedChatMemberIds.value) {
-            _snackbarMessage.value = "لا يمكن إرسال رسالة قبل فتح هذه المحادثة بدفع موثق."
+        val threadId = chatThreadByMember[memberId]
+        if (!hasFirebaseAuthForCurrentUser() || threadId == null || memberId !in _unlockedChatMemberIds.value) {
+            _snackbarMessage.value = "هذه المحادثة غير مفتوحة من الخادم."
             return
         }
-        val profile = _userProfile.value
-        val userMsg = ChatMessageItem(
-            id = "msg_u_${System.currentTimeMillis()}",
-            memberId = memberId,
-            senderName = profile.displayName.ifBlank { "أنا" },
-            senderUsername = profile.username,
-            text = cleanText,
-            timestampLabel = "الآن",
-            isFromCurrentUser = true
-        )
-        // No fabricated replies from the other person. A real chat transport
-        // must be connected before this is considered delivered.
-        val existing = _chatMessagesByMember.value[memberId].orEmpty()
-        _chatMessagesByMember.value = _chatMessagesByMember.value +
-            (memberId to (existing + userMsg))
-        _snackbarMessage.value = "تم حفظ الرسالة على هذا الجهاز؛ لم يتم ربط التسليم المباشر بعد."
+        val message = text.trim().take(2000)
+        if (message.isBlank()) return
+        viewModelScope.launch {
+            repository.sendServerChatMessage(threadId, message)
+                .onFailure { error ->
+                    _snackbarMessage.value = "لم تُرسل الرسالة: ${error.localizedMessage ?: "تعذر الوصول للخادم"}"
+                }
+        }
     }
 
     fun updateVenueStartingPrice(venueId: String, newPriceUsd: Int) {
@@ -1043,67 +939,41 @@ class LayaliViewModel(
         _snackbarMessage.value = "تم استعادة جميع مراكز الدليل المحذوفة"
     }
 
-    fun topUpWallet(amountUsd: Int, bonusUsd: Int = 0, methodTitle: String = "شحن رصيد المحفظة") {
-        val validAmount = amountUsd.coerceIn(1, 100000)
-        val totalCredit = validAmount + bonusUsd
-        _walletBalanceUsd.value += totalCredit
-        val tx = WalletTransaction(
-            id = "tx_${System.currentTimeMillis()}",
-            title = if (bonusUsd > 0) "$methodTitle (شامل +$$bonusUsd هدية مجانية)" else methodTitle,
-            amountUsd = totalCredit,
-            bonusUsd = bonusUsd,
-            isCredit = true,
-            timestampLabel = "الآن"
-        )
-        _walletTransactions.value = listOf(tx) + _walletTransactions.value
-        _snackbarMessage.value = if (bonusUsd > 0) {
-            "تم شحن المحفظة بمبلغ $$validAmount + $$bonusUsd مجاناً! رصيدك الحالي: $${_walletBalanceUsd.value}"
-        } else {
-            "تم شحن المحفظة بمبلغ $$validAmount بنجاح! رصيدك الحالي: $${_walletBalanceUsd.value}"
+    fun submitCreatorWithdrawal(amountUsd: Int, destination: String) {
+        if (!hasFirebaseAuthForCurrentUser()) {
+            _snackbarMessage.value = "سجل الدخول بحساب Firebase موثق لطلب السحب."
+            return
         }
+        if (amountUsd < 1 || destination.trim().length < 8) {
+            _snackbarMessage.value = "أدخل مبلغاً صحيحاً ووجهة سحب صالحة."
+            return
+        }
+        viewModelScope.launch {
+            _isSubmitting.value = true
+            try {
+                repository.requestCreatorWithdrawal(amountUsd, destination.trim())
+                    .onSuccess { withdrawalId ->
+                        _snackbarMessage.value = "تم حجز مبلغ السحب وإرسال الطلب ${withdrawalId} للمراجعة. لم يتم التحويل بعد."
+                    }.onFailure { error ->
+                        _snackbarMessage.value = "تعذر طلب السحب: ${error.localizedMessage ?: "رفض الخادم"}"
+                    }
+            } finally {
+                _isSubmitting.value = false
+            }
+        }
+    }
+
+    fun topUpWallet(amountUsd: Int, bonusUsd: Int = 0, methodTitle: String = "شحن رصيد المحفظة") {
+        _snackbarMessage.value = "شحن الرصيد متوقف لحين تأكيد الدفع من الخادم."
     }
 
     fun adminAdjustWalletBalance(amountDeltaUsd: Int, reasonNote: String) {
-        if (!enforceSuperAdminMiddleware()) return
-        if (amountDeltaUsd == 0) return
-        val nextBalance = (_walletBalanceUsd.value + amountDeltaUsd).coerceAtLeast(0)
-        val isCredit = amountDeltaUsd > 0
-        val absAmount = kotlin.math.abs(amountDeltaUsd)
-        _walletBalanceUsd.value = nextBalance
-
-        val tx = WalletTransaction(
-            id = "admin_tx_${System.currentTimeMillis()}",
-            title = if (isCredit) {
-                "إضافة رصيد إداري (Super Admin): ${reasonNote.ifBlank { "شحن مباشر من الإدارة" }}"
-            } else {
-                "خصم/تسوية رصيد إداري (Super Admin): ${reasonNote.ifBlank { "تسوية رصيد" }}"
-            },
-            amountUsd = absAmount,
-            bonusUsd = 0,
-            isCredit = isCredit,
-            timestampLabel = "بواسطة الإدارة"
-        )
-        _walletTransactions.value = listOf(tx) + _walletTransactions.value
-        _snackbarMessage.value = "تم تحديث رصيد المحفظة من لوحة الإدارة إلى $$nextBalance"
+        _snackbarMessage.value = "لا يمكن تعديل الرصيد من الجهاز. يلزم تفويض الإدارة من الخادم وسجل تدقيق."
     }
 
     fun deductWalletBalance(amountUsd: Int, orderTitle: String): Boolean {
-        val current = _walletBalanceUsd.value
-        if (current < amountUsd) {
-            _snackbarMessage.value = "رصيد المحفظة الحالي ($$current) غير كافٍ لإتمام الطلب ($$amountUsd). يرجى إرفاق إيصال شام كاش أو USDT."
-            return false
-        }
-        _walletBalanceUsd.value = current - amountUsd
-        val tx = WalletTransaction(
-            id = "tx_${System.currentTimeMillis()}",
-            title = "دفع حجز: $orderTitle",
-            amountUsd = amountUsd,
-            bonusUsd = 0,
-            isCredit = false,
-            timestampLabel = "الآن"
-        )
-        _walletTransactions.value = listOf(tx) + _walletTransactions.value
-        return true
+        _snackbarMessage.value = "تأكيد دفع المحفظة يتطلب خصماً موثقاً من الخادم."
+        return false
     }
 
     fun consumeBroadcastAlert() {
@@ -1166,45 +1036,40 @@ class LayaliViewModel(
         onPublished: (PublishedService) -> Unit = {}
     ) {
         if (!enforceSuperAdminMiddleware()) return
-        val localId = "local_pub_${System.currentTimeMillis()}"
-        val publishedItem = PublishedService(
-            id = localId,
-            authorId = currentUserId,
-            title = title,
-            cityName = cityName,
-            country = country,
-            category = category,
-            description = description,
-            priceUsd = priceUsd.toLong(),
-            imageUrl = imageUrl.ifBlank { "brand_dark_showcase" },
-            videoUrl = videoUrl,
-            mediaType = mediaType,
-            status = "active",
-            createdAt = Timestamp.now()
-        )
-        seenPublishedIds.add(localId)
-        _localPublishedServices.value = listOf(publishedItem) + _localPublishedServices.value
-        _snackbarMessage.value = "تم نشر الخدمة وإرسال إشعار أندرويد لجميع المستخدمين!"
-        onPublished(publishedItem)
-
-        if (hasFirebaseAuth()) {
-            viewModelScope.launch {
-                val result = repository.publishService(
+        if (!hasFirebaseAuthForCurrentUser()) {
+            _snackbarMessage.value = "يلزم حساب Firebase فعلي لنشر الخدمة."
+            return
+        }
+        viewModelScope.launch {
+            _isSubmitting.value = true
+            try {
+                repository.publishService(
                     title = title,
                     cityName = cityName,
                     country = country,
                     category = category,
                     description = description,
                     priceUsd = priceUsd,
-                    imageUrl = imageUrl.ifBlank { "brand_dark_showcase" },
+                    imageUrl = imageUrl,
                     videoUrl = videoUrl,
                     mediaType = mediaType
-                )
-                result.onSuccess { remoteId ->
+                ).onSuccess { remoteId ->
                     seenPublishedIds.add(remoteId)
-                }.onFailure { err ->
-                    Log.d(TAG, "Saved locally; remote sync skipped or failed: ${err.message}")
+                    _snackbarMessage.value = "تم نشر الخدمة في قاعدة البيانات بنجاح."
+                    onPublished(
+                        PublishedService(
+                            id = remoteId, authorId = currentUserId, title = title,
+                            cityName = cityName, country = country, category = category,
+                            description = description, priceUsd = priceUsd.toLong(),
+                            imageUrl = imageUrl, videoUrl = videoUrl,
+                            mediaType = mediaType, status = "active"
+                        )
+                    )
+                }.onFailure { error ->
+                    _snackbarMessage.value = "تعذر نشر الخدمة: ${error.localizedMessage ?: "خطأ بالخادم"}"
                 }
+            } finally {
+                _isSubmitting.value = false
             }
         }
     }
@@ -1384,91 +1249,65 @@ class LayaliViewModel(
         transactionReference: String = "",
         onSuccess: () -> Unit = {}
     ) {
-        val totalUsd = (unitPriceUsd * guestCount).coerceIn(5, 10000)
-
-        if (receiptImageUri.isNotBlank()) {
-            val receiptRecord = PaymentReceiptRecord(
-                id = "rcpt_book_${System.currentTimeMillis()}",
-                userId = currentUserId,
-                userName = _userProfile.value.displayName.ifBlank { "عضو VIP" },
-                usernameHandle = _userProfile.value.username,
-                methodKey = if (paymentMethodTitle.contains("شام")) "SHAM_CASH" else "USDT_BEP20",
-                methodTitleAr = paymentMethodTitle,
-                amountUsd = totalUsd,
-                receiptImageUri = receiptImageUri,
-                transactionReference = transactionReference.ifBlank { "حجز ${venue.name}" },
-                purposeAr = "دفع حجز: ${venue.name}",
-                status = "verified",
-                timestampLabel = "الآن"
-            )
-            _paymentReceipts.value = listOf(receiptRecord) + _paymentReceipts.value
+        if (!hasFirebaseAuthForCurrentUser()) {
+            _snackbarMessage.value = "يلزم تسجيل الدخول بحساب Firebase قبل طلب الحجز."
+            return
         }
-
-        val localBooking = Booking(
-            id = "booking_${System.currentTimeMillis()}",
-            userId = currentUserId,
-            venueId = venue.id,
-            venueName = venue.name,
-            cityName = venue.cityName,
-            country = venue.country,
-            serviceTitle = serviceTitle,
-            category = venue.category,
-            bookingDate = bookingDate,
-            timeSlot = timeSlot,
-            guestCount = guestCount.toLong(),
-            totalPriceUsd = totalUsd.toLong(),
-            notes = notes,
-            status = "confirmed",
-            paymentMethodTitle = paymentMethodTitle,
-            receiptImageUri = receiptImageUri,
-            transactionReference = transactionReference,
-            createdAt = Timestamp.now()
-        )
-        _localBookings.value = listOf(localBooking) + _localBookings.value
-        gainProfileXp(40)
-        _snackbarMessage.value = "تم توثيق الدفع وتأكيد حجزك في ${venue.name} (${venue.cityName}) (+40 XP)!"
-        onSuccess()
-
-        if (hasFirebaseAuthForCurrentUser()) {
-            viewModelScope.launch {
-                repository.createBooking(
-                    venueId = venue.id,
-                    venueName = venue.name,
-                    cityName = venue.cityName,
-                    country = venue.country,
-                    serviceTitle = serviceTitle,
-                    category = venue.category,
+        val payWithWallet = transactionReference == "WALLET_DEDUCT"
+        if (!payWithWallet && (receiptImageUri.isBlank() || transactionReference.trim().length < 6)) {
+            _snackbarMessage.value = "أرفق إيصال التحويل ورقم معاملته لإرسال طلب الحجز."
+            return
+        }
+        val contentType = if (payWithWallet) null else receiptContentType(receiptImageUri)
+        if (!payWithWallet && contentType == null) {
+            _snackbarMessage.value = "صيغة الإيصال غير مدعومة."
+            return
+        }
+        viewModelScope.launch {
+            _isSubmitting.value = true
+            try {
+                repository.createVerifiedBookingRequest(
+                    serviceId = venue.id,
                     bookingDate = bookingDate,
                     timeSlot = timeSlot,
                     guestCount = guestCount,
-                    totalPriceUsd = totalUsd,
-                    notes = notes
-                )
+                    notes = notes,
+                    payWithWallet = payWithWallet
+                ).onSuccess { (bookingId, status) ->
+                    if (payWithWallet) {
+                        _snackbarMessage.value = "تم الحجز وخصم الرصيد من الخادم بنجاح."
+                        onSuccess()
+                    } else {
+                        repository.submitVerifiedReceipt(
+                            receiptUri = receiptImageUri,
+                            contentType = checkNotNull(contentType),
+                            method = if (paymentMethodTitle.contains("شام")) "SHAM_CASH" else "USDT_BEP20",
+                            transactionRef = transactionReference,
+                            purpose = "booking",
+                            bookingId = bookingId
+                        ).onSuccess {
+                            _snackbarMessage.value = "تم تسجيل طلب الحجز وإيصال الدفع. الحالة: بانتظار مراجعة التحويل."
+                            onSuccess()
+                        }.onFailure { error ->
+                            _snackbarMessage.value = "تم إنشاء الحجز ${bookingId} بحالة انتظار؛ تعذر إرسال الإيصال: ${error.localizedMessage}"
+                        }
+                    }
+                }.onFailure { error ->
+                    _snackbarMessage.value = "لم يتم إنشاء الحجز: ${error.localizedMessage ?: "تعذر الاتصال بالخادم"}"
+                }
+            } finally {
+                _isSubmitting.value = false
             }
         }
     }
 
     fun updateBookingStatus(bookingId: String, newStatus: String) {
-        _localBookings.value = _localBookings.value.map { item ->
-            if (item.id == bookingId) item.copy(status = newStatus) else item
-        }
-        val statusLabel = when (newStatus) {
-            "cancelled" -> "تم إلغاء الحجز"
-            "confirmed" -> "تم قبول وتأكيد الحجز بنجاح"
-            else -> "تم تحديث حالة الحجز إلى مكتمل"
-        }
-        _snackbarMessage.value = statusLabel
-
-        if (hasFirebaseAuthForCurrentUser()) {
-            viewModelScope.launch {
-                repository.updateBookingStatus(bookingId, newStatus)
-            }
-        }
+        _snackbarMessage.value = "تغيير حالة الحجز يتطلب مراجعة الخادم. لم يتم تعديل الحجز."
     }
 
     fun adminUpdateBookingStatus(bookingId: String, newStatus: String) {
-        if (!enforceSuperAdminMiddleware()) return
-        updateBookingStatus(bookingId, newStatus)
+        // Admin workflow uses a Firebase-authenticated claim, not a local session token.
+        _snackbarMessage.value = "تغيير حالات الحجوزات لا ينفذ من الجهاز قبل تحقق تفويض الإدارة من الخادم."
     }
 
     fun rescheduleBooking(
@@ -1478,41 +1317,11 @@ class LayaliViewModel(
         newGuestCount: Int,
         newNotes: String
     ) {
-        _localBookings.value = _localBookings.value.map { item ->
-            if (item.id == bookingId) {
-                item.copy(
-                    bookingDate = newDate,
-                    timeSlot = newTimeSlot,
-                    guestCount = newGuestCount.toLong(),
-                    notes = newNotes
-                )
-            } else {
-                item
-            }
-        }
-        _snackbarMessage.value = "تم تعديل موعد الحجز بنجاح"
-
-        if (hasFirebaseAuthForCurrentUser()) {
-            viewModelScope.launch {
-                repository.rescheduleBooking(
-                    bookingId = bookingId,
-                    newDate = newDate,
-                    newTimeSlot = newTimeSlot,
-                    newGuestCount = newGuestCount,
-                    newNotes = newNotes
-                )
-            }
-        }
+        _snackbarMessage.value = "إعادة الجدولة تتطلب تعديل السعة والحجز معاً من الخادم. لم يُعدّل الموعد."
     }
 
     fun deleteBooking(bookingId: String) {
-        _localBookings.value = _localBookings.value.filterNot { it.id == bookingId }
-        _snackbarMessage.value = "تم حذف السجل من حجوزاتك"
-        if (hasFirebaseAuthForCurrentUser()) {
-            viewModelScope.launch {
-                repository.deleteBooking(bookingId)
-            }
-        }
+        _snackbarMessage.value = "لا يمكن حذف سجل مالي من الجهاز. يمكن طلب الإلغاء من الإدارة."
     }
 
     fun submitCustomerReview(

@@ -1,0 +1,20 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Unmatched objects are always private. User receipts are immutable.
+    match /receipts/{userId}/{fileName} {
+      allow get: if request.auth != null && request.auth.uid == userId;
+      allow list: if false;
+      allow create: if request.auth != null &&
+        request.auth.uid == userId &&
+        fileName.matches('^[a-zA-Z0-9_-]{8,128}\\.(jpg|jpeg|png|pdf)$') &&
+        request.resource.size > 100 &&
+        request.resource.size < 8 * 1024 * 1024 &&
+        request.resource.contentType in ['image/jpeg', 'image/png', 'application/pdf'];
+      allow update, delete: if false;
+    }
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

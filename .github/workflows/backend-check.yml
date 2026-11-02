@@ -1,0 +1,29 @@
+name: Verify trusted backend source
+
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+    branches: [ "**" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check Firebase backend syntax
+        run: node --check functions/index.js
+      - name: Check Firestore security tests syntax
+        run: node --check firestore.test.js
+      - name: Check rule files exist
+        run: |
+          test -s firestore.rules
+          test -s storage.rules
+          test -s firebase.json
