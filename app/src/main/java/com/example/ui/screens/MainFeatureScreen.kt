@@ -162,12 +162,13 @@ import com.google.firebase.firestore.FirebaseFirestore
 
 enum class MainTab(val titleAr: String, val tag: String) {
     EXPLORE("الرئيسية", "tab_explore"),
+    STORE("الحجز", "tab_store"),
     REELS("الريلز", "tab_reels"),
-    CHAT("الدردشة", "tab_chat"),
+    CHAT("الرسائل", "tab_chat"),
     WALLET("شراء رصيد", "tab_wallet"),
     BOOKINGS("الحجوزات", "tab_bookings"),
     FAVORITES("المفضلة", "tab_favorites"),
-    PROFILE("الحساب", "tab_profile"),
+    PROFILE("الملف", "tab_profile"),
     REVIEWS("التقييمات", "tab_reviews"),
     ADMIN("الإدارة", "tab_admin")
 }
@@ -475,8 +476,8 @@ fun MainFeatureScreen(
     val bottomNavigationTabs = remember {
         listOf(
             MainTab.EXPLORE,
+            MainTab.STORE,
             MainTab.REELS,
-            MainTab.WALLET,
             MainTab.CHAT,
             MainTab.PROFILE
         )
@@ -534,7 +535,7 @@ fun MainFeatureScreen(
                         ) {
                             bottomNavigationTabs.forEach { tab ->
                                 val selected = currentTab == tab
-                                val isWalletCenterTab = tab == MainTab.WALLET
+                                val isWalletCenterTab = tab == MainTab.REELS
                                 NavigationBarItem(
                                     selected = selected,
                                     onClick = { currentTab = tab },
@@ -543,21 +544,22 @@ fun MainFeatureScreen(
                                         if (isWalletCenterTab) {
                                             Box(
                                                 modifier = Modifier
-                                                    .size(36.dp)
+                                                    .size(52.dp)
                                                     .clip(CircleShape)
-                                                    .background(VioletBlueVip),
+                                                    .background(MaterialTheme.colorScheme.primary),
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 Icon(
-                                                    imageVector = Icons.Default.AccountBalanceWallet,
-                                                    contentDescription = "شراء رصيد",
-                                                    tint = Color.White,
-                                                    modifier = Modifier.size(18.dp)
+                                                    imageVector = Icons.Default.Add,
+                                                    contentDescription = "عرض الريلز",
+                                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                                    modifier = Modifier.size(28.dp)
                                                 )
                                             }
                                         } else {
                                             Icon(
                                                 imageVector = when (tab) {
+                                                    MainTab.STORE -> Icons.Default.CalendarMonth
                                                     MainTab.EXPLORE -> Icons.Default.Home
                                                     MainTab.REELS -> Icons.Default.PlayCircleFilled
                                                     MainTab.CHAT -> Icons.Default.Chat
@@ -575,17 +577,17 @@ fun MainFeatureScreen(
                                     },
                                     label = {
                                         Text(
-                                            text = if (isWalletCenterTab) "المحفظة" else tab.titleAr,
-                                            fontSize = 10.sp,
+                                            text = if (isWalletCenterTab) "الريلز" else tab.titleAr,
+                                            fontSize = 13.sp,
                                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
                                         )
                                     },
                                     colors = NavigationBarItemDefaults.colors(
-                                        selectedIconColor = VioletBlueVip,
-                                        selectedTextColor = VioletBlueVip,
-                                        indicatorColor = if (isWalletCenterTab) Color.Transparent else VioletBlueVip.copy(alpha = 0.14f),
+                                        selectedIconColor = MaterialTheme.colorScheme.primary,
+                                        selectedTextColor = MaterialTheme.colorScheme.primary,
+                                        indicatorColor = if (isWalletCenterTab) Color.Transparent else MaterialTheme.colorScheme.primaryContainer,
                                         unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                         unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -617,7 +619,8 @@ fun MainFeatureScreen(
                                     icon = {
                                         Icon(
                                             imageVector = when (tab) {
-                                                MainTab.EXPLORE -> Icons.Default.Home
+                                                MainTab.STORE -> Icons.Default.CalendarMonth
+                                                    MainTab.EXPLORE -> Icons.Default.Home
                                                 MainTab.REELS -> Icons.Default.PlayCircleFilled
                                                 MainTab.CHAT -> Icons.Default.Chat
                                                 MainTab.BOOKINGS -> Icons.Default.CalendarMonth
@@ -716,7 +719,7 @@ fun MainFeatureScreen(
                             )
                         } else {
                             when (currentTab) {
-                                MainTab.EXPLORE -> ExploreTabContent(
+                                MainTab.EXPLORE, MainTab.STORE -> ExploreTabContent(
                                     userProfile = userProfile,
                                     userDisplayName = userProfile.displayName.ifBlank { userDisplayName },
                                     userAvatarUri = userProfile.avatarUri,
@@ -728,7 +731,7 @@ fun MainFeatureScreen(
                                     sortOption = sortOption,
                                     cities = filteredCities,
                                     venues = visibleVenues,
-                                    publishedServices = publishedServicesList.filter { it.authorId == viewModel.currentUserId },
+                                    publishedServices = publishedServicesList,
                                     favoriteIds = favoriteIds,
                                     isSoftRoseLightTheme = isSoftRoseLightTheme,
                                     isSuperAdmin = isSuperAdmin,
@@ -884,7 +887,7 @@ fun MainFeatureScreen(
                                     walletTransactions = walletTransactions,
                                     isGoogleSignedIn = isGoogleSignedIn,
                                     userEmail = userEmail,
-                                    publishedServices = publishedServicesList,
+                                    publishedServices = publishedServicesList.filter { it.authorId == viewModel.currentUserId },
                                     bookingsCount = bookingsList.size,
                                     reviewsCount = userReviewsList.size,
                                     favoritesCount = favoriteIds.size,
@@ -925,7 +928,7 @@ fun MainFeatureScreen(
                                     onOpenAdminTab = { currentTab = MainTab.ADMIN },
                                     onOpenBookingsTab = { currentTab = MainTab.BOOKINGS },
                                     onOpenFavoritesTab = { currentTab = MainTab.FAVORITES },
-                                    onOpenExploreTab = { currentTab = MainTab.EXPLORE },
+                                    onOpenExploreTab = { currentTab = MainTab.STORE },
                                     onOpenChatTab = { currentTab = MainTab.CHAT },
                                     onOpenWalletTab = { currentTab = MainTab.WALLET },
                                     onQuickBlockUser = { identifier, reason ->

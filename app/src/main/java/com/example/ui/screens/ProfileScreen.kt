@@ -98,23 +98,17 @@ import com.example.data.model.UserProfile
 import com.example.ui.components.FramedUserAvatar
 import com.example.ui.components.SmartServiceMediaView
 import com.example.ui.components.copyTextToClipboard
-import com.example.ui.theme.DeepTealPrimary
 import com.example.ui.theme.EmeraldVerified
 import com.example.ui.theme.ErrorCrimson
-import com.example.ui.theme.MutedLuxuryGold
-import com.example.ui.theme.RoyalNavyBackground
-import com.example.ui.theme.RoyalNavyCard
-import com.example.ui.theme.SlateSecondaryText
-import com.example.ui.theme.SoftWhiteText
 import com.example.ui.viewmodel.WalletTransaction
 
 private enum class ProfileMediaTab(
     val label: String,
     val icon: ImageVector
 ) {
-    REELS("Reels", Icons.Default.PlayArrow),
+    REELS("الريلز", Icons.Default.PlayArrow),
     VIDEOS("Videos", Icons.Default.Videocam),
-    PHOTOS("Photos", Icons.Default.GridOn),
+    PHOTOS("الصور", Icons.Default.GridOn),
     EXCLUSIVE("Exclusive", Icons.Default.AutoAwesome),
     POSTS("منشورات", Icons.Default.Lock)
 }
@@ -141,7 +135,7 @@ private const val VIP_MONTHLY_SUBSCRIPTION_USD = 29
 @Composable
 fun ProfileScreen(
     userProfile: UserProfile,
-    walletBalanceUsd: Int = 250,
+    walletBalanceUsd: Int = 0,
     walletTransactions: List<WalletTransaction> = emptyList(),
     isGoogleSignedIn: Boolean,
     userEmail: String?,
@@ -193,7 +187,7 @@ fun ProfileScreen(
     var isFollowing by rememberSaveable { mutableStateOf(false) }
     var isSubscribedVip by rememberSaveable { mutableStateOf(false) }
     var selectedTab by rememberSaveable { mutableStateOf(ProfileMediaTab.REELS) }
-    var coverImageUri by rememberSaveable { mutableStateOf("aleppo_palace_nights") }
+    var coverImageUri by rememberSaveable { mutableStateOf("") }
 
     val unlockedVideoIds = remember { mutableStateListOf<String>() }
     val pinnedClipIds = remember {
@@ -233,10 +227,10 @@ fun ProfileScreen(
                 subtitle = pub.cityName,
                 tab = ProfileMediaTab.REELS,
                 viewsLabel = "—",
-                durationLabel = "00:45",
+                durationLabel = "",
                 imageUrl = pub.imageUrl,
                 category = pub.category,
-                singlePriceUsd = pub.priceUsd.toInt().coerceAtLeast(15),
+                singlePriceUsd = pub.priceUsd.toInt(),
                 isExclusiveLocked = false,
                 accentHex = 0xFF0D9488L,
                 secondaryHex = 0xFF09111EL,
@@ -290,17 +284,17 @@ fun ProfileScreen(
         allProfileMedia.filter { it.tab == selectedTab }
     }
 
-    val formattedUsername = userProfile.username.ifBlank { "@layla_vip" }.let {
-        if (it.startsWith("@")) it else "@$it"
+    val formattedUsername = userProfile.username.let {
+        if (it.isBlank() || it.startsWith("@")) it else "@$it"
     }
 
     val hasActiveAccount = isGoogleSignedIn || isSuperAdmin || userProfile.displayName.isNotBlank()
     val displayTitle = if (hasActiveAccount) {
         userProfile.displayName.substringBefore("•").trim().ifBlank {
-            userEmail?.substringBefore("@") ?: "ليلى الملكية"
+            userEmail?.substringBefore("@") ?: "حسابي"
         }
     } else {
-        "ليلى • Layla VIP"
+        "مرحباً بك"
     }
 
     val handleOpenOrUnlockMedia: (ProfileMediaItem) -> Unit = { item ->
@@ -343,1196 +337,80 @@ fun ProfileScreen(
     }
 
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(RoyalNavyBackground)
+        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
             .testTag("profile_screen_list"),
-        contentPadding = PaddingValues(bottom = 96.dp)
+        contentPadding = PaddingValues(bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
-        // ====================================================================
-        // 1. COVER PHOTO + OVERLAPPING AVATAR + NAME + GOLDEN LEVEL BADGE + BIO
-        // ====================================================================
         item(key = "profile_header_section") {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(182.dp)
-                ) {
-                    // Cover Banner Image (138.dp height)
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(138.dp)
-                            .clickable {
-                                coverPickerLauncher.launch(
-                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                )
-                            }
-                    ) {
-                        SmartServiceMediaView(
-                            imageUrl = coverImageUri,
-                            accentHex = 0xFF0D9488L,
-                            secondaryHex = 0xFF09111EL,
-                            category = "سهرات فنية",
-                            modifier = Modifier.fillMaxSize()
-                        )
-
-                        // Smooth Cover Vignette
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors = listOf(
-                                            RoyalNavyBackground.copy(alpha = 0.45f),
-                                            Color.Transparent,
-                                            RoyalNavyBackground
-                                        )
-                                    )
-                                )
-                        )
-
-                        // Top Action Icons Over Cover (Small, balanced, non-crowded)
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 14.dp, vertical = 10.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                // Settings & Account Gear Icon
-                                IconButton(
-                                    onClick = { showSettingsModal = true },
-                                    modifier = Modifier
-                                        .size(32.dp)
-                                        .clip(CircleShape)
-                                        .background(RoyalNavyBackground.copy(alpha = 0.6f))
-                                        .testTag("profile_settings_button")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Settings,
-                                        contentDescription = "الإعدادات",
-                                        tint = SoftWhiteText,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-
-                                // Edit Profile Icon
-                                IconButton(
-                                    onClick = { showEditProfileDialog = true },
-                                    modifier = Modifier
-                                        .size(32.dp)
-                                        .clip(CircleShape)
-                                        .background(RoyalNavyBackground.copy(alpha = 0.6f))
-                                        .testTag("edit_profile_button")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Edit,
-                                        contentDescription = "تعديل الملف",
-                                        tint = SoftWhiteText,
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                }
-
-                                // Compact Wallet Pill in Cover Corner
-                                Surface(
-                                    onClick = onOpenWalletTab,
-                                    color = RoyalNavyBackground.copy(alpha = 0.68f),
-                                    shape = RoundedCornerShape(50),
-                                    border = BorderStroke(0.8.dp, MutedLuxuryGold.copy(alpha = 0.55f)),
-                                    modifier = Modifier.testTag("profile_independent_wallet_card")
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.AccountBalanceWallet,
-                                            contentDescription = null,
-                                            tint = MutedLuxuryGold,
-                                            modifier = Modifier.size(13.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(
-                                            text = "$$walletBalanceUsd",
-                                            fontSize = 11.sp,
-                                            color = SoftWhiteText,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-                            }
-
-                            // Cover Photo Change Pill
-                            Surface(
-                                onClick = {
-                                    coverPickerLauncher.launch(
-                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                    )
-                                },
-                                color = RoyalNavyBackground.copy(alpha = 0.55f),
-                                shape = RoundedCornerShape(50)
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.CameraAlt,
-                                        contentDescription = "تغيير الغلاف",
-                                        tint = SoftWhiteText.copy(alpha = 0.85f),
-                                        modifier = Modifier.size(12.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = "الغلاف",
-                                        fontSize = 10.sp,
-                                        color = SoftWhiteText.copy(alpha = 0.85f)
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    // Overlapping Centered Profile Avatar with Luxury Multi-Layer Jewel Frame
-                    Box(
-                        contentAlignment = Alignment.BottomEnd,
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .clickable {
-                                avatarPickerLauncher.launch(
-                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                )
-                            }
-                            .testTag("profile_avatar_picker")
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(96.dp)
-                                .clip(CircleShape)
-                                .background(RoyalNavyBackground)
-                                .padding(2.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            FramedUserAvatar(
-                                avatarUri = userProfile.avatarUri,
-                                fallbackInitial = displayTitle.take(1).ifBlank { "L" },
-                                frameId = userProfile.selectedFrameId,
-                                level = userProfile.level,
-                                avatarSize = 72.dp,
-                                showLevelBadge = true,
-                                isOnline = userProfile.isAvailableNow
-                            )
-                        }
-
-                        Surface(
-                            color = DeepTealPrimary,
-                            shape = CircleShape,
-                            border = BorderStroke(1.5.dp, RoyalNavyBackground),
-                            modifier = Modifier.size(24.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.CameraAlt,
-                                    contentDescription = "تغيير الصورة",
-                                    tint = SoftWhiteText,
-                                    modifier = Modifier.size(12.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Name + Royal Amethyst LEVEL Badge (Hard-earned prestige badge)
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center,
-                    modifier = Modifier.padding(horizontal = 20.dp)
-                ) {
-                    val activeFrame = remember(userProfile.selectedFrameId) {
-                        AvatarFrameCatalog.findById(userProfile.selectedFrameId)
-                    }
-                    // Royal Prestige LEVEL Badge
-                    Surface(
-                        onClick = {
-                            onShowMessage(
-                                "المستوى الحالي LEVEL ${userProfile.level} (${userProfile.xpPoints}/${userProfile.nextLevelXp} XP) • يرتفع المستوى فقط عبر الحجوزات الموثقة وشحن الرصيد"
-                            )
-                        },
-                        color = Color.Transparent,
-                        shape = RoundedCornerShape(50),
-                        border = BorderStroke(1.dp, Color(activeFrame.accentHex)),
-                        modifier = Modifier.testTag("boost_profile_xp_button")
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .background(
-                                    Brush.horizontalGradient(
-                                        colors = listOf(
-                                            Color(activeFrame.primaryHex).copy(alpha = 0.32f),
-                                            Color(activeFrame.secondaryHex).copy(alpha = 0.32f)
-                                        )
-                                    )
-                                )
-                                .padding(horizontal = 9.dp, vertical = 3.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.AutoAwesome,
-                                contentDescription = null,
-                                tint = Color(activeFrame.accentHex),
-                                modifier = Modifier.size(11.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "LEVEL ${userProfile.level} • ${activeFrame.badgeLabel}",
-                                fontSize = 10.sp,
-                                color = SoftWhiteText,
-                                fontWeight = FontWeight.ExtraBold
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.width(6.dp))
-
-                    Text(
-                        text = displayTitle,
-                        fontSize = 16.sp,
-                        color = SoftWhiteText,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(2.dp))
-
-                // @username + City
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp),
-                    modifier = Modifier
-                        .clickable { copyTextToClipboard(context, "Username", formattedUsername) }
-                        .testTag("profile_username_badge")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.ContentCopy,
-                        contentDescription = null,
-                        tint = SlateSecondaryText,
-                        modifier = Modifier.size(11.dp)
-                    )
-                    Text(
-                        text = formattedUsername,
-                        fontSize = 12.sp,
-                        color = SlateSecondaryText,
-                        fontWeight = FontWeight.Medium
-                    )
-                    if (userProfile.cityName.isNotBlank()) {
-                        Text(
-                            text = "• ${userProfile.cityName.substringBefore("•").trim()}",
-                            fontSize = 11.sp,
-                            color = SlateSecondaryText
-                        )
-                    }
-                }
-
-                // Concise Bio
-                val bioText = userProfile.bio.ifBlank {
-                    "صانعة محتوى وسهرات VIP حصرية ✨ • حجوزات خاصة ومقاطع 4K"
-                }
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = bioText,
-                    fontSize = 12.sp,
-                    lineHeight = 17.sp,
-                    color = SoftWhiteText.copy(alpha = 0.86f),
-                    textAlign = TextAlign.Center,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 28.dp)
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // ====================================================================
-                // 2. STATS ROW: FOLLOWERS, LIKES, VIEWS (إحصائيات المتابعين والإعجابات والمشاهدات)
-                // ====================================================================
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 32.dp)
-                        .testTag("profile_level_xp_card"),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    MinimalStatItem(
-                        value = if (isFollowing) "24.9K" else "24.8K",
-                        label = "المتابعين"
-                    )
-
-                    Box(
-                        modifier = Modifier
-                            .width(1.dp)
-                            .height(22.dp)
-                            .background(MaterialTheme.colorScheme.outline)
-                    )
-
-                    MinimalStatItem(
-                        value = "186.4K",
-                        label = "الإعجابات"
-                    )
-
-                    Box(
-                        modifier = Modifier
-                            .width(1.dp)
-                            .height(22.dp)
-                            .background(MaterialTheme.colorScheme.outline)
-                    )
-
-                    MinimalStatItem(
-                        value = "1.4M",
-                        label = "المشاهدات"
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // ====================================================================
-                // 3. ACTION BUTTONS: FOLLOW, SUBSCRIBE, MESSAGE (أزرار المتابعة والاشتراك والمراسلة)
-                // ====================================================================
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Message Button (مراسلة)
-                    Surface(
-                        onClick = onOpenChatTab,
-                        color = RoyalNavyCard,
-                        shape = RoundedCornerShape(10.dp),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                        modifier = Modifier
-                            .weight(0.95f)
-                            .height(36.dp)
-                            .testTag("profile_message_button")
-                    ) {
-                        Row(
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 8.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.ChatBubbleOutline,
-                                contentDescription = null,
-                                tint = SoftWhiteText,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(5.dp))
-                            Text(
-                                text = "مراسلة",
-                                fontSize = 12.sp,
-                                color = SoftWhiteText,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1
-                            )
-                        }
-                    }
-
-                    // Subscribe VIP Button (اشتراك)
-                    Surface(
-                        onClick = { showSubscribeVipModal = true },
-                        color = if (isSubscribedVip) MutedLuxuryGold.copy(alpha = 0.22f) else MutedLuxuryGold,
-                        shape = RoundedCornerShape(10.dp),
-                        border = BorderStroke(1.dp, MutedLuxuryGold),
-                        modifier = Modifier
-                            .weight(1.15f)
-                            .height(36.dp)
-                            .testTag("profile_subscribe_vip_button")
-                    ) {
-                        Row(
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 8.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Star,
-                                contentDescription = null,
-                                tint = if (isSubscribedVip) MutedLuxuryGold else RoyalNavyBackground,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = if (isSubscribedVip) "مشترك VIP ✓" else "اشتراك • $$VIP_MONTHLY_SUBSCRIPTION_USD",
-                                fontSize = 11.sp,
-                                color = if (isSubscribedVip) MutedLuxuryGold else RoyalNavyBackground,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1
-                            )
-                        }
-                    }
-
-                    // Follow Button (متابعة)
-                    Surface(
-                        onClick = {
-                            isFollowing = !isFollowing
-                            onShowMessage(if (isFollowing) "تمت المتابعة بنجاح ✓" else "تم إلغاء المتابعة")
-                        },
-                        color = if (isFollowing) RoyalNavyCard else DeepTealPrimary,
-                        shape = RoundedCornerShape(10.dp),
-                        border = BorderStroke(
-                            width = 1.dp,
-                            color = if (isFollowing) DeepTealPrimary else Color.Transparent
-                        ),
-                        modifier = Modifier
-                            .weight(0.95f)
-                            .height(36.dp)
-                            .testTag("profile_follow_button")
-                    ) {
-                        Row(
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 8.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (isFollowing) Icons.Default.Check else Icons.Default.PersonAdd,
-                                contentDescription = null,
-                                tint = if (isFollowing) DeepTealPrimary else SoftWhiteText,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = if (isFollowing) "متابَع" else "متابعة",
-                                fontSize = 12.sp,
-                                color = if (isFollowing) DeepTealPrimary else SoftWhiteText,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // ====================================================================
-                // 3.5. LUXURY AVATAR FRAMES & HARD-EARNED LEVEL PROGRESSION CARD
-                // ====================================================================
-                val xpRatio = (userProfile.xpPoints.toFloat() / userProfile.nextLevelXp.coerceAtLeast(1).toFloat())
-                    .coerceIn(0.03f, 1f)
-                val remainingXp = (userProfile.nextLevelXp - userProfile.xpPoints).coerceAtLeast(0)
-
-                Surface(
-                    color = RoyalNavyCard,
-                    shape = RoundedCornerShape(14.dp),
-                    border = BorderStroke(0.8.dp, MutedLuxuryGold.copy(alpha = 0.38f)),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 10.dp)
-                    ) {
-                        // Top Row: XP Remaining + Level Title
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "${userProfile.xpPoints} / ${userProfile.nextLevelXp} XP (متبقي $remainingXp XP)",
-                                fontSize = 10.sp,
-                                color = SlateSecondaryText,
-                                fontWeight = FontWeight.Medium
-                            )
-
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = "الإطارات الملكية الفاخرة • LEVEL ${userProfile.level}",
-                                    fontSize = 11.sp,
-                                    color = SoftWhiteText,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Icon(
-                                    imageVector = Icons.Default.AutoAwesome,
-                                    contentDescription = null,
-                                    tint = MutedLuxuryGold,
-                                    modifier = Modifier.size(13.dp)
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        // Sleek Amethyst & Sapphire XP Progress Bar
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(5.dp)
-                                .clip(RoundedCornerShape(50))
-                                .background(RoyalNavyBackground)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth(xpRatio)
-                                    .height(5.dp)
-                                    .clip(RoundedCornerShape(50))
-                                    .background(
-                                        Brush.horizontalGradient(
-                                            colors = listOf(DeepTealPrimary, MutedLuxuryGold)
-                                        )
-                                    )
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        // Horizontal Luxury Frames Showcase
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            items(AvatarFrameCatalog.frames, key = { it.id }) { frameStyle ->
-                                val isSelected = userProfile.selectedFrameId == frameStyle.id
-                                val isUnlocked = isSuperAdmin || userProfile.level >= frameStyle.minLevel
-                                val framePrimary = Color(frameStyle.primaryHex)
-                                val frameAccent = Color(frameStyle.accentHex)
-
-                                Surface(
-                                    onClick = { onSelectAvatarFrame(frameStyle.id) },
-                                    color = if (isSelected) {
-                                        framePrimary.copy(alpha = 0.18f)
-                                    } else {
-                                        RoyalNavyBackground.copy(alpha = 0.75f)
-                                    },
-                                    shape = RoundedCornerShape(12.dp),
-                                    border = BorderStroke(
-                                        width = if (isSelected) 1.3.dp else 0.7.dp,
-                                        color = if (isSelected) {
-                                            frameAccent
-                                        } else if (isUnlocked) {
-                                            framePrimary.copy(alpha = 0.45f)
-                                        } else {
-                                            MaterialTheme.colorScheme.outline
-                                        }
-                                    ),
-                                    modifier = Modifier.width(104.dp)
-                                ) {
-                                    Column(
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp),
-                                        horizontalAlignment = Alignment.CenterHorizontally
-                                    ) {
-                                        FramedUserAvatar(
-                                            avatarUri = userProfile.avatarUri,
-                                            fallbackInitial = displayTitle.take(1).ifBlank { "L" },
-                                            frameId = frameStyle.id,
-                                            level = frameStyle.minLevel,
-                                            avatarSize = 36.dp,
-                                            showLevelBadge = false
-                                        )
-
-                                        Spacer(modifier = Modifier.height(4.dp))
-
-                                        Text(
-                                            text = frameStyle.nameAr,
-                                            fontSize = 9.sp,
-                                            color = if (isUnlocked) SoftWhiteText else SlateSecondaryText,
-                                            fontWeight = FontWeight.SemiBold,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-
-                                        Spacer(modifier = Modifier.height(3.dp))
-
-                                        Surface(
-                                            color = when {
-                                                isSelected -> framePrimary
-                                                isUnlocked -> DeepTealPrimary.copy(alpha = 0.22f)
-                                                else -> RoyalNavyCard
-                                            },
-                                            shape = RoundedCornerShape(50)
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                if (!isUnlocked) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Lock,
-                                                        contentDescription = null,
-                                                        tint = SlateSecondaryText,
-                                                        modifier = Modifier.size(9.dp)
-                                                    )
-                                                    Spacer(modifier = Modifier.width(2.dp))
-                                                }
-                                                Text(
-                                                    text = when {
-                                                        isSelected -> "مفعّل ✓"
-                                                        isUnlocked -> "تفعيل"
-                                                        else -> "LV.${frameStyle.minLevel}"
-                                                    },
-                                                    fontSize = 8.sp,
-                                                    color = when {
-                                                        isSelected -> Color.White
-                                                        isUnlocked -> DeepTealPrimary
-                                                        else -> SlateSecondaryText
-                                                    },
-                                                    fontWeight = FontWeight.ExtraBold
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            CalmProfileHeader(
+                profile = userProfile, title = displayTitle, username = formattedUsername,
+                coverUri = coverImageUri, bookings = bookingsCount,
+                services = publishedServices.size, favorites = favoritesCount,
+                light = isSoftRoseLightTheme, isAdmin = isSuperAdmin,
+                onCover = { coverPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                onAvatar = { avatarPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                onCopy = { copyTextToClipboard(context, "Username", formattedUsername) },
+                onEdit = { showEditProfileDialog = true }, onSettings = { showSettingsModal = true },
+                onWallet = onOpenWalletTab, onBookings = onOpenBookingsTab,
+                onFavorites = onOpenFavoritesTab, onMessages = onOpenChatTab,
+                onStore = onOpenExploreTab, onTheme = onToggleThemeMode, onAdmin = onOpenAdminTab
+            )
         }
-
-        // ====================================================================
-        // 4. PINNED TOP 3 CLIPS (إمكانية تثبيت أفضل 3 مقاطع)
-        // ====================================================================
-        if (pinnedItems.isNotEmpty()) {
-            item(key = "profile_pinned_top_3") {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 16.dp, start = 16.dp, end = 16.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "${pinnedItems.size}/3 مثبت",
-                            fontSize = 10.sp,
-                            color = SlateSecondaryText
-                        )
-
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "أفضل 3 مقاطع مثبتة",
-                                fontSize = 12.sp,
-                                color = SoftWhiteText,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Icon(
-                                imageVector = Icons.Default.PushPin,
-                                contentDescription = null,
-                                tint = MutedLuxuryGold,
-                                modifier = Modifier.size(13.dp)
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        pinnedItems.forEachIndexed { index, clip ->
-                            val isLocked = clip.isExclusiveLocked && !isSubscribedVip && !unlockedVideoIds.contains(clip.id)
-                            PinnedClipCard(
-                                item = clip,
-                                rank = index + 1,
-                                isLocked = isLocked,
-                                onClick = { handleOpenOrUnlockMedia(clip) },
-                                onUnpin = { handleTogglePin(clip) },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                        repeat((3 - pinnedItems.size).coerceAtLeast(0)) {
-                            Spacer(modifier = Modifier.weight(1f))
-                        }
-                    }
-                }
-            }
-        }
-
-        // ====================================================================
-        // 5. MEDIA TABS BAR: Reels | Videos | Photos | Exclusive
-        // ====================================================================
         item(key = "profile_content_tabs") {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 16.dp)
-            ) {
-                LazyRow(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    items(ProfileMediaTab.entries) { tab ->
-                        val isSelected = selectedTab == tab
-                        val activeColor = if (tab == ProfileMediaTab.EXCLUSIVE) MutedLuxuryGold else DeepTealPrimary
-
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier
-                                .width(88.dp)
-                                .clickable { selectedTab = tab }
-                                .padding(vertical = 8.dp)
-                                .testTag("profile_tab_${tab.name.lowercase()}")
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
-                            ) {
-                                Icon(
-                                    imageVector = tab.icon,
-                                    contentDescription = tab.label,
-                                    tint = if (isSelected) activeColor else SlateSecondaryText,
-                                    modifier = Modifier.size(15.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = tab.label,
-                                    fontSize = 12.sp,
-                                    color = if (isSelected) SoftWhiteText else SlateSecondaryText,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(6.dp))
-
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth(0.65f)
-                                    .height(2.dp)
-                                    .background(if (isSelected) activeColor else Color.Transparent)
-                            )
-                        }
-                    }
-                }
-
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-            }
-        }
-
-        // ====================================================================
-        // 6. EXCLUSIVE / PPV BANNER (When on Exclusive or Videos tab)
-        // ====================================================================
-        if (selectedTab == ProfileMediaTab.EXCLUSIVE && !isSubscribedVip) {
-            item(key = "exclusive_unlock_banner") {
-                Surface(
-                    onClick = { showSubscribeVipModal = true },
-                    color = RoyalNavyCard,
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(0.8.dp, MutedLuxuryGold.copy(alpha = 0.5f)),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 10.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Surface(
-                            color = MutedLuxuryGold,
-                            shape = RoundedCornerShape(50)
-                        ) {
-                            Text(
-                                text = "اشتراك $$VIP_MONTHLY_SUBSCRIPTION_USD",
-                                fontSize = 10.sp,
-                                color = RoyalNavyBackground,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                            )
-                        }
-
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text(
-                                text = "افتح كل المحتوى الحصري أو اشترِ أي فيديو منفرداً",
-                                fontSize = 11.sp,
-                                color = SoftWhiteText,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Text(
-                                text = "فيديوهات 4K خاصة • جلسات VIP • ألبومات حصرية",
-                                fontSize = 10.sp,
-                                color = SlateSecondaryText
-                            )
-                        }
+            Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("منشوراتي", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(listOf(ProfileMediaTab.REELS, ProfileMediaTab.PHOTOS, ProfileMediaTab.POSTS)) { tab ->
+                        FilterChip(selected = selectedTab == tab, onClick = { selectedTab = tab },
+                            label = { Text(tab.label, fontSize = 15.sp) },
+                            modifier = Modifier.heightIn(min = 48.dp).testTag("profile_tab_${tab.name.lowercase()}"))
                     }
                 }
             }
         }
-
+        if (selectedTab == ProfileMediaTab.PHOTOS) {
+            item {
+                TextButton(onClick = { showcasePhotoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                    modifier = Modifier.padding(horizontal = 20.dp)) {
+                    Icon(Icons.Default.Add, null); Spacer(Modifier.width(8.dp)); Text("إضافة صورة")
+                }
+            }
+        }
         if (selectedTab == ProfileMediaTab.POSTS) {
-            item(key = "profile_paid_post_publish") {
-                Surface(
-                    onClick = { showPaidPostDialog = true },
-                    shape = RoundedCornerShape(14.dp),
-                    color = RoyalNavyCard,
-                    border = BorderStroke(1.dp, MutedLuxuryGold.copy(alpha = 0.5f)),
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp).testTag("create_paid_post_button")
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(14.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = null, tint = MutedLuxuryGold)
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text("إنشاء منشور مدفوع", fontSize = 15.sp, color = SoftWhiteText, fontWeight = FontWeight.Bold)
-                            Text("معاينة عامة ومحتوى خاص بسعر تختارينه", fontSize = 12.sp, color = SlateSecondaryText)
-                        }
+            item { Text("المنشورات المدفوعة متاحة للمعاينة. النشر والشراء ينتظران تفعيل الخادم.",
+                modifier = Modifier.padding(horizontal = 20.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
+        if (currentTabItems.isEmpty()) {
+            item {
+                Surface(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp), shape = RoundedCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.surface, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
+                    Column(Modifier.padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Icon(Icons.Default.GridOn, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("لا توجد منشورات بعد", style = MaterialTheme.typography.titleMedium)
+                        Text("ستظهر صورك وخدماتك المنشورة هنا.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
         }
-
-        // ====================================================================
-        // 7. TAB CONTENT GRID (3-Column for Reels/Photos, 2-Column for Videos/Exclusive)
-        // ====================================================================
-        item(key = "profile_tab_grid_${selectedTab.name}") {
-            val columns = if (selectedTab == ProfileMediaTab.VIDEOS || selectedTab == ProfileMediaTab.EXCLUSIVE || selectedTab == ProfileMediaTab.POSTS) 2 else 3
-            val rows = currentTabItems.chunked(columns)
-
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                if (selectedTab == ProfileMediaTab.PHOTOS) {
-                    // Subtle Add Photo Strip
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        Surface(
-                            onClick = {
-                                showcasePhotoPickerLauncher.launch(
-                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                )
-                            },
-                            color = RoyalNavyCard,
-                            shape = RoundedCornerShape(50),
-                            border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.outline)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Add,
-                                    contentDescription = null,
-                                    tint = DeepTealPrimary,
-                                    modifier = Modifier.size(13.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "إضافة صورة للمعرض",
-                                    fontSize = 11.sp,
-                                    color = SoftWhiteText,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                        }
-                    }
+        items(currentTabItems.chunked(2)) { rowItems ->
+            Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                rowItems.forEach { item ->
+                    ProfileMediaGridTile(item = item, isPinned = pinnedClipIds.contains(item.id),
+                        isLocked = item.isExclusiveLocked, isWideTile = true,
+                        onClick = { handleOpenOrUnlockMedia(item) }, onTogglePin = { handleTogglePin(item) },
+                        modifier = Modifier.weight(1f))
                 }
-
-                if (rows.isEmpty()) {
-                    Surface(
-                        color = RoyalNavyCard,
-                        shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.outline),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth().padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(Icons.Default.GridOn, contentDescription = null, tint = SlateSecondaryText)
-                            Text("لا توجد منشورات في هذا القسم بعد", fontSize = 14.sp, color = SoftWhiteText)
-                            Text("ستظهر المنشورات الحقيقية هنا بعد نشرها.", fontSize = 12.sp, color = SlateSecondaryText)
-                        }
-                    }
-                }
-                rows.forEach { rowItems ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        rowItems.forEach { mediaItem ->
-                            val isPinned = pinnedClipIds.contains(mediaItem.id)
-                            val isLocked = mediaItem.tab == ProfileMediaTab.POSTS ||
-                                (mediaItem.isExclusiveLocked &&
-                                !isSubscribedVip &&
-                                !unlockedVideoIds.contains(mediaItem.id))
-
-                            ProfileMediaGridTile(
-                                item = mediaItem,
-                                isPinned = isPinned,
-                                isLocked = isLocked,
-                                isWideTile = columns == 2,
-                                onClick = { handleOpenOrUnlockMedia(mediaItem) },
-                                onTogglePin = { handleTogglePin(mediaItem) },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                        repeat((columns - rowItems.size).coerceAtLeast(0)) {
-                            Spacer(modifier = Modifier.weight(1f))
-                        }
-                    }
-                }
-            }
-        }
-
-        // ====================================================================
-        // 8. COMPACT FOOTER BAR FOR CREATOR SETTINGS, FRAMES & AUTH
-        // ====================================================================
-        item(key = "profile_compact_footer") {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Surface(
-                    onClick = { showSettingsModal = true },
-                    color = RoyalNavyCard,
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.outline),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("profile_chat_pricing_card")
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "تعديل الإعدادات",
-                            fontSize = 11.sp,
-                            color = DeepTealPrimary,
-                            fontWeight = FontWeight.Bold
-                        )
-
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "تسعير الدردشة ($${userProfile.chatPriceUsd}) • الإطارات • الحساب",
-                                fontSize = 11.sp,
-                                color = SlateSecondaryText
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Icon(
-                                imageVector = Icons.Default.Settings,
-                                contentDescription = null,
-                                tint = SoftWhiteText,
-                                modifier = Modifier.size(15.dp)
-                            )
-                        }
-                    }
-                }
-
-                // Infrastructure Database & Password Management Card
-                Surface(
-                    onClick = { showPasswordAndDbModal = true },
-                    color = RoyalNavyCard,
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(0.9.dp, MutedLuxuryGold.copy(alpha = 0.45f)),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("profile_database_infrastructure_card")
-                ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Surface(
-                                color = EmeraldVerified.copy(alpha = 0.16f),
-                                shape = RoundedCornerShape(50),
-                                border = BorderStroke(0.8.dp, EmeraldVerified.copy(alpha = 0.5f))
-                            ) {
-                                Text(
-                                    text = "${savedAccounts.size.coerceAtLeast(1)} حساب محفوظ",
-                                    fontSize = 9.sp,
-                                    color = EmeraldVerified,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                                )
-                            }
-
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = "قاعدة بيانات الحسابات • حفظ البنية التحتية وكلمة السر",
-                                    fontSize = 11.sp,
-                                    color = SoftWhiteText,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Spacer(modifier = Modifier.width(5.dp))
-                                Icon(
-                                    imageVector = Icons.Default.Lock,
-                                    contentDescription = null,
-                                    tint = MutedLuxuryGold,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                            }
-                        }
-
-                        Text(
-                            text = "الحالة: $lastInfrastructureSyncLabel • تشفير PBKDF2-HMAC-SHA256",
-                            fontSize = 10.sp,
-                            color = SlateSecondaryText,
-                            modifier = Modifier.fillMaxWidth(),
-                            textAlign = TextAlign.End
-                        )
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            OutlinedButton(
-                                onClick = { showPasswordAndDbModal = true },
-                                shape = RoundedCornerShape(8.dp),
-                                border = BorderStroke(0.8.dp, MutedLuxuryGold),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(32.dp)
-                                    .testTag("open_change_password_dialog_button")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Lock,
-                                    contentDescription = null,
-                                    tint = MutedLuxuryGold,
-                                    modifier = Modifier.size(12.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "تغيير كلمة السر",
-                                    fontSize = 10.sp,
-                                    color = SoftWhiteText,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-
-                            Button(
-                                onClick = onSaveInfrastructureNow,
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = DeepTealPrimary,
-                                    contentColor = SoftWhiteText
-                                ),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(32.dp)
-                                    .testTag("save_infrastructure_button")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.CheckCircle,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(12.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "حفظ البنية التحتية",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Direct quick buttons for Auth & Super Admin so testTags are always mounted
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("profile_avatar_frames_card"),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = onOpenGoogleSignIn,
-                        shape = RoundedCornerShape(10.dp),
-                        border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.outline),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(34.dp)
-                            .testTag("profile_open_auth_screen_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = null,
-                            tint = DeepTealPrimary,
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Spacer(modifier = Modifier.width(5.dp))
-                        Text(
-                            text = if (isGoogleSignedIn || isSuperAdmin) "إعدادات الحساب" else "تسجيل الدخول",
-                            fontSize = 11.sp,
-                            color = SoftWhiteText
-                        )
-                    }
-
-                    if (isSuperAdmin) {
-                        Button(
-                            onClick = onOpenAdminTab,
-                            shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MutedLuxuryGold,
-                                contentColor = RoyalNavyBackground
-                            ),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(34.dp)
-                                .testTag("open_super_admin_dashboard_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.AdminPanelSettings,
-                                contentDescription = null,
-                                modifier = Modifier.size(13.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "لوحة الإدارة",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
+                if (rowItems.size == 1) Spacer(Modifier.weight(1f))
             }
         }
     }
 
-    // ====================================================================
-    // MODAL 1: PURCHASE SINGLE VIDEO OR SUBSCRIBE VIP FOR EXCLUSIVE CONTENT
-    // ====================================================================
     selectedLockedItemForPurchase?.let { item ->
         AlertDialog(
             onDismissRequest = { selectedLockedItemForPurchase = null },
-            containerColor = RoyalNavyCard,
+            containerColor = MaterialTheme.colorScheme.surface,
             title = {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1540,13 +418,13 @@ fun ProfileScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Surface(
-                        color = MutedLuxuryGold.copy(alpha = 0.16f),
+                        color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.16f),
                         shape = RoundedCornerShape(50)
                     ) {
                         Text(
                             text = "Exclusive VIP",
                             fontSize = 10.sp,
-                            color = MutedLuxuryGold,
+                            color = MaterialTheme.colorScheme.secondary,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                         )
@@ -1554,7 +432,7 @@ fun ProfileScreen(
                     Text(
                         text = "فتح المحتوى الحصري",
                         fontSize = 15.sp,
-                        color = SoftWhiteText,
+                        color = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -1564,7 +442,7 @@ fun ProfileScreen(
                     Text(
                         text = "${item.title} (${item.durationLabel})",
                         fontSize = 13.sp,
-                        color = SoftWhiteText,
+                        color = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.fillMaxWidth(),
                         textAlign = TextAlign.End
@@ -1573,7 +451,7 @@ fun ProfileScreen(
                         text = "يمكنك شراء هذا الفيديو منفرداً لمشاهدته فوراً، أو الاشتراك الشهري لفتح جميع الفيديوهات والألبومات الحصرية بلا حدود.",
                         fontSize = 11.sp,
                         lineHeight = 16.sp,
-                        color = SlateSecondaryText,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.End
                     )
 
@@ -1590,7 +468,7 @@ fun ProfileScreen(
                                 onOpenWalletTab()
                             }
                         },
-                        color = DeepTealPrimary,
+                        color = MaterialTheme.colorScheme.primary,
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -1602,13 +480,13 @@ fun ProfileScreen(
                             Text(
                                 text = "$${item.singlePriceUsd}",
                                 fontSize = 13.sp,
-                                color = SoftWhiteText,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 fontWeight = FontWeight.ExtraBold
                             )
                             Text(
                                 text = "شراء هذا الفيديو منفرداً",
                                 fontSize = 12.sp,
-                                color = SoftWhiteText,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -1627,9 +505,9 @@ fun ProfileScreen(
                                 onOpenWalletTab()
                             }
                         },
-                        color = MutedLuxuryGold.copy(alpha = 0.16f),
+                        color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.16f),
                         shape = RoundedCornerShape(10.dp),
-                        border = BorderStroke(1.dp, MutedLuxuryGold),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
@@ -1640,13 +518,13 @@ fun ProfileScreen(
                             Text(
                                 text = "$$VIP_MONTHLY_SUBSCRIPTION_USD / شهرياً",
                                 fontSize = 12.sp,
-                                color = MutedLuxuryGold,
+                                color = MaterialTheme.colorScheme.secondary,
                                 fontWeight = FontWeight.ExtraBold
                             )
                             Text(
                                 text = "اشتراك VIP (فتح كل المحتوى)",
                                 fontSize = 12.sp,
-                                color = MutedLuxuryGold,
+                                color = MaterialTheme.colorScheme.secondary,
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -1655,7 +533,7 @@ fun ProfileScreen(
                     Text(
                         text = "رصيد محفظتك الحالي: $$walletBalanceUsd",
                         fontSize = 11.sp,
-                        color = SlateSecondaryText,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.fillMaxWidth(),
                         textAlign = TextAlign.Center
                     )
@@ -1666,12 +544,12 @@ fun ProfileScreen(
                     selectedLockedItemForPurchase = null
                     onOpenWalletTab()
                 }) {
-                    Text("شحن المحفظة", fontSize = 12.sp, color = DeepTealPrimary, fontWeight = FontWeight.Bold)
+                    Text("شحن المحفظة", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { selectedLockedItemForPurchase = null }) {
-                    Text("إغلاق", fontSize = 12.sp, color = SlateSecondaryText)
+                    Text("إغلاق", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         )
@@ -1683,12 +561,12 @@ fun ProfileScreen(
     if (showSubscribeVipModal) {
         AlertDialog(
             onDismissRequest = { showSubscribeVipModal = false },
-            containerColor = RoyalNavyCard,
+            containerColor = MaterialTheme.colorScheme.surface,
             title = {
                 Text(
                     text = "اشتراك VIP الحصري • $displayTitle",
                     fontSize = 15.sp,
-                    color = MutedLuxuryGold,
+                    color = MaterialTheme.colorScheme.secondary,
                     fontWeight = FontWeight.Bold
                 )
             },
@@ -1698,7 +576,7 @@ fun ProfileScreen(
                         text = "• فتح جميع فيديوهات وألبومات قسم Exclusive بلا حدود\n• أولوية في الرد والمراسلة الخاصة\n• شارة داعم ملكية أرجوانية في الملف الشخصي",
                         fontSize = 12.sp,
                         lineHeight = 18.sp,
-                        color = SoftWhiteText,
+                        color = MaterialTheme.colorScheme.onSurface,
                         textAlign = TextAlign.End,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -1706,7 +584,7 @@ fun ProfileScreen(
                     Text(
                         text = "قيمة الاشتراك الشهري: $$VIP_MONTHLY_SUBSCRIPTION_USD (رصيدك: $$walletBalanceUsd)",
                         fontSize = 11.sp,
-                        color = SlateSecondaryText,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.End,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -1728,8 +606,8 @@ fun ProfileScreen(
                         }
                     },
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = MutedLuxuryGold,
-                        contentColor = RoyalNavyBackground
+                        containerColor = MaterialTheme.colorScheme.secondary,
+                        contentColor = MaterialTheme.colorScheme.background
                     ),
                     shape = RoundedCornerShape(50)
                 ) {
@@ -1742,7 +620,7 @@ fun ProfileScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showSubscribeVipModal = false }) {
-                    Text("إلغاء", fontSize = 12.sp, color = SlateSecondaryText)
+                    Text("إلغاء", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         )
@@ -1761,15 +639,15 @@ fun ProfileScreen(
 
         AlertDialog(
             onDismissRequest = { showPaidPostDialog = false },
-            containerColor = RoyalNavyCard,
-            title = { Text("نشر محتوى مدفوع", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = SoftWhiteText) },
+            containerColor = MaterialTheme.colorScheme.surface,
+            title = { Text("نشر محتوى مدفوع", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface) },
             text = {
                 LazyColumn(
                     modifier = Modifier.fillMaxWidth().heightIn(max = 460.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     item {
-                        Text("المعاينة متاحة للجميع، أما المحتوى الكامل فيُحفظ بسجل خاص لا يستطيع الزوار قراءته مباشرة.", color = SlateSecondaryText, fontSize = 13.sp)
+                        Text("المعاينة متاحة للجميع، أما المحتوى الكامل فيُحفظ بسجل خاص لا يستطيع الزوار قراءته مباشرة.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
                     }
                     item {
                         OutlinedTextField(
@@ -1803,7 +681,7 @@ fun ProfileScreen(
                         )
                     }
                     item {
-                        Text("تنبيه: تحصيل المبلغ وفتح المحتوى للمشتري لن يُفعّلا قبل ربط تحقق الدفع والصلاحيات في الخادم.", color = MutedLuxuryGold, fontSize = 12.sp)
+                        Text("تنبيه: تحصيل المبلغ وفتح المحتوى للمشتري لن يُفعّلا قبل ربط تحقق الدفع والصلاحيات في الخادم.", color = MaterialTheme.colorScheme.secondary, fontSize = 12.sp)
                     }
                 }
             },
@@ -1814,7 +692,7 @@ fun ProfileScreen(
                         onPublishPaidPost(postTitle.trim(), postPreview.trim(), postBody.trim(), parsedPrice ?: 5)
                         showPaidPostDialog = false
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = DeepTealPrimary)
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) { Text("نشر المعاينة", fontWeight = FontWeight.Bold) }
             },
             dismissButton = {
@@ -1849,7 +727,7 @@ fun ProfileScreen(
     // ====================================================================
     if (showEditProfileDialog) {
         var nameInput by remember { mutableStateOf(userProfile.displayName) }
-        var usernameInput by remember { mutableStateOf(userProfile.username.ifBlank { "@layla_vip" }) }
+        var usernameInput by remember { mutableStateOf(userProfile.username) }
         var roleInput by remember { mutableStateOf(userProfile.roleTitle) }
         var cityInput by remember { mutableStateOf(userProfile.cityName) }
         var bioInput by remember { mutableStateOf(userProfile.bio) }
@@ -1857,12 +735,12 @@ fun ProfileScreen(
 
         AlertDialog(
             onDismissRequest = { showEditProfileDialog = false },
-            containerColor = RoyalNavyCard,
+            containerColor = MaterialTheme.colorScheme.surface,
             title = {
                 Text(
                     text = "تعديل الملف الشخصي",
                     fontSize = 15.sp,
-                    color = SoftWhiteText,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.Bold
                 )
             },
@@ -1930,8 +808,8 @@ fun ProfileScreen(
                     },
                     shape = RoundedCornerShape(50),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = DeepTealPrimary,
-                        contentColor = SoftWhiteText
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onSurface
                     )
                 ) {
                     Text("حفظ", fontSize = 12.sp, fontWeight = FontWeight.Bold)
@@ -1939,7 +817,7 @@ fun ProfileScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showEditProfileDialog = false }) {
-                    Text("إلغاء", fontSize = 12.sp, color = SlateSecondaryText)
+                    Text("إلغاء", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         )
@@ -1957,12 +835,12 @@ fun ProfileScreen(
 
         AlertDialog(
             onDismissRequest = { showPasswordAndDbModal = false },
-            containerColor = RoyalNavyCard,
+            containerColor = MaterialTheme.colorScheme.surface,
             title = {
                 Text(
                     text = "قاعدة بيانات الحسابات وتغيير كلمة المرور",
                     fontSize = 14.sp,
-                    color = SoftWhiteText,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.fillMaxWidth(),
                     textAlign = TextAlign.End
@@ -1971,7 +849,7 @@ fun ProfileScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Surface(
-                        color = RoyalNavyBackground,
+                        color = MaterialTheme.colorScheme.background,
                         shape = RoundedCornerShape(10.dp),
                         border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.outline),
                         modifier = Modifier.fillMaxWidth()
@@ -1983,7 +861,7 @@ fun ProfileScreen(
                             Text(
                                 text = "الحساب النشط: $formattedUsername • LEVEL ${userProfile.level}",
                                 fontSize = 11.sp,
-                                color = SoftWhiteText,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
@@ -1994,7 +872,7 @@ fun ProfileScreen(
                             Text(
                                 text = "إجمالي الحسابات المحفوظة: ${savedAccounts.size.coerceAtLeast(1)} حساب",
                                 fontSize = 10.sp,
-                                color = SlateSecondaryText
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -2011,8 +889,8 @@ fun ProfileScreen(
                             },
                             label = { Text("تأكيد كلمة السر الحالية", fontSize = 10.sp) },
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = DeepTealPrimary,
-                                selectedLabelColor = SoftWhiteText
+                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                selectedLabelColor = MaterialTheme.colorScheme.onSurface
                             ),
                             modifier = Modifier.weight(1f)
                         )
@@ -2024,8 +902,8 @@ fun ProfileScreen(
                             },
                             label = { Text("تعيين مباشر للحساب", fontSize = 10.sp) },
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MutedLuxuryGold,
-                                selectedLabelColor = RoyalNavyBackground
+                                selectedContainerColor = MaterialTheme.colorScheme.secondary,
+                                selectedLabelColor = MaterialTheme.colorScheme.background
                             ),
                             modifier = Modifier.weight(1f)
                         )
@@ -2113,8 +991,8 @@ fun ProfileScreen(
                     },
                     shape = RoundedCornerShape(50),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = MutedLuxuryGold,
-                        contentColor = RoyalNavyBackground
+                        containerColor = MaterialTheme.colorScheme.secondary,
+                        contentColor = MaterialTheme.colorScheme.background
                     ),
                     modifier = Modifier.testTag("profile_save_new_password_button")
                 ) {
@@ -2128,7 +1006,7 @@ fun ProfileScreen(
                         showPasswordAndDbModal = false
                     }
                 ) {
-                    Text("حفظ البنية وإغلاق", fontSize = 11.sp, color = DeepTealPrimary)
+                    Text("حفظ البنية وإغلاق", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
                 }
             }
         )
@@ -2144,13 +1022,13 @@ private fun MinimalStatItem(
         Text(
             text = value,
             fontSize = 14.sp,
-            color = SoftWhiteText,
+            color = MaterialTheme.colorScheme.onSurface,
             fontWeight = FontWeight.Bold
         )
         Text(
             text = label,
             fontSize = 11.sp,
-            color = SlateSecondaryText
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
@@ -2167,8 +1045,8 @@ private fun PinnedClipCard(
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(10.dp),
-        color = RoyalNavyCard,
-        border = BorderStroke(0.7.dp, MutedLuxuryGold.copy(alpha = 0.45f)),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(0.7.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.45f)),
         modifier = modifier.height(132.dp)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -2186,9 +1064,9 @@ private fun PinnedClipCard(
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                RoyalNavyBackground.copy(alpha = 0.35f),
+                                MaterialTheme.colorScheme.background.copy(alpha = 0.35f),
                                 Color.Transparent,
-                                RoyalNavyBackground.copy(alpha = 0.88f)
+                                MaterialTheme.colorScheme.background.copy(alpha = 0.88f)
                             )
                         )
                     )
@@ -2207,26 +1085,26 @@ private fun PinnedClipCard(
                     modifier = Modifier
                         .size(20.dp)
                         .clip(CircleShape)
-                        .background(RoyalNavyBackground.copy(alpha = 0.65f))
+                        .background(MaterialTheme.colorScheme.background.copy(alpha = 0.65f))
                         .clickable { onUnpin() },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.PushPin,
                         contentDescription = "إلغاء التثبيت",
-                        tint = MutedLuxuryGold,
+                        tint = MaterialTheme.colorScheme.secondary,
                         modifier = Modifier.size(11.dp)
                     )
                 }
 
                 Surface(
-                    color = MutedLuxuryGold,
+                    color = MaterialTheme.colorScheme.secondary,
                     shape = RoundedCornerShape(4.dp)
                 ) {
                     Text(
                         text = "مثبت #$rank",
                         fontSize = 8.sp,
-                        color = RoyalNavyBackground,
+                        color = MaterialTheme.colorScheme.background,
                         fontWeight = FontWeight.ExtraBold,
                         modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
                     )
@@ -2237,7 +1115,7 @@ private fun PinnedClipCard(
                 Icon(
                     imageVector = Icons.Default.Lock,
                     contentDescription = "مقفل",
-                    tint = MutedLuxuryGold,
+                    tint = MaterialTheme.colorScheme.secondary,
                     modifier = Modifier
                         .size(18.dp)
                         .align(Alignment.Center)
@@ -2256,7 +1134,7 @@ private fun PinnedClipCard(
                     text = item.title,
                     fontSize = 10.sp,
                     lineHeight = 12.sp,
-                    color = SoftWhiteText,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -2264,7 +1142,7 @@ private fun PinnedClipCard(
                 Text(
                     text = if (item.viewsLabel == "—" || item.viewsLabel == "خاص") "" else "${item.viewsLabel} مشاهدة",
                     fontSize = 9.sp,
-                    color = SlateSecondaryText
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -2284,10 +1162,10 @@ private fun ProfileMediaGridTile(
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(10.dp),
-        color = RoyalNavyCard,
+        color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(
             width = 0.7.dp,
-            color = if (isLocked) MutedLuxuryGold.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outline
+            color = if (isLocked) MaterialTheme.colorScheme.secondary.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outline
         ),
         modifier = modifier.height(if (isWideTile) 128.dp else 142.dp)
     ) {
@@ -2307,9 +1185,9 @@ private fun ProfileMediaGridTile(
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                RoyalNavyBackground.copy(alpha = if (isLocked) 0.55f else 0.25f),
-                                RoyalNavyBackground.copy(alpha = if (isLocked) 0.65f else 0.1f),
-                                RoyalNavyBackground.copy(alpha = 0.9f)
+                                MaterialTheme.colorScheme.background.copy(alpha = if (isLocked) 0.55f else 0.25f),
+                                MaterialTheme.colorScheme.background.copy(alpha = if (isLocked) 0.65f else 0.1f),
+                                MaterialTheme.colorScheme.background.copy(alpha = 0.9f)
                             )
                         )
                     )
@@ -2330,7 +1208,7 @@ private fun ProfileMediaGridTile(
                         .size(22.dp)
                         .clip(CircleShape)
                         .background(
-                            if (isPinned) MutedLuxuryGold else RoyalNavyBackground.copy(alpha = 0.6f)
+                            if (isPinned) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.background.copy(alpha = 0.6f)
                         )
                         .clickable { onTogglePin() },
                     contentAlignment = Alignment.Center
@@ -2338,20 +1216,20 @@ private fun ProfileMediaGridTile(
                     Icon(
                         imageVector = Icons.Default.PushPin,
                         contentDescription = "تثبيت في أفضل 3",
-                        tint = if (isPinned) RoyalNavyBackground else SoftWhiteText.copy(alpha = 0.85f),
+                        tint = if (isPinned) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
                         modifier = Modifier.size(11.dp)
                     )
                 }
 
                 if (item.tab != ProfileMediaTab.PHOTOS) {
                     Surface(
-                        color = RoyalNavyBackground.copy(alpha = 0.65f),
+                        color = MaterialTheme.colorScheme.background.copy(alpha = 0.65f),
                         shape = RoundedCornerShape(4.dp)
                     ) {
                         Text(
                             text = item.durationLabel,
                             fontSize = 9.sp,
-                            color = SoftWhiteText,
+                            color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
                         )
                     }
@@ -2361,9 +1239,9 @@ private fun ProfileMediaGridTile(
             // Center Lock / Unlock Indicator for Exclusive & Paid Videos
             if (isLocked) {
                 Surface(
-                    color = RoyalNavyBackground.copy(alpha = 0.78f),
+                    color = MaterialTheme.colorScheme.background.copy(alpha = 0.78f),
                     shape = RoundedCornerShape(50),
-                    border = BorderStroke(0.8.dp, MutedLuxuryGold),
+                    border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.secondary),
                     modifier = Modifier.align(Alignment.Center)
                 ) {
                     Row(
@@ -2373,14 +1251,14 @@ private fun ProfileMediaGridTile(
                         Icon(
                             imageVector = Icons.Default.Lock,
                             contentDescription = "محتوى حصري",
-                            tint = MutedLuxuryGold,
+                            tint = MaterialTheme.colorScheme.secondary,
                             modifier = Modifier.size(12.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = if (item.tab == ProfileMediaTab.POSTS) "بسعر • ${item.singlePriceUsd}" else "فتح • ${item.singlePriceUsd}",
                             fontSize = 10.sp,
-                            color = MutedLuxuryGold,
+                            color = MaterialTheme.colorScheme.secondary,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -2425,7 +1303,7 @@ private fun ProfileMediaGridTile(
                     text = item.title,
                     fontSize = 10.sp,
                     lineHeight = 13.sp,
-                    color = SoftWhiteText,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -2433,7 +1311,7 @@ private fun ProfileMediaGridTile(
                 Text(
                     text = if (item.viewsLabel == "—" || item.viewsLabel == "خاص") "" else "${item.viewsLabel} مشاهدة",
                     fontSize = 9.sp,
-                    color = SlateSecondaryText
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }

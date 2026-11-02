@@ -92,14 +92,15 @@ class LayaliViewModel(
     val isSubmitting: StateFlow<Boolean> = _isSubmitting.asStateFlow()
 
     // Default to Royal Dark Sapphire & Sovereign Gold theme
-    private val _isSoftRoseLightTheme = MutableStateFlow(false)
+    private val appearancePreferences = appContext?.getSharedPreferences("layali_appearance", Context.MODE_PRIVATE)
+    private val _isSoftRoseLightTheme = MutableStateFlow(appearancePreferences?.getBoolean("light_theme", true) ?: true)
     val isSoftRoseLightTheme: StateFlow<Boolean> = _isSoftRoseLightTheme.asStateFlow()
 
     private val _userProfile = MutableStateFlow(
         UserProfile(
-            displayName = "عضو ليالي الملكي",
-            username = "@layali_vip",
-            roleTitle = "عضو النخبة VIP",
+            displayName = "",
+            username = "",
+            roleTitle = "",
             cityName = "دمشق",
             country = "سوريا",
             level = 1,
@@ -667,6 +668,7 @@ class LayaliViewModel(
 
     fun toggleThemeMode() {
         _isSoftRoseLightTheme.value = !_isSoftRoseLightTheme.value
+        appearancePreferences?.edit()?.putBoolean("light_theme", _isSoftRoseLightTheme.value)?.apply()
     }
 
     fun updateUserProfile(
