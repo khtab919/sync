@@ -600,9 +600,6 @@ class LayaliRepository(private val db: FirebaseFirestore) {
                     "cityName" to cityName.trim().ifBlank { "دمشق" }.take(80),
                     "country" to safeCountry,
                     "selectedFrameId" to selectedFrameId.trim().ifBlank { "emerald_crown" }.take(60),
-                    "level" to level.coerceIn(1, 100).toLong(),
-                    "xpPoints" to xpPoints.coerceIn(0, 10000000).toLong(),
-                    "nextLevelXp" to nextLevelXp.coerceIn(100, 50000000).toLong(),
 
                     "chatPriceUsd" to chatPriceUsd.coerceIn(1, 5000).toLong(),
                     "isPaidChatEnabled" to isPaidChatEnabled,
