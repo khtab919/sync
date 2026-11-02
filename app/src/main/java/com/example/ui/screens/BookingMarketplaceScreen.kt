@@ -207,6 +207,7 @@ fun BookingMarketplaceScreen(
                 }
             }
         }
+    }
 
     if (offerDialogVisible) {
         CreatorServiceOfferDialog(
