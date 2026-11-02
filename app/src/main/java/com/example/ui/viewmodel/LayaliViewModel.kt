@@ -21,6 +21,7 @@ import com.example.data.model.Venue
 import com.example.data.repository.LayaliRepository
 import com.example.security.MiddlewareResult
 import com.example.security.SuperAdminSecurityManager
+import com.example.ui.theme.LayaliAppearance
 import com.google.firebase.Firebase
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.auth
@@ -90,7 +91,7 @@ class LayaliViewModel(
     val isSubmitting: StateFlow<Boolean> = _isSubmitting.asStateFlow()
 
     // Default to Royal Dark Sapphire & Sovereign Gold theme
-    private val _isSoftRoseLightTheme = MutableStateFlow(false)
+    private val _isSoftRoseLightTheme = MutableStateFlow(appContext?.let { LayaliAppearance.isLightTheme(it) } ?: false)
     val isSoftRoseLightTheme: StateFlow<Boolean> = _isSoftRoseLightTheme.asStateFlow()
 
     private val _userProfile = MutableStateFlow(
@@ -738,6 +739,7 @@ class LayaliViewModel(
 
     fun toggleThemeMode() {
         _isSoftRoseLightTheme.value = !_isSoftRoseLightTheme.value
+        appContext?.let { LayaliAppearance.setLightTheme(it, _isSoftRoseLightTheme.value) }
     }
 
     fun updateUserProfile(
@@ -1153,6 +1155,7 @@ class LayaliViewModel(
         _snackbarMessage.value = msg
     }
 
+    /** A published offer is never visible until Firestore accepts it and admin approves. */
     fun publishNewService(
         title: String,
         cityName: String,
@@ -1165,46 +1168,31 @@ class LayaliViewModel(
         mediaType: String,
         onPublished: (PublishedService) -> Unit = {}
     ) {
-        if (!enforceSuperAdminMiddleware()) return
-        val localId = "local_pub_${System.currentTimeMillis()}"
-        val publishedItem = PublishedService(
-            id = localId,
-            authorId = currentUserId,
-            title = title,
-            cityName = cityName,
-            country = country,
-            category = category,
-            description = description,
-            priceUsd = priceUsd.toLong(),
-            imageUrl = imageUrl.ifBlank { "brand_dark_showcase" },
-            videoUrl = videoUrl,
-            mediaType = mediaType,
-            status = "active",
-            createdAt = Timestamp.now()
-        )
-        seenPublishedIds.add(localId)
-        _localPublishedServices.value = listOf(publishedItem) + _localPublishedServices.value
-        _snackbarMessage.value = "تم نشر الخدمة وإرسال إشعار أندرويد لجميع المستخدمين!"
-        onPublished(publishedItem)
-
-        if (hasFirebaseAuth()) {
-            viewModelScope.launch {
-                val result = repository.publishService(
-                    title = title,
-                    cityName = cityName,
-                    country = country,
-                    category = category,
-                    description = description,
-                    priceUsd = priceUsd,
-                    imageUrl = imageUrl.ifBlank { "brand_dark_showcase" },
-                    videoUrl = videoUrl,
-                    mediaType = mediaType
-                )
-                result.onSuccess { remoteId ->
-                    seenPublishedIds.add(remoteId)
-                }.onFailure { err ->
-                    Log.d(TAG, "Saved locally; remote sync skipped or failed: ${err.message}")
+        if (!hasFirebaseAuth()) {
+            _snackbarMessage.value = "يتطلب إرسال العرض حساب Firebase مسجلاً."
+            return
+        }
+        if (title.trim().length < 2 || description.trim().length < 3 ||
+            cityName.trim().length < 2 || category.trim().length < 2 || priceUsd !in 5..10000
+        ) {
+            _snackbarMessage.value = "تحقق من العنوان والوصف والمدينة ونوع الخدمة والسعر."
+            return
+        }
+        viewModelScope.launch {
+            _isSubmitting.value = true
+            try {
+                repository.publishService(
+                    title = title, cityName = cityName, country = country,
+                    category = category, description = description, priceUsd = priceUsd,
+                    imageUrl = imageUrl, videoUrl = videoUrl, mediaType = mediaType
+                ).onSuccess {
+                    _snackbarMessage.value = "أُرسل العرض إلى الإدارة للمراجعة. لن يظهر قبل الاعتماد."
+                }.onFailure { error ->
+                    Log.e(TAG, "Creator service submission failed", error)
+                    _snackbarMessage.value = "تعذر إرسال العرض. تحقق من الاتصال وصلاحية الحساب."
                 }
+            } finally {
+                _isSubmitting.value = false
             }
         }
     }
@@ -1242,12 +1230,12 @@ class LayaliViewModel(
                         imageUrl = "",
                         videoUrl = "",
                         mediaType = "photo",
-                        status = "active",
+                        status = "pending",
                         createdAt = Timestamp.now()
                     )
                     seenPublishedIds.add(postId)
                     _localPublishedServices.value = listOf(created) + _localPublishedServices.value
-                    _snackbarMessage.value = "تم نشر المعاينة وحفظ المحتوى الخاص بشكل محمي. الشراء متوقف حتى توثيق الدفع من الخادم."
+                    _snackbarMessage.value = "أُرسل المنشور إلى الإدارة للمراجعة. المحتوى المدفوع مغلق حتى التحقق من الدفع."
                 }.onFailure { error ->
                     Log.e(TAG, "Failed to publish private paid post", error)
                     _snackbarMessage.value = "تعذر نشر المنشور المدفوع. تحقق من الاتصال وصلاحيات الحساب."
