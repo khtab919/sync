@@ -1223,6 +1223,55 @@ class LayaliViewModel(
         }
     }
 
+    /** Creator publication requires real Firebase authentication and a successful write. */
+    fun publishCreatorPaidPost(title: String, preview: String, body: String, priceUsd: Int) {
+        if (!hasFirebaseAuth()) {
+            _snackbarMessage.value = "يجب تسجيل الدخول بحساب متصل قبل نشر منشور مدفوع"
+            return
+        }
+        if (title.trim().length < 3 || preview.trim().length < 10 || body.trim().length < 20 || priceUsd !in 1..1000) {
+            _snackbarMessage.value = "تحقق من العنوان والوصف والمحتوى والسعر (1–1000 دولار)"
+            return
+        }
+        viewModelScope.launch {
+            _isSubmitting.value = true
+            try {
+                repository.publishPaidPost(
+                    title = title,
+                    preview = preview,
+                    privateBody = body,
+                    priceUsd = priceUsd,
+                    cityName = _userProfile.value.cityName,
+                    country = _userProfile.value.country
+                ).onSuccess { postId ->
+                    val created = PublishedService(
+                        id = postId,
+                        authorId = currentUserId,
+                        title = title.trim(),
+                        cityName = _userProfile.value.cityName.ifBlank { "غير محدد" },
+                        country = _userProfile.value.country,
+                        category = "منشور مدفوع",
+                        description = preview.trim(),
+                        priceUsd = priceUsd.toLong(),
+                        imageUrl = "",
+                        videoUrl = "",
+                        mediaType = "photo",
+                        status = "active",
+                        createdAt = Timestamp.now()
+                    )
+                    seenPublishedIds.add(postId)
+                    _localPublishedServices.value = listOf(created) + _localPublishedServices.value
+                    _snackbarMessage.value = "تم نشر المعاينة وحفظ المحتوى الخاص بشكل محمي. الشراء متوقف حتى توثيق الدفع من الخادم."
+                }.onFailure { error ->
+                    Log.e(TAG, "Failed to publish private paid post", error)
+                    _snackbarMessage.value = "تعذر نشر المنشور المدفوع. تحقق من الاتصال وصلاحيات الحساب."
+                }
+            } finally {
+                _isSubmitting.value = false
+            }
+        }
+    }
+
     fun updatePublishedPrice(serviceId: String, newPriceUsd: Int) {
         if (!enforceSuperAdminMiddleware()) return
         val validPrice = newPriceUsd.coerceIn(5, 50000)
