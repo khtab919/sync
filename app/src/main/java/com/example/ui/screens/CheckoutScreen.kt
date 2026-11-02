@@ -127,7 +127,17 @@ fun CheckoutScreen(
 ) {
     BackHandler { onBack() }
 
-    val planOptions = remember(venue) { buildVipPlanOptions(venue) }
+    // Never offer synthetic Silver/Gold tiers with prices absent from the backend.
+    val planOptions = remember(venue) {
+        buildVipPlanOptions(venue).take(1).map { plan ->
+            plan.copy(
+                tierTitle = venue.name,
+                discountBadge = "السعر المعلن",
+                priceUsd = venue.startingPriceUsd,
+                benefits = listOf(venue.shortDescription)
+            )
+        }
+    }
     var selectedPlanIndex by remember(selectedPackage.id) {
         val idx = planOptions.indexOfFirst { it.id == selectedPackage.id || it.priceUsd == selectedPackage.priceUsd }
         mutableIntStateOf(if (idx >= 0) idx else 0)
