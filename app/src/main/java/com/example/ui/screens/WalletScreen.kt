@@ -92,6 +92,7 @@ fun WalletScreen(
     walletBalanceUsd: Int,
     transactions: List<WalletTransaction>,
     paymentReceipts: List<PaymentReceiptRecord> = emptyList(),
+    isSubmitting: Boolean = false,
     onSubmitRealDepositReceipt: (
         amountUsd: Int,
         bonusUsd: Int,
@@ -615,7 +616,9 @@ fun WalletScreen(
 
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     LuxuryGradientButton(
-                        text = if (attachedReceiptUri.isBlank()) {
+                        text = if (isSubmitting) {
+                            "جارٍ رفع الإيصال وتسجيل الطلب..."
+                        } else if (attachedReceiptUri.isBlank()) {
                             "أرفق الإيصال لإرسال طلب الإيداع"
                         } else if (activeBonus > 0) {
                             "إرسال طلب مراجعة الإيداع ($activeAmount + $activeBonus)"
@@ -625,8 +628,10 @@ fun WalletScreen(
                         icon = Icons.Default.ReceiptLong,
                         isEmeraldStyle = attachedReceiptUri.isNotBlank(),
                         onClick = {
-                            if (attachedReceiptUri.isBlank()) {
-                                onShowMessage("لا يوجد دفع وهمي! يرجى إرفاق صورة إيصال التحويل ($gatewayLabel) أولاً.")
+                            if (isSubmitting) {
+                                onShowMessage("طلب الإيداع قيد الإرسال.")
+                            } else if (attachedReceiptUri.isBlank()) {
+                                onShowMessage("يرجى إرفاق صورة إيصال التحويل ($gatewayLabel) أولاً.")
                             } else {
                                 onSubmitRealDepositReceipt(
                                     activeAmount,
@@ -684,7 +689,7 @@ fun WalletScreen(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "سجل إيصالات الدفع المرفقة (${paymentReceipts.size})",
+                            text = "طلبات الإيداع (${paymentReceipts.size})",
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onBackground,
                             fontWeight = FontWeight.Bold
