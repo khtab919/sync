@@ -792,11 +792,9 @@ fun MainFeatureScreen(
                                     walletBalanceUsd = walletBalanceUsd,
                                     transactions = walletTransactions,
                                     paymentReceipts = paymentReceipts,
+                                    isSubmitting = isSubmitting,
                                     onBack = { currentTab = MainTab.EXPLORE },
                                     onSubmitRealDepositReceipt = viewModel::submitRealDepositReceipt,
-                                    onTopUpConfirm = { amount, bonus, pkgTitle ->
-                                        viewModel.topUpWallet(amount, bonus, pkgTitle)
-                                    },
                                     onShowMessage = viewModel::showInfoMessage
                                 )
 
