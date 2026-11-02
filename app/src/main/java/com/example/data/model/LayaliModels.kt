@@ -67,7 +67,7 @@ data class PublishedService(
     val imageUrl: String = "",
     val videoUrl: String = "",
     val mediaType: String = "both",
-    val status: String = "active",
+    val status: String = "draft",
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null
 )

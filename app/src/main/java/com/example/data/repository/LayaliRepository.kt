@@ -172,19 +172,24 @@ class LayaliRepository(private val db: FirebaseFirestore) {
         val uid = requireUserId()
         val serviceId = "srv_${UUID.randomUUID().toString().replace("-", "").take(16)}"
         val docRef = db.collection("published_services").document(serviceId)
-        val safeTitle = title.trim().let { if (it.length < 2) "$it عرض" else it.take(150) }
-        val safeDesc = description.trim().let { if (it.length < 3) "$it تفاصيل العرض" else it.take(600) }
+        val safeTitle = title.trim().also { require(it.length >= 2) { "Enter a service title." } }.take(150)
+        val safeDescription = description.trim().also { require(it.length >= 3) { "Enter a service description." } }.take(600)
+        val safeCity = cityName.trim().also { require(it.isNotBlank()) { "Choose a city." } }.take(80)
+        val safeCountry = country.trim().also { require(it in listOf("سوريا", "تركيا")) { "Choose a supported country." } }
+        val safeCategory = category.trim().also { require(it.isNotBlank()) { "Choose a service category." } }.take(80)
+        val safePrice = priceUsd.also { require(it > 0) { "Enter a price greater than zero." } }.coerceAtMost(10000)
+        val safeMediaType = mediaType.also { require(it in listOf("photo", "video", "both")) { "Choose valid media." } }
         val payload = mapOf(
             "authorId" to uid,
             "title" to safeTitle,
-            "cityName" to cityName.trim().take(80),
-            "country" to if (country in listOf("سوريا", "تركيا")) country else "سوريا",
-            "category" to category.trim().take(80),
-            "description" to safeDesc,
-            "priceUsd" to priceUsd.coerceIn(5, 10000).toLong(),
+            "cityName" to safeCity,
+            "country" to safeCountry,
+            "category" to safeCategory,
+            "description" to safeDescription,
+            "priceUsd" to safePrice.toLong(),
             "imageUrl" to imageUrl.trim().take(500),
             "videoUrl" to videoUrl.trim().take(500),
-            "mediaType" to if (mediaType in listOf("photo", "video", "both")) mediaType else "both",
+            "mediaType" to safeMediaType,
             "status" to "active",
             "createdAt" to FieldValue.serverTimestamp(),
             "updatedAt" to FieldValue.serverTimestamp()

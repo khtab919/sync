@@ -400,13 +400,13 @@ class LayaliViewModel(
         if (isSuperAdmin) {
             _userProfile.value = current.copy(
                 displayName = authenticatedDisplayName.ifBlank { "Super Admin" },
-                username = "@ramanur_admin",
-                telegramHandle = "@RamaNUR",
+                username = existingSaved?.username.orEmpty(),
+                telegramHandle = "",
                 roleTitle = "المسؤول الرئيسي للنظام (Super Admin)",
-                level = existingSaved?.level ?: 50,
-                xpPoints = existingSaved?.xpPoints ?: 9850,
-                nextLevelXp = existingSaved?.nextLevelXp ?: 10000,
-                selectedFrameId = existingSaved?.selectedFrameId ?: "obsidian_elite"
+                level = existingSaved?.level ?: 0,
+                xpPoints = existingSaved?.xpPoints ?: 0,
+                nextLevelXp = existingSaved?.nextLevelXp ?: 0,
+                selectedFrameId = existingSaved?.selectedFrameId.orEmpty()
             )
             if (existingSaved != null && _walletBalanceUsd.value == 0) {
                 _walletBalanceUsd.value = existingSaved.walletBalanceUsd
@@ -416,10 +416,10 @@ class LayaliViewModel(
                 .lowercase()
                 .replace(" ", "_")
                 .filter { it.isLetterOrDigit() || it == '_' }
-                .ifBlank { "layali_vip" })
+                .ifBlank { "" })
             _userProfile.value = current.copy(
-                displayName = authenticatedDisplayName.ifBlank { existingSaved?.displayName ?: "عضو ليالي الملكي" },
-                username = if (current.username.isBlank() || current.username == "@layali_vip") cleanHandle else current.username,
+                displayName = authenticatedDisplayName.ifBlank { existingSaved?.displayName.orEmpty() },
+                username = if (current.username.isBlank()) cleanHandle else current.username,
                 bio = existingSaved?.bio?.takeIf { it.isNotBlank() } ?: current.bio,
                 cityName = existingSaved?.cityName?.takeIf { it.isNotBlank() } ?: current.cityName,
                 country = existingSaved?.country?.takeIf { it.isNotBlank() } ?: current.country,
@@ -461,17 +461,17 @@ class LayaliViewModel(
         }
 
         val nowLabel = SuperAdminSecurityManager.currentTimestampLabel()
-        _lastInfrastructureSyncLabel.value = "محفوظ في SQLite + السحابة ($nowLabel)"
+        _lastInfrastructureSyncLabel.value = "محفوظ محليًا؛ المزامنة السحابية قيد التنفيذ ($nowLabel)"
 
         if (hasFirebaseAuthForCurrentUser()) {
             viewModelScope.launch {
                 repository.saveOrUpdateUserAccount(
                     username = profile.username,
-                    displayName = profile.displayName.ifBlank { "عضو ليالي الملكي" },
-                    email = emailOverride ?: savedEntity?.email ?: "${profile.username.removePrefix("@")}@layali.client",
+                    displayName = profile.displayName,
+                    email = emailOverride ?: savedEntity?.email.orEmpty(),
                     bio = profile.bio,
-                    cityName = profile.cityName.ifBlank { "دمشق" },
-                    country = profile.country.ifBlank { "سوريا" },
+                    cityName = profile.cityName,
+                    country = profile.country,
                     avatarUri = profile.avatarUri,
                     selectedFrameId = profile.selectedFrameId,
                     level = profile.level,
@@ -480,15 +480,15 @@ class LayaliViewModel(
                     walletBalanceUsd = _walletBalanceUsd.value,
                     chatPriceUsd = profile.chatPriceUsd,
                     isPaidChatEnabled = profile.isPaidChatEnabled,
-                    passwordSaltHex = savedEntity?.passwordSaltHex ?: "a1b2c3d4e5f60718293a4b5c6d7e8f90",
-                    passwordHashHex = savedEntity?.passwordHashHex ?: "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+                    passwordSaltHex = savedEntity?.passwordSaltHex.orEmpty(),
+                    passwordHashHex = savedEntity?.passwordHashHex.orEmpty(),
                     role = role
                 )
             }
         }
 
         if (showSnackbar) {
-            _snackbarMessage.value = "تم حفظ البنية التحتية وبيانات الحساب (${profile.username} • LEVEL ${profile.level}) في قاعدة البيانات بنجاح ✓"
+            _snackbarMessage.value = "تم حفظ بيانات الحساب محليًا."
         }
     }
 
