@@ -412,7 +412,8 @@ service cloud.firestore {
       allow update: if isAdmin() &&
                       existing().status == 'pending' &&
                       incoming().status in ['reviewed', 'rejected'] &&
-                      incoming().updatedAt == request.time &&
+                      incoming().updatedAt >= existing().updatedAt &&
+                      incoming().updatedAt <= request.time &&
                       incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
       allow delete: if false;
     }
