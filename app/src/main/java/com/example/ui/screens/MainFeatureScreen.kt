@@ -1446,79 +1446,46 @@ private fun ExploreTabContent(
             }
         }
 
-        // 5. Section Header: "الخدمات" + Sort Pills + Admin/Reviews Quick Access
-        item(key = "explore_sort_header", contentType = "sort_header") {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 18.dp, vertical = 6.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+        // Sorting belongs to the optional filter panel, not a crowded service header.
+        if (showFiltersRow) {
+            item(key = "explore_sort_controls", contentType = "sort_controls") {
+                Column(
+                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        SortOption.entries.forEach { option ->
-                            val active = sortOption == option
-                            Surface(
-                                color = if (active) CoralPinkPrimary.copy(alpha = 0.2f) else Color.Transparent,
-                                shape = RoundedCornerShape(50),
-                                border = BorderStroke(
-                                    0.7.dp,
-                                    if (active) CoralPinkPrimary else MaterialTheme.colorScheme.outline
-                                ),
-                                modifier = Modifier.clickable { onSelectSort(option) }
-                            ) {
-                                Text(
-                                    text = option.labelAr,
-                                    fontSize = 11.sp,
-                                    color = if (active) PureWhite else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
-                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
-                                )
-                            }
+                    Text("ترتيب النتائج", style = MaterialTheme.typography.titleMedium)
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(SortOption.entries.toList()) { option ->
+                            FilterChip(
+                                selected = sortOption == option,
+                                onClick = { onSelectSort(option) },
+                                label = {
+                                    Text(option.labelAr, style = MaterialTheme.typography.labelLarge)
+                                }
+                            )
                         }
                     }
-
-                    Text(
-                        text = "السهرات (${venues.size})",
-                        fontSize = 15.sp,
-                        color = MaterialTheme.colorScheme.onBackground,
-                        fontWeight = FontWeight.Bold
-                    )
+                }
+            }
+        }
+        item(key = "explore_result_title", contentType = "result_title") {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "الخدمات المتاحة (${venues.size})",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                TextButton(onClick = { showFiltersRow = !showFiltersRow }) {
+                    Text(if (showFiltersRow) "إخفاء الخيارات" else "تصفية وترتيب")
                 }
             }
         }
 
-        // 6. 2-Column Featured Services Grid matching Screen 2 of the UI/UX Case Study
-        if (venues.isNotEmpty()) {
-            val gridVenues = venues.take(4)
-            val gridRows = gridVenues.chunked(2)
-            items(gridRows.size, key = { "grid_row_$it" }) { rowIndex ->
-                val pair = gridRows[rowIndex]
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    pair.forEach { venue ->
-                        CompactServiceGridCard(
-                            venue = venue,
-                            isFavorite = favoriteIds.contains(venue.id),
-                            onOpenDetails = { onOpenVenue(venue) },
-                            onBookNow = { onQuickBookVenue(venue) },
-                            onToggleFavorite = { onToggleFavorite(venue) },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    if (pair.size == 1) {
-                        Spacer(modifier = Modifier.weight(1f))
-                    }
-                }
-            }
-        }
+        // A service is shown only once in the results list.
 
         // 7. Live Published Services & Offers Showcase (Zero Admin UI for Customers)
         if (publishedServices.isNotEmpty()) {
@@ -1610,7 +1577,7 @@ private fun ExploreTabContent(
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = "لا توجد مراكز مطابقة للفلتر الحالي",
+                        text = "لا توجد خدمات مطابقة للبحث",
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -1647,7 +1614,7 @@ private fun ExploreTabContent(
                         Text("جميع التقييمات الموثوقة", color = BrandChampagneGold)
                     }
                     Text(
-                        text = "جميع المراكز والسهرات المتاحة",
+                        text = "تصفح جميع الخدمات",
                         style = MaterialTheme.typography.titleMedium,
                         color = SoftGold,
                         fontWeight = FontWeight.Bold
