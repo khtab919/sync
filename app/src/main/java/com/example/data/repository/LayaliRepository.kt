@@ -167,6 +167,25 @@ class LayaliRepository(private val db: FirebaseFirestore) {
         result["messageId"] as String
     }
 
+    data class VerifiedChatThread(val threadId: String, val peerId: String)
+
+    fun observeVerifiedChatThreads(userId: String = requireUserId()): Flow<List<VerifiedChatThread>> = flow {
+        if (auth.currentUser?.uid != userId) {
+            emit(emptyList())
+            return@flow
+        }
+        emitAll(db.collection("chat_threads")
+            .whereArrayContains("participants", userId).snapshots()
+            .map { snapshot ->
+                snapshot.documents.mapNotNull { doc ->
+                    if (doc.getBoolean("unlocked") != true) return@mapNotNull null
+                    val users = (doc.get("participants") as? List<*>)?.filterIsInstance<String>().orEmpty()
+                    if (users.size != 2 || userId !in users) return@mapNotNull null
+                    VerifiedChatThread(doc.id, users.first { it != userId })
+                }
+            })
+    }
+
     fun observeVerifiedChatMessages(threadId: String, memberId: String): Flow<List<ChatMessageItem>> = flow {
         val uid = requireUserId()
         require(threadId.matches(Regex("^[0-9a-f]{64}$")))
