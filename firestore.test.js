@@ -79,7 +79,7 @@ function validBookingPayload(uid) {
     guestCount: 2,
     totalPriceUsd: 120,
     notes: "جلسة هادئة مع زيوت عطرية",
-    status: "confirmed",
+    status: "pending",
     createdAt: now,
     updatedAt: now,
   };
