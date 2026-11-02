@@ -200,6 +200,65 @@ class LayaliRepository(private val db: FirebaseFirestore) {
         }
     }
 
+    /**
+     * Publish a paid post preview while keeping the actual paid body unreadable
+     * from the public feed. Payment verification and buyer entitlements must be
+     * implemented server-side before buyers can access creator_post_bodies.
+     */
+    suspend fun publishPaidPost(
+        title: String,
+        preview: String,
+        privateBody: String,
+        priceUsd: Int,
+        cityName: String,
+        country: String
+    ): Result<String> = runCatching {
+        val uid = requireUserId()
+        require(title.trim().length in 3..150) { "عنوان المنشور غير صالح" }
+        require(preview.trim().length in 10..300) { "اكتب وصفاً قصيراً للمعاينة" }
+        require(privateBody.trim().length in 20..5000) { "محتوى المنشور قصير جداً أو طويل جداً" }
+        require(priceUsd in 1..1000) { "السعر يجب أن يكون بين 1 و1000 دولار" }
+
+        val postId = "post_${UUID.randomUUID().toString().replace("-", "").take(20)}"
+        val publicRef = db.collection("published_services").document(postId)
+        val privateRef = db.collection("creator_post_bodies").document(postId)
+        val safeCity = cityName.trim().take(80).ifBlank { "غير محدد" }
+        val safeCountry = if (country == "تركيا") "تركيا" else "سوريا"
+        val publicPreview = mapOf(
+            "authorId" to uid,
+            "title" to title.trim().take(150),
+            "cityName" to safeCity,
+            "country" to safeCountry,
+            "category" to "منشور مدفوع",
+            "description" to preview.trim().take(300),
+            "priceUsd" to priceUsd.toLong(),
+            "imageUrl" to "",
+            "videoUrl" to "",
+            "mediaType" to "photo",
+            "status" to "active",
+            "createdAt" to FieldValue.serverTimestamp(),
+            "updatedAt" to FieldValue.serverTimestamp()
+        )
+        val privateContent = mapOf(
+            "authorId" to uid,
+            "serviceId" to postId,
+            "body" to privateBody.trim().take(5000),
+            "createdAt" to FieldValue.serverTimestamp()
+        )
+        try {
+            db.batch().apply {
+                set(publicRef, publicPreview)
+                set(privateRef, privateContent)
+            }.commit().await()
+            postId
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.CREATE, privateRef.path)
+            throw e
+        }
+    }
+
     suspend fun updatePublishedServicePrice(
         serviceId: String,
         newPriceUsd: Int
