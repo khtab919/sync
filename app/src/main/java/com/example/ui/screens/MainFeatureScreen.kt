@@ -371,6 +371,7 @@ fun MainFeatureScreen(
             isPopular = true
         )
         val updatedVenue = matchingVenue.copy(
+            id = pub.id,
             name = pub.title,
             cityName = pub.cityName,
             country = pub.country,
@@ -632,12 +633,7 @@ fun MainFeatureScreen(
                                     currentTab = MainTab.WALLET
                                 },
                                 onConfirmCheckout = { date, slot, guests, notes, paymentMethod, receiptUri, txRef ->
-                                    if (paymentMethod == PaymentMethodType.WALLET) {
-                                        viewModel.deductWalletBalance(
-                                            amountUsd = checkoutTarget.second.priceUsd * guests,
-                                            orderTitle = "${checkoutTarget.second.title} (${checkoutTarget.first.cityName})"
-                                        )
-                                    }
+                                    // The backend debits and confirms atomically; never pre-debit locally.
                                     viewModel.createDirectBooking(
                                         venue = checkoutTarget.first,
                                         serviceTitle = "${checkoutTarget.second.title} • ${paymentMethod.titleAr}",
@@ -942,15 +938,8 @@ fun MainFeatureScreen(
                                         )
                                     },
                                     onPurchaseContentWithWallet = { amountUsd, itemTitle ->
-                                        if (walletBalanceUsd >= amountUsd) {
-                                            viewModel.deductWalletBalance(
-                                                amountUsd = amountUsd,
-                                                orderTitle = itemTitle
-                                            )
-                                            true
-                                        } else {
-                                            false
-                                        }
+                                        viewModel.showInfoMessage("فتح المحتوى المدفوع يتطلب تأكيد عملية الشراء من الخادم.")
+                                        false
                                     },
                                     onShowMessage = viewModel::showInfoMessage,
                                     onPublishPaidPost = viewModel::publishCreatorPaidPost,
