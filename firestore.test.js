@@ -54,7 +54,7 @@ function validUserAccountPayload(uid) {
     level: 1,
     xpPoints: 150,
     nextLevelXp: 2500,
-    walletBalanceUsd: 250,
+    walletBalanceUsd: 0,
     chatPriceUsd: 15,
     isPaidChatEnabled: true,
     passwordSaltHex: "0123456789abcdef0123456789abcdef",
@@ -257,4 +257,19 @@ test("Paid posts: public preview works; owner-only body stays private", async ()
     ...body, serviceId: "post_secure_2",
   }));
   await assertFails(alice.collection("creator_post_bodies").doc(id).update({ body: "modified" }));
+});
+
+test("Money hardening: clients cannot mint wallet credit, debit balances or confirm bookings", async () => {
+  const alice = testEnv.authenticatedContext(ALICE_UID).firestore();
+  const userRef = alice.collection("users").doc(ALICE_UID);
+  const forged = { ...validUserAccountPayload(ALICE_UID), walletBalanceUsd: 50000 };
+  await assertFails(userRef.set(forged));
+  await assertSucceeds(userRef.set(validUserAccountPayload(ALICE_UID)));
+  await assertFails(userRef.update({ walletBalanceUsd: 999999, updatedAt: new Date() }));
+  await assertFails(userRef.update({ level: 100, xpPoints: 999999, updatedAt: new Date() }));
+  await assertFails(alice.collection("wallets").doc(ALICE_UID).set({ balanceCents: 999999 }));
+  await assertFails(alice.collection("creator_wallets").doc(ALICE_UID).set({ availableCents: 999999 }));
+  await assertFails(alice.collection("users").doc(ALICE_UID).collection("bookings").doc("forged").set(validBookingPayload(ALICE_UID)));
+  await assertFails(alice.collection("payment_receipts").doc("unverified").set({ userId: ALICE_UID, status: "verified" }));
+  await assertFails(alice.collection("withdrawals").doc("fake").set({ userId: ALICE_UID, status: "paid" }));
 });
