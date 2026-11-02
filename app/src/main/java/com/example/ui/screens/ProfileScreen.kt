@@ -1914,160 +1914,27 @@ fun ProfileScreen(
         )
     }
 
-    // ====================================================================
-    // MODAL 3: CLEAN SETTINGS, CHAT PRICING, AVATAR FRAMES & WALLET HISTORY
-    // ====================================================================
+    // MODAL 3: Full, navigable settings; each category has its own screen.
+    // ============================================================================
     if (showSettingsModal) {
-        var customChatPriceText by remember(userProfile.chatPriceUsd) {
-            mutableStateOf(userProfile.chatPriceUsd.toString())
-        }
-        val presetChatPrices = listOf(5, 10, 15, 25, 50, 100)
-
-        AlertDialog(
-            onDismissRequest = { showSettingsModal = false },
-            containerColor = RoyalNavyCard,
-            title = {
-                Text(
-                    text = "إعدادات الحساب وتسعير الدردشة",
-                    fontSize = 15.sp,
-                    color = SoftWhiteText,
-                    fontWeight = FontWeight.Bold
-                )
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    // 1. Chat Pricing
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Switch(
-                            checked = userProfile.isPaidChatEnabled,
-                            onCheckedChange = { enabled ->
-                                onUpdateChatPricing(userProfile.chatPriceUsd, enabled)
-                            },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = SoftWhiteText,
-                                checkedTrackColor = DeepTealPrimary
-                            )
-                        )
-                        Text(
-                            text = "تسعير الدردشة الخاصة ($${userProfile.chatPriceUsd})",
-                            fontSize = 12.sp,
-                            color = SoftWhiteText,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        presetChatPrices.forEach { price ->
-                            val isSelected = userProfile.chatPriceUsd == price
-                            FilterChip(
-                                selected = isSelected,
-                                onClick = {
-                                    customChatPriceText = price.toString()
-                                    onUpdateChatPricing(price, true)
-                                },
-                                label = { Text("$$price", fontSize = 11.sp) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = DeepTealPrimary,
-                                    selectedLabelColor = SoftWhiteText
-                                )
-                            )
-                        }
-                    }
-
-                    // 2. Avatar Frames Row
-                    Text(
-                        text = "إطار الصورة الشخصية",
-                        fontSize = 12.sp,
-                        color = MutedLuxuryGold,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.fillMaxWidth(),
-                        textAlign = TextAlign.End
-                    )
-
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(AvatarFrameCatalog.frames, key = { it.id }) { frameItem ->
-                            val isSelected = userProfile.selectedFrameId == frameItem.id
-                            Surface(
-                                onClick = { onSelectAvatarFrame(frameItem.id) },
-                                shape = RoundedCornerShape(10.dp),
-                                color = if (isSelected) DeepTealPrimary.copy(alpha = 0.2f) else RoyalNavyBackground,
-                                border = BorderStroke(
-                                    1.dp,
-                                    if (isSelected) DeepTealPrimary else MaterialTheme.colorScheme.outline
-                                ),
-                                modifier = Modifier.testTag("select_avatar_frame_${frameItem.id}")
-                            ) {
-                                Text(
-                                    text = frameItem.nameAr,
-                                    fontSize = 10.sp,
-                                    color = SoftWhiteText,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    // 3. Recent Transactions Summary
-                    if (walletTransactions.isNotEmpty()) {
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-                        Text(
-                            text = "آخر المعاملات: ${walletTransactions.first().title} ($${walletTransactions.first().amountUsd})",
-                            fontSize = 11.sp,
-                            color = SlateSecondaryText,
-                            modifier = Modifier.fillMaxWidth(),
-                            textAlign = TextAlign.End
-                        )
-                    }
-
-                    // 4. Sign Out if signed in
-                    if (isGoogleSignedIn || isSuperAdmin) {
-                        OutlinedButton(
-                            onClick = {
-                                showSettingsModal = false
-                                onSignOut()
-                            },
-                            shape = RoundedCornerShape(50),
-                            border = BorderStroke(1.dp, ErrorCrimson),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ExitToApp,
-                                contentDescription = null,
-                                tint = ErrorCrimson,
-                                modifier = Modifier.size(15.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("تسجيل الخروج", fontSize = 12.sp, color = ErrorCrimson)
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val parsed = (customChatPriceText.toIntOrNull() ?: userProfile.chatPriceUsd).coerceIn(1, 5000)
-                        onUpdateChatPricing(parsed, userProfile.isPaidChatEnabled)
-                        showSettingsModal = false
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = DeepTealPrimary,
-                        contentColor = SoftWhiteText
-                    ),
-                    shape = RoundedCornerShape(50)
-                ) {
-                    Text("تم", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                }
-            }
+        ProfileSettingsDialog(
+            userProfile = userProfile,
+            lightTheme = isSoftRoseLightTheme,
+            isSignedIn = isGoogleSignedIn || isSuperAdmin,
+            isAdmin = isSuperAdmin,
+            walletBalanceUsd = walletBalanceUsd,
+            onDismiss = { showSettingsModal = false },
+            onEditProfile = { showEditProfileDialog = true },
+            onToggleTheme = onToggleThemeMode,
+            onUpdateChatPricing = onUpdateChatPricing,
+            onSelectFrame = onSelectAvatarFrame,
+            onOpenWallet = onOpenWalletTab,
+            onChangePassword = { showPasswordAndDbModal = true },
+            onSignOut = onSignOut
         )
     }
 
+    // ============================================================================
     // ====================================================================
     // MODAL 4: EDIT PROFILE DIALOG
     // ====================================================================
