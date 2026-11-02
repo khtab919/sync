@@ -1251,6 +1251,24 @@ fun ProfileScreen(
                     }
                 }
 
+                if (rows.isEmpty()) {
+                    Surface(
+                        color = RoyalNavyCard,
+                        shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.outline),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(Icons.Default.GridOn, contentDescription = null, tint = SlateSecondaryText)
+                            Text("لا توجد منشورات في هذا القسم بعد", fontSize = 14.sp, color = SoftWhiteText)
+                            Text("ستظهر المنشورات الحقيقية هنا بعد نشرها.", fontSize = 12.sp, color = SlateSecondaryText)
+                        }
+                    }
+                }
                 rows.forEach { rowItems ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -2243,7 +2261,7 @@ private fun PinnedClipCard(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "${item.viewsLabel} مشاهدة",
+                    text = if (item.viewsLabel == "—" || item.viewsLabel == "خاص") "" else "${item.viewsLabel} مشاهدة",
                     fontSize = 9.sp,
                     color = SlateSecondaryText
                 )
@@ -2412,7 +2430,7 @@ private fun ProfileMediaGridTile(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "${item.viewsLabel} مشاهدة",
+                    text = if (item.viewsLabel == "—" || item.viewsLabel == "خاص") "" else "${item.viewsLabel} مشاهدة",
                     fontSize = 9.sp,
                     color = SlateSecondaryText
                 )
