@@ -1,6 +1,10 @@
 package com.example.data.repository
 
 import android.content.Context
+import android.net.Uri
+import com.google.firebase.functions.functions
+import com.google.firebase.storage.StorageMetadata
+import com.google.firebase.storage.storage
 import com.example.R
 import com.example.data.model.BlockedUser
 import com.example.data.model.Booking
@@ -33,6 +37,85 @@ class LayaliRepository(private val db: FirebaseFirestore) {
     )
 
     private val auth = Firebase.auth
+
+    /**
+     * Only the server-maintained wallets collection is an authoritative balance.
+     * A local SQLite account and /users walletBalanceUsd are NOT sources of funds.
+     */
+    fun observeVerifiedWalletBalance(userId: String = requireUserId()): Flow<Int> = flow {
+        if (auth.currentUser?.uid != userId) {
+            emit(0)
+            return@flow
+        }
+        emitAll(db.collection("wallets").document(userId).snapshots().map { snapshot ->
+            val balanceCents = snapshot.getLong("balanceCents") ?: 0L
+            if (balanceCents < 0L) 0 else (balanceCents / 100L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+        })
+    }
+
+    /** Accepted payments are always reconciled by the trusted Firebase callable endpoint. */
+    suspend fun createVerifiedBookingRequest(
+        serviceId: String, bookingDate: String, timeSlot: String,
+        guestCount: Int, notes: String, payWithWallet: Boolean
+    ): Result<Pair<String, String>> = runCatching {
+        requireUserId()
+        val payload = mapOf(
+            "serviceId" to serviceId,
+            "bookingDate" to bookingDate,
+            "timeSlot" to timeSlot,
+            "guestCount" to guestCount,
+            "notes" to notes,
+            "paymentMethod" to if (payWithWallet) "wallet" else "external"
+        )
+        @Suppress("UNCHECKED_CAST")
+        val result = Firebase.functions("europe-west1")
+            .getHttpsCallable("createBookingRequest").call(payload).await().data as Map<String, Any?>
+        Pair(result["bookingId"] as String, result["status"] as String)
+    }
+
+    /**
+     * Upload a private immutable receipt to Storage before queueing it for independent
+     * manual payment verification. The server grants NO credit on submission.
+     */
+    suspend fun submitVerifiedReceipt(
+        receiptUri: String, contentType: String, method: String, transactionRef: String,
+        purpose: String, amountUsd: Int = 0, bookingId: String? = null
+    ): Result<String> = runCatching {
+        val uid = requireUserId()
+        require(contentType in setOf("image/jpeg", "image/png", "application/pdf")) { "صيغة الإيصال غير مدعومة" }
+        val suffix = when (contentType) {
+            "image/png" -> "png"
+            "application/pdf" -> "pdf"
+            else -> "jpg"
+        }
+        val id = UUID.randomUUID().toString().replace("-", "")
+        val storagePath = "receipts/$uid/$id.$suffix"
+        val metadata = StorageMetadata.Builder().setContentType(contentType).build()
+        Firebase.storage.reference.child(storagePath).putFile(Uri.parse(receiptUri), metadata).await()
+        val payload = mutableMapOf<String, Any>(
+            "submissionId" to id,
+            "storagePath" to storagePath,
+            "method" to method,
+            "transactionReference" to transactionRef,
+            "purpose" to purpose
+        )
+        if (purpose == "wallet") payload["amountUsd"] = amountUsd
+        if (purpose == "booking") payload["bookingId"] = checkNotNull(bookingId)
+        @Suppress("UNCHECKED_CAST")
+        val result = Firebase.functions("europe-west1")
+            .getHttpsCallable("submitPaymentReceipt").call(payload).await().data as Map<String, Any?>
+        result["receiptId"] as String
+    }
+
+    suspend fun requestCreatorWithdrawal(amountUsd: Int, destination: String): Result<String> = runCatching {
+        requireUserId()
+        @Suppress("UNCHECKED_CAST")
+        val result = Firebase.functions("europe-west1").getHttpsCallable("requestWithdrawal")
+            .call(mapOf("amountUsd" to amountUsd, "destination" to destination))
+            .await().data as Map<String, Any?>
+        result["withdrawalId"] as String
+    }
+
 
     private fun requireUserId(): String {
         return auth.currentUser?.uid
