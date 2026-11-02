@@ -9,6 +9,11 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -123,141 +128,141 @@ fun FramedUserAvatar(
                 if (onClick != null) base.clickable { onClick() } else base
             }
     ) {
-        // Ultra-Luxury Multi-Layered Jewel Frame Canvas (Aura, Braided Rings, 12 Diamond Gems, 5-Peak Imperial Crown)
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val center = Offset(size.width / 2f, size.height / 2f)
-            val outerRadius = (size.minDimension / 2f) - 5.dp.toPx()
-            val midRadius = outerRadius - 3.2.dp.toPx()
-            val innerRadius = outerRadius - 6.2.dp.toPx()
+        // Only the prominent avatar animates. Small list previews remain static for performance.
+        val motion = if (avatarSize >= 60.dp && frame.minLevel >= 12) {
+            val transition = rememberInfiniteTransition(label = "frame_${frame.id}")
+            val angle by transition.animateFloat(
+                initialValue = 0f,
+                targetValue = 360f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 7200),
+                    repeatMode = RepeatMode.Restart
+                ),
+                label = "frame_motion"
+            )
+            angle
+        } else 0f
 
-            // 1. Deep multi-stop royal radial aura
+        // Six independent silhouettes: each new level changes geometry, not only color.
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val c = Offset(size.width / 2f, size.height / 2f)
+            val radius = size.minDimension / 2f - 5.dp.toPx()
+            val ring = 2.5.dp.toPx()
+            val tau = Math.PI * 2.0
+            val points = when (frame.id) {
+                "obsidian_elite" -> 8
+                "sapphire_neon" -> 6
+                "amethyst_vip" -> 12
+                else -> 10
+            }
+            val subtleGlow = when (frame.id) {
+                "crimson_flame", "obsidian_elite" -> 0.18f + (motion / 360f) * 0.16f
+                else -> 0.13f
+            }
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(
-                        primaryColor.copy(alpha = 0.45f),
-                        secondaryColor.copy(alpha = 0.24f),
-                        accentColor.copy(alpha = 0.08f),
-                        Color.Transparent
-                    ),
-                    center = center,
-                    radius = outerRadius + 8.dp.toPx()
+                    listOf(primaryColor.copy(alpha = subtleGlow), Color.Transparent),
+                    center = c,
+                    radius = radius + 12.dp.toPx()
                 ),
-                radius = outerRadius + 8.dp.toPx(),
-                center = center
+                radius = radius + 12.dp.toPx(),
+                center = c
             )
 
-            // 2. Outer sculpted jewel bezel ring
-            drawCircle(
-                brush = Brush.sweepGradient(
-                    colors = listOf(
-                        primaryColor,
-                        accentColor,
-                        secondaryColor,
-                        Color.White.copy(alpha = 0.9f),
-                        primaryColor,
-                        secondaryColor,
-                        accentColor,
-                        primaryColor
-                    ),
-                    center = center
-                ),
-                radius = outerRadius,
-                center = center,
-                style = Stroke(width = 3.8.dp.toPx())
-            )
-
-            // 3. Middle dark obsidian contrast groove
-            drawCircle(
-                color = Color(0xFF080C16).copy(alpha = 0.9f),
-                radius = midRadius,
-                center = center,
-                style = Stroke(width = 1.6.dp.toPx())
-            )
-
-            // 4. Inner crystalline platinum filigree ring
-            drawCircle(
-                brush = Brush.sweepGradient(
-                    colors = listOf(
-                        accentColor,
-                        secondaryColor,
-                        primaryColor,
-                        accentColor
-                    ),
-                    center = center
-                ),
-                radius = innerRadius,
-                center = center,
-                style = Stroke(width = 1.5.dp.toPx())
-            )
-
-            // 5. 12 Faceted Diamond-Cut Gemstones around the bezel
-            for (i in 0 until 12) {
-                if (i == 0) continue // Top position is reserved for the Imperial Crown
-                val angleRad = Math.toRadians((i * 30.0) - 90.0)
-                val px = center.x + (outerRadius * cos(angleRad)).toFloat()
-                val py = center.y + (outerRadius * sin(angleRad)).toFloat()
-                val isCardinal = i % 3 == 0
-                val gemSize = if (isCardinal) 4.4.dp.toPx() else 2.8.dp.toPx()
-
-                val diamondPath = Path().apply {
-                    moveTo(px, py - gemSize)
-                    lineTo(px + gemSize * 0.85f, py)
-                    lineTo(px, py + gemSize)
-                    lineTo(px - gemSize * 0.85f, py)
-                    close()
+            when (frame.id) {
+                "emerald_crown" -> {
+                    // Quiet brushed-metal rim: the entry frame has no crown or animation.
+                    drawCircle(color = primaryColor, radius = radius, center = c, style = Stroke(ring))
+                    drawCircle(color = accentColor.copy(alpha = 0.75f), radius = radius - 4.dp.toPx(), center = c, style = Stroke(1.dp.toPx()))
+                    for (i in 0 until 4) {
+                        val a = (tau * i / 4) - Math.PI / 4
+                        drawCircle(
+                            color = accentColor, radius = 2.dp.toPx(),
+                            center = Offset(c.x + (radius * cos(a)).toFloat(), c.y + (radius * sin(a)).toFloat())
+                        )
+                    }
                 }
-                drawPath(
-                    path = diamondPath,
-                    color = if (isCardinal) accentColor else secondaryColor
-                )
-                // Inner specular diamond highlight
-                drawCircle(
-                    color = Color.White.copy(alpha = 0.9f),
-                    radius = gemSize * 0.32f,
-                    center = Offset(px, py)
-                )
+                "amber_sovereign" -> {
+                    // Rose-gold ornamental petals, eight sections and pearlescent ends.
+                    drawCircle(brush = Brush.sweepGradient(listOf(primaryColor, accentColor, secondaryColor, primaryColor), center = c), radius = radius - 3.dp.toPx(), center = c, style = Stroke(ring))
+                    for (i in 0 until 8) {
+                        val a = tau * i / 8
+                        val x = c.x + (radius * cos(a)).toFloat()
+                        val y = c.y + (radius * sin(a)).toFloat()
+                        drawCircle(color = if (i % 2 == 0) accentColor else primaryColor, radius = 3.dp.toPx(), center = Offset(x,y))
+                    }
+                }
+                "sapphire_neon" -> {
+                    // Angular sapphire hexagon with orbiting light.
+                    val hex = Path()
+                    for (i in 0..6) {
+                        val a = tau * (i % 6) / 6 - Math.PI / 2
+                        val x = c.x + (radius * cos(a)).toFloat()
+                        val y = c.y + (radius * sin(a)).toFloat()
+                        if (i == 0) hex.moveTo(x,y) else hex.lineTo(x,y)
+                    }
+                    drawPath(hex, color = primaryColor, style = Stroke(3.dp.toPx()))
+                    drawCircle(color = secondaryColor.copy(alpha=0.7f), radius = radius - 5.dp.toPx(), center = c, style = Stroke(1.3.dp.toPx()))
+                    val a = (motion / 360.0 * tau) - Math.PI / 2
+                    drawCircle(color = accentColor, radius = 3.dp.toPx(), center = Offset(c.x + (radius * cos(a)).toFloat(), c.y + (radius * sin(a)).toFloat()))
+                }
+                "amethyst_vip" -> {
+                    // A twelve-ray amethyst constellation with discrete animated glints.
+                    drawCircle(brush = Brush.sweepGradient(listOf(primaryColor, secondaryColor, accentColor, primaryColor), center = c), radius = radius - 3.dp.toPx(), center = c, style = Stroke(2.8.dp.toPx()))
+                    for (i in 0 until points) {
+                        val a = tau * i / points - Math.PI / 2
+                        val outer = radius + if (i % 3 == 0) 5.dp.toPx() else 2.dp.toPx()
+                        val p1 = Offset(c.x + ((radius - 4.dp.toPx()) * cos(a)).toFloat(), c.y + ((radius - 4.dp.toPx()) * sin(a)).toFloat())
+                        val p2 = Offset(c.x + (outer * cos(a)).toFloat(), c.y + (outer * sin(a)).toFloat())
+                        drawLine(color = if(i % 3 == 0) accentColor else secondaryColor, start = p1, end = p2, strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round)
+                    }
+                    val a = tau * motion / 360 - Math.PI / 2
+                    drawCircle(color = Color.White.copy(alpha = 0.85f), radius = 2.4.dp.toPx(), center = Offset(c.x + (radius * cos(a)).toFloat(), c.y + (radius * sin(a)).toFloat()))
+                }
+                "crimson_flame" -> {
+                    // Ruby ember: alternating sharp facets and a restrained moving halo.
+                    drawCircle(color = primaryColor.copy(alpha = 0.4f), radius = radius + 3.dp.toPx(), center = c, style = Stroke(5.dp.toPx()))
+                    val crown = Path()
+                    for (i in 0..16) {
+                        val a = tau * (i % 16) / 16 - Math.PI / 2
+                        val r = radius + if(i % 2 == 0) 5.dp.toPx() else -3.dp.toPx()
+                        val x = c.x + (r * cos(a)).toFloat()
+                        val y = c.y + (r * sin(a)).toFloat()
+                        if(i == 0) crown.moveTo(x,y) else crown.lineTo(x,y)
+                    }
+                    drawPath(crown, color = accentColor, style = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round))
+                    drawCircle(color = secondaryColor, radius = radius - 7.dp.toPx(), center = c, style = Stroke(1.5.dp.toPx()))
+                }
+                else -> {
+                    // Obsidian diamond: exclusive octagonal bezel and rotating silver highlight.
+                    for (i in 0 until 2) {
+                        val oct = Path()
+                        val r = radius - i * 5.dp.toPx()
+                        for (j in 0..8) {
+                            val a = tau * (j % 8) / 8 - Math.PI / 8
+                            val x = c.x + (r * cos(a)).toFloat()
+                            val y = c.y + (r * sin(a)).toFloat()
+                            if(j == 0) oct.moveTo(x,y) else oct.lineTo(x,y)
+                        }
+                        drawPath(oct, color = if(i == 0) accentColor else primaryColor, style = Stroke(if(i==0) 3.dp.toPx() else 1.6.dp.toPx()))
+                    }
+                    drawArc(
+                        brush = Brush.sweepGradient(listOf(Color.Transparent, secondaryColor, Color.White, Color.Transparent), center = c),
+                        startAngle = motion - 42f, sweepAngle = 84f,
+                        useCenter = false,
+                        topLeft = Offset(c.x - radius, c.y - radius),
+                        size = Size(radius * 2, radius * 2),
+                        style = Stroke(3.3.dp.toPx(), cap = StrokeCap.Round)
+                    )
+                    for (i in 0 until 8) {
+                        val a = tau * i / 8 - Math.PI / 8
+                        drawCircle(
+                            color = accentColor, radius = 1.6.dp.toPx(),
+                            center = Offset(c.x + (radius * cos(a)).toFloat(), c.y + (radius * sin(a)).toFloat())
+                        )
+                    }
+                }
             }
-
-            // 6. Top 5-Peak Imperial Royal Crown with Jewel Tips
-            val crownBaseY = center.y - outerRadius + 1.5.dp.toPx()
-            val crownWidth = 22.dp.toPx()
-            val crownHeight = 11.dp.toPx()
-            val crownPath = Path().apply {
-                moveTo(center.x - crownWidth * 0.44f, crownBaseY)
-                lineTo(center.x - crownWidth * 0.52f, crownBaseY - crownHeight * 0.55f)
-                lineTo(center.x - crownWidth * 0.28f, crownBaseY - crownHeight * 0.22f)
-                lineTo(center.x - crownWidth * 0.22f, crownBaseY - crownHeight * 0.82f)
-                lineTo(center.x - crownWidth * 0.08f, crownBaseY - crownHeight * 0.32f)
-                lineTo(center.x, crownBaseY - crownHeight * 1.12f)
-                lineTo(center.x + crownWidth * 0.08f, crownBaseY - crownHeight * 0.32f)
-                lineTo(center.x + crownWidth * 0.22f, crownBaseY - crownHeight * 0.82f)
-                lineTo(center.x + crownWidth * 0.28f, crownBaseY - crownHeight * 0.22f)
-                lineTo(center.x + crownWidth * 0.52f, crownBaseY - crownHeight * 0.55f)
-                lineTo(center.x + crownWidth * 0.44f, crownBaseY)
-                close()
-            }
-            drawPath(
-                path = crownPath,
-                brush = Brush.linearGradient(
-                    colors = listOf(accentColor, primaryColor, secondaryColor, accentColor)
-                )
-            )
-            // Crown top center diamond pearl
-            drawCircle(
-                color = Color.White,
-                radius = 2.2.dp.toPx(),
-                center = Offset(center.x, crownBaseY - crownHeight * 1.15f)
-            )
-            drawCircle(
-                color = accentColor,
-                radius = 1.6.dp.toPx(),
-                center = Offset(center.x - crownWidth * 0.22f, crownBaseY - crownHeight * 0.85f)
-            )
-            drawCircle(
-                color = accentColor,
-                radius = 1.6.dp.toPx(),
-                center = Offset(center.x + crownWidth * 0.22f, crownBaseY - crownHeight * 0.85f)
-            )
         }
 
         // Inner Avatar Circle
