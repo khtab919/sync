@@ -8,6 +8,7 @@ import com.google.firebase.storage.storage
 import com.example.R
 import com.example.data.model.BlockedUser
 import com.example.data.model.Booking
+import com.example.data.model.ChatMessageItem
 import com.example.data.model.CustomerReview
 import com.example.data.model.FavoriteVenue
 import com.example.data.model.PublishedService
@@ -120,6 +121,42 @@ class LayaliRepository(private val db: FirebaseFirestore) {
     private fun requireUserId(): String {
         return auth.currentUser?.uid
             ?: throw IllegalStateException("User must be signed in with Google before accessing Firestore.")
+    }
+
+
+    suspend fun unlockServerPaidChat(creatorId: String): Result<String> = runCatching {
+        requireUserId()
+        @Suppress("UNCHECKED_CAST")
+        val result = Firebase.functions("europe-west1").getHttpsCallable("unlockPaidChat")
+            .call(mapOf("creatorId" to creatorId)).await().data as Map<String, Any?>
+        result["threadId"] as String
+    }
+
+    suspend fun sendServerChatMessage(threadId: String, message: String): Result<String> = runCatching {
+        requireUserId()
+        @Suppress("UNCHECKED_CAST")
+        val result = Firebase.functions("europe-west1").getHttpsCallable("sendVerifiedMessage")
+            .call(mapOf("threadId" to threadId, "message" to message)).await().data as Map<String, Any?>
+        result["messageId"] as String
+    }
+
+    fun observeVerifiedChatMessages(threadId: String, memberId: String): Flow<List<ChatMessageItem>> = flow {
+        val uid = requireUserId()
+        require(threadId.matches(Regex("^[0-9a-f]{64}$")))
+        emitAll(db.collection("chat_threads").document(threadId).collection("messages")
+            .orderBy("createdAt").snapshots().map { snapshot ->
+                snapshot.documents.mapNotNull { doc ->
+                    val text = doc.getString("text") ?: return@mapNotNull null
+                    val senderId = doc.getString("senderId") ?: return@mapNotNull null
+                    ChatMessageItem(
+                        id = doc.id, memberId = memberId,
+                        senderName = if (senderId == uid) "أنا" else "مقدم الخدمة",
+                        senderUsername = "",
+                        text = text, timestampLabel = "",
+                        isFromCurrentUser = senderId == uid
+                    )
+                }
+            })
     }
 
     private fun isSyntheticSessionId(userId: String): Boolean {
