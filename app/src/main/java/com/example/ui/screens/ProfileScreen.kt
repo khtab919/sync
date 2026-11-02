@@ -1276,9 +1276,10 @@ fun ProfileScreen(
                     ) {
                         rowItems.forEach { mediaItem ->
                             val isPinned = pinnedClipIds.contains(mediaItem.id)
-                            val isLocked = mediaItem.isExclusiveLocked &&
+                            val isLocked = mediaItem.tab == ProfileMediaTab.POSTS ||
+                                (mediaItem.isExclusiveLocked &&
                                 !isSubscribedVip &&
-                                !unlockedVideoIds.contains(mediaItem.id)
+                                !unlockedVideoIds.contains(mediaItem.id))
 
                             ProfileMediaGridTile(
                                 item = mediaItem,
@@ -2377,7 +2378,7 @@ private fun ProfileMediaGridTile(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "فتح • $${item.singlePriceUsd}",
+                            text = if (item.tab == ProfileMediaTab.POSTS) "بسعر • ${item.singlePriceUsd}" else "فتح • ${item.singlePriceUsd}",
                             fontSize = 10.sp,
                             color = MutedLuxuryGold,
                             fontWeight = FontWeight.Bold
