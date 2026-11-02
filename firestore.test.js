@@ -98,7 +98,7 @@ function validPublishedServicePayload(uid) {
     imageUrl: "preset://rose_gold_spa",
     videoUrl: "https://example.com/showcase.mp4",
     mediaType: "both",
-    status: "active",
+    status: "pending",
     createdAt: now,
     updatedAt: now,
   };
@@ -137,13 +137,13 @@ test("UserAccount: owner can create account, update password hash, and cross-use
   await assertFails(bobDb.collection("users").doc(ALICE_UID).get());
 });
 
-test("Unauthenticated user: cannot read or create accounts, bookings, or published services", async () => {
+test("Unauthenticated user: cannot read private records, but can browse approved services", async () => {
   const unauthDb = testEnv.unauthenticatedContext().firestore();
   await assertFails(unauthDb.collection("users").doc(ALICE_UID).get());
   await assertFails(
     unauthDb.collection("users").doc(ALICE_UID).collection("bookings").get()
   );
-  await assertFails(
+  await assertSucceeds(
     unauthDb.collection("published_services").where("status", "==", "active").get()
   );
 });
@@ -153,6 +153,23 @@ test("Published services: authenticated user can publish offer and query active 
   const docRef = aliceDb.collection("published_services").doc("srv_1");
 
   await assertSucceeds(docRef.set(validPublishedServicePayload(ALICE_UID)));
+
+  // Unapproved offers stay unreadable to other users.
+  const bobBefore = testEnv.authenticatedContext(BOB_UID).firestore();
+  await assertFails(bobBefore.collection("published_services").doc("srv_1").get());
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().collection("admins").doc("moderator_1").set({ role: "moderator" });
+  });
+  const admin = testEnv.authenticatedContext("moderator_1").firestore();
+  await assertSucceeds(docRef.get());
+  await assertSucceeds(admin.collection("published_services").doc("srv_1").update({
+    status: "active",
+    updatedAt: new Date(),
+  }));
+  await assertFails(aliceDb.collection("published_services").doc("srv_1").update({
+    status: "archived",
+    updatedAt: new Date(),
+  }));
 
   // Bob can query active services
   const bobDb = testEnv.authenticatedContext(BOB_UID).firestore();
@@ -249,6 +266,14 @@ test("Paid posts: public preview works; owner-only body stays private", async ()
 
   await assertSucceeds(alice.collection("published_services").doc(id).set(preview));
   await assertSucceeds(alice.collection("creator_post_bodies").doc(id).set(body));
+  await assertFails(bob.collection("published_services").doc(id).get());
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().collection("admins").doc("moderator_1").set({ role: "moderator" });
+  });
+  const admin = testEnv.authenticatedContext("moderator_1").firestore();
+  await assertSucceeds(admin.collection("published_services").doc(id).update({
+    status: "active", updatedAt: new Date(),
+  }));
   await assertSucceeds(bob.collection("published_services").doc(id).get());
   await assertSucceeds(alice.collection("creator_post_bodies").doc(id).get());
   await assertFails(bob.collection("creator_post_bodies").doc(id).get());
@@ -257,4 +282,31 @@ test("Paid posts: public preview works; owner-only body stays private", async ()
     ...body, serviceId: "post_secure_2",
   }));
   await assertFails(alice.collection("creator_post_bodies").doc(id).update({ body: "modified" }));
+});
+
+test("Marketplace: only a verified Firebase admin can mark pending booking requests reviewed", async () => {
+  const alice = testEnv.authenticatedContext(ALICE_UID).firestore();
+  const bob = testEnv.authenticatedContext(BOB_UID).firestore();
+  const request = {
+    userId: ALICE_UID,
+    serviceId: "srv_123",
+    creatorId: BOB_UID,
+    serviceTitle: "مكالمة فيديو",
+    priceUsd: 4,
+    status: "pending",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().collection("service_booking_requests").doc("req_one").set(request);
+    await ctx.firestore().collection("admins").doc("moderator_1").set({ role: "moderator" });
+  });
+  await assertSucceeds(alice.collection("service_booking_requests").doc("req_one").get());
+  await assertFails(bob.collection("service_booking_requests").doc("req_one").get());
+  await assertFails(alice.collection("service_booking_requests").doc("req_one").update({ status: "reviewed" }));
+  const admin = testEnv.authenticatedContext("moderator_1").firestore();
+  await assertSucceeds(admin.collection("service_booking_requests").doc("req_one").update({
+    status: "reviewed", updatedAt: new Date(),
+  }));
+  await assertFails(admin.collection("service_booking_requests").doc("req_one").delete());
 });

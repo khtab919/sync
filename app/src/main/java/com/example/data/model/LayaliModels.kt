@@ -146,8 +146,8 @@ object AvatarFrameCatalog {
             nameAr = "الزمرد الكلاسيكي",
             subtitleAr = "إطار زمردي مرصع بالبلاتين والياقوت",
             minLevel = 1,
-            primaryHex = 0xFF10B981L,
-            secondaryHex = 0xFF0EA5E9L,
+            primaryHex = 0xFF4A8B7CL,
+            secondaryHex = 0xFF567F9BL,
             accentHex = 0xFF6EE7B7L,
             badgeLabel = "ROYAL"
         ),
@@ -156,7 +156,7 @@ object AvatarFrameCatalog {
             nameAr = "بتلات الروز الملكي",
             subtitleAr = "هالة وردية إمبراطورية مزدوجة لكبار الشخصيات",
             minLevel = 5,
-            primaryHex = 0xFFEC4899L,
+            primaryHex = 0xFFAA7691L,
             secondaryHex = 0xFFA855F7L,
             accentHex = 0xFFF9A8D4L,
             badgeLabel = "ROSE VIP"
@@ -166,7 +166,7 @@ object AvatarFrameCatalog {
             nameAr = "سداسي السافير",
             subtitleAr = "إطار كريستالي مضيء بتصميم هندسي فاخر",
             minLevel = 12,
-            primaryHex = 0xFF0EA5E9L,
+            primaryHex = 0xFF567F9BL,
             secondaryHex = 0xFF6366F1L,
             accentHex = 0xFF7DD3FCL,
             badgeLabel = "SAPPHIRE"
@@ -177,7 +177,7 @@ object AvatarFrameCatalog {
             subtitleAr = "إطار أرجواني ملكي مرصع بـ 12 ماسة",
             minLevel = 20,
             primaryHex = 0xFFA855F7L,
-            secondaryHex = 0xFFEC4899L,
+            secondaryHex = 0xFFAA7691L,
             accentHex = 0xFFD8B4FEL,
             badgeLabel = "IMPERIAL"
         ),
@@ -196,9 +196,9 @@ object AvatarFrameCatalog {
             nameAr = "أوبسيديان ألماسي",
             subtitleAr = "إطار ألماسي بلاتيني حصري للمستويات العليا",
             minLevel = 50,
-            primaryHex = 0xFFE2E8F0L,
+            primaryHex = 0xFFD5DCE2L,
             secondaryHex = 0xFFA855F7L,
-            accentHex = 0xFFFFFFFFL,
+            accentHex = 0xFFF7F7F3L,
             badgeLabel = "DIAMOND"
         )
     )

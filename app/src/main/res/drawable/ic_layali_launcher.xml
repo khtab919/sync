@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Restrained petrol rounded square, intentionally free of neon and wings. -->
+    <path
+        android:fillColor="#145665"
+        android:pathData="M27,3 L81,3 C94.3,3 105,13.7 105,27 L105,81 C105,94.3 94.3,105 81,105 L27,105 C13.7,105 3,94.3 3,81 L3,27 C3,13.7 13.7,3 27,3 Z"/>
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="5.3"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M27,40 C27,27 35,22 49,22 L58,22 C73,22 82,31 82,45 L82,58 C82,71 73,78 58,78 L42,78 L27,88 L27,62"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M50,39 L50,62 L68,50.5 Z"/>
+</vector>

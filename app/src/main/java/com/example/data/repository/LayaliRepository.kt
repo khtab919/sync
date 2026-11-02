@@ -113,10 +113,6 @@ class LayaliRepository(private val db: FirebaseFirestore) {
     }
 
     fun observePublishedServices(): Flow<List<PublishedService>> = flow {
-        if (auth.currentUser == null) {
-            emit(emptyList())
-            return@flow
-        }
         val path = "published_services"
         emitAll(
             db.collection("published_services")
@@ -185,7 +181,7 @@ class LayaliRepository(private val db: FirebaseFirestore) {
             "imageUrl" to imageUrl.trim().take(500),
             "videoUrl" to videoUrl.trim().take(500),
             "mediaType" to if (mediaType in listOf("photo", "video", "both")) mediaType else "both",
-            "status" to "active",
+            "status" to "pending",
             "createdAt" to FieldValue.serverTimestamp(),
             "updatedAt" to FieldValue.serverTimestamp()
         )
@@ -235,7 +231,7 @@ class LayaliRepository(private val db: FirebaseFirestore) {
             "imageUrl" to "",
             "videoUrl" to "",
             "mediaType" to "photo",
-            "status" to "active",
+            "status" to "pending",
             "createdAt" to FieldValue.serverTimestamp(),
             "updatedAt" to FieldValue.serverTimestamp()
         )

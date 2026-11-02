@@ -64,6 +64,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Spa
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.SupportAgent
+import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.filled.Videocam
@@ -158,14 +159,18 @@ import com.example.ui.viewmodel.LayaliViewModel
 import com.example.ui.viewmodel.SortOption
 import com.example.ui.viewmodel.UiState
 import com.example.util.LayaliNotificationHelper
+import com.google.firebase.Firebase
+import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.launch
 
 enum class MainTab(val titleAr: String, val tag: String) {
     EXPLORE("الرئيسية", "tab_explore"),
     REELS("الريلز", "tab_reels"),
     CHAT("الدردشة", "tab_chat"),
     WALLET("شراء رصيد", "tab_wallet"),
-    BOOKINGS("الحجوزات", "tab_bookings"),
+    BOOKINGS("حجوزاتي", "tab_bookings"),
+    MARKETPLACE("الحجز", "tab_marketplace"),
     FAVORITES("المفضلة", "tab_favorites"),
     PROFILE("الحساب", "tab_profile"),
     REVIEWS("التقييمات", "tab_reviews"),
@@ -201,6 +206,7 @@ fun MainFeatureScreen(
     userEmail: String? = null,
     adminSessionToken: String? = null,
     isSuperAdmin: Boolean = false,
+    onThemeModeChanged: (Boolean) -> Unit = {},
     onRequestGoogleSignIn: () -> Unit = {},
     onSuperAdminSignOut: () -> Unit = {},
     onSignedOut: () -> Unit
@@ -221,6 +227,7 @@ fun MainFeatureScreen(
 
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    var submittingMarketplaceId by remember { mutableStateOf<String?>(null) }
     val credentialManager = remember { CredentialManager.create(context) }
 
     val selectedCountry by viewModel.selectedCountry.collectAsStateWithLifecycle()
@@ -352,34 +359,31 @@ fun MainFeatureScreen(
         blockedUsersList.filter { it.status == "active" }.map { it.blockedIdentifier.trim() }.toSet()
     }
 
-    val visibleVenues = remember(filteredVenues, blockedAuthorsSet) {
-        filteredVenues.filterNot { v ->
-            blockedAuthorsSet.contains(v.name.trim()) ||
-                blockedAuthorsSet.contains(v.providerDisplayName.trim())
-        }
-    }
+    // Retire unverified hard-coded venues. Only actual Firestore offers appear publicly.
+    val visibleVenues = remember { emptyList<Venue>() }
 
-    val helperBookPublishedService: (PublishedService) -> Unit = { pub ->
-        val matchingVenue = LayaliCatalog.venues.find { it.cityName == pub.cityName }
-            ?: LayaliCatalog.venues.first()
-        val pkg = ServicePackage(
-            id = "pub_${pub.id}",
-            title = pub.title,
-            durationLabel = "حجز مباشر VIP",
-            priceUsd = pub.priceUsd.toInt(),
-            description = pub.description,
-            isPopular = true
-        )
-        val updatedVenue = matchingVenue.copy(
-            name = pub.title,
-            cityName = pub.cityName,
-            country = pub.country,
-            category = pub.category,
-            startingPriceUsd = pub.priceUsd.toInt(),
-            visualPresetKey = pub.imageUrl,
-            packages = listOf(pkg)
-        )
-        activeCheckoutOrder = updatedVenue to pkg
+    // All entry points use the same audited pending request, never a synthetic venue checkout.
+    val helperBookPublishedService: (PublishedService) -> Unit = { service ->
+        if (Firebase.auth.currentUser == null) {
+            viewModel.showInfoMessage("يجب تسجيل الدخول بحساب Firebase لطلب حجز.")
+            onRequestGoogleSignIn()
+        } else {
+            coroutineScope.launch {
+                submittingMarketplaceId = service.id
+                try {
+                    val db = FirebaseFirestore.getInstance(context.getString(R.string.firestore_database_id))
+                    submitMarketplaceRequest(db, service)
+                        .onSuccess {
+                            viewModel.showInfoMessage("وصل طلبك للإدارة للمراجعة. لا يوجد دفع أو تأكيد موعد بعد.")
+                        }
+                        .onFailure { error ->
+                            viewModel.showInfoMessage("فشل إرسال الطلب: ${error.localizedMessage}")
+                        }
+                } finally {
+                    submittingMarketplaceId = null
+                }
+            }
+        }
     }
 
     val helperOpenPublishedMediaViewer: (PublishedService, Boolean) -> Unit = { pub, initialVideo ->
@@ -454,8 +458,8 @@ fun MainFeatureScreen(
     val bottomNavigationTabs = remember {
         listOf(
             MainTab.EXPLORE,
+            MainTab.MARKETPLACE,
             MainTab.REELS,
-            MainTab.WALLET,
             MainTab.CHAT,
             MainTab.PROFILE
         )
@@ -513,13 +517,13 @@ fun MainFeatureScreen(
                         ) {
                             bottomNavigationTabs.forEach { tab ->
                                 val selected = currentTab == tab
-                                val isWalletCenterTab = tab == MainTab.WALLET
+                                val isReelsCenterTab = tab == MainTab.REELS
                                 NavigationBarItem(
                                     selected = selected,
                                     onClick = { currentTab = tab },
                                     modifier = Modifier.testTag(tab.tag),
                                     icon = {
-                                        if (isWalletCenterTab) {
+                                        if (isReelsCenterTab) {
                                             Box(
                                                 modifier = Modifier
                                                     .size(36.dp)
@@ -528,8 +532,8 @@ fun MainFeatureScreen(
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 Icon(
-                                                    imageVector = Icons.Default.AccountBalanceWallet,
-                                                    contentDescription = "شراء رصيد",
+                                                    imageVector = Icons.Default.PlayCircleFilled,
+                                                    contentDescription = "مشاهدة الريلز",
                                                     tint = Color.White,
                                                     modifier = Modifier.size(18.dp)
                                                 )
@@ -538,6 +542,7 @@ fun MainFeatureScreen(
                                             Icon(
                                                 imageVector = when (tab) {
                                                     MainTab.EXPLORE -> Icons.Default.Home
+                                                    MainTab.MARKETPLACE -> Icons.Default.Storefront
                                                     MainTab.REELS -> Icons.Default.PlayCircleFilled
                                                     MainTab.CHAT -> Icons.Default.Chat
                                                     MainTab.BOOKINGS -> Icons.Default.CalendarMonth
@@ -554,7 +559,7 @@ fun MainFeatureScreen(
                                     },
                                     label = {
                                         Text(
-                                            text = if (isWalletCenterTab) "المحفظة" else tab.titleAr,
+                                            text = if (isReelsCenterTab) "المحفظة" else tab.titleAr,
                                             fontSize = 10.sp,
                                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                                             maxLines = 1,
@@ -564,7 +569,7 @@ fun MainFeatureScreen(
                                     colors = NavigationBarItemDefaults.colors(
                                         selectedIconColor = VioletBlueVip,
                                         selectedTextColor = VioletBlueVip,
-                                        indicatorColor = if (isWalletCenterTab) Color.Transparent else VioletBlueVip.copy(alpha = 0.14f),
+                                        indicatorColor = if (isReelsCenterTab) Color.Transparent else VioletBlueVip.copy(alpha = 0.14f),
                                         unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                         unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -597,6 +602,7 @@ fun MainFeatureScreen(
                                         Icon(
                                             imageVector = when (tab) {
                                                 MainTab.EXPLORE -> Icons.Default.Home
+                                                    MainTab.MARKETPLACE -> Icons.Default.Storefront
                                                 MainTab.REELS -> Icons.Default.PlayCircleFilled
                                                 MainTab.CHAT -> Icons.Default.Chat
                                                 MainTab.BOOKINGS -> Icons.Default.CalendarMonth
@@ -712,11 +718,11 @@ fun MainFeatureScreen(
                                     sortOption = sortOption,
                                     cities = filteredCities,
                                     venues = visibleVenues,
-                                    publishedServices = publishedServicesList.filter { it.authorId == viewModel.currentUserId },
+                                    publishedServices = publishedServicesList.filter { it.status == "active" && it.category != "منشور مدفوع" },
                                     favoriteIds = favoriteIds,
                                     isSoftRoseLightTheme = isSoftRoseLightTheme,
                                     isSuperAdmin = isSuperAdmin,
-                                    onToggleThemeMode = viewModel::toggleThemeMode,
+                                    onToggleThemeMode = { viewModel.toggleThemeMode(); onThemeModeChanged(!isSoftRoseLightTheme) },
                                     onOpenLoginScreen = onRequestGoogleSignIn,
                                     onOpenWalletTab = { currentTab = MainTab.WALLET },
                                     onOpenChatTab = { currentTab = MainTab.CHAT },
@@ -831,6 +837,33 @@ fun MainFeatureScreen(
                                     onShowMessage = viewModel::showInfoMessage
                                 )
 
+                                MainTab.MARKETPLACE -> BookingMarketplaceScreen(
+                                    services = publishedServicesList,
+                                    loading = publishedServicesState is UiState.Loading,
+                                    error = (publishedServicesState as? UiState.Error)?.message,
+                                    submittingId = submittingMarketplaceId,
+                                    canOfferServices = Firebase.auth.currentUser != null,
+                                    onSubmitOffer = { title, description, category, city, country, price, image, video ->
+                                        viewModel.publishNewService(
+                                            title = title,
+                                            cityName = city,
+                                            country = country,
+                                            category = category,
+                                            description = description,
+                                            priceUsd = price,
+                                            imageUrl = image,
+                                            videoUrl = video,
+                                            mediaType = when {
+                                                video.isNotBlank() && image.isNotBlank() -> "both"
+                                                video.isNotBlank() -> "video"
+                                                else -> "photo"
+                                            }
+                                        )
+                                    },
+                                    onRequestBooking = helperBookPublishedService,
+                                    onViewService = { service -> helperOpenPublishedMediaViewer(service, false) }
+                                )
+
                                 MainTab.CHAT -> ChatScreen(
                                     userProfile = userProfile,
                                     walletBalanceUsd = walletBalanceUsd,
@@ -853,8 +886,8 @@ fun MainFeatureScreen(
                                     paymentReceipts = paymentReceipts,
                                     onBack = { currentTab = MainTab.EXPLORE },
                                     onSubmitRealDepositReceipt = viewModel::submitRealDepositReceipt,
-                                    onTopUpConfirm = { amount, bonus, pkgTitle ->
-                                        viewModel.topUpWallet(amount, bonus, pkgTitle)
+                                    onTopUpConfirm = { _, _, _ ->
+                                        viewModel.showInfoMessage("لا تُضاف أرصدة محلية. يُراجع الإيصال أولاً عبر الإدارة والخادم.")
                                     },
                                     onShowMessage = viewModel::showInfoMessage
                                 )
@@ -865,13 +898,13 @@ fun MainFeatureScreen(
                                     walletTransactions = walletTransactions,
                                     isGoogleSignedIn = isGoogleSignedIn,
                                     userEmail = userEmail,
-                                    publishedServices = publishedServicesList,
+                                    publishedServices = publishedServicesList.filter { it.authorId == viewModel.currentUserId },
                                     bookingsCount = bookingsList.size,
                                     reviewsCount = userReviewsList.size,
                                     favoritesCount = favoriteIds.size,
                                     blockedUsers = blockedUsersList,
                                     isSoftRoseLightTheme = isSoftRoseLightTheme,
-                                    onToggleThemeMode = viewModel::toggleThemeMode,
+                                    onToggleThemeMode = { viewModel.toggleThemeMode(); onThemeModeChanged(!isSoftRoseLightTheme) },
                                     onUpdateProfile = viewModel::updateUserProfile,
                                     onUpdateUsername = viewModel::updateUsername,
                                     onSelectAvatarFrame = viewModel::selectAvatarFrame,
@@ -941,16 +974,9 @@ fun MainFeatureScreen(
                                             scope = coroutineScope
                                         )
                                     },
-                                    onPurchaseContentWithWallet = { amountUsd, itemTitle ->
-                                        if (walletBalanceUsd >= amountUsd) {
-                                            viewModel.deductWalletBalance(
-                                                amountUsd = amountUsd,
-                                                orderTitle = itemTitle
-                                            )
-                                            true
-                                        } else {
-                                            false
-                                        }
+                                    onPurchaseContentWithWallet = { _, _ ->
+                                        viewModel.showInfoMessage("المحتوى المدفوع يتطلب إثبات دفع موثّق من الخادم.")
+                                        false
                                     },
                                     onShowMessage = viewModel::showInfoMessage,
                                     onPublishPaidPost = viewModel::publishCreatorPaidPost,
@@ -1021,7 +1047,11 @@ fun MainFeatureScreen(
                                     onExploreClick = { currentTab = MainTab.EXPLORE }
                                 )
 
-                                MainTab.ADMIN -> AdminManagementScreen(
+                                MainTab.ADMIN -> {
+                                    Column(modifier = Modifier.fillMaxSize()) {
+                                        AdminModerationInbox()
+                                        Box(modifier = Modifier.weight(1f)) {
+                                            AdminManagementScreen(
                                     adminSessionToken = adminSessionToken,
                                     publishedServicesState = publishedServicesState,
                                     catalogVenues = visibleVenues,
@@ -1032,7 +1062,7 @@ fun MainFeatureScreen(
                                     blockedUsersState = blockedUsersState,
                                     isSoftRoseLightTheme = isSoftRoseLightTheme,
                                     isSubmitting = isSubmitting,
-                                    onToggleThemeMode = viewModel::toggleThemeMode,
+                                    onToggleThemeMode = { viewModel.toggleThemeMode(); onThemeModeChanged(!isSoftRoseLightTheme) },
                                     onPublishService = { title, city, country, cat, price, desc, imgUri, vidUrl ->
                                         val mediaType = if (vidUrl.isNotBlank()) "both" else "image"
                                         viewModel.publishNewService(
@@ -1078,7 +1108,7 @@ fun MainFeatureScreen(
                                             description = "عرض $cat جديد متاح الآن للحجز المباشر",
                                             mediaType = "both"
                                         )
-                                        viewModel.showInfoMessage("تم إرسال إشعار أندرويد الفوري إلى شريط الإشعارات!")
+                                        viewModel.showInfoMessage("تم إنشاء إشعار محلي على هذا الجهاز فقط؛ لم يُرسل للعملاء.")
                                     },
                                     onNavigateToPublicStore = { currentTab = MainTab.EXPLORE },
                                     onSuperAdminSignOut = {
@@ -1087,6 +1117,9 @@ fun MainFeatureScreen(
                                         currentTab = MainTab.EXPLORE
                                     }
                                 )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -1261,31 +1294,6 @@ private fun ExploreTabContent(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(
-                        onClick = {
-                            LayaliNotificationHelper.sendNewServiceBroadcastNotification(
-                                context = context,
-                                title = "عرض خاص VIP",
-                                cityName = selectedCity ?: "دمشق وإسطنبول",
-                                priceUsd = 50L,
-                                description = "احجز سهرتك الآن",
-                                mediaType = "both"
-                            )
-                        },
-                        modifier = Modifier
-                            .size(34.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surface)
-                            .testTag("home_notification_bell_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.NotificationsActive,
-                            contentDescription = "الإشعارات",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-
                     // Compact Wallet Balance Pill
                     Surface(
                         onClick = onOpenWalletTab,
