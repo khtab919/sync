@@ -4,6 +4,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -31,6 +32,28 @@ private val LuxuryNightlifeColorScheme = darkColorScheme(
     error = ErrorCrimson
 )
 
+// Restrained daylight palette, with independent surface and content contrast.
+private val LayaliDaylightColorScheme = lightColorScheme(
+    primary = androidx.compose.ui.graphics.Color(0xFF126878),
+    onPrimary = androidx.compose.ui.graphics.Color.White,
+    primaryContainer = androidx.compose.ui.graphics.Color(0xFFD9EDF0),
+    onPrimaryContainer = androidx.compose.ui.graphics.Color(0xFF103E48),
+    secondary = androidx.compose.ui.graphics.Color(0xFF536A79),
+    onSecondary = androidx.compose.ui.graphics.Color.White,
+    secondaryContainer = androidx.compose.ui.graphics.Color(0xFFE4EBF0),
+    onSecondaryContainer = androidx.compose.ui.graphics.Color(0xFF243B49),
+    tertiary = androidx.compose.ui.graphics.Color(0xFF336B82),
+    onTertiary = androidx.compose.ui.graphics.Color.White,
+    background = androidx.compose.ui.graphics.Color(0xFFF5F7F8),
+    onBackground = androidx.compose.ui.graphics.Color(0xFF17232D),
+    surface = androidx.compose.ui.graphics.Color(0xFFFFFFFF),
+    onSurface = androidx.compose.ui.graphics.Color(0xFF17232D),
+    surfaceVariant = androidx.compose.ui.graphics.Color(0xFFEDF1F3),
+    onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFF53616B),
+    outline = androidx.compose.ui.graphics.Color(0xFFD7DEE3),
+    error = androidx.compose.ui.graphics.Color(0xFFB42336)
+)
+
 val LayaliShapes = Shapes(
     small = RoundedCornerShape(14.dp),
     medium = RoundedCornerShape(20.dp),
@@ -44,7 +67,7 @@ fun MyApplicationTheme(
 ) {
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         MaterialTheme(
-            colorScheme = LuxuryNightlifeColorScheme,
+            colorScheme = if (isSoftRoseLightTheme) LayaliDaylightColorScheme else LuxuryNightlifeColorScheme,
             typography = Typography,
             shapes = LayaliShapes,
             content = content
