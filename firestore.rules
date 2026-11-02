@@ -168,7 +168,7 @@ service cloud.firestore {
              data.imageUrl is string && data.imageUrl.size() <= 500 &&
              data.videoUrl is string && data.videoUrl.size() <= 500 &&
              data.mediaType is string && data.mediaType in ['photo', 'video', 'both'] &&
-             data.status is string && data.status in ['active', 'archived'] &&
+             data.status is string && data.status in ['pending', 'active', 'archived'] &&
              data.createdAt is timestamp && data.createdAt <= request.time &&
              data.updatedAt is timestamp && data.updatedAt <= request.time;
     }
@@ -346,34 +346,75 @@ service cloud.firestore {
     }
 
     // Collection: Published Services & Offers (Real-time Broadcasts)
+    // Verified public catalog: anyone can read active listings; unpublished items
+    // remain visible only to their owner and trusted Firestore administrators.
     match /published_services/{serviceId} {
-      allow get: if isSignedIn() &&
-                    isValidId(serviceId) &&
-                    (existing().status == 'active' || existing().authorId == request.auth.uid || isAdmin());
-
-      allow list: if isSignedIn() &&
-                     (existing().status == 'active' || existing().authorId == request.auth.uid || isAdmin());
-
+      allow get: if isValidId(serviceId) &&
+                 (existing().status == 'active' ||
+                  (isSignedIn() && (existing().authorId == request.auth.uid || isAdmin())));
+      allow list: if existing().status == 'active' ||
+                  (isSignedIn() && (existing().authorId == request.auth.uid || isAdmin()));
       allow create: if isSignedIn() &&
-                       isValidId(serviceId) &&
-                       isValidPublishedService(incoming()) &&
-                       incoming().authorId == request.auth.uid &&
-                       incoming().status == 'active';
-
+                    isValidId(serviceId) &&
+                    isValidPublishedService(incoming()) &&
+                    incoming().authorId == request.auth.uid &&
+                    incoming().status == 'pending';
       allow update: if isSignedIn() &&
-                       isValidId(serviceId) &&
-                       isValidPublishedService(incoming()) &&
-                       (existing().authorId == request.auth.uid || isAdmin()) &&
-                       incoming().authorId == existing().authorId &&
-                       incoming().createdAt == existing().createdAt &&
+                    isValidId(serviceId) &&
+                    isValidPublishedService(incoming()) &&
+                    incoming().authorId == existing().authorId &&
+                    incoming().createdAt == existing().createdAt &&
+                    (
+                      // Moderation decisions cannot manipulate creator, price or content.
+                      (isAdmin() && existing().status == 'pending' &&
+                       incoming().status in ['active', 'archived'] &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])) ||
+                      // Creators may edit content, but never self-approve or unarchive.
+                      (existing().authorId == request.auth.uid &&
+                       incoming().status == existing().status &&
+                       existing().status in ['pending', 'active'] &&
                        incoming().diff(existing()).affectedKeys().hasOnly([
                          'title', 'cityName', 'country', 'category', 'description',
-                         'priceUsd', 'imageUrl', 'videoUrl', 'mediaType', 'status', 'updatedAt'
-                       ]);
-
+                         'priceUsd', 'imageUrl', 'videoUrl', 'mediaType', 'updatedAt'
+                       ]))
+                    );
       allow delete: if isSignedIn() &&
-                       isValidId(serviceId) &&
-                       (existing().authorId == request.auth.uid || isAdmin());
+                    isValidId(serviceId) &&
+                    (existing().authorId == request.auth.uid || isAdmin());
+    }
+
+    // A booking is a reviewable REQUEST, not a completed payment or reservation.
+    // Backend / moderator must verify funds and schedule separately.
+    match /service_booking_requests/{requestId} {
+      allow get, list: if isSignedIn() &&
+                        (isAdmin() || existing().userId == request.auth.uid);
+      allow create: if isSignedIn() &&
+                      isValidId(requestId) &&
+                      incoming().keys().hasAll([
+                        'userId', 'serviceId', 'creatorId', 'serviceTitle',
+                        'priceUsd', 'status', 'createdAt', 'updatedAt'
+                      ]) &&
+                      incoming().keys().hasOnly([
+                        'userId', 'serviceId', 'creatorId', 'serviceTitle',
+                        'priceUsd', 'status', 'createdAt', 'updatedAt'
+                      ]) &&
+                      incoming().userId == request.auth.uid &&
+                      incoming().serviceId is string &&
+                      isValidId(incoming().serviceId) &&
+                      exists(/databases/$(database)/documents/published_services/$(incoming().serviceId)) &&
+                      get(/databases/$(database)/documents/published_services/$(incoming().serviceId)).data.status == 'active' &&
+                      incoming().creatorId == get(/databases/$(database)/documents/published_services/$(incoming().serviceId)).data.authorId &&
+                      incoming().serviceTitle == get(/databases/$(database)/documents/published_services/$(incoming().serviceId)).data.title &&
+                      incoming().priceUsd == get(/databases/$(database)/documents/published_services/$(incoming().serviceId)).data.priceUsd &&
+                      incoming().status == 'pending' &&
+                      incoming().createdAt == request.time &&
+                      incoming().updatedAt == request.time;
+      allow update: if isAdmin() &&
+                      existing().status == 'pending' &&
+                      incoming().status in ['reviewed', 'rejected'] &&
+                      incoming().updatedAt == request.time &&
+                      incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
+      allow delete: if false;
     }
 
     // Paid post bodies are NEVER readable from the public feed. A future trusted
