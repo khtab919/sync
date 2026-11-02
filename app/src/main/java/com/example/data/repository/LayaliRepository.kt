@@ -1,6 +1,7 @@
 package com.example.data.repository
 
 import android.content.Context
+import android.net.Uri
 import com.example.R
 import com.example.data.model.BlockedUser
 import com.example.data.model.Booking
@@ -15,6 +16,7 @@ import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.snapshots
+import com.google.firebase.storage.FirebaseStorage
 import java.util.UUID
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.flow.Flow
@@ -154,6 +156,83 @@ class LayaliRepository(private val db: FirebaseFirestore) {
                 .catch { error ->
                     if (error is Exception) handleFirestoreError(error, OperationType.LIST, path)
                     throw error
+                }
+        )
+    }
+
+    /**
+     * Store an actual deposit request, not spendable wallet funds. The uploaded
+     * image is private to the requesting user and review service. Only a trusted
+     * server may verify the transfer and grant wallet credit.
+     */
+    suspend fun submitDepositRequest(
+        amountUsd: Int,
+        bonusUsd: Int,
+        methodKey: String,
+        receiptImageUri: String,
+        transactionReference: String
+    ): Result<String> = runCatching {
+        val uid = requireUserId()
+        require(amountUsd in 10..100000) { "Invalid deposit amount" }
+        require(methodKey in setOf("SHAM_CASH", "USDT_BEP20")) { "Invalid payment method" }
+        require(receiptImageUri.isNotBlank()) { "Missing payment receipt image" }
+        require(transactionReference.trim().length <= 120) { "Invalid transaction reference" }
+        val requestId = "deposit_" + UUID.randomUUID().toString().replace("-", "")
+        val storagePath = "payment-receipts/$uid/$requestId"
+        val storageReference = FirebaseStorage.getInstance().reference.child(storagePath)
+
+        // Upload first; never write a content:// URI into Firestore.
+        storageReference.putFile(Uri.parse(receiptImageUri)).await()
+        val docRef = db.collection("users").document(uid)
+            .collection("deposit_requests").document(requestId)
+        try {
+            docRef.set(
+                mapOf(
+                    "userId" to uid,
+                    "amountUsd" to amountUsd.toLong(),
+                    "bonusUsd" to bonusUsd.coerceIn(0, 10000).toLong(),
+                    "methodKey" to methodKey,
+                    "receiptStoragePath" to storagePath,
+                    "transactionReference" to transactionReference.trim(),
+                    "status" to "pending",
+                    "createdAt" to FieldValue.serverTimestamp()
+                )
+            ).await()
+        } catch (error: Exception) {
+            runCatching { storageReference.delete().await() }
+            throw error
+        }
+        requestId
+    }
+
+    fun observeDepositRequests(userId: String): Flow<List<com.example.data.model.PaymentReceiptRecord>> = flow {
+        if (isSyntheticSessionId(userId)) {
+            emit(emptyList())
+            return@flow
+        }
+        emitAll(
+            db.collection("users").document(userId).collection("deposit_requests")
+                .whereEqualTo("userId", userId)
+                .snapshots()
+                .map { snapshot ->
+                    snapshot.documents.map { doc ->
+                        val method = doc.getString("methodKey").orEmpty()
+                        com.example.data.model.PaymentReceiptRecord(
+                            id = doc.id,
+                            userId = userId,
+                            userName = "",
+                            usernameHandle = "",
+                            methodKey = method,
+                            methodTitleAr = if (method == "SHAM_CASH") "شام كاش" else "USDT BEP-20",
+                            amountUsd = (doc.getLong("amountUsd") ?: 0L).toInt(),
+                            bonusUsd = (doc.getLong("bonusUsd") ?: 0L).toInt(),
+                            receiptImageUri = "",
+                            transactionReference = doc.getString("transactionReference").orEmpty(),
+                            purposeAr = "شحن محفظة",
+                            status = doc.getString("status") ?: "pending",
+                            timestampLabel = "طلب مسجل"
+                        )
+                    }.sortedByDescending { it.id }
                 }
         )
     }
