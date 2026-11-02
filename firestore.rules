@@ -34,6 +34,16 @@ service cloud.firestore {
       );
     }
 
+    // Frame visibility must never be elevated by a client-side profile edit.
+    function isFrameAllowed(frameId, level) {
+      return (frameId == 'emerald_crown' && level >= 1) ||
+             (frameId == 'amber_sovereign' && level >= 5) ||
+             (frameId == 'sapphire_neon' && level >= 12) ||
+             (frameId == 'amethyst_vip' && level >= 20) ||
+             (frameId == 'crimson_flame' && level >= 35) ||
+             (frameId == 'obsidian_elite' && level >= 50);
+    }
+
     // Validation Blueprint: UserAccount
     function isValidUserAccount(data) {
       return data.keys().hasAll([
@@ -60,7 +70,7 @@ service cloud.firestore {
              data.bio is string && data.bio.size() <= 300 &&
              data.cityName is string && data.cityName.size() >= 1 && data.cityName.size() <= 80 &&
              data.country is string && data.country in ['سوريا', 'تركيا'] &&
-             data.selectedFrameId is string && data.selectedFrameId.size() >= 1 && data.selectedFrameId.size() <= 60 &&
+             data.selectedFrameId is string && isFrameAllowed(data.selectedFrameId, data.level) &&
              data.level is int && data.level >= 1 && data.level <= 100 &&
              data.xpPoints is int && data.xpPoints >= 0 && data.xpPoints <= 10000000 &&
              data.nextLevelXp is int && data.nextLevelXp >= 100 && data.nextLevelXp <= 50000000 &&
