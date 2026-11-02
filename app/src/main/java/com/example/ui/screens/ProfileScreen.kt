@@ -193,7 +193,7 @@ fun ProfileScreen(
     var isFollowing by rememberSaveable { mutableStateOf(false) }
     var isSubscribedVip by rememberSaveable { mutableStateOf(false) }
     var selectedTab by rememberSaveable { mutableStateOf(ProfileMediaTab.REELS) }
-    var coverImageUri by rememberSaveable { mutableStateOf("aleppo_palace_nights") }
+    var coverImageUri by rememberSaveable { mutableStateOf("") }
 
     val unlockedVideoIds = remember { mutableStateListOf<String>() }
     val pinnedClipIds = remember {
@@ -345,7 +345,7 @@ fun ProfileScreen(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(RoyalNavyBackground)
+            .background(MaterialTheme.colorScheme.background)
             .testTag("profile_screen_list"),
         contentPadding = PaddingValues(bottom = 96.dp)
     ) {
@@ -607,8 +607,8 @@ fun ProfileScreen(
 
                     Text(
                         text = displayTitle,
-                        fontSize = 16.sp,
-                        color = SoftWhiteText,
+                        fontSize = 18.sp,
+                        color = MaterialTheme.colorScheme.onBackground,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -648,14 +648,14 @@ fun ProfileScreen(
 
                 // Concise Bio
                 val bioText = userProfile.bio.ifBlank {
-                    "صانعة محتوى وسهرات VIP حصرية ✨ • حجوزات خاصة ومقاطع 4K"
+                    "أضف نبذة قصيرة عنك وعن الخدمات التي تقدمها"
                 }
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = bioText,
-                    fontSize = 12.sp,
-                    lineHeight = 17.sp,
-                    color = SoftWhiteText.copy(alpha = 0.86f),
+                    fontSize = 13.sp,
+                    lineHeight = 19.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
@@ -676,32 +676,18 @@ fun ProfileScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     MinimalStatItem(
-                        value = if (isFollowing) "24.9K" else "24.8K",
-                        label = "المتابعين"
+                        value = publishedServices.size.toString(),
+                        label = "خدماتي"
                     )
-
-                    Box(
-                        modifier = Modifier
-                            .width(1.dp)
-                            .height(22.dp)
-                            .background(MaterialTheme.colorScheme.outline)
-                    )
-
+                    Box(Modifier.width(1.dp).height(22.dp).background(MaterialTheme.colorScheme.outline))
                     MinimalStatItem(
-                        value = "186.4K",
-                        label = "الإعجابات"
+                        value = bookingsCount.toString(),
+                        label = "حجوزاتي"
                     )
-
-                    Box(
-                        modifier = Modifier
-                            .width(1.dp)
-                            .height(22.dp)
-                            .background(MaterialTheme.colorScheme.outline)
-                    )
-
+                    Box(Modifier.width(1.dp).height(22.dp).background(MaterialTheme.colorScheme.outline))
                     MinimalStatItem(
-                        value = "1.4M",
-                        label = "المشاهدات"
+                        value = favoritesCount.toString(),
+                        label = "المفضلة"
                     )
                 }
 
@@ -750,75 +736,26 @@ fun ProfileScreen(
                         }
                     }
 
-                    // Subscribe VIP Button (اشتراك)
+                    // Useful destinations instead of simulated subscriptions/follows.
                     Surface(
-                        onClick = { showSubscribeVipModal = true },
-                        color = if (isSubscribedVip) MutedLuxuryGold.copy(alpha = 0.22f) else MutedLuxuryGold,
-                        shape = RoundedCornerShape(10.dp),
-                        border = BorderStroke(1.dp, MutedLuxuryGold),
-                        modifier = Modifier
-                            .weight(1.15f)
-                            .height(36.dp)
-                            .testTag("profile_subscribe_vip_button")
+                        onClick = onOpenBookingsTab,
+                        color = MaterialTheme.colorScheme.surface,
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                        modifier = Modifier.weight(1f).height(40.dp).testTag("profile_bookings_button")
                     ) {
-                        Row(
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 8.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Star,
-                                contentDescription = null,
-                                tint = if (isSubscribedVip) MutedLuxuryGold else RoyalNavyBackground,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = if (isSubscribedVip) "مشترك VIP ✓" else "اشتراك • $$VIP_MONTHLY_SUBSCRIPTION_USD",
-                                fontSize = 11.sp,
-                                color = if (isSubscribedVip) MutedLuxuryGold else RoyalNavyBackground,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1
-                            )
+                        Box(contentAlignment = Alignment.Center) {
+                            Text("حجوزاتي", color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp)
                         }
                     }
-
-                    // Follow Button (متابعة)
                     Surface(
-                        onClick = {
-                            isFollowing = !isFollowing
-                            onShowMessage(if (isFollowing) "تمت المتابعة بنجاح ✓" else "تم إلغاء المتابعة")
-                        },
-                        color = if (isFollowing) RoyalNavyCard else DeepTealPrimary,
-                        shape = RoundedCornerShape(10.dp),
-                        border = BorderStroke(
-                            width = 1.dp,
-                            color = if (isFollowing) DeepTealPrimary else Color.Transparent
-                        ),
-                        modifier = Modifier
-                            .weight(0.95f)
-                            .height(36.dp)
-                            .testTag("profile_follow_button")
+                        onClick = { showSettingsModal = true },
+                        color = MaterialTheme.colorScheme.primary,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.weight(1f).height(40.dp).testTag("profile_frames_settings_button")
                     ) {
-                        Row(
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 8.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (isFollowing) Icons.Default.Check else Icons.Default.PersonAdd,
-                                contentDescription = null,
-                                tint = if (isFollowing) DeepTealPrimary else SoftWhiteText,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = if (isFollowing) "متابَع" else "متابعة",
-                                fontSize = 12.sp,
-                                color = if (isFollowing) DeepTealPrimary else SoftWhiteText,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1
-                            )
+                        Box(contentAlignment = Alignment.Center) {
+                            Text("الإطارات", color = MaterialTheme.colorScheme.onPrimary, fontSize = 13.sp)
                         }
                     }
                 }
@@ -2144,13 +2081,13 @@ private fun MinimalStatItem(
         Text(
             text = value,
             fontSize = 14.sp,
-            color = SoftWhiteText,
+            color = MaterialTheme.colorScheme.onBackground,
             fontWeight = FontWeight.Bold
         )
         Text(
             text = label,
             fontSize = 11.sp,
-            color = SlateSecondaryText
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
