@@ -89,8 +89,11 @@ class LayaliViewModel(
     private val _isSubmitting = MutableStateFlow(false)
     val isSubmitting: StateFlow<Boolean> = _isSubmitting.asStateFlow()
 
-    // Default to Royal Dark Sapphire & Sovereign Gold theme
-    private val _isSoftRoseLightTheme = MutableStateFlow(false)
+    // Store visual preference on-device; it must survive activity/process recreation.
+    private val _isSoftRoseLightTheme = MutableStateFlow(
+        appContext?.getSharedPreferences("layali_ui", Context.MODE_PRIVATE)
+            ?.getBoolean("light_mode", false) ?: false
+    )
     val isSoftRoseLightTheme: StateFlow<Boolean> = _isSoftRoseLightTheme.asStateFlow()
 
     private val _userProfile = MutableStateFlow(
@@ -132,95 +135,9 @@ class LayaliViewModel(
         }
     }
 
-    // Paid Chat Members, Unlocked Conversations & Message Threads
-    private val _chatMembers = MutableStateFlow(
-        listOf(
-            ChatMemberProfile(
-                id = "chat_mira_aleppo",
-                displayName = "الأميرة ميرا • جناح حلب الملكي",
-                username = "@mira_royal_vip",
-                cityName = "حلب",
-                country = "سوريا",
-                category = "سهرات فنية وقدود",
-                bio = "مضيفة جناح السهرات الملكية في حلب • حجز مباشر وتنسيق سهرات خاصة بكامل الخصوصية.",
-                level = 28,
-                frameId = "obsidian_elite",
-                chatPriceUsd = 20,
-                isOnline = true,
-                avatarPreset = "palace_hall"
-            ),
-            ChatMemberProfile(
-                id = "chat_nour_damascus",
-                displayName = "نور الشام • سبا ومساج ملكي",
-                username = "@nour_spa_vip",
-                cityName = "دمشق",
-                country = "سوريا",
-                category = "سبا ومساج",
-                bio = "جلسات مساج ملكي بالزيوت العطرية الدافئة والأحجار البركانية في أرقى أجنحة دمشق.",
-                level = 24,
-                frameId = "emerald_crown",
-                chatPriceUsd = 15,
-                isOnline = true,
-                avatarPreset = "card_spa"
-            ),
-            ChatMemberProfile(
-                id = "chat_lina_latakia",
-                displayName = "لينا الساحل • لاونج اللاذقية",
-                username = "@lina_coast_lounge",
-                cityName = "اللاذقية",
-                country = "سوريا",
-                category = "سهرات فنية",
-                bio = "إطلالة بحرية ساحرة وسهرات VIP خاصة على كورنيش اللاذقية وطرطوس.",
-                level = 19,
-                frameId = "sapphire_neon",
-                chatPriceUsd = 15,
-                isOnline = true,
-                avatarPreset = "card_lounge"
-            ),
-            ChatMemberProfile(
-                id = "chat_sara_istanbul",
-                displayName = "سارة البوسفور • زيارات VIP",
-                username = "@sara_istanbul_vip",
-                cityName = "إسطنبول",
-                country = "تركيا",
-                category = "زيارات خارجية",
-                bio = "تنسيق الزيارات الفندقية الملكية والسهرات الخاصة في إسطنبول وأنطاليا على مدار الساعة.",
-                level = 32,
-                frameId = "crimson_flame",
-                chatPriceUsd = 25,
-                isOnline = true,
-                avatarPreset = "card_vip_night"
-            ),
-            ChatMemberProfile(
-                id = "chat_reem_homs",
-                displayName = "ريم الميماس • جناح حمص الخاص",
-                username = "@reem_homs_royal",
-                cityName = "حمص",
-                country = "سوريا",
-                category = "سبا ومساج",
-                bio = "استرخاء ملكي وضيافة فاخرة في جناح الميماس الخاص • متاحة للرد الفوري.",
-                level = 16,
-                frameId = "amber_sovereign",
-                chatPriceUsd = 10,
-                isOnline = true,
-                avatarPreset = "brand_light_showcase"
-            ),
-            ChatMemberProfile(
-                id = "chat_dana_antalya",
-                displayName = "دانا الريفيرا • منتجع أنطاليا",
-                username = "@dana_antalya_club",
-                cityName = "أنطاليا",
-                country = "تركيا",
-                category = "سهرات فنية",
-                bio = "حفلات يخت خاصة وأجنحة منتجعات 5 نجوم في أنطاليا مع استقبال VIP.",
-                level = 22,
-                frameId = "amethyst_vip",
-                chatPriceUsd = 30,
-                isOnline = false,
-                avatarPreset = "brand_dark_showcase"
-            )
-        )
-    )
+    // Real conversations must be loaded from authenticated accounts; never seed
+    // fabricated members, online states or provider messages into production.
+    private val _chatMembers = MutableStateFlow<List<ChatMemberProfile>>(emptyList())
     val chatMembers: StateFlow<List<ChatMemberProfile>> = _chatMembers.asStateFlow()
 
     private val _unlockedChatMemberIds = MutableStateFlow<Set<String>>(emptySet())
@@ -229,33 +146,10 @@ class LayaliViewModel(
     private val _activeChatMemberId = MutableStateFlow<String?>(null)
     val activeChatMemberId: StateFlow<String?> = _activeChatMemberId.asStateFlow()
 
-    private val _chatMessagesByMember = MutableStateFlow<Map<String, List<ChatMessageItem>>>(
-        mapOf(
-            "chat_mira_aleppo" to listOf(
-                ChatMessageItem(
-                    id = "msg_init_1",
-                    memberId = "chat_mira_aleppo",
-                    senderName = "الأميرة ميرا",
-                    senderUsername = "@mira_royal_vip",
-                    text = "أهلاً بك في جناح حلب الملكي VIP ✨ يسعدني تنسيق سهرتك الخاصة بكل خصوصية.",
-                    timestampLabel = "الآن",
-                    isFromCurrentUser = false
-                )
-            ),
-            "chat_nour_damascus" to listOf(
-                ChatMessageItem(
-                    id = "msg_init_2",
-                    memberId = "chat_nour_damascus",
-                    senderName = "نور الشام",
-                    senderUsername = "@nour_spa_vip",
-                    text = "مرحباً بك في جناح السبا الملكي بدمشق 🌿 أخبرني بالموعد المناسب لك لتجهيز الجناح.",
-                    timestampLabel = "الآن",
-                    isFromCurrentUser = false
-                )
-            )
-        )
-    )
-    val chatMessagesByMember: StateFlow<Map<String, List<ChatMessageItem>>> = _chatMessagesByMember.asStateFlow()
+    private val _chatMessagesByMember =
+        MutableStateFlow<Map<String, List<ChatMessageItem>>>(emptyMap())
+    val chatMessagesByMember: StateFlow<Map<String, List<ChatMessageItem>>> =
+        _chatMessagesByMember.asStateFlow()
 
     // Admin custom price, photo, and deletion overrides for catalog venues
     private val _adminSessionToken = MutableStateFlow<String?>(null)
@@ -737,7 +631,10 @@ class LayaliViewModel(
     }
 
     fun toggleThemeMode() {
-        _isSoftRoseLightTheme.value = !_isSoftRoseLightTheme.value
+        val next = !_isSoftRoseLightTheme.value
+        _isSoftRoseLightTheme.value = next
+        appContext?.getSharedPreferences("layali_ui", Context.MODE_PRIVATE)
+            ?.edit()?.putBoolean("light_mode", next)?.apply()
     }
 
     fun updateUserProfile(
@@ -848,46 +745,34 @@ class LayaliViewModel(
         transactionRef: String
     ) {
         if (receiptImageUri.isBlank()) {
-            _snackbarMessage.value = "يرجى إرفاق صورة إيصال الدفع أولاً لإتمام عملية الشحن!"
+            _snackbarMessage.value = "يرجى إرفاق صورة الإيصال أولاً."
             return
         }
+        // Until server-side review and durable receipt upload are installed,
+        // this is only a local draft; it never credits a wallet.
         val validAmount = amountUsd.coerceIn(1, 100000)
-        val totalCredit = validAmount + bonusUsd
         val methodTitleAr = if (methodKey == "SHAM_CASH") {
             "شام كاش السوري (Sham Cash)"
         } else {
             "USDT (BEP-20) Tether"
         }
-
-        val receiptRecord = PaymentReceiptRecord(
-            id = "rcpt_${System.currentTimeMillis()}",
+        val receipt = PaymentReceiptRecord(
+            id = "draft_deposit_${System.currentTimeMillis()}",
             userId = currentUserId,
-            userName = _userProfile.value.displayName.ifBlank { "عضو VIP" },
+            userName = _userProfile.value.displayName.ifBlank { "عضو" },
             usernameHandle = _userProfile.value.username,
             methodKey = methodKey,
             methodTitleAr = methodTitleAr,
             amountUsd = validAmount,
             bonusUsd = bonusUsd,
             receiptImageUri = receiptImageUri,
-            transactionReference = transactionRef.trim().ifBlank { "إيصال مرفق وموثق" },
+            transactionReference = transactionRef.trim(),
             purposeAr = "شحن رصيد المحفظة",
-            status = "verified",
-            timestampLabel = "الآن"
+            status = "local_draft",
+            timestampLabel = "مسودة محلية"
         )
-        _paymentReceipts.value = listOf(receiptRecord) + _paymentReceipts.value
-        _walletBalanceUsd.value += totalCredit
-
-        val tx = WalletTransaction(
-            id = "tx_${System.currentTimeMillis()}",
-            title = "إيداع موثق بإيصال ($methodTitleAr)",
-            amountUsd = totalCredit,
-            bonusUsd = bonusUsd,
-            isCredit = true,
-            timestampLabel = "إيصال مرفق ✓"
-        )
-        _walletTransactions.value = listOf(tx) + _walletTransactions.value
-        gainProfileXp(60)
-        _snackbarMessage.value = "تم توثيق إيصال $methodTitleAr وإضافة $$totalCredit إلى محفظتك (+60 XP)!"
+        _paymentReceipts.value = listOf(receipt) + _paymentReceipts.value
+        _snackbarMessage.value = "حُفظ الإيصال كمسودة على هذا الجهاز فقط. لم يُرسل للإدارة ولم يُضف أي رصيد؛ يلزم ربط مراجعة المدفوعات بالخادم."
     }
 
     // ========================================================================
@@ -928,25 +813,8 @@ class LayaliViewModel(
     }
 
     fun unlockChatWithWallet(member: ChatMemberProfile) {
-        val currentBalance = _walletBalanceUsd.value
-        if (currentBalance < member.chatPriceUsd) {
-            _snackbarMessage.value = "رصيد المحفظة ($$currentBalance) غير كافٍ لفتح دردشة ${member.displayName} ($${member.chatPriceUsd}). استخدم شام كاش أو USDT وأرفق الإيصال."
-            return
-        }
-        _walletBalanceUsd.value = currentBalance - member.chatPriceUsd
-        _unlockedChatMemberIds.value = _unlockedChatMemberIds.value + member.id
-        _activeChatMemberId.value = member.id
-
-        val tx = WalletTransaction(
-            id = "tx_chat_${System.currentTimeMillis()}",
-            title = "فتح دردشة VIP مع ${member.displayName} (${member.username})",
-            amountUsd = member.chatPriceUsd,
-            isCredit = false,
-            timestampLabel = "الآن"
-        )
-        _walletTransactions.value = listOf(tx) + _walletTransactions.value
-        gainProfileXp(25)
-        _snackbarMessage.value = "تم فتح الدردشة الخاصة مع ${member.displayName} بنجاح!"
+        // Client-side balances are not payment authorization.
+        _snackbarMessage.value = "فتح المحادثة مع ${member.displayName} عبر المحفظة غير متاح حتى ربط خصم آمن وتوثيق الدفع بالخادم."
     }
 
     fun unlockChatWithReceipt(
@@ -975,43 +843,17 @@ class LayaliViewModel(
             receiptImageUri = receiptUri,
             transactionReference = txRef.trim().ifBlank { "دردشة ${member.username}" },
             purposeAr = "فتح دردشة مع ${member.displayName}",
-            status = "verified",
-            timestampLabel = "الآن"
+            status = "local_draft",
+            timestampLabel = "مسودة محلية"
         )
         _paymentReceipts.value = listOf(receipt) + _paymentReceipts.value
-        _unlockedChatMemberIds.value = _unlockedChatMemberIds.value + member.id
-        _activeChatMemberId.value = member.id
-        gainProfileXp(35)
-        _snackbarMessage.value = "تم توثيق إيصال $methodTitleAr وفتح الدردشة مع ${member.displayName} (+35 XP)!"
+        _snackbarMessage.value = "الإيصال محفوظ محلياً فقط، ولم يُرسل للمراجعة أو يفتح المحادثة. التفعيل يتطلب تحققاً من الخادم."
     }
 
     fun sendChatMessage(memberId: String, text: String) {
-        val cleanText = text.trim()
-        if (cleanText.isBlank()) return
-        val member = _chatMembers.value.find { it.id == memberId } ?: return
-        val profile = _userProfile.value
-
-        val userMsg = ChatMessageItem(
-            id = "msg_u_${System.currentTimeMillis()}",
-            memberId = memberId,
-            senderName = profile.displayName.ifBlank { "أنا" },
-            senderUsername = profile.username,
-            text = cleanText,
-            timestampLabel = "الآن",
-            isFromCurrentUser = true
-        )
-        val autoReply = ChatMessageItem(
-            id = "msg_r_${System.currentTimeMillis() + 1}",
-            memberId = memberId,
-            senderName = member.displayName,
-            senderUsername = member.username,
-            text = "شكراً لتواصلك معي في نادي ليالي VIP (${member.cityName}) ✨ تم استلام رسالتك وسأقوم بتأكيد كافة التفاصيل معك فوراً.",
-            timestampLabel = "الآن",
-            isFromCurrentUser = false
-        )
-
-        val existing = _chatMessagesByMember.value[memberId].orEmpty()
-        _chatMessagesByMember.value = _chatMessagesByMember.value + (memberId to (existing + userMsg + autoReply))
+        if (text.isBlank() || memberId.isBlank()) return
+        // Do not fabricate delivery or replies without a real conversation backend.
+        _snackbarMessage.value = "لم تُرسل الرسالة: خدمة المراسلة الحقيقية لم تُربط بالخادم بعد."
     }
 
     fun updateVenueStartingPrice(venueId: String, newPriceUsd: Int) {
