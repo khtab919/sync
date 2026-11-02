@@ -620,7 +620,7 @@ fun AuthScreen(
                             shape = RoundedCornerShape(50),
                             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                             modifier = Modifier
-                                .weight(1f)
+                                .fillMaxWidth()
                                 .height(48.dp)
                                 .testTag("google_sign_in_button")
                         ) {
@@ -661,39 +661,7 @@ fun AuthScreen(
                             }
                         }
 
-                        // Apple Sign-In Button
-                        Surface(
-                            onClick = {
-                                errorMessage = null
-                                onTraditionalLoginSuccess("عميل Apple VIP")
-                            },
-                            color = CharcoalButton,
-                            shape = RoundedCornerShape(50),
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(48.dp)
-                                .testTag("apple_sign_in_button")
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxSize(),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "",
-                                    color = Color.White,
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 16.sp
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "Apple",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = Color.White,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                        }
+
                     }
 
                     Spacer(modifier = Modifier.height(18.dp))

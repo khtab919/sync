@@ -172,19 +172,24 @@ class LayaliRepository(private val db: FirebaseFirestore) {
         val uid = requireUserId()
         val serviceId = "srv_${UUID.randomUUID().toString().replace("-", "").take(16)}"
         val docRef = db.collection("published_services").document(serviceId)
-        val safeTitle = title.trim().let { if (it.length < 2) "$it عرض" else it.take(150) }
-        val safeDesc = description.trim().let { if (it.length < 3) "$it تفاصيل العرض" else it.take(600) }
+        val safeTitle = title.trim().also { require(it.length >= 2) { "Enter a service title." } }.take(150)
+        val safeDescription = description.trim().also { require(it.length >= 3) { "Enter a service description." } }.take(600)
+        val safeCity = cityName.trim().also { require(it.isNotBlank()) { "Choose a city." } }.take(80)
+        val safeCountry = country.trim().also { require(it in listOf("سوريا", "تركيا")) { "Choose a supported country." } }
+        val safeCategory = category.trim().also { require(it.isNotBlank()) { "Choose a service category." } }.take(80)
+        val safePrice = priceUsd.also { require(it > 0) { "Enter a price greater than zero." } }.coerceAtMost(10000)
+        val safeMediaType = mediaType.also { require(it in listOf("photo", "video", "both")) { "Choose valid media." } }
         val payload = mapOf(
             "authorId" to uid,
             "title" to safeTitle,
-            "cityName" to cityName.trim().take(80),
-            "country" to if (country in listOf("سوريا", "تركيا")) country else "سوريا",
-            "category" to category.trim().take(80),
-            "description" to safeDesc,
-            "priceUsd" to priceUsd.coerceIn(5, 10000).toLong(),
+            "cityName" to safeCity,
+            "country" to safeCountry,
+            "category" to safeCategory,
+            "description" to safeDescription,
+            "priceUsd" to safePrice.toLong(),
             "imageUrl" to imageUrl.trim().take(500),
             "videoUrl" to videoUrl.trim().take(500),
-            "mediaType" to if (mediaType in listOf("photo", "video", "both")) mediaType else "both",
+            "mediaType" to safeMediaType,
             "status" to "active",
             "createdAt" to FieldValue.serverTimestamp(),
             "updatedAt" to FieldValue.serverTimestamp()
@@ -515,20 +520,17 @@ class LayaliRepository(private val db: FirebaseFirestore) {
         val uid = requireUserId()
         val docRef = db.collection("users").document(uid)
         val safeUsername = username.trim().let {
-            val base = if (it.startsWith("@")) it else "@$it"
-            if (base.length < 3) "${base}_vip" else base.take(50)
+            if (it.isBlank()) "" else (if (it.startsWith("@")) it else "@$it").take(50)
         }
-        val safeDisplayName = displayName.trim().let {
-            if (it.length < 2) "عضو ليالي الملكي" else it.take(100)
+        val safeDisplayName = displayName.trim().also {
+            require(it.length >= 2) { "Enter a display name." }
+        }.take(100)
+        val safeEmail = email.trim().take(150)
+        val safeSaltHex = passwordSaltHex.trim().take(128)
+        val safeHashHex = passwordHashHex.trim().take(256)
+        val safeCountry = country.trim().also {
+            require(it.isEmpty() || it in listOf("سوريا", "تركيا")) { "Choose a supported country." }
         }
-        val safeEmail = email.trim().let {
-            if (it.length < 3) "${safeUsername.removePrefix("@")}@layali.client" else it.take(150)
-        }
-        val safeSaltHex = passwordSaltHex.trim().ifBlank { "a1b2c3d4e5f60718293a4b5c6d7e8f90" }.take(128)
-        val safeHashHex = passwordHashHex.trim().ifBlank {
-            "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
-        }.take(256)
-        val safeCountry = if (country.trim() in listOf("سوريا", "تركيا")) country.trim() else "سوريا"
 
         try {
             val existingSnap = docRef.get().await()
@@ -538,14 +540,14 @@ class LayaliRepository(private val db: FirebaseFirestore) {
                     "displayName" to safeDisplayName,
                     "email" to safeEmail,
                     "bio" to bio.trim().take(300),
-                    "cityName" to cityName.trim().ifBlank { "دمشق" }.take(80),
+                    "cityName" to cityName.trim().take(80),
                     "country" to safeCountry,
-                    "selectedFrameId" to selectedFrameId.trim().ifBlank { "emerald_crown" }.take(60),
-                    "level" to level.coerceIn(1, 100).toLong(),
+                    "selectedFrameId" to selectedFrameId.trim().take(60),
+                    "level" to level.coerceIn(0, 100).toLong(),
                     "xpPoints" to xpPoints.coerceIn(0, 10000000).toLong(),
-                    "nextLevelXp" to nextLevelXp.coerceIn(100, 50000000).toLong(),
+                    "nextLevelXp" to nextLevelXp.coerceIn(0, 50000000).toLong(),
                     "walletBalanceUsd" to walletBalanceUsd.coerceIn(0, 1000000).toLong(),
-                    "chatPriceUsd" to chatPriceUsd.coerceIn(1, 5000).toLong(),
+                    "chatPriceUsd" to chatPriceUsd.coerceIn(0, 5000).toLong(),
                     "isPaidChatEnabled" to isPaidChatEnabled,
                     "passwordSaltHex" to safeSaltHex,
                     "passwordHashHex" to safeHashHex,
@@ -559,14 +561,14 @@ class LayaliRepository(private val db: FirebaseFirestore) {
                     "displayName" to safeDisplayName,
                     "email" to safeEmail,
                     "bio" to bio.trim().take(300),
-                    "cityName" to cityName.trim().ifBlank { "دمشق" }.take(80),
+                    "cityName" to cityName.trim().take(80),
                     "country" to safeCountry,
-                    "selectedFrameId" to selectedFrameId.trim().ifBlank { "emerald_crown" }.take(60),
-                    "level" to level.coerceIn(1, 100).toLong(),
+                    "selectedFrameId" to selectedFrameId.trim().take(60),
+                    "level" to level.coerceIn(0, 100).toLong(),
                     "xpPoints" to xpPoints.coerceIn(0, 10000000).toLong(),
-                    "nextLevelXp" to nextLevelXp.coerceIn(100, 50000000).toLong(),
+                    "nextLevelXp" to nextLevelXp.coerceIn(0, 50000000).toLong(),
                     "walletBalanceUsd" to walletBalanceUsd.coerceIn(0, 1000000).toLong(),
-                    "chatPriceUsd" to chatPriceUsd.coerceIn(1, 5000).toLong(),
+                    "chatPriceUsd" to chatPriceUsd.coerceIn(0, 5000).toLong(),
                     "isPaidChatEnabled" to isPaidChatEnabled,
                     "passwordSaltHex" to safeSaltHex,
                     "passwordHashHex" to safeHashHex,

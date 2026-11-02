@@ -1,19 +1,19 @@
 <resources>
-    <string name="app_name">Layali Lounge</string>
-    <string name="hero_title">ليالي وسبا الشام والأناضول</string>
-    <string name="hero_subtitle">الحجز المباشر لأرقى مراكز المساج والسبا والسهرات الفنية في جميع المدن السورية والتركية</string>
+    <string name="app_name">Layali | ليالي</string>
+    <string name="hero_title">اكتشف ليالي مدينتك</string>
+    <string name="hero_subtitle">تصفّح الخدمات المنشورة واحجز مباشرة من مقدّميها.</string>
     <string name="sign_in_google">تسجيل الدخول عبر Google</string>
     <string name="sign_out">تسجيل الخروج</string>
     <string name="tab_explore">المدن والخدمات</string>
-    <string name="tab_bookings">حجوزاتي المباشرة</string>
-    <string name="tab_reviews">تقييمات موثوقة</string>
+    <string name="tab_bookings">حجوزاتي</string>
+    <string name="tab_reviews">التقييمات</string>
     <string name="tab_favorites">المفضلة</string>
     <string name="search_hint">ابحث عن مدينة، مساج، سهرة طربية، لاونج...</string>
     <string name="book_now">حجز مباشر الآن</string>
     <string name="add_review">إضافة تقييم موثق</string>
-    <string name="verified_badge">حجز وتقييم موثق</string>
+    <string name="verified_badge">حجز موثق</string>
     <string name="empty_bookings_title">لا توجد حجوزات مباشرة حتى الآن</string>
-    <string name="empty_bookings_subtitle">اختر مدينتك المفضلة في سوريا أو تركيا واحجز جلسة مساج أو طاولة سهرة فنية بضغطة زر.</string>
+    <string name="empty_bookings_subtitle">ستظهر حجوزاتك هنا بعد إتمامها.</string>
     <string name="empty_favorites_title">قائمة المفضلة فارغة</string>
     <string name="empty_favorites_subtitle">اضغط على أيقونة القلب لحفظ مراكز السبا والسهرات المفضلة لديك.</string>
 </resources>

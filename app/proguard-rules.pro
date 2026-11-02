@@ -19,3 +19,8 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+
+# Firestore maps documents to these Kotlin data models using reflection.
+-keep class com.example.data.model.** { *; }
+-keepattributes *Annotation*

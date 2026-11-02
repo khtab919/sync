@@ -18,10 +18,10 @@ data class Booking(
     val bookingDate: String = "",
     val timeSlot: String = "",
     val guestCount: Long = 1L,
-    val totalPriceUsd: Long = 50L,
+    val totalPriceUsd: Long = 0L,
     val notes: String = "",
-    val status: String = "confirmed",
-    val paymentMethodTitle: String = "شام كاش / USDT",
+    val status: String = "pending",
+    val paymentMethodTitle: String = "",
     val receiptImageUri: String = "",
     val transactionReference: String = "",
     @ServerTimestamp val createdAt: Timestamp? = null,
@@ -37,7 +37,7 @@ data class CustomerReview(
     val venueName: String = "",
     val cityName: String = "",
     val serviceType: String = "",
-    val rating: Long = 5L,
+    val rating: Long = 0L,
     val comment: String = "",
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null
@@ -60,14 +60,14 @@ data class PublishedService(
     val authorId: String = "",
     val title: String = "",
     val cityName: String = "",
-    val country: String = "سوريا",
-    val category: String = "سبا ومساج",
+    val country: String = "",
+    val category: String = "",
     val description: String = "",
-    val priceUsd: Long = 50L,
+    val priceUsd: Long = 0L,
     val imageUrl: String = "",
     val videoUrl: String = "",
     val mediaType: String = "both",
-    val status: String = "active",
+    val status: String = "draft",
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null
 )
@@ -88,20 +88,20 @@ data class BlockedUser(
 data class UserAccount(
     @DocumentId val id: String = "",
     val userId: String = "",
-    val username: String = "@layali_vip",
+    val username: String = "",
     val displayName: String = "",
     val email: String = "",
     val bio: String = "",
-    val cityName: String = "دمشق",
-    val country: String = "سوريا",
+    val cityName: String = "",
+    val country: String = "",
     val avatarUri: String = "",
-    val selectedFrameId: String = "emerald_crown",
+    val selectedFrameId: String = "",
     val level: Long = 1L,
-    val xpPoints: Long = 150L,
-    val nextLevelXp: Long = 2500L,
+    val xpPoints: Long = 0L,
+    val nextLevelXp: Long = 0L,
     val walletBalanceUsd: Long = 0L,
-    val chatPriceUsd: Long = 15L,
-    val isPaidChatEnabled: Boolean = true,
+    val chatPriceUsd: Long = 0L,
+    val isPaidChatEnabled: Boolean = false,
     val passwordSaltHex: String = "",
     val passwordHashHex: String = "",
     val role: String = "customer",
@@ -111,7 +111,7 @@ data class UserAccount(
 
 data class UserProfile(
     val displayName: String = "",
-    val username: String = "@layali_vip",
+    val username: String = "",
     val telegramHandle: String = "",
     val roleTitle: String = "",
     val bio: String = "",
@@ -121,11 +121,11 @@ data class UserProfile(
     val isAvailableNow: Boolean = true,
     val customPhotos: List<String> = emptyList(),
     val level: Int = 1,
-    val xpPoints: Int = 150,
-    val nextLevelXp: Int = 2500,
-    val selectedFrameId: String = "emerald_crown",
-    val chatPriceUsd: Int = 15,
-    val isPaidChatEnabled: Boolean = true
+    val xpPoints: Int = 0,
+    val nextLevelXp: Int = 0,
+    val selectedFrameId: String = "",
+    val chatPriceUsd: Int = 0,
+    val isPaidChatEnabled: Boolean = false
 )
 
 data class AvatarFrameStyle(
@@ -287,7 +287,7 @@ data class CuratedReview(
     val rating: Int,
     val comment: String,
     val dateLabel: String,
-    val isVerifiedBooking: Boolean = true
+    val isVerifiedBooking: Boolean = false
 )
 
 data class Venue(
@@ -309,19 +309,14 @@ data class Venue(
     val packages: List<ServicePackage>,
     val curatedReviews: List<CuratedReview>,
     val availableTimeSlots: List<String>,
-    val providerDisplayName: String = "جناح ملكي معتمد",
-    val providerUsername: String = "@layali_royal",
-    val providerLevel: Int = 18,
-    val providerFrameId: String = "emerald_crown",
-    val providerChatPriceUsd: Int = 20,
-    val isOnlineNow: Boolean = true,
-    val visualPresetKey: String = "brand_dark_showcase",
-    val showcaseVideoTitle: String = "عرض فيديو توضيحي 4K للأجنحة الملكية والسهرات",
-    val showcaseDuration: String = "01:45 HD",
-    val galleryHighlights: List<String> = listOf(
-        "الجناح الملكي الخاص والشموع",
-        "جلسة المساج بالزيوت العطرية الدافئة",
-        "صالة السهرات الفاخرة والموسيقى الحية",
-        "ركن الضيافة الملكية والاستقبال VIP"
-    )
+    val providerDisplayName: String = "",
+    val providerUsername: String = "",
+    val providerLevel: Int = 0,
+    val providerFrameId: String = "",
+    val providerChatPriceUsd: Int = 0,
+    val isOnlineNow: Boolean = false,
+    val visualPresetKey: String = "",
+    val showcaseVideoTitle: String = "",
+    val showcaseDuration: String = "",
+    val galleryHighlights: List<String> = emptyList()
 )
