@@ -25,13 +25,8 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isSignedIn() && (
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
-        ('email' in request.auth.token &&
-         'email_verified' in request.auth.token &&
-         request.auth.token.email == 'khtaub7341@gmail.com' &&
-         request.auth.token.email_verified == true)
-      );
+      // This claim can be granted only by a trusted Firebase Admin SDK process.
+      return isSignedIn() && request.auth.token.get('admin', false) == true;
     }
 
     // Validation Blueprint: UserAccount
@@ -193,6 +188,38 @@ service cloud.firestore {
              data.updatedAt is timestamp && data.updatedAt <= request.time;
     }
 
+
+    // Only trusted Admin SDK / Cloud Functions may change money or chat entitlements.
+    match /wallets/{userId} {
+      allow get: if isSignedIn() && request.auth.uid == userId;
+      allow list, create, update, delete: if false;
+    }
+    match /creator_wallets/{userId} {
+      allow get: if isSignedIn() && request.auth.uid == userId;
+      allow list, create, update, delete: if false;
+    }
+    match /payment_receipts/{receiptId} {
+      allow get, list: if isSignedIn() && existing().userId == request.auth.uid;
+      allow create, update, delete: if false;
+    }
+    match /withdrawals/{withdrawalId} {
+      allow get, list: if isSignedIn() && existing().userId == request.auth.uid;
+      allow create, update, delete: if false;
+    }
+    match /wallet_ledger/{entryId} {
+      allow get, list: if isSignedIn() && existing().userId == request.auth.uid;
+      allow create, update, delete: if false;
+    }
+    match /chat_threads/{threadId} {
+      allow get, list: if isSignedIn() && request.auth.uid in existing().participants;
+      allow create, update, delete: if false;
+      match /messages/{messageId} {
+        allow get, list: if isSignedIn() &&
+          request.auth.uid in get(/databases/$(database)/documents/chat_threads/$(threadId)).data.participants;
+        allow create, update, delete: if false;
+      }
+    }
+
     // Collection: User Account & Encrypted Password Hash Document
     match /users/{userId} {
       allow get: if isSignedIn() &&
@@ -206,7 +233,8 @@ service cloud.firestore {
       allow create: if isSignedIn() &&
                        isValidId(userId) &&
                        request.auth.uid == userId &&
-                       isValidUserAccount(incoming());
+                       isValidUserAccount(incoming()) &&
+                       incoming().walletBalanceUsd == 0;
 
       allow update: if isSignedIn() &&
                        isValidId(userId) &&
@@ -218,15 +246,12 @@ service cloud.firestore {
                        incoming().diff(existing()).affectedKeys().hasOnly([
                          'username', 'displayName', 'email', 'bio',
                          'cityName', 'country', 'selectedFrameId', 'level',
-                         'xpPoints', 'nextLevelXp', 'walletBalanceUsd',
                          'chatPriceUsd', 'isPaidChatEnabled',
                          'passwordSaltHex', 'passwordHashHex', 'updatedAt'
                        ]);
 
-      allow delete: if isSignedIn() &&
-                       isValidId(userId) &&
-                       request.auth.uid == userId &&
-                       existing().userId == request.auth.uid;
+      // Financial identity removal requires a retention-aware server operation.
+      allow delete: if false;
     }
 
     // Collection: User Bookings
@@ -241,12 +266,8 @@ service cloud.firestore {
                      request.auth.uid == userId &&
                      existing().userId == request.auth.uid;
 
-      allow create: if isSignedIn() &&
-                       isValidId(userId) &&
-                       isValidId(bookingId) &&
-                       request.auth.uid == userId &&
-                       isValidBooking(incoming()) &&
-                       incoming().status == 'confirmed';
+      // No booking is confirmed by a client write; payment requires server verification.
+      allow create: if false;
 
       allow update: if isSignedIn() &&
                        isValidId(userId) &&
