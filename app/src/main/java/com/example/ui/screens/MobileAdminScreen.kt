@@ -264,10 +264,7 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
                     OutlinedTextField(paymentInstructions,{paymentInstructions=it.take(500)},label={Text("تعليمات الدفع")},modifier=Modifier.fillMaxWidth())
                     Button(onClick={perform { api.request("/api/admin/payment-settings","POST",JSONObject().put("enabled",paymentEnabled).put("account",paymentAccount).put("currency",paymentCurrency).put("rate",paymentRate).put("instructions",paymentInstructions));success="تم حفظ بيانات الاستلام." }},enabled=!busy){Text("حفظ")}
                 }
-            } else if(section=="البث المباشر")content=api.request("/api/admin/live").adminItems()
-            else if(section=="الحجوزات")content=api.request("/api/admin/bookings").adminItems()
-            else if(section=="السحب")content=api.request("/api/admin/payouts").adminItems()
-            else if (section == "الطلبات") {
+            } else if (section == "الطلبات") {
                 if(requests.isEmpty() && !loading) item { Text("لا توجد طلبات دفع أو بائعين.") }
                 items(requests, key = { it.optString("kind") + it.optString("id") }) { row ->
                     Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {

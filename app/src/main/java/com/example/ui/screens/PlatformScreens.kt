@@ -53,7 +53,7 @@ internal fun operationLabel(status:String)=when(status){"held","paid_reserved"->
         if(error.isNotBlank())item{Text(error,color=MaterialTheme.colorScheme.error)}
         if(rows.isEmpty()&&error.isBlank())item{Text("لا توجد عمليات مسجّلة.")}
         items(rows,key={it.getString("id")}){row->OutlinedCard(onClick={scope.launch{try{receipt=api.request("/api/receipts/"+java.net.URLEncoder.encode(row.getString("id"),"UTF-8"))}catch(e:Exception){error=commerceError(e)}}},modifier=Modifier.fillMaxWidth()){Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(6.dp)){
-            Text(when(row.optString("kind")){"live_entry"->"دخول بث خاص";"live_gift"->"هدية بث";"booking"->"حجز خدمة";"chat_message"->"رسالة مدفوعة";"chat_unlock"->"فتح مرفق";else->"شحن الرصيد"},style=MaterialTheme.typography.titleMedium)
+            Text(when(row.optString("kind")){"withdrawal"->"طلب سحب";"live_entry"->"دخول بث خاص";"live_gift"->"هدية بث";"booking"->"حجز خدمة";"chat_message"->"رسالة مدفوعة";"chat_unlock"->"فتح مرفق";else->"شحن الرصيد"},style=MaterialTheme.typography.titleMedium)
             Text((if(row.optBoolean("incoming"))"وارد · "else"صادر · ")+usd(row.optLong("amount_cents")));Text(operationLabel(row.optString("status")));Text(row.optString("created_at").take(19).replace('T',' '),style=MaterialTheme.typography.bodySmall)
         }}}
     }}

@@ -93,6 +93,9 @@ def synchronize(row,force=False):
     if row.status not in LIVE or (not force and row.last_checked_at and now-row.last_checked_at<timedelta(seconds=4)):return
     participants=provider('ListParticipants',{'room':room_name(row)},room_name(row)).get('participants',[])
     host=next((p for p in participants if p.get('identity')=='host-'+str(row.owner_id)),None)
+    host_admission=LiveAdmission.objects.filter(broadcast=row,user_id=row.owner_id).select_related('session').first()
+    if host and (not host_admission or not host_admission.session_id or host_admission.session.expires_at<=now):
+        provider('RemoveParticipant',{'room':room_name(row),'identity':'host-'+str(row.owner_id)},room_name(row));host=None
     transmitting=bool(host and any(str(t.get('type','AUDIO')).upper() in ('VIDEO','1','AUDIO','0') and not t.get('muted',False) for t in host.get('tracks',[])))
     ids={str(p.get('identity')) for p in participants}
     invalid=[]
@@ -216,7 +219,7 @@ def room(request,broadcast_id):
     if request.method!='POST':return HttpResponse(status=405)
     try:
         with transaction.atomic():
-            ticket=LiveRoomTicket.objects.select_for_update().select_related('admission__broadcast__owner','admission__user','admission__operation','session__user').filter(digest=hashlib.sha256(request.POST.get('ticket','').encode()).hexdigest(),admission__broadcast_id=broadcast_id,used_at__isnull=True,expires_at__gt=timezone.now(),session__expires_at__gt=timezone.now(),session__user__is_active=True).first()
+            ticket=LiveRoomTicket.objects.select_for_update(of=('self',)).select_related('admission__broadcast__owner','admission__user','admission__operation','session__user').filter(digest=hashlib.sha256(request.POST.get('ticket','').encode()).hexdigest(),admission__broadcast_id=broadcast_id,used_at__isnull=True,expires_at__gt=timezone.now(),session__expires_at__gt=timezone.now(),session__user__is_active=True).first()
             if not ticket:return HttpResponse(status=403)
             a=ticket.admission;join=join_token(a,ticket.session);ticket.used_at=timezone.now();ticket.save(update_fields=['used_at'])
         nonce=secrets.token_urlsafe(24)
