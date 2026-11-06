@@ -42,20 +42,20 @@ internal fun ChatHeader(name: String, back: () -> Unit, call: () -> Unit, buy: (
             RelaxiaAvatar(name, 0, 58, avatar)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Text(name, fontWeight = FontWeight.Bold, fontSize = 21.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    Text(name, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 21.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     if (verified) Icon(Icons.Outlined.Verified, "حساب معتمد", Modifier.size(18.dp), tint = colors.accent)
                 }
                 Text(if(handle.isNotBlank() && handle != name) "@$handle" else "محادثة خاصة", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, maxLines = 1)
             }
             FilledIconButton(video, enabled = enabled, modifier = Modifier.size(44.dp), shape = RoundedCornerShape(16.dp), colors = IconButtonDefaults.filledIconButtonColors(containerColor = colors.soft, contentColor = MaterialTheme.colorScheme.onSurface)) { Icon(Icons.Outlined.Videocam, "اتصال فيديو") }
             FilledIconButton(call, enabled = enabled, modifier = Modifier.size(44.dp), shape = RoundedCornerShape(16.dp), colors = IconButtonDefaults.filledIconButtonColors(containerColor = colors.soft, contentColor = MaterialTheme.colorScheme.onSurface)) { Icon(Icons.Outlined.Call, "بدء اتصال") }
-            IconButton(back, modifier = Modifier.size(36.dp)) { Icon(Icons.Outlined.ArrowForward, "رجوع") }
+            IconButton(back, modifier = Modifier.size(36.dp)) { Icon(Icons.Outlined.ArrowForward, "رجوع", tint = MaterialTheme.colorScheme.onSurface) }
         }
         Surface(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), shape = RoundedCornerShape(25.dp), color = colors.soft) {
             Row(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Icon(if(priceCoins > 0) Icons.Outlined.Lock else Icons.Outlined.ChatBubbleOutline, null, Modifier.size(24.dp), tint = colors.accent)
                 Column(Modifier.weight(1f)) {
-                    Text(if(priceCoins > 0) "رسائل $name مدفوعة" else "مساحتكما الخاصة", style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    Text(if(priceCoins > 0) "رسائل $name مدفوعة" else "مساحتكما الخاصة", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     Text(if(priceCoins > 0) "$priceCoins كوينز لكل رسالة · الإرسال غير متاح حاليًا" else "رسائل وصور وتسجيلات صوتية", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Button(buy, enabled = enabled, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp), colors = ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = Color.White), shape = RoundedCornerShape(20.dp)) { Text("شراء رصيد", fontSize = 12.sp) }
