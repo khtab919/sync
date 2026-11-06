@@ -391,7 +391,7 @@ def unlock_message(request,message_id):
     with transaction.atomic():
         # All transfers lock users in the same order as sending to avoid deadlocks.
         list(User.objects.select_for_update().filter(pk__in=sorted([row.sender_id,row.recipient_id])).order_by('pk'))
-        row=Message.objects.select_for_update().select_related('sender__profile','recipient__profile','attachment','call').get(pk=row.pk)
+        row=Message.objects.select_for_update(of=('self',)).select_related('sender__profile','recipient__profile','attachment','call').get(pk=row.pk)
         if not row.sender.is_active or not row.recipient.is_active:raise ApiError('message_unavailable',404)
         if not row.attachment_id or row.media_price_cents<=0:raise ApiError('not_paid_media')
         if type(request.payload.get('price_cents')) is not int or request.payload['price_cents']!=row.media_price_cents:raise ApiError('paid_price_changed',409)
