@@ -524,12 +524,12 @@ class CommerceConcurrencyTests(TransactionTestCase):
 
     def parallel_post(self, path, data, token):
         from concurrent.futures import ThreadPoolExecutor
-        from django.db import close_old_connections
+        from django.db import close_old_connections, connections
         from django.test import Client
         def send(_):
             close_old_connections()
             try: return Client().post(path, json.dumps(data), content_type='application/json', HTTP_AUTHORIZATION='Bearer ' + token).status_code
-            finally: close_old_connections()
+            finally: connections.close_all()
         with ThreadPoolExecutor(max_workers=2) as pool: return list(pool.map(send, range(2)))
 
     def test_concurrent_topup_approval_credits_once(self):

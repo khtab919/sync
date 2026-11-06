@@ -254,6 +254,7 @@ def wheel_configuration(request):
         config, _ = PaidWheelConfiguration.objects.get_or_create(pk=1)
         config = PaidWheelConfiguration.objects.select_for_update().get(pk=1)
         if request.method == 'POST':
+            previous_settings = {'enabled': config.enabled, 'cost_cents': config.cost_cents, 'prizes': config.prizes, 'bankroll_cents': config.bankroll_cents}
             p = request.payload
             if type(p.get('enabled')) is not bool or type(p.get('cost_cents')) is not int or type(p.get('bankroll_cents')) is not int or not 0 <= p['bankroll_cents'] <= 100000000:
                 raise ApiError('invalid_wheel_configuration')
@@ -265,5 +266,6 @@ def wheel_configuration(request):
             if not valid or (config.enabled and config.bankroll_cents < max(prize['amount_cents'] for prize in config.prizes)):
                 raise ApiError('invalid_wheel_configuration')
             config.save()
-            audit(request.actor, config, 'Wheel settings and reserve updated')
+            import json
+            audit(request.actor, config, json.dumps({'before': previous_settings, 'after': {'enabled': config.enabled, 'cost_cents': config.cost_cents, 'prizes': config.prizes, 'bankroll_cents': config.bankroll_cents}}))
     return JsonResponse({'enabled': config.enabled, 'cost_cents': config.cost_cents, 'prizes': config.prizes, 'bankroll_cents': config.bankroll_cents})
