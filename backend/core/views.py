@@ -99,7 +99,7 @@ def issue_token(user):
 def health(request):
     with connection.cursor() as cursor:
         cursor.execute('SELECT 1')
-    return JsonResponse({'status': 'ok', 'registration_version': 4, 'identity_required': False, 'brand': 'Relaxia', 'mobile_admin_version': 1})
+    return JsonResponse({'status': 'ok', 'registration_version': 4, 'identity_required': False, 'brand': 'Relaxia', 'mobile_admin_version': 1, 'commerce_version': 1})
 
 @endpoint(['POST'], authenticated=False)
 def register(request):
@@ -252,7 +252,14 @@ def services(request):
     category = p.get('category', 'خدمة')
     if category not in ('خدمة', 'منتج', 'جلسة'):
         raise ApiError('invalid_category')
-    service = Service.objects.create(owner=request.actor, title=text(p, 'title', 3, 150), description=text(p, 'description', 10, 600), price_cents=amount(p, 'price_cents'), image_url=image_url, category=category)
+    from .models import UploadedMedia
+    media = None
+    if p.get('image_id'):
+        media = UploadedMedia.objects.filter(pk=uuid.UUID(text(p, 'image_id', 36, 36)), owner=request.actor, purpose='offer').first()
+        if not media:
+            raise ApiError('invalid_image')
+        image_url = request.build_absolute_uri(f'/api/media/{media.pk}')
+    service = Service.objects.create(image=media, owner=request.actor, title=text(p, 'title', 3, 150), description=text(p, 'description', 10, 600), price_cents=amount(p, 'price_cents'), image_url=image_url, category=category)
     return JsonResponse({'id': service.pk, 'status': 'pending_review'}, status=201)
 
 @endpoint(['POST'])
@@ -334,20 +341,52 @@ def bookings(request):
 
 @endpoint(['GET', 'POST'])
 def messages(request, peer_id):
+    from .commerce import message_json
+    from .models import UploadedMedia
     peer = User.objects.filter(pk=peer_id, is_active=True).first()
     if not peer or peer == request.actor:
         raise ApiError('recipient_unavailable', 404)
     if request.method == 'GET':
-        rows = Message.objects.filter(Q(sender=request.actor, recipient=peer) | Q(sender=peer, recipient=request.actor)).order_by('-id').values('id', 'sender_id', 'recipient_id', 'body', 'created_at')[:100]
-        return JsonResponse({'items': list(rows)})
+        rows = Message.objects.filter(Q(sender=request.actor, recipient=peer) | Q(sender=peer, recipient=request.actor)).select_related('attachment').order_by('-id')[:100]
+        return JsonResponse({'items': [message_json(request, row) for row in rows]})
     profile = Profile.objects.filter(user=peer).first()
     if not profile or profile.chat_price_cents:
         raise ApiError('paid_chat_requires_verified_payment', 409)
-    message = Message.objects.create(sender=request.actor, recipient=peer, body=text(request.payload, 'body', 1, 2000))
-    return JsonResponse({'id': message.pk}, status=201)
+    p = request.payload
+    attachment = None
+    if p.get('attachment_id'):
+        attachment = UploadedMedia.objects.filter(pk=uuid.UUID(text(p, 'attachment_id', 36, 36)), owner=request.actor, purpose__in=['chat_image', 'chat_audio']).first()
+        if not attachment:
+            raise ApiError('invalid_attachment')
+    body = p.get('body', '')
+    if not isinstance(body, str) or len(body) > 2000:
+        raise ApiError('invalid_body')
+    call_url = ''
+    if p.get('start_call') is True:
+        call_url = 'https://meet.jit.si/Relaxia-' + secrets.token_urlsafe(32)
+        body = 'دعوة اتصال عبر Jitsi — افتح الرابط للانضمام'
+    if not body.strip() and not attachment and not call_url:
+        raise ApiError('invalid_body')
+    if attachment:
+        existing = Message.objects.filter(attachment=attachment).first()
+        if existing:
+            if existing.sender_id == request.actor.pk and existing.recipient_id == peer.pk:
+                return JsonResponse(message_json(request, existing))
+            raise ApiError('attachment_already_used', 409)
+    message = Message.objects.create(sender=request.actor, recipient=peer, body=body.strip(), attachment=attachment, call_url=call_url)
+    return JsonResponse(message_json(request, message), status=201)
 
-@endpoint(['GET'])
+@endpoint(['GET', 'POST'])
 def reels(request):
+    from .models import UploadedMedia
+    if request.method == 'POST':
+        if not Profile.objects.filter(user=request.actor, creator=True).exists():
+            raise ApiError('creator_account_required', 403)
+        media = UploadedMedia.objects.filter(pk=uuid.UUID(text(request.payload, 'media_id', 36, 36)), owner=request.actor, purpose='reel').first()
+        if not media:
+            raise ApiError('invalid_media')
+        reel = Reel.objects.create(owner=request.actor, media=media, video_url=request.build_absolute_uri(f'/api/media/{media.pk}'))
+        return JsonResponse({'id': reel.pk, 'status': 'pending_review'}, status=201)
     return JsonResponse({'items': list(Reel.objects.filter(approved=True, owner__is_active=True).order_by('-id').values('id', 'owner_id', 'video_url')[:100])})
 
 @endpoint(['GET'])

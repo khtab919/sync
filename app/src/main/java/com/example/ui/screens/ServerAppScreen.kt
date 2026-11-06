@@ -219,7 +219,20 @@ fun ServerAppScreen(baseUrl: String) {
             }
             return@MyApplicationTheme
         }
+        if (screen in listOf("شحن الرصيد", "تفعيل البائع", "العجلة")) {
+            CommerceScreen(api, screen) { back(); revision++ }
+            return@MyApplicationTheme
+        }
+        if (screen == "إضافة عرض") {
+            SellerPublishScreen(api) { back(); revision++ }
+            return@MyApplicationTheme
+        }
+        if (screen == "محادثة" && peerId.toIntOrNull() != null) {
+            ConversationScreen(api, peerId.toInt(), peerName, profile.optInt("id")) { back(); revision++ }
+            return@MyApplicationTheme
+        }
         Scaffold(
+            floatingActionButton = { SupportFloatingButton() },
             containerColor = MaterialTheme.colorScheme.background,
             topBar = {
                 if (screen != "حسابي" && screen != "صفحة المذيعة") TopAppBar(
@@ -374,6 +387,9 @@ fun ServerAppScreen(baseUrl: String) {
                             if (offers.isEmpty() && !loading) item { ReferenceEmpty(Icons.Outlined.Storefront, "اعرض خدمة، جلسة، أو منتجًا", "تظهر العروض هنا بعد مراجعة الإدارة واعتمادها.") }
                             items(offers) { offer -> Box(Modifier.padding(horizontal = 20.dp)) { OfferCard(offer) { showService(offer) } } }
                             if (own) item { FormColumn {
+                                ReferenceRow(Icons.Outlined.AddCard, "شراء وشحن الرصيد") { open("شحن الرصيد") }
+                                ReferenceRow(Icons.Outlined.Casino, "عجلة الحظ المدفوعة") { open("العجلة") }
+                                if (!profile.optBoolean("creator")) ReferenceRow(Icons.Outlined.Storefront, "طلب تفعيل البائع") { open("تفعيل البائع") }
                                 ReferenceRow(Icons.Outlined.AccountBalanceWallet, "المحفظة والسحب") { price = ""; open("المحفظة") }
                                 ReferenceRow(Icons.Outlined.ShoppingBag, "حجوزاتي") { open("الحجوزات") }
                                 ReferenceRow(Icons.Outlined.SupportAgent, "الدعم وخدمة العملاء") { message = ""; open("الدعم وخدمة العملاء") }
@@ -439,7 +455,8 @@ fun ServerAppScreen(baseUrl: String) {
                                     Text(usd(wallet.optLong("available_cents")), fontSize = 32.sp, fontWeight = FontWeight.Bold)
                                     Text("محجوز: ${usd(wallet.optLong("reserved_cents"))}", color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 } }
-                                Text("الدفع والتحويل الفعلي غير مفعّلين بعد. طلب السحب يحجز مبلغًا من رصيدك المتاح للمراجعة ولا ينفّذ تحويلًا.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                ReferencePrimary("شراء رصيد عبر USDT", !submitting) { open("شحن الرصيد") }
+                                Text("الشحن يعتمد بعد تحقق الإدارة من التحويل. طلب السحب يحجز الرصيد للمراجعة ولا ينفّذ تحويلًا تلقائيًا.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Field(price, { price = it; requestKey = UUID.randomUUID().toString() }, "مبلغ السحب بالدولار", numeric = true)
                                 Field(destination, { destination = it; requestKey = UUID.randomUUID().toString() }, "جهة استلام الأموال")
                                 ReferencePrimary("طلب سحب", !submitting) { perform {

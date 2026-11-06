@@ -20,6 +20,22 @@ class LayaliApi internal constructor(private val baseUrl: String, private val se
         require(url.protocol == "https" && url.host.isNotBlank() && url.userInfo == null)
     }
 
+    suspend fun upload(context: android.content.Context, uri: android.net.Uri, purpose: String): JSONObject = withContext(Dispatchers.IO) {
+        val maximum = if (purpose == "reel") 20 * 1024 * 1024 else 8 * 1024 * 1024
+        val bytes = context.contentResolver.openInputStream(uri)?.use { input ->
+            val output = java.io.ByteArrayOutputStream()
+            val buffer = ByteArray(8192)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                if (output.size() + count > maximum) throw ApiException("file_too_large")
+                output.write(buffer, 0, count)
+            }
+            output.toByteArray()
+        } ?: throw ApiException("invalid_file")
+        request("/api/upload", "POST", JSONObject().put("purpose", purpose).put("data", android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)))
+    }
+
     suspend fun restoreSession(): Boolean = withContext(Dispatchers.IO) {
         token = sessionStore?.read()
         sessionSaved = token != null
@@ -47,7 +63,7 @@ class LayaliApi internal constructor(private val baseUrl: String, private val se
         try {
             connection.requestMethod = method
             connection.connectTimeout = 15000
-            connection.readTimeout = 15000
+            connection.readTimeout = if (path == "/api/upload") 90000 else 15000
             connection.instanceFollowRedirects = false
             connection.setRequestProperty("Accept", "application/json")
             requestToken?.let { connection.setRequestProperty("Authorization", "Bearer $it") }

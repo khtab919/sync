@@ -44,6 +44,14 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, logout: () -> 
     var amount by remember { mutableStateOf("") }
     var reason by remember { mutableStateOf("") }
     var creditKey by remember { mutableStateOf(UUID.randomUUID().toString()) }
+    var wheelConfig by remember { mutableStateOf(JSONObject()) }
+    var wheelCost by remember { mutableStateOf("") }
+    var wheelBank by remember { mutableStateOf("") }
+    var wheelPrizes by remember { mutableStateOf("") }
+    var wheelEnabled by remember { mutableStateOf(false) }
+    var reviewNote by remember { mutableStateOf("") }
+    var verified by remember { mutableStateOf(false) }
+    var requests by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var confirmation by remember { mutableStateOf<JSONObject?>(null) }
     fun message(e: Exception): String = when(e.message) {
         "administrator_required", "invalid_session", "authentication_required" -> "لا تملك الجلسة صلاحية الإدارة. سجّل الدخول بحساب المسؤول."
@@ -75,7 +83,15 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, logout: () -> 
             } else if (section == "الحسابات") {
                 val result = api.request("/api/admin/accounts?q=${URLEncoder.encode(query.trim(), "UTF-8")}&offset=$offset")
                 accounts = result.adminItems(); total = result.optInt("total")
-            } else content = api.request("/api/admin/moderation").adminItems()
+            } else if (section == "العجلة") {
+                wheelConfig = api.request("/api/admin/wheel")
+                wheelCost = BigDecimal.valueOf(wheelConfig.optLong("cost_cents"),2).toPlainString()
+                wheelBank = BigDecimal.valueOf(wheelConfig.optLong("bankroll_cents"),2).toPlainString()
+                wheelEnabled = wheelConfig.optBoolean("enabled")
+                val prizes = wheelConfig.optJSONArray("prizes")
+                wheelPrizes = if(prizes == null) "" else (0 until prizes.length()).joinToString("\n") { i -> val p = prizes.getJSONObject(i); "${BigDecimal.valueOf(p.optLong("amount_cents"),2)}:${p.optInt("weight")}" }
+            } else if (section == "الطلبات") requests = api.request("/api/admin/requests").adminItems()
+            else content = api.request("/api/admin/moderation").adminItems()
         } catch(e: CancellationException) { throw e }
         catch(e: Exception) { accounts = emptyList(); content = emptyList(); error = message(e) }
         finally { loading = false }
@@ -87,7 +103,7 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, logout: () -> 
                 Text("مرحبًا، $adminName", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 TextButton(onClick = logout, enabled = !busy) { Text("تسجيل الخروج") }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    listOf("الحسابات", "مراجعة المحتوى").forEach { name ->
+                    listOf("الحسابات", "المحتوى", "الطلبات", "العجلة").forEach { name ->
                         FilterChip(selected = section == name, onClick = { selected = null; section = name; offset = 0 }, label = { Text(name) }, enabled = !busy)
                     }
                 }
@@ -155,6 +171,42 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, logout: () -> 
                     OutlinedButton(onClick = { offset = (offset - 50).coerceAtLeast(0) }, enabled = offset > 0 && !loading && !busy) { Text("السابق") }
                     OutlinedButton(onClick = { offset += 50 }, enabled = offset + 50 < total && !loading && !busy) { Text("التالي") }
                 } }
+            } else if (section == "العجلة") {
+                item {
+                    Text("إعدادات العجلة المدفوعة", style = MaterialTheme.typography.titleLarge)
+                    Text("غير مفعّلة افتراضيًا. كل جائزة واحتمالها يظهران للمستخدم قبل الدفع. احتياطي الجوائز منفصل ويُحدّث مع كل لفة.")
+                    Row { Switch(wheelEnabled, { wheelEnabled = it }, enabled = !busy); Text("تفعيل العجلة") }
+                    OutlinedTextField(wheelCost, { wheelCost = it }, label = { Text("سعر اللفة بالدولار") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(wheelBank, { wheelBank = it }, label = { Text("احتياطي الجوائز بالدولار") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(wheelPrizes, { wheelPrizes = it }, label = { Text("كل سطر: الجائزة بالدولار:الوزن") }, minLines = 5, modifier = Modifier.fillMaxWidth())
+                    Text("مجموع الأوزان يحدد نسب الاحتمالات. الوزن 20 من مجموع 100 يعني احتمال 20%. الجائزة صفر تعني خسارة سعر اللفة.")
+                    Button(onClick = { perform {
+                        val list = org.json.JSONArray()
+                        wheelPrizes.lines().filter { it.isNotBlank() }.forEach { line -> val parts = line.split(":"); require(parts.size == 2); list.put(JSONObject().put("amount_cents", BigDecimal(parts[0].trim()).movePointRight(2).intValueExact()).put("weight", parts[1].trim().toInt())) }
+                        api.request("/api/admin/wheel", "POST", JSONObject().put("enabled", wheelEnabled).put("cost_cents", BigDecimal(wheelCost).movePointRight(2).intValueExact()).put("bankroll_cents", BigDecimal(wheelBank).movePointRight(2).longValueExact()).put("expected_bankroll_cents", wheelConfig.optLong("bankroll_cents")).put("prizes", list))
+                        revision++; success = "تم حفظ إعدادات العجلة."
+                    } }, enabled = !busy && !loading) { Text("حفظ الإعدادات") }
+                }
+            } else if (section == "الطلبات") {
+                if(requests.isEmpty() && !loading) item { Text("لا توجد طلبات دفع أو بائعين.") }
+                items(requests, key = { it.optString("kind") + it.optString("id") }) { row ->
+                    Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(if(row.optString("kind") == "topup") "طلب شحن رصيد" else "طلب تفعيل بائع", style = MaterialTheme.typography.titleLarge)
+                        Text("${row.optString("username")} · #${row.optInt("user_id")}")
+                        Text(when(row.optString("status")) { "pending" -> "قيد المراجعة"; "approved" -> "معتمد"; else -> "مرفوض" })
+                        if(row.optString("kind") == "topup") {
+                            Text("المحوّل: ${cents(row.optLong("amount_cents"))} · المكافأة: ${cents(row.optLong("bonus_cents"))}")
+                            Text(row.optString("transaction_hash"))
+                            ReferenceImage(row.optString("receipt_url"), Modifier.fillMaxWidth().height(220.dp))
+                            TextButton(onClick = { runCatching { uriHandler.openUri("https://bscscan.com/tx/" + row.optString("transaction_hash")) } }) { Text("فحص التحويل على BscScan") }
+                        } else Text(row.optString("description"))
+                        if(row.optString("status") == "pending") Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            listOf("approve" to "اعتماد", "reject" to "رفض").forEach { (decision, label) ->
+                                OutlinedButton(onClick = { reviewNote = ""; verified = false; confirmation = JSONObject().put("request_kind", row.optString("kind")).put("id", row.optString("id")).put("decision", decision).put("label", "$label الطلب") }, enabled = !busy) { Text(label) }
+                            }
+                        } else Text(row.optString("review_note"))
+                    } }
+                }
             } else {
                 if(content.isEmpty() && !loading) item { Text("لا يوجد محتوى للمراجعة حاليًا.") }
                 items(content, key = { it.optString("kind") + it.optInt("id") }) { row ->
@@ -167,18 +219,30 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, logout: () -> 
                 }
             }
         }
-        confirmation?.let { data -> AlertDialog(onDismissRequest = { if(!busy) confirmation = null }, title = { Text(data.optString("label")) }, text = { Text("تأكيد تنفيذ الإجراء؟ سيُسجل باسم حسابك الإداري." ) }, confirmButton = {
+        confirmation?.let { data -> AlertDialog(onDismissRequest = { if(!busy) confirmation = null }, title = { Text(data.optString("label")) }, text = { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("تأكيد تنفيذ الإجراء؟ سيُسجل باسم حسابك الإداري.")
+            if(data.has("request_kind")) {
+                OutlinedTextField(reviewNote, { reviewNote = it.take(300) }, label = { Text("سبب القرار / تفاصيل التحقق") })
+                if(data.optString("request_kind") == "topup" && data.optString("decision") == "approve") {
+                    Text("تحقق من نجاح التحويل، USDT على BEP20، والعنوان والمبلغ. الإيصال وحده لا يثبت الدفع.")
+                    Row { Checkbox(verified, { verified = it }); Text("تحققت من وصول التحويل فعليًا") }
+                }
+            }
+        } }, confirmButton = {
             TextButton(onClick = {
                 confirmation = null
                 perform {
-                    if(data.has("kind")) { api.request("/api/admin/moderation", "POST", data); revision++ }
+                    if(data.has("request_kind")) {
+                        val body = JSONObject().put("kind", data.optString("request_kind")).put("id", if(data.optString("request_kind") == "seller") data.optString("id").toInt() else data.optString("id")).put("decision", data.optString("decision")).put("review_note", reviewNote).put("payment_verified", verified)
+                        api.request("/api/admin/requests", "POST", body); revision++
+                    } else if(data.has("kind")) { api.request("/api/admin/moderation", "POST", data); revision++ }
                     else {
                         selected = api.request("/api/admin/accounts/${selected!!.optInt("id")}", "POST", data)
                         if(data.optString("action") == "credit") { amount = ""; reason = ""; creditKey = UUID.randomUUID().toString() }
                     }
                     success = "تم تنفيذ الإجراء بنجاح."
                 }
-            }, enabled = !busy) { Text("تأكيد") }
+            }, enabled = !busy && (!data.has("request_kind") || (reviewNote.trim().length >= 3 && (data.optString("request_kind") != "topup" || data.optString("decision") != "approve" || verified)))) { Text("تأكيد") }
         }, dismissButton = { TextButton(onClick = { confirmation = null }, enabled = !busy) { Text("إلغاء") } }) }
     }
 }

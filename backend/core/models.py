@@ -17,6 +17,7 @@ class Profile(models.Model):
     avatar_url = models.URLField(max_length=500, blank=True)
 
 class Service(models.Model):
+    image = models.ForeignKey("UploadedMedia", null=True, blank=True, on_delete=models.PROTECT)
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     title = models.CharField(max_length=150)
     description = models.TextField(max_length=600)
@@ -54,12 +55,15 @@ class Withdrawal(models.Model):
         constraints = [models.UniqueConstraint(fields=['user', 'request_key'], name='unique_withdrawal_request')]
 
 class Message(models.Model):
+    attachment = models.OneToOneField("UploadedMedia", null=True, blank=True, on_delete=models.PROTECT)
+    call_url = models.URLField(blank=True)
     sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='sent_messages')
     recipient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='received_messages')
     body = models.CharField(max_length=2000)
     created_at = models.DateTimeField(auto_now_add=True)
 
 class Reel(models.Model):
+    media = models.OneToOneField("UploadedMedia", null=True, blank=True, on_delete=models.PROTECT)
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     video_url = models.URLField(max_length=500)
     approved = models.BooleanField(default=False)
@@ -113,3 +117,48 @@ class BalanceAdjustment(models.Model):
     amount_cents = models.PositiveBigIntegerField()
     reason = models.CharField(max_length=300)
     created_at = models.DateTimeField(auto_now_add=True)
+
+class UploadedMedia(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    purpose = models.CharField(max_length=20)
+    file = models.FileField(upload_to='uploads/%Y/%m/')
+    mime = models.CharField(max_length=40)
+    size = models.PositiveIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+class SellerApplication(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    description = models.CharField(max_length=1000)
+    status = models.CharField(max_length=16, default='pending')
+    review_note = models.CharField(max_length=300, blank=True)
+    reviewer = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.PROTECT, related_name='seller_reviews')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+class TopUp(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    amount_cents = models.PositiveIntegerField()
+    bonus_cents = models.PositiveIntegerField(default=0)
+    transaction_hash = models.CharField(max_length=66, unique=True)
+    receipt = models.OneToOneField(UploadedMedia, on_delete=models.PROTECT)
+    status = models.CharField(max_length=16, default='pending')
+    review_note = models.CharField(max_length=300, blank=True)
+    reviewer = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.PROTECT, related_name='topup_reviews')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+class PaidWheelConfiguration(models.Model):
+    enabled = models.BooleanField(default=False)
+    cost_cents = models.PositiveIntegerField(default=100)
+    prizes = models.JSONField(default=list)
+    bankroll_cents = models.PositiveBigIntegerField(default=0)
+
+class PaidSpin(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    request_key = models.UUIDField()
+    cost_cents = models.PositiveIntegerField()
+    prize_cents = models.PositiveIntegerField()
+    prizes_snapshot = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['user', 'request_key'], name='unique_paid_spin_request')]

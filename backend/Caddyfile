@@ -5,7 +5,7 @@
         Referrer-Policy same-origin
     }
     request_body {
-        max_size 64KB
+        max_size 32MB
     }
     handle_path /static/* {
         root * /srv/static

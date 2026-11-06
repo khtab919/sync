@@ -125,3 +125,29 @@ class SupportTicketAdmin(admin.ModelAdmin):
 admin.site.site_header = "Relaxia · الإدارة"
 admin.site.site_title = "Relaxia"
 admin.site.index_title = "إدارة الحسابات والمحتوى"
+
+
+from .models import TopUp, SellerApplication, PaidWheelConfiguration, PaidSpin, UploadedMedia
+admin.site.register(TopUp, FinancialReadOnlyAdmin)
+admin.site.register(SellerApplication, FinancialReadOnlyAdmin)
+admin.site.register(PaidSpin, FinancialReadOnlyAdmin)
+
+@admin.register(PaidWheelConfiguration)
+class PaidWheelConfigurationAdmin(admin.ModelAdmin):
+    list_display = ('enabled', 'cost_cents', 'bankroll_cents')
+    def has_module_permission(self, request): return request.user.is_superuser
+    def has_view_permission(self, request, obj=None): return request.user.is_superuser
+    def has_add_permission(self, request): return request.user.is_superuser and not PaidWheelConfiguration.objects.exists()
+    def has_change_permission(self, request, obj=None): return request.user.is_superuser
+    def has_delete_permission(self, request, obj=None): return False
+    def get_form(self, request, obj=None, **kwargs):
+        base = super().get_form(request, obj, **kwargs)
+        from .commerce import wheel_settings
+        class CheckedForm(base):
+            def clean(self):
+                data = super().clean()
+                candidate = PaidWheelConfiguration(cost_cents=data.get('cost_cents') or 0, prizes=data.get('prizes') or [])
+                if data.get('enabled') and not wheel_settings(candidate)[0]:
+                    raise forms.ValidationError('حدد سعرًا موجبًا وجوائز بصيغة amount_cents وweight قبل التفعيل.')
+                return data
+        return CheckedForm

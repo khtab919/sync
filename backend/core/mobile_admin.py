@@ -111,4 +111,5 @@ def moderation(request):
             audit(request.actor, obj, 'approved' if approved else 'hidden')
     services = Service.objects.exclude(category='كورس').select_related('owner').order_by('approved', '-id')[:100]
     reels = Reel.objects.select_related('owner').order_by('approved', '-id')[:100]
-    return JsonResponse({'items': [dict(id=o.pk, kind='service', title=o.title, owner=o.owner.username, approved=o.approved, url=o.image_url) for o in services] + [dict(id=o.pk, kind='reel', title='ريلز #' + str(o.pk), owner=o.owner.username, approved=o.approved, url=o.video_url) for o in reels]})
+    from .commerce import grant_url
+    return JsonResponse({'items': [dict(id=o.pk, kind='service', title=o.title, owner=o.owner.username, approved=o.approved, url=grant_url(request, o.image) if o.image_id else o.image_url) for o in services] + [dict(id=o.pk, kind='reel', title='ريلز #' + str(o.pk), owner=o.owner.username, approved=o.approved, url=grant_url(request, o.media) if o.media_id else o.video_url) for o in reels]})

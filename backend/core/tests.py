@@ -409,3 +409,104 @@ class MobileAdministrationTests(TestCase):
         token = response.json()['token']
         self.assertTrue(self.call('/api/me', token=token).json()['is_admin'])
         self.assertEqual(self.call('/api/admin/accounts', token=token).status_code, 200)
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+class CommerceTests(TestCase):
+    def setUp(self):
+        import tempfile
+        self.directory = tempfile.TemporaryDirectory()
+        self.override = override_settings(MEDIA_ROOT=self.directory.name)
+        self.override.enable()
+        self.addCleanup(self.override.disable)
+        self.addCleanup(self.directory.cleanup)
+        self.user = get_user_model().objects.create_user('payer', 'payer@example.com', 'unique-pass')
+        self.peer = get_user_model().objects.create_user('peer', 'peer@example.com', 'unique-pass')
+        self.admin = get_user_model().objects.create_superuser('boss', 'boss@example.com', 'unique-pass')
+        for user in (self.user, self.peer, self.admin):
+            Profile.objects.create(user=user)
+            Wallet.objects.create(user=user)
+        self.token = issue_token(self.user)
+        self.peer_token = issue_token(self.peer)
+        self.admin_token = issue_token(self.admin)
+
+    def call(self, path, data=None, token=None):
+        kwargs = {'HTTP_AUTHORIZATION': 'Bearer ' + (token or self.token)}
+        if data is None: return self.client.get(path, **kwargs)
+        return self.client.post(path, json.dumps(data), content_type='application/json', **kwargs)
+
+    def upload(self, purpose='receipt'):
+        import io, base64
+        from PIL import Image
+        stream = io.BytesIO()
+        Image.new('RGB', (32,32), 'red').save(stream, 'PNG')
+        response = self.call('/api/upload', {'purpose': purpose, 'data': base64.b64encode(stream.getvalue()).decode()})
+        self.assertEqual(response.status_code, 201)
+        return response.json()
+
+    def test_receipts_are_private_and_transaction_cannot_double_credit(self):
+        from .models import TopUp
+        media = self.upload()
+        self.assertEqual(self.client.get('/api/media/' + media['id']).status_code, 403)
+        self.assertEqual(self.client.get(media['url']).status_code, 200)
+        body = {'amount_cents': 2500, 'transaction_hash': '0x' + 'a'*64, 'receipt_id': media['id']}
+        result = self.call('/api/topups', body)
+        self.assertEqual(result.status_code, 201)
+        self.assertEqual(self.call('/api/topups', body).status_code, 200)
+        self.assertEqual(TopUp.objects.count(), 1)
+        self.assertEqual(Wallet.objects.get(user=self.user).balance_cents, 0)
+        decision = {'kind': 'topup', 'id': result.json()['id'], 'decision': 'approve', 'review_note': 'Verified on chain'}
+        self.assertEqual(self.call('/api/admin/requests', decision).status_code, 403)
+        self.assertEqual(self.call('/api/admin/requests', decision, self.admin_token).status_code, 400)
+        decision['payment_verified'] = True
+        self.assertEqual(self.call('/api/admin/requests', decision, self.admin_token).status_code, 200)
+        self.assertEqual(self.call('/api/admin/requests', decision, self.admin_token).status_code, 200)
+        self.assertEqual(Wallet.objects.get(user=self.user).balance_cents, 2600)
+        self.assertEqual(self.call('/api/admin/requests', dict(decision, decision='reject'), self.admin_token).status_code, 409)
+
+    def test_seller_needs_approval_and_private_chat_files_restrict_recipients(self):
+        self.assertEqual(self.call('/api/seller-requests', {'description': 'Non-explicit adult services'}).status_code, 200)
+        self.assertEqual(self.call('/api/seller-requests', {'description': 'Non-explicit adult services'}).status_code, 409)
+        from .models import SellerApplication
+        row = SellerApplication.objects.get()
+        self.assertEqual(self.call('/api/admin/requests', {'kind': 'seller', 'id': row.pk, 'decision': 'approve', 'review_note': 'Content reviewed'}, self.admin_token).status_code, 200)
+        self.user.profile.refresh_from_db()
+        self.assertTrue(self.user.profile.creator)
+        media = self.upload('chat_image')
+        result = self.call(f'/api/messages/{self.peer.pk}', {'attachment_id': media['id']})
+        self.assertEqual(result.status_code, 201)
+        received = self.call(f'/api/messages/{self.user.pk}', token=self.peer_token).json()['items'][0]
+        self.assertEqual(self.client.get(received['attachment_url']).status_code, 200)
+        self.assertEqual(self.call(f'/api/messages/{self.peer.pk}', {'attachment_id': media['id']}).status_code, 200)
+        from .models import Message
+        self.assertEqual(Message.objects.count(), 1)
+        self.user.is_active = False
+        self.user.save()
+        self.assertEqual(self.client.get(received['attachment_url']).status_code, 403)
+
+    def test_upload_validation_and_reel_publishing_gate(self):
+        import base64
+        self.assertEqual(self.call('/api/upload', {'purpose':'receipt','data':base64.b64encode(b'<html>not an image</html>').decode()}).status_code, 400)
+        self.assertEqual(self.call('/api/upload', {'purpose':'offer','data':'a'*40}).status_code, 403)
+        self.assertEqual(self.call('/api/reels', {'media_id':str(uuid.uuid4())}).status_code, 403)
+        self.assertEqual(self.call('/api/admin/requests').status_code, 403)
+        info = self.call('/api/payment-info').json()
+        self.assertEqual(info['address'], '0xc35797768180752b67743d791f79f812bb0972d1')
+        self.assertEqual(self.client.get('/api/payment-qr').status_code, 200)
+
+    def test_paid_wheel_disabled_until_configured_and_retry_does_not_charge_twice(self):
+        from .models import PaidWheelConfiguration, PaidSpin
+        self.assertFalse(self.call('/api/promotion/wheel').json()['enabled'])
+        self.assertEqual(self.call('/api/promotion/wheel', {'request_key': str(uuid.uuid4())}).status_code, 409)
+        config = PaidWheelConfiguration.objects.get(pk=1)
+        config.enabled = True; config.cost_cents = 100; config.prizes = [{'amount_cents': 50, 'weight': 1}]; config.bankroll_cents = 10000; config.save()
+        info = self.call('/api/promotion/wheel').json()
+        data = {'request_key': str(uuid.uuid4()), 'config_version': info['config_version']}
+        self.assertEqual(self.call('/api/promotion/wheel', data).status_code, 409)
+        wallet = Wallet.objects.get(user=self.user); wallet.balance_cents = 500; wallet.save()
+        self.assertEqual(self.call('/api/promotion/wheel', data).status_code, 201)
+        self.assertEqual(self.call('/api/promotion/wheel', data).status_code, 200)
+        self.assertEqual(PaidSpin.objects.count(), 1)
+        wallet.refresh_from_db(); config.refresh_from_db()
+        self.assertEqual(wallet.balance_cents, 450)
+        self.assertEqual(config.bankroll_cents, 10050)
+        self.assertEqual(self.call('/api/admin/wheel').status_code, 403)

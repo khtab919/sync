@@ -115,3 +115,17 @@ At `/admin/`, Users supports ban/unban and account previews. Bans revoke API ses
 The ordinary app login opens the native management dashboard automatically for active staff superusers. No management menu is shown to other accounts. Existing administrators created with `createsuperuser` have their app profile and wallet initialized on successful login; the same username/password works in the app. Usernames should be lowercase to match app normalization. New API routes under `/api/admin/` require active staff AND superuser privileges on every request.
 
 The dashboard supports account search/pagination, account previews, ban/unban with API-token revocation, creator publishing/discovery activation, audited USD credit additions with retry idempotency, and approving/hiding offers and reels. It does not grant administrator privileges or impersonate accounts. Payment and payout integration remain separate unfinished features. Deploy migration 0008 before using the new dashboard.
+
+
+### Relaxia 9.0 — uploads, funding, seller requests and chat
+Deploy migration 0009 and rebuild the containers. The API persists uploaded files in the new `media_data` Docker volume; include it with database backups. Proxy/JSON upload limit is 32 MB. Image uploads are decoded, bounded, stripped of metadata and re-encoded as JPEG. Chat/receipt media use expiring signed grants; public offer/reel media are accessible only after approval and while the owner remains active. Per-user media quota is 500 MB. Images/audio are limited to 8 MB; MP4 reels to 20 MB.
+
+USDT BEP20 destination is `0xc35797768180752b67743d791f79f812bb0972d1`; QR encodes this exact address, not the unrelated screenshot address. Funding is manual: users submit amount, unique transaction hash, and uploaded receipt. Administration must verify token, network, successful confirmation, destination and amount on-chain before approving. Approval atomically credits the submitted amount plus the disclosed volume bonus (4% at 25, 6% at 50, 8% at 100 USDT), once only. An uploaded receipt does not prove payment and no automatic blockchain verification is claimed.
+
+Seller applications require a description and administrator approval before offer/reel uploads and publication. Uploaded reels remain pending content moderation.
+
+The chat has a fixed composer, physical left/right bubbles, periodic refresh, image messages and microphone recordings (60 seconds maximum). Calls are explicit external Jitsi room invitations requiring both parties to join; they are not integrated ringing/push calls, and Jitsi may require host authentication. Paid-message settlement and automated withdrawals remain unavailable.
+
+Paid cash-value wheel is disabled by default. The administrator configures cost, weighted prizes and a separate reward reserve from the native dashboard. Odds are shown before a charge; a cryptographic draw, atomic wallet/reserve update and idempotent spin ledger prevent duplicate charge retries. Wheel settings cannot change the quoted cost/odds unnoticed; stale quotes are rejected. No paid wheel is enabled or funded by this deployment. The operator must determine whether and where a real-money chance product may be offered before enabling it.
+
+The floating support chooser opens WhatsApp `https://wa.me/201145781363` or Telegram `https://t.me/RamaNUR`; the user writes and sends the message.
