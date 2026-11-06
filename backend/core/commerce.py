@@ -277,7 +277,7 @@ def review_requests(request):
 
 
 def message_json(request, row):
-    return {'id': row.pk, 'sender_id': row.sender_id, 'recipient_id': row.recipient_id, 'body': row.body, 'created_at': row.created_at, 'attachment_url': grant_url(request, row.attachment) if row.attachment_id else '', 'attachment_mime': row.attachment.mime if row.attachment_id else '', 'client_key': str(row.client_key) if row.client_key else '', 'delivered_at': row.delivered_at, 'sender_name': row.sender.username, 'call_url': '', 'call_id': str(row.call_id) if row.call_id else '', 'call_mode': row.call.mode if row.call_id else '', 'call_status': row.call.status if row.call_id else ''}
+    return {'id': row.pk, 'sender_id': row.sender_id, 'recipient_id': row.recipient_id, 'body': row.body, 'created_at': row.created_at, 'attachment_url': grant_url(request, row.attachment) if row.attachment_id else '', 'attachment_mime': row.attachment.mime if row.attachment_id else '', 'client_key': str(row.client_key) if row.client_key else '', 'delivered_at': row.delivered_at, 'recipient_name': row.recipient.username, 'sender_name': row.sender.username, 'call_url': '', 'call_id': str(row.call_id) if row.call_id else '', 'call_mode': row.call.mode if row.call_id else '', 'call_status': row.call.status if row.call_id else ''}
 
 
 def wheel_settings(config):

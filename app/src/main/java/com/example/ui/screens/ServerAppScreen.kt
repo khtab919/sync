@@ -7,6 +7,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import com.example.data.api.MessageInbox
 import android.content.Intent
 import android.net.Uri
 import android.widget.MediaController
@@ -215,6 +218,22 @@ fun ServerAppScreen(baseUrl: String) {
         finally { loading = false }
     }
 
+    LaunchedEffect(signedIn, foreground, profile.optInt("id")) {
+        if(!signedIn || !foreground || profile.optBoolean("is_admin"))return@LaunchedEffect
+        val inbox=MessageInbox(context,api.origin,profile.optInt("id"))
+        while(true){
+            try {
+                if(api.request("/health/").optInt("messaging_version")>=2){
+                    val received=api.request("/api/delivery/incoming").rows()
+                    if(received.isNotEmpty()){
+                        withContext(Dispatchers.IO){inbox.save(received)}
+                        api.request("/api/delivery/acknowledge","POST",JSONObject().put("ids",org.json.JSONArray(received.map{it.optInt("id")})))
+                    }
+                }
+            }catch(e:CancellationException){throw e}catch(e:Exception){}
+            delay(4000)
+        }
+    }
     LaunchedEffect(signedIn, foreground, profile.optInt("id"), activeCall) {
         if (!signedIn || !foreground || profile.optBoolean("is_admin") || activeCall.isNotBlank()) { incomingCall = null; return@LaunchedEffect }
         try { if (api.request("/health/").optInt("calls_version") < 1) return@LaunchedEffect } catch (e: Exception) { return@LaunchedEffect }

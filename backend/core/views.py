@@ -347,7 +347,7 @@ def messages(request, peer_id):
     if not peer or peer == request.actor:
         raise ApiError('recipient_unavailable', 404)
     if request.method == 'GET':
-        rows = Message.objects.filter(Q(sender=request.actor, recipient=peer) | Q(sender=peer, recipient=request.actor)).select_related('attachment', 'call', 'sender').order_by('-id')[:100]
+        rows = Message.objects.filter(Q(sender=request.actor, recipient=peer) | Q(sender=peer, recipient=request.actor)).select_related('attachment', 'call', 'sender', 'recipient').order_by('-id')[:100]
         peer_profile = Profile.objects.filter(user=peer).first()
         return JsonResponse({'peer': {'id':peer.pk,'username':peer.username,'display_name':(peer_profile.display_name if peer_profile else '') or peer.username,'avatar_url':peer_profile.avatar_url if peer_profile else ''}, 'items': [message_json(request, row) for row in rows]})
     submitted_body=request.payload.get('body','')
@@ -451,3 +451,16 @@ def reports(request):
         raise ApiError('target_unavailable', 404)
     report = Report.objects.create(reporter=request.actor, target_type=kind, target_id=target_id, reason=text(p, 'reason', 3, 500))
     return JsonResponse({'id': report.pk}, status=201)
+
+@endpoint(['GET'])
+def incoming_messages(request):
+    from .commerce import message_json
+    rows=Message.objects.filter(recipient=request.actor,delivered_at__isnull=True,sender__is_active=True).select_related('sender','recipient','attachment','call').order_by('id')[:100]
+    return JsonResponse({'items':[message_json(request,row) for row in rows]})
+
+@endpoint(['POST'])
+def acknowledge_messages(request):
+    ids=request.payload.get('ids')
+    if not isinstance(ids,list) or len(ids)>100 or not all(type(value) is int and value>0 for value in ids):raise ApiError('invalid_message_ids')
+    Message.objects.filter(pk__in=ids,recipient=request.actor,delivered_at__isnull=True).update(delivered_at=timezone.now())
+    return JsonResponse({'ok':True})

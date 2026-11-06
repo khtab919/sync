@@ -758,3 +758,21 @@ class NOWPaymentsTests(TestCase):
         with patch('core.nowpayments.provider_request') as provider:
             self.assertEqual(self.post('/api/nowpayments/invoices',{'quote_id':quote['id']}).status_code,200)
             provider.assert_not_called()
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+class ForegroundDeliveryTests(TestCase):
+    def test_inbox_requires_real_recipient_acknowledgement(self):
+        sender=get_user_model().objects.create_user('foregroundsender',password='unique-pass')
+        recipient=get_user_model().objects.create_user('foregroundrecipient',password='unique-pass')
+        stranger=get_user_model().objects.create_user('foregroundstranger',password='unique-pass')
+        for user in (sender,recipient,stranger):Profile.objects.create(user=user);Wallet.objects.create(user=user)
+        message=Message.objects.create(sender=sender,recipient=recipient,body='Actual downloaded content')
+        receiver_token=issue_token(recipient);stranger_token=issue_token(stranger)
+        data=self.client.get('/api/delivery/incoming',HTTP_AUTHORIZATION='Bearer '+receiver_token).json()['items']
+        self.assertEqual(data[0]['body'],'Actual downloaded content')
+        message.refresh_from_db();self.assertIsNone(message.delivered_at)
+        self.client.post('/api/delivery/acknowledge',json.dumps({'ids':[message.pk]}),content_type='application/json',HTTP_AUTHORIZATION='Bearer '+stranger_token)
+        message.refresh_from_db();self.assertIsNone(message.delivered_at)
+        self.client.post('/api/delivery/acknowledge',json.dumps({'ids':[message.pk]}),content_type='application/json',HTTP_AUTHORIZATION='Bearer '+receiver_token)
+        message.refresh_from_db();self.assertIsNotNone(message.delivered_at)
+        self.assertEqual(self.client.get('/api/delivery/incoming',HTTP_AUTHORIZATION='Bearer '+receiver_token).json()['items'],[])

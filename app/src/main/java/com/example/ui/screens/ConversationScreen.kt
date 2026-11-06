@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.platform.LocalLayoutDirection
 import com.example.data.api.LayaliApi
 import com.example.data.api.MessageOutbox
+import com.example.data.api.MessageInbox
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.CancellationException
@@ -43,12 +44,14 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
     val lifecycleOwner = LocalLifecycleOwner.current
     var resumed by remember { mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
     val outbox = remember(api.origin, myId, peerId) { MessageOutbox(context, api.origin, myId, peerId) }
+    val inbox=remember(api.origin,myId){MessageInbox(context,api.origin,myId)}
+    val cached=remember(peerId){runCatching{inbox.read(peerId)}.getOrDefault(emptyList())}
     var pending by remember { mutableStateOf(runCatching { outbox.read() }.getOrDefault(emptyList())) }
-    var actualPeer by remember { mutableStateOf(peerName.takeUnless { it.startsWith("حساب #") }.orEmpty()) }
+    var actualPeer by remember { mutableStateOf(peerName.takeUnless { it.startsWith("حساب #") }.orEmpty().ifBlank{cached.lastOrNull()?.let{if(it.optInt("sender_id")==myId)it.optString("recipient_name")else it.optString("sender_name")}.orEmpty()}) }
     var peerHandle by remember { mutableStateOf("") }
     var peerAvatar by remember { mutableStateOf("") }
     var amplitude by remember { mutableFloatStateOf(0f) }
-    var rows by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var rows by remember { mutableStateOf<List<JSONObject>>(cached) }
     var error by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var recording by remember { mutableStateOf(false) }
@@ -64,6 +67,7 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
         val loaded=if(a==null)emptyList()else(0 until a.length()).map{a.getJSONObject(it)}.reversed()
         val acknowledged=loaded.map{it.optString("client_key")}.filter{it.isNotBlank()}.toSet()
         withContext(Dispatchers.IO){outbox.read().filter{it.optString("client_key") in acknowledged}.forEach{outbox.remove(it.optString("client_key"))}}
+        withContext(Dispatchers.IO){inbox.save(loaded)}
         rows=loaded;pending=withContext(Dispatchers.IO){outbox.read()}
         val delivered=org.json.JSONArray(loaded.filter{it.optInt("sender_id")!=myId&&it.isNull("delivered_at")}.map{it.optInt("id")})
         if(delivered.length()>0)api.request("/api/messages/$peerId/delivered","POST",JSONObject().put("ids",delivered))
