@@ -116,6 +116,9 @@ class LivePaymentConcurrencyTests(TransactionTestCase):
         owner=get_user_model().objects.create_user('concurrent_live_owner',password='test');viewer=get_user_model().objects.create_user('concurrent_live_viewer',password='test')
         Profile.objects.create(user=owner,creator=True);Profile.objects.create(user=viewer);Wallet.objects.create(user=owner);Wallet.objects.create(user=viewer,balance_cents=100)
         token=issue_token(viewer);broadcast=LiveBroadcast.objects.create(owner=owner,title='Concurrent test',private=True,price_cents=100,status='active',started_at=timezone.now(),last_checked_at=timezone.now())
+        from .models import SessionToken
+        issue_token(owner)
+        LiveAdmission.objects.create(broadcast=broadcast,user=owner,session=SessionToken.objects.get(user=owner))
         parts={'participants':[{'identity':'host-'+str(owner.pk),'tracks':[{'type':'VIDEO'}]}]}
         def join(_):
             close_old_connections()
