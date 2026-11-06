@@ -44,7 +44,7 @@ def get_call(user, call_id, locked=False):
 
 
 def call_json(row):
-    return {'id': row.pk, 'caller_id': row.caller_id, 'callee_id': row.callee_id, 'caller_name': row.caller.username, 'callee_name': row.callee.username, 'mode': row.mode, 'status': row.status}
+    return {'id': row.pk, 'caller_id': row.caller_id, 'callee_id': row.callee_id, 'caller_name':getattr(getattr(row.caller,'profile',None),'display_name','') or row.caller.username, 'callee_name':getattr(getattr(row.callee,'profile',None),'display_name','') or row.callee.username, 'mode': row.mode, 'status': row.status, 'ringing_at':row.ringing_at, 'caller_avatar':getattr(getattr(row.caller,'profile',None),'avatar_url',''), 'callee_avatar':getattr(getattr(row.callee,'profile',None),'avatar_url','')}
 
 
 @endpoint(['GET', 'POST'])
@@ -52,6 +52,8 @@ def calls(request):
     expire_calls()
     if request.method == 'GET':
         incoming = InternalCall.objects.filter(callee=request.actor, status='ringing', caller__is_active=True).select_related('caller', 'callee').first()
+        if incoming and incoming.ringing_at is None:
+            incoming.ringing_at=timezone.now(); incoming.save(update_fields=['ringing_at'])
         return JsonResponse({'available': available(), 'incoming': call_json(incoming) if incoming else None})
     if not available():
         raise ApiError('calls_setup_required', 503)
@@ -148,11 +150,11 @@ def room(request, call_id):
     nonce = secrets.token_urlsafe(24)
     peer = call.callee if user.pk == call.caller_id else call.caller
     peer_profile = Profile.objects.filter(user=peer).first()
-    config = {'peerName': (peer_profile.display_name if peer_profile else '') or peer.username, 'call': str(call.pk), 'caller': user.pk == call.caller_id, 'video': call.mode == 'video', 'token': token, 'iceServers': ice_servers(user, call.pk), 'relayOnly': os.environ.get('LAYALI_TESTING') == '1' and os.environ.get('LAYALI_CALL_TEST_RELAY_ONLY') == '1'}
+    config = {'peerAvatar':peer_profile.avatar_url if peer_profile else '', 'peerName': (peer_profile.display_name if peer_profile else '') or peer.username, 'call': str(call.pk), 'caller': user.pk == call.caller_id, 'video': call.mode == 'video', 'token': token, 'iceServers': ice_servers(user, call.pk), 'relayOnly': os.environ.get('LAYALI_TESTING') == '1' and os.environ.get('LAYALI_CALL_TEST_RELAY_ONLY') == '1'}
     response = render(request, 'core/call_room.html', {'config': config, 'nonce': nonce})
     response['Cache-Control'] = 'no-store'
     response['Referrer-Policy'] = 'no-referrer'
-    response['Content-Security-Policy'] = f"default-src 'none'; script-src 'nonce-{nonce}'; style-src 'unsafe-inline'; media-src 'self' blob:; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'"
+    response['Content-Security-Policy'] = f"default-src 'none'; script-src 'nonce-{nonce}'; style-src 'unsafe-inline'; media-src 'self' blob:; connect-src 'self'; img-src 'self' data: https:; frame-ancestors 'none'; base-uri 'none'"
     return response
 
 
@@ -178,30 +180,41 @@ def signal(request, call_id):
                 if request.content_type != 'application/json' or len(request.body) > 65536:
                     raise ApiError('invalid_signal')
                 p = json.loads(request.body)
-                if not isinstance(p, dict) or p.get('kind') not in ('offer', 'answer', 'ice') or not isinstance(p.get('data'), dict):
+                if not isinstance(p, dict) or p.get('kind') not in ('offer', 'answer', 'ice', 'reconnect', 'hangup') or not isinstance(p.get('data'), dict):
                     raise ApiError('invalid_signal')
                 kind, payload = p['kind'], p['data']
                 if (kind == 'offer' and call.caller_id != session.user.pk) or (kind == 'answer' and call.callee_id != session.user.pk):
                     raise ApiError('call_action_forbidden', 403)
+                if kind == 'hangup':
+                    call.status='ended';call.ended_at=timezone.now();call.save(update_fields=['status','ended_at'])
+                    return JsonResponse({'ok':True})
+                revision=payload.get('revision',0)
+                if type(revision) is not int or not 0<=revision<=8:raise ApiError('invalid_signal')
                 if kind in ('offer', 'answer'):
                     if payload.get('type') != kind or not isinstance(payload.get('sdp'), str) or not 1 <= len(payload['sdp']) <= 60000:
                         raise ApiError('invalid_signal')
-                    if CallSignal.objects.filter(call=call, kind=kind).exists():
-                        raise ApiError('signal_already_sent', 409)
-                else:
+                    prior=CallSignal.objects.filter(call=call,kind=kind)
+                    for previous in prior:
+                        if previous.data.get('revision',0)==revision:
+                            if previous.data==payload:return JsonResponse({'ok':True})
+                            raise ApiError('signal_already_sent',409)
+                    if revision>0 and call.status!='accepted':raise ApiError('call_not_accepted',409)
+                    if kind=='offer' and revision>0 and not prior.filter(data__revision=revision-1).exists():
+                        if revision!=1 or not prior.exists():raise ApiError('invalid_signal')
+                elif kind == 'ice':
                     if not isinstance(payload.get('candidate'), str) or len(payload['candidate']) > 4096:
                         raise ApiError('invalid_signal')
                     if payload.get('sdpMid') is not None and not isinstance(payload['sdpMid'], str):
                         raise ApiError('invalid_signal')
                     if payload.get('sdpMLineIndex') is not None and type(payload['sdpMLineIndex']) is not int:
                         raise ApiError('invalid_signal')
-                if CallSignal.objects.filter(call=call).count() >= 500:
+                if CallSignal.objects.filter(call=call).count() >= 2000:
                     raise ApiError('signal_limit', 429)
                 CallSignal.objects.create(call=call, sender=session.user, kind=kind, data=payload)
                 return JsonResponse({'ok': True}, status=201)
             cursor = max(0, int(request.GET.get('after', '0')))
             events = list(CallSignal.objects.filter(call=call, id__gt=cursor).exclude(sender=session.user).order_by('id').values('id', 'kind', 'data')[:100])
-        return JsonResponse({'status': call.status, 'events': events})
+        return JsonResponse({'status': call.status, 'ringing_at':call.ringing_at, 'events': events})
     except (signing.BadSignature, ValueError, TypeError, KeyError):
         return JsonResponse({'error': 'call_token_invalid'}, status=403)
     except ApiError as exc:

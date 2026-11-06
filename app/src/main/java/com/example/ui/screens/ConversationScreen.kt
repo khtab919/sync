@@ -32,6 +32,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.distinctUntilChanged
 import org.json.JSONObject
 import java.io.File
 
@@ -52,6 +53,12 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
     var peerAvatar by remember { mutableStateOf("") }
     var peerVerified by remember { mutableStateOf(false) }
     var peerPrice by remember { mutableLongStateOf(0L) }
+    var peerOnline by remember { mutableStateOf(false) }
+    var presenceKnown by remember { mutableStateOf(false) }
+    var recordingPaused by remember { mutableStateOf(false) }
+    var amplitudeHistory by remember { mutableStateOf<List<Float>>(emptyList()) }
+    var chooseAttachment by remember { mutableStateOf(false) }
+    var messagingVersion by remember { mutableIntStateOf(0) }
     var amplitude by remember { mutableFloatStateOf(0f) }
     var rows by remember { mutableStateOf<List<JSONObject>>(cached) }
     var error by remember { mutableStateOf("") }
@@ -64,7 +71,7 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
     var confirmCall by remember { mutableStateOf(false) }
     suspend fun refresh() {
         val result=api.request("/api/messages/$peerId")
-        result.optJSONObject("peer")?.let { actualPeer=it.optString("display_name",it.optString("username"));peerHandle=it.optString("username");peerAvatar=it.optString("avatar_url");peerVerified=it.optBoolean("creator");peerPrice=it.optLong("chat_price_cents") }
+        result.optJSONObject("peer")?.let { actualPeer=it.optString("display_name",it.optString("username"));peerHandle=it.optString("username");peerAvatar=it.optString("avatar_url");peerVerified=it.optBoolean("creator");peerPrice=it.optLong("chat_price_cents");peerOnline=it.optBoolean("online");presenceKnown=it.has("online") }
         val a=result.optJSONArray("items")
         val loaded=if(a==null)emptyList()else(0 until a.length()).map{a.getJSONObject(it)}.reversed()
         val acknowledged=loaded.map{it.optString("client_key")}.filter{it.isNotBlank()}.toSet()
@@ -84,7 +91,7 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
         scope.launch { try { block(); refresh() } catch(e: CancellationException) { throw e } catch(e: Exception) { error = if(e.message == "calls_setup_required" || e.message == "server_unavailable") "خادم الاتصال غير جاهز بعد. حدّث الخادم لتفعيل الاتصال الداخلي." else if(e.message == "call_busy") "أحد الطرفين مشغول بمكالمة أخرى." else if(e.message == "paid_chat_requires_verified_payment") "هذه المحادثة مدفوعة؛ لم تُرسل الرسالة ولم يُخصم رصيد." else commerceError(e) } finally { busy = false } }
     }
     fun finishRecording(send: Boolean) {
-        val current = recorder; recorder = null; recording = false
+        val current = recorder; recorder = null; recording = false; recordingPaused = false
         val file = recordingFile; recordingFile = null
         val valid = runCatching { current?.stop(); true }.getOrDefault(false)
         current?.release()
@@ -101,10 +108,11 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
                 @Suppress("DEPRECATION") val r = MediaRecorder()
                 recorder = r
                 r.setAudioSource(MediaRecorder.AudioSource.MIC); r.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4); r.setAudioEncoder(MediaRecorder.AudioEncoder.AAC); r.setAudioEncodingBitRate(64000); r.setAudioSamplingRate(44100); r.setOutputFile(file.absolutePath); r.prepare(); r.start()
-                seconds = 0; recording = true
+                seconds = 0; amplitudeHistory=emptyList(); recordingPaused=false; recording = true
             }.onFailure { recorder?.release(); recorder = null; recordingFile?.delete(); recordingFile = null; error = "تعذّر بدء تسجيل الصوت." }
         } else if(!granted) error = "اسمح باستخدام الميكروفون لتسجيل رسالة صوتية."
     }
+    val videoPicker=rememberLauncherForActivityResult(ActivityResultContracts.GetContent()){selected->if(selected!=null)enqueue(selected,"chat_video")}
     val photo=rememberLauncherForActivityResult(ActivityResultContracts.GetContent()){selected->if(selected!=null)enqueue(selected,"chat_image")}
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -120,7 +128,7 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
         var versionKnown=false
         var checkedAt=0L
         while(true) {
-            if(!reliable&&System.currentTimeMillis()-checkedAt>10000){checkedAt=System.currentTimeMillis();try{reliable=api.request("/health/").optInt("messaging_version")>=2;versionKnown=true}catch(e:CancellationException){throw e}catch(e:Exception){versionKnown=false}}
+            if(!reliable&&System.currentTimeMillis()-checkedAt>10000){checkedAt=System.currentTimeMillis();try{messagingVersion=api.request("/health/").optInt("messaging_version");reliable=messagingVersion>=2;versionKnown=true}catch(e:CancellationException){throw e}catch(e:Exception){versionKnown=false}}
             try {
                 val first=withContext(Dispatchers.IO){outbox.read().firstOrNull{!it.optBoolean("failed")}}
                 if(first!=null&&reliable) {
@@ -136,10 +144,10 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
                 } else if(first!=null&&!reliable) error=if(versionKnown)"حدّث الخادم لتفعيل الإرسال الموثوق وحالات تسليم الرسائل."else"بانتظار الاتصال لإرسال الرسائل…"
             }catch(e:CancellationException){throw e}catch(e:Exception){error="بانتظار الاتصال لإرسال الرسائل…"}
             try { refresh() }catch(e:CancellationException){throw e}catch(e:Exception){if(pending.isEmpty())error=commerceError(e)}
-            delay(if(pending.isEmpty())2500 else 900)
+            delay(if(pending.isEmpty())1500 else 900)
         }
     }
-    LaunchedEffect(recording) { while(recording){amplitude=runCatching{(recorder?.maxAmplitude?:0)/32767f}.getOrDefault(0f);delay(120)};amplitude=0f }
+    LaunchedEffect(recording,recordingPaused) { while(recording&&!recordingPaused){amplitude=runCatching{(recorder?.maxAmplitude?:0)/32767f}.getOrDefault(0f);amplitudeHistory=(amplitudeHistory+amplitude).takeLast(40);delay(120)};amplitude=0f }
     val confirmedKeys=rows.map{it.optString("client_key")}.filter{it.isNotBlank()}.toSet()
     val displayed=rows+pending.filterNot{it.optString("client_key") in confirmedKeys}.map{outbox.pendingJson(it,myId)}
     LaunchedEffect(voice.playing){while(voice.playing){voice.tick();delay(200)}}
@@ -154,20 +162,31 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
         if(!historyLoaded || (arrived && (atBottom || rows.last().optInt("sender_id") == myId))) listState.scrollToItem(rows.lastIndex)
         historyLoaded = true; previousNewest = newest
     }
-    LaunchedEffect(recording) {
-        if(recording) { while(recording && seconds < 60) { delay(1000); seconds++ }; if(recording) finishRecording(true) }
+    LaunchedEffect(recording,recordingPaused) {
+        if(recording&&!recordingPaused) { while(recording && !recordingPaused && seconds < 60) { delay(1000); seconds++ }; if(recording && seconds>=60) finishRecording(true) }
+    }
+    LaunchedEffect(resumed,rows,messagingVersion) {
+        if(!resumed || messagingVersion<3)return@LaunchedEffect
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo.map{it.key.toString()} }.distinctUntilChanged().collect { keys ->
+            val visible=rows.filter{it.optInt("sender_id")!=myId && it.isNull("read_at") && (it.optString("client_key").ifBlank{it.optInt("id").toString()}) in keys}.map{it.optInt("id")}.filter{it>0}
+            if(visible.isNotEmpty())try{api.request("/api/messages/$peerId/read","POST",JSONObject().put("ids",org.json.JSONArray(visible)))}catch(e:CancellationException){throw e}catch(_:Exception){}
+        }
     }
     DisposableEffect(Unit) { onDispose { runCatching { recorder?.stop() }; recorder?.release(); recordingFile?.delete(); voice.close() } }
     Scaffold(
         containerColor = conversationColors().background,
-        topBar = { ChatHeader(actualPeer.ifBlank { "المحادثة" }, { if(recording) finishRecording(false); back() }, { confirmCall = true }, buy, !busy && !recording, peerHandle, peerAvatar, video = { perform { val call = api.request("/api/calls", "POST", JSONObject().put("peer_id", peerId).put("mode", "video")); openCall(call.getString("id")) } }, verified = peerVerified, priceCoins = peerPrice) },
+        topBar = { ChatHeader(actualPeer.ifBlank { "المحادثة" }, { if(recording) finishRecording(false); back() }, { confirmCall = true }, buy, !busy && !recording, peerHandle, peerAvatar, video = { perform { val call = api.request("/api/calls", "POST", JSONObject().put("peer_id", peerId).put("mode", "video")); openCall(call.getString("id")) } }, verified = peerVerified, priceCoins = peerPrice, online = peerOnline, presenceKnown = presenceKnown) },
         bottomBar = { Surface(color = conversationColors().background) { Column(Modifier.navigationBarsPadding().imePadding()) {
             if(error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
             if(recording) {
-                RecordingIndicator(seconds, amplitude)
-                Row { Button(onClick = { finishRecording(true) }) { Text("إرسال التسجيل") }; TextButton(onClick = { finishRecording(false) }) { Text("إلغاء") } }
+                RecordingIndicator(seconds, amplitude, amplitudeHistory, recordingPaused)
+                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceEvenly) {
+                    TextButton(onClick={runCatching{if(recordingPaused)recorder?.resume()else recorder?.pause()}.onSuccess{recordingPaused=!recordingPaused}.onFailure{error="تعذّر تغيير حالة التسجيل."}}){Text(if(recordingPaused)"استكمال"else"إيقاف مؤقت")}
+                    Button(onClick={finishRecording(true)}){Text("إرسال")}
+                    TextButton(onClick={finishRecording(false)}){Text("إلغاء")}
+                }
             } else {
-                ChatComposer(body, { changeBody(it.take(2000)) }, busy, { photo.launch("image/*") }, { permission.launch(Manifest.permission.RECORD_AUDIO) }) {
+                ChatComposer(body, { changeBody(it.take(2000)) }, busy, { chooseAttachment = true }, { permission.launch(Manifest.permission.RECORD_AUDIO) }) {
                     enqueue(null, "text")
                 }
             }
@@ -175,7 +194,7 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
         if(displayed.isEmpty() && error.isBlank()) Column(Modifier.align(Alignment.Center).padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) { Text("مساحة لحديثكما", style = MaterialTheme.typography.titleLarge); Text("اكتب رسالة أو أرسل صورة أو تسجيلًا صوتيًا.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(horizontal = 16.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(horizontal = 16.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             items(displayed, key = { it.optString("client_key").ifBlank { it.optInt("id").toString() } }) { message ->
                 val mine = message.optInt("sender_id") == myId
                 val index = displayed.indexOf(message)
@@ -192,6 +211,7 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
         }
         }
     }
+    if(chooseAttachment) AlertDialog(onDismissRequest={chooseAttachment=false},title={Text("إرسال مرفق")},text={Text("اختر صورة أو فيديو MP4. الحد الأقصى 8MB.")},confirmButton={TextButton({chooseAttachment=false;photo.launch("image/*")}){Text("صورة")}},dismissButton={TextButton({chooseAttachment=false;videoPicker.launch("video/mp4")}){Text("فيديو")}})
     if(confirmCall) AlertDialog(onDismissRequest = { confirmCall = false }, title = { Text("اتصال داخل Relaxia") }, text = { Text("اختر نوع المكالمة. سيفتح الميكروفون أو الكاميرا بعد إذنك. الطرف الآخر يحتاج أن يكون التطبيق مفتوحًا لاستقبال الرنين.") }, confirmButton = {
         TextButton(onClick = { confirmCall = false; perform { val call = api.request("/api/calls", "POST", JSONObject().put("peer_id", peerId).put("mode", "audio")); openCall(call.getString("id")) } }) { Text("اتصال صوتي") }
     }, dismissButton = {

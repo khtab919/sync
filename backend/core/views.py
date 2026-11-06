@@ -99,7 +99,7 @@ def issue_token(user):
 def health(request):
     with connection.cursor() as cursor:
         cursor.execute('SELECT 1')
-    return JsonResponse({'status': 'ok', 'registration_version': 4, 'identity_required': False, 'brand': 'Relaxia', 'mobile_admin_version': 1, 'commerce_version': 1, 'calls_version': 1, 'messaging_version': 2, 'shop_version': 2})
+    return JsonResponse({'status': 'ok', 'registration_version': 4, 'identity_required': False, 'brand': 'Relaxia', 'mobile_admin_version': 1, 'commerce_version': 1, 'calls_version': 2, 'messaging_version': 3, 'shop_version': 2})
 
 @endpoint(['POST'], authenticated=False)
 def register(request):
@@ -347,9 +347,9 @@ def messages(request, peer_id):
     if not peer or peer == request.actor:
         raise ApiError('recipient_unavailable', 404)
     if request.method == 'GET':
-        rows = Message.objects.filter(Q(sender=request.actor, recipient=peer) | Q(sender=peer, recipient=request.actor)).select_related('attachment', 'call', 'sender', 'recipient').order_by('-id')[:100]
+        rows = Message.objects.filter(Q(sender=request.actor, recipient=peer) | Q(sender=peer, recipient=request.actor)).select_related('attachment', 'call', 'sender__profile', 'recipient__profile').order_by('-id')[:100]
         peer_profile = Profile.objects.filter(user=peer).first()
-        return JsonResponse({'peer': {'id':peer.pk,'username':peer.username,'display_name':(peer_profile.display_name if peer_profile else '') or peer.username,'avatar_url':peer_profile.avatar_url if peer_profile else '', 'creator':bool(peer_profile and peer_profile.creator), 'chat_price_cents':peer_profile.chat_price_cents if peer_profile else 0}, 'items': [message_json(request, row) for row in rows]})
+        return JsonResponse({'peer': {'id':peer.pk,'username':peer.username,'display_name':(peer_profile.display_name if peer_profile else '') or peer.username,'avatar_url':peer_profile.avatar_url if peer_profile else '', 'creator':bool(peer_profile and peer_profile.creator), 'chat_price_cents':peer_profile.chat_price_cents if peer_profile else 0, 'online':bool(peer_profile and peer_profile.last_active_at and peer_profile.last_active_at > timezone.now()-timedelta(seconds=25)), 'last_active_at':peer_profile.last_active_at if peer_profile else None}, 'items': [message_json(request, row) for row in rows]})
     submitted_body=request.payload.get('body','')
     if not isinstance(submitted_body,str) or len(submitted_body)>2000:raise ApiError('invalid_body')
     client_key = uuid.UUID(text(request.payload,'client_key',36,36)) if request.payload.get('client_key') else None
@@ -367,7 +367,7 @@ def messages(request, peer_id):
         p = request.payload
         attachment = None
         if p.get('attachment_id'):
-            attachment = UploadedMedia.objects.filter(pk=uuid.UUID(text(p, 'attachment_id', 36, 36)), owner=request.actor, purpose__in=['chat_image', 'chat_audio']).first()
+            attachment = UploadedMedia.objects.filter(pk=uuid.UUID(text(p, 'attachment_id', 36, 36)), owner=request.actor, purpose__in=['chat_image', 'chat_audio', 'chat_video']).first()
             if not attachment:
                 raise ApiError('invalid_attachment')
         body = p.get('body', '')
@@ -455,7 +455,7 @@ def reports(request):
 @endpoint(['GET'])
 def incoming_messages(request):
     from .commerce import message_json
-    rows=Message.objects.filter(recipient=request.actor,delivered_at__isnull=True,sender__is_active=True).select_related('sender','recipient','attachment','call').order_by('id')[:100]
+    rows=Message.objects.filter(recipient=request.actor,delivered_at__isnull=True,sender__is_active=True).select_related('sender__profile','recipient__profile','attachment','call').order_by('id')[:100]
     return JsonResponse({'items':[message_json(request,row) for row in rows]})
 
 @endpoint(['POST'])
@@ -463,4 +463,23 @@ def acknowledge_messages(request):
     ids=request.payload.get('ids')
     if not isinstance(ids,list) or len(ids)>100 or not all(type(value) is int and value>0 for value in ids):raise ApiError('invalid_message_ids')
     Message.objects.filter(pk__in=ids,recipient=request.actor,delivered_at__isnull=True).update(delivered_at=timezone.now())
+    return JsonResponse({'ok':True})
+
+
+@endpoint(['POST'])
+def presence(request):
+    Profile.objects.filter(user=request.actor).update(last_active_at=timezone.now())
+    return JsonResponse({'ok':True})
+
+
+@endpoint(['POST'])
+def read_messages(request, peer_id):
+    ids=request.payload.get('ids')
+    if not isinstance(ids,list) or len(ids)>100 or not all(type(i) is int and i>0 for i in ids):
+        raise ApiError('invalid_message_ids')
+    now=timezone.now()
+    with transaction.atomic():
+        rows=Message.objects.filter(pk__in=ids,sender_id=peer_id,recipient=request.actor)
+        rows.filter(delivered_at__isnull=True).update(delivered_at=now)
+        rows.filter(read_at__isnull=True).update(read_at=now)
     return JsonResponse({'ok':True})

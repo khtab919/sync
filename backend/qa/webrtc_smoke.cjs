@@ -27,10 +27,13 @@ const fs=require('fs');
   if(s.localCandidate!=='relay'||s.remoteCandidate!=='relay')throw Error('TURN relay was not used');
   if(!s.outbound.some(x=>x.kind==='video'&&x.bytesSent>0)||!s.outbound.some(x=>x.kind==='audio'&&x.bytesSent>0)||s.remoteTracks!==2)throw Error('Missing actual audio/video RTP');
  }
+ // Exercise an actual ICE restart over the relay, not just a status label.
+ await pages[0].evaluate(async()=>{lastRestart=0;await restart()});
+ for(const page of pages)await page.waitForFunction(()=>revision===1&&remoteRevision===1&&pc.connectionState==='connected',null,{timeout:25000});
  await pages[0].locator('#mute').click();if(await pages[0].evaluate(()=>stream.getAudioTracks()[0].enabled))throw Error('Mute failed');
  await pages[0].locator('#camera').click();if(await pages[0].evaluate(()=>stream.getVideoTracks()[0].enabled))throw Error('Camera disable failed');
- await request(0,'/api/calls/'+call.id,{action:'end'});
+ await pages[0].locator('#hangup').click();
  for(const page of pages)await page.waitForFunction(()=>stream.getTracks().every(t=>t.readyState==='ended'),null,{timeout:6000});
- console.log(JSON.stringify({twoPeers:stats,mute:true,cameraToggle:true,hangupStopsBothStreams:true,devices:'synthetic browser devices',transport:'forced TURN relay'}));
+ console.log(JSON.stringify({twoPeers:stats,mute:true,cameraToggle:true,hangupStopsBothStreams:true,iceRestartRecovered:true,devices:'synthetic browser devices',transport:'forced TURN relay'}));
  }finally{await browser.close()}
 })().catch(e=>{console.error(e.stack);process.exitCode=1});

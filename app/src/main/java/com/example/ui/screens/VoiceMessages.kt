@@ -16,6 +16,12 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 
 internal class VoicePlayback(private val context:Context) {
     var url by mutableStateOf("");private set
@@ -48,6 +54,7 @@ internal fun VoiceMessage(url:String,messageKey:String="") {
     val controller=shared?:own
     val identity=messageKey.ifBlank{controller.identity(url)}
     val active=controller.url==identity
+    val envelope by produceState<AudioEnvelope?>(null,identity){value=withContext(Dispatchers.IO){decodeAudioEnvelope(context,url)}}
     DisposableEffect(Unit){onDispose{own.close()}}
     LaunchedEffect(controller,controller.playing){if(shared==null)while(controller.playing){controller.tick();delay(200)}}
     Column(Modifier.widthIn(min=205.dp,max=255.dp)) {
@@ -60,12 +67,19 @@ internal fun VoiceMessage(url:String,messageKey:String="") {
                 }
                 Column(Modifier.weight(1f)) {
                     Text("رسالة صوتية",style=MaterialTheme.typography.labelSmall)
-                    Slider(value=if(active&&controller.duration>0)controller.position.toFloat()/controller.duration else 0f,
-                        onValueChange={controller.seek((it*controller.duration).toInt())},enabled=active&&controller.duration>0,
-                        colors=SliderDefaults.colors(thumbColor=LocalContentColor.current,activeTrackColor=LocalContentColor.current,inactiveTrackColor=LocalContentColor.current.copy(alpha=.2f),disabledInactiveTrackColor=LocalContentColor.current.copy(alpha=.2f),disabledThumbColor=LocalContentColor.current.copy(alpha=.5f)),modifier=Modifier.height(28.dp))
+                    val progress=if(active&&controller.duration>0)controller.position.toFloat()/controller.duration else 0f
+                    val tint=LocalContentColor.current
+                    Canvas(Modifier.fillMaxWidth().height(32.dp).semantics{contentDescription="موجة التسجيل الصوتي"}.pointerInput(identity,active,controller.duration){detectTapGestures { point -> if(active&&controller.duration>0)controller.seek((point.x/size.width*controller.duration).toInt().coerceIn(0,controller.duration)) }}) {
+                        val values=envelope?.peaks
+                        if(values!=null) values.forEachIndexed { i, amplitude ->
+                            val x=(i+.5f)*size.width/values.size
+                            val height=(size.height*.43f*amplitude).coerceAtLeast(1.dp.toPx())
+                            drawLine(tint.copy(alpha=if(i.toFloat()/values.size<=progress)1f else .35f),Offset(x,size.height/2-height),Offset(x,size.height/2+height),strokeWidth=2.dp.toPx(),cap=StrokeCap.Round)
+                        } else drawLine(tint.copy(alpha=.3f),Offset(0f,size.height/2),Offset(size.width,size.height/2),strokeWidth=2.dp.toPx())
+                    }
                 }
-                val value=if(active)if(controller.playing)controller.position else controller.duration else 0
-                Text(if(active)"${value/60000}:${((value/1000)%60).toString().padStart(2,'0')}"else"تشغيل",style=MaterialTheme.typography.labelSmall)
+                val value=if(active)if(controller.playing)controller.position else controller.duration else envelope?.durationMs?:0
+                Text(if(active||envelope!=null)"${value/60000}:${((value/1000)%60).toString().padStart(2,'0')}"else"تشغيل",style=MaterialTheme.typography.labelSmall)
             }
         }
         if(active&&controller.error.isNotBlank()) Text(controller.error,style=MaterialTheme.typography.labelSmall)
@@ -73,14 +87,15 @@ internal fun VoiceMessage(url:String,messageKey:String="") {
 }
 
 @Composable
-internal fun RecordingIndicator(seconds:Int,amplitude:Float){
+internal fun RecordingIndicator(seconds:Int,amplitude:Float, samples:List<Float> = emptyList(), paused:Boolean=false){
     val color=MaterialTheme.colorScheme.primary
     Row(Modifier.fillMaxWidth().padding(12.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)){
-        Icon(Icons.Outlined.Mic,"جارٍ تسجيل الصوت",tint=color)
+        Icon(if(paused)Icons.Outlined.Pause else Icons.Outlined.Mic,if(paused)"التسجيل متوقف مؤقتًا"else"جارٍ تسجيل الصوت",tint=color)
         Text("${seconds/60}:${(seconds%60).toString().padStart(2,'0')}")
         Canvas(Modifier.weight(1f).height(30.dp)){
             val center=size.height/2
-            for(i in 0..23){val x=(i+.5f)*size.width/24;val scale=if(i%3==0)1f else if(i%2==0).7f else .4f;val h=2.dp.toPx()+amplitude.coerceIn(0f,1f)*center*scale;drawLine(color,Offset(x,center-h),Offset(x,center+h),strokeWidth=3.dp.toPx(),cap=StrokeCap.Round)}
+            val history=samples.takeLast(40)
+            history.forEachIndexed { i, peak -> val x=(i+.5f)*size.width/40;val h=(peak.coerceIn(0f,1f)*center).coerceAtLeast(1.dp.toPx());drawLine(color,Offset(x,center-h),Offset(x,center+h),strokeWidth=3.dp.toPx(),cap=StrokeCap.Round) }
         }
         Text("60ث كحد أقصى",style=MaterialTheme.typography.labelSmall)
     }

@@ -27,10 +27,10 @@ internal class MessageOutbox(private val context: Context, origin: String, myId:
         write(rows+row);return row
     }
     @Synchronized fun file(uri:Uri,purpose:String):JSONObject {
-        require(purpose in listOf("chat_image","chat_audio"))
+        require(purpose in listOf("chat_image","chat_audio","chat_video"))
         val rows=read();require(rows.size<50)
         val key=UUID.randomUUID().toString()
-        val file=File(directory,key+if(purpose=="chat_audio")".m4a"else".image")
+        val file=File(directory,key+when(purpose){"chat_audio"->".m4a";"chat_video"->".mp4";else->".image"})
         try {
             context.contentResolver.openInputStream(uri)!!.use{input->file.outputStream().use{output->val buffer=ByteArray(8192);var total=0;while(true){val n=input.read(buffer);if(n<0)break;total+=n;require(total<=8*1024*1024);output.write(buffer,0,n)}}}
             val row=JSONObject().put("client_key",key).put("body","").put("kind",purpose).put("file",file.name).put("created_at",Instant.now().toString())
@@ -38,11 +38,11 @@ internal class MessageOutbox(private val context: Context, origin: String, myId:
         }catch(e:Exception){file.delete();throw e}
     }
     @Synchronized fun update(row:JSONObject){write(read().map{if(it.optString("client_key")==row.optString("client_key"))row else it})}
-    fun fileFor(row:JSONObject):File {val name=row.getString("file");require(name.matches(Regex("[a-f0-9-]+\\.(m4a|image)")));return File(directory,name)}
+    fun fileFor(row:JSONObject):File {val name=row.getString("file");require(name.matches(Regex("[a-f0-9-]+\\.(m4a|mp4|image)")));return File(directory,name)}
     @Synchronized fun remove(key:String){val rows=read();val row=rows.firstOrNull{it.optString("client_key")==key};write(rows.filterNot{it.optString("client_key")==key});if(row?.has("file")==true)fileFor(row).delete()}
     fun pendingJson(row:JSONObject,senderId:Int):JSONObject {
         val result=JSONObject(row.toString()).put("id",-1).put("sender_id",senderId).put("pending",true)
-        if(row.has("file"))result.put("attachment_url",Uri.fromFile(fileFor(row)).toString()).put("attachment_mime",if(row.optString("kind")=="chat_audio")"audio/mp4"else"image/jpeg")
+        if(row.has("file"))result.put("attachment_url",Uri.fromFile(fileFor(row)).toString()).put("attachment_mime",when(row.optString("kind")){"chat_audio"->"audio/mp4";"chat_video"->"video/mp4";else->"image/jpeg"})
         return result
     }
 }

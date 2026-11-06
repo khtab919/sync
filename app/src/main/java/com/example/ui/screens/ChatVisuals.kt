@@ -12,7 +12,10 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,27 +34,35 @@ import java.time.format.DateTimeFormatter
 internal data class ConversationColors(val background: Color, val incoming: Color, val accent: Color, val soft: Color)
 @Composable
 internal fun conversationColors(): ConversationColors = if (MaterialTheme.colorScheme.background.luminance() < .5f)
-    ConversationColors(Color(0xFF170E15), Color(0xFF30232E), Color(0xFFB72D61), Color(0xFF3C192B))
-else ConversationColors(Color(0xFFFFF3F6), Color(0xFFF2E8EC), Color(0xFF8F1945), Color(0xFFF4DCE5))
+    ConversationColors(Color(0xFF191517), Color(0xFF302B2D), Color(0xFF925562), Color(0xFF392D32))
+else ConversationColors(Color(0xFFF8F5F4), Color(0xFFECE7E5), Color(0xFF754451), Color(0xFFEEE3E5))
 
 @Composable
-internal fun ChatHeader(name: String, back: () -> Unit, call: () -> Unit, buy: () -> Unit, enabled: Boolean, handle: String = "", avatar: String = "", video: () -> Unit = call, verified: Boolean = false, priceCoins: Long = 0) {
+internal fun ChatAvatar(name:String, size:Int, url:String="") {
+    Box(Modifier.size(size.dp).clip(CircleShape).background(conversationColors().soft).border(1.dp,conversationColors().accent.copy(alpha=.35f),CircleShape),contentAlignment=Alignment.Center) {
+        Text(name.trim().take(1),fontSize=(size*.32f).sp,color=MaterialTheme.colorScheme.onSurface)
+        if(url.startsWith("https://"))coil.compose.AsyncImage(url,name,Modifier.fillMaxSize(),contentScale=androidx.compose.ui.layout.ContentScale.Crop)
+    }
+}
+
+@Composable
+internal fun ChatHeader(name: String, back: () -> Unit, call: () -> Unit, buy: () -> Unit, enabled: Boolean, handle: String = "", avatar: String = "", video: () -> Unit = call, verified: Boolean = false, priceCoins: Long = 0, online: Boolean = false, presenceKnown: Boolean = false) {
     val colors = conversationColors()
     Column(Modifier.background(colors.background).statusBarsPadding()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            RelaxiaAvatar(name, 0, 58, avatar)
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ChatAvatar(name, 44, avatar)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Text(name, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 21.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    Text(name, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 18.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     if (verified) Icon(Icons.Outlined.Verified, "حساب معتمد", Modifier.size(18.dp), tint = colors.accent)
                 }
-                Text(if(handle.isNotBlank() && handle != name) "@$handle" else "محادثة خاصة", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, maxLines = 1)
+                Text(if(presenceKnown && online) "متصل الآن" else if(presenceKnown) "غير متصل" else if(handle.isNotBlank() && handle != name) "@$handle" else "محادثة خاصة", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, maxLines = 1)
             }
-            FilledIconButton(video, enabled = enabled, modifier = Modifier.size(44.dp), shape = RoundedCornerShape(16.dp), colors = IconButtonDefaults.filledIconButtonColors(containerColor = colors.soft, contentColor = MaterialTheme.colorScheme.onSurface)) { Icon(Icons.Outlined.Videocam, "اتصال فيديو") }
-            FilledIconButton(call, enabled = enabled, modifier = Modifier.size(44.dp), shape = RoundedCornerShape(16.dp), colors = IconButtonDefaults.filledIconButtonColors(containerColor = colors.soft, contentColor = MaterialTheme.colorScheme.onSurface)) { Icon(Icons.Outlined.Call, "بدء اتصال") }
+            FilledIconButton(video, enabled = enabled, modifier = Modifier.size(40.dp), shape = RoundedCornerShape(14.dp), colors = IconButtonDefaults.filledIconButtonColors(containerColor = colors.soft, contentColor = MaterialTheme.colorScheme.onSurface)) { Icon(Icons.Outlined.Videocam, "اتصال فيديو") }
+            FilledIconButton(call, enabled = enabled, modifier = Modifier.size(40.dp), shape = RoundedCornerShape(14.dp), colors = IconButtonDefaults.filledIconButtonColors(containerColor = colors.soft, contentColor = MaterialTheme.colorScheme.onSurface)) { Icon(Icons.Outlined.Call, "بدء اتصال") }
             IconButton(back, modifier = Modifier.size(36.dp)) { Icon(Icons.Outlined.ArrowForward, "رجوع", tint = MaterialTheme.colorScheme.onSurface) }
         }
-        Surface(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), shape = RoundedCornerShape(25.dp), color = colors.soft) {
+        if(priceCoins > 0) Surface(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), shape = RoundedCornerShape(25.dp), color = colors.soft) {
             Row(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Icon(if(priceCoins > 0) Icons.Outlined.Lock else Icons.Outlined.ChatBubbleOutline, null, Modifier.size(24.dp), tint = colors.accent)
                 Column(Modifier.weight(1f)) {
@@ -60,6 +71,10 @@ internal fun ChatHeader(name: String, back: () -> Unit, call: () -> Unit, buy: (
                 }
                 Button(buy, enabled = enabled, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp), colors = ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = Color.White), shape = RoundedCornerShape(20.dp)) { Text("شراء رصيد", fontSize = 12.sp) }
             }
+        }
+        else Row(Modifier.fillMaxWidth().padding(horizontal=16.dp),verticalAlignment=Alignment.CenterVertically) {
+            Text("محادثة خاصة",Modifier.weight(1f),fontSize=11.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
+            TextButton(buy,enabled=enabled,contentPadding=PaddingValues(horizontal=8.dp,vertical=0.dp)){Text("شراء رصيد",fontSize=12.sp,color=colors.accent)}
         }
     }
 }
@@ -89,24 +104,29 @@ internal fun ChatDayLabel(label: String) {
 @Composable
 internal fun ChatBubble(message: JSONObject, mine: Boolean, play: (String) -> Unit, join: (String) -> Unit, retry: (String) -> Unit = {}, remove: (String) -> Unit = {}, peerName: String = "", peerAvatar: String = "") {
     val colors = conversationColors()
-    val outgoing = Color(0xFF8C2048)
+    val outgoing = Color(0xFF754451)
+    var showMedia by remember { mutableStateOf(false) }
+    if(showMedia) ChatMediaViewer(message.optString("attachment_url"),message.optString("attachment_mime").startsWith("video/")){showMedia=false}
     val time = runCatching { Instant.parse(message.optString("created_at")).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("HH:mm")) }.getOrDefault("")
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = if(mine) Arrangement.End else Arrangement.Start, verticalAlignment = Alignment.Bottom) {
-            if(!mine && peerName.isNotBlank()) { RelaxiaAvatar(peerName, 0, 34, peerAvatar); Spacer(Modifier.width(6.dp)) }
+            if(!mine && peerName.isNotBlank()) { ChatAvatar(peerName, 28, peerAvatar); Spacer(Modifier.width(6.dp)) }
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                Surface(Modifier.widthIn(max = 290.dp).weight(1f, fill = false), shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp, bottomStart = if(mine) 22.dp else 5.dp, bottomEnd = if(mine) 5.dp else 22.dp), shadowElevation = 1.dp, color = if(mine) outgoing else colors.incoming, contentColor = if(mine) Color.White else MaterialTheme.colorScheme.onSurface) {
-                    Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if(message.optString("body").isNotBlank() && message.optString("call_id").isBlank()) SelectionContainer { Text(message.optString("body"), fontSize = 17.sp, lineHeight = 25.sp) }
+                Surface(Modifier.widthIn(max = 300.dp).weight(1f, fill = false), shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp, bottomStart = if(mine) 22.dp else 5.dp, bottomEnd = if(mine) 5.dp else 22.dp), shadowElevation = 0.dp, color = if(mine) outgoing else colors.incoming, contentColor = if(mine) Color.White else MaterialTheme.colorScheme.onSurface) {
+                    Column(Modifier.padding(horizontal = 14.dp, vertical = 7.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        if(message.optString("body").isNotBlank() && message.optString("call_id").isBlank()) SelectionContainer { Text(message.optString("body"), fontSize = 16.sp, lineHeight = 23.sp) }
                         val media = message.optString("attachment_url")
-                        if(media.isNotBlank() && message.optString("attachment_mime").startsWith("image/")) coil.compose.AsyncImage(model=coil.request.ImageRequest.Builder(LocalContext.current).data(media).memoryCacheKey(media.substringBefore('?')).diskCachePolicy(coil.request.CachePolicy.DISABLED).build(),contentDescription="صورة في المحادثة",modifier=Modifier.widthIn(max=250.dp).fillMaxWidth().height(220.dp).clip(RoundedCornerShape(16.dp)),contentScale=androidx.compose.ui.layout.ContentScale.Crop)
+                        if(media.isNotBlank() && message.optString("attachment_mime").startsWith("image/")) coil.compose.AsyncImage(model=coil.request.ImageRequest.Builder(LocalContext.current).data(media).memoryCacheKey(media.substringBefore('?')).diskCachePolicy(coil.request.CachePolicy.DISABLED).build(),contentDescription="صورة في المحادثة",modifier=Modifier.widthIn(max=250.dp).fillMaxWidth().height(190.dp).clip(RoundedCornerShape(14.dp)).clickable{showMedia=true},contentScale=androidx.compose.ui.layout.ContentScale.Crop)
+                        if(media.isNotBlank() && message.optString("attachment_mime").startsWith("video/")) Surface(onClick={showMedia=true},shape=RoundedCornerShape(14.dp),color=LocalContentColor.current.copy(alpha=.1f)) {
+                            Row(Modifier.padding(18.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(10.dp)){Icon(Icons.Outlined.PlayCircleOutline,"فتح فيديو المحادثة",Modifier.size(32.dp));Text("مقطع فيديو")}
+                        }
                         if(media.isNotBlank() && message.optString("attachment_mime").startsWith("audio/")) VoiceMessage(media,message.optString("client_key").ifBlank{"message-${message.optInt("id")}"})
                         if(message.optBoolean("failed")) Row { TextButton({retry(message.optString("client_key"))},colors=ButtonDefaults.textButtonColors(contentColor=if(mine)Color.White else MaterialTheme.colorScheme.primary)){Text("إعادة المحاولة")};TextButton({remove(message.optString("client_key"))},colors=ButtonDefaults.textButtonColors(contentColor=if(mine)Color.White else MaterialTheme.colorScheme.primary)){Text("حذف")}}
                         if(message.optString("call_id").isNotBlank()) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Icon(if(message.optString("call_mode") == "video") Icons.Outlined.Videocam else Icons.Outlined.Call, null, Modifier.size(30.dp))
+                                Icon(if(message.optString("call_mode") == "video") Icons.Outlined.Videocam else Icons.Outlined.Call, null, Modifier.size(22.dp))
                                 Column {
-                                    Text(if(message.optString("call_mode") == "video") "مكالمة فيديو" else "مكالمة صوتية", fontWeight = FontWeight.SemiBold)
+                                    Text(if(message.optString("call_mode") == "video") "مكالمة فيديو" else "مكالمة صوتية", fontWeight = FontWeight.Medium, fontSize=14.sp)
                                     Text(when(message.optString("call_status")) { "missed" -> "لم يتم الرد"; "rejected" -> "تم رفض الاتصال"; "ringing" -> "جارٍ الاتصال"; "accepted" -> "مكالمة جارية"; else -> "انتهت المكالمة" }, fontSize = 12.sp)
                                 }
                             }
@@ -114,7 +134,7 @@ internal fun ChatBubble(message: JSONObject, mine: Boolean, play: (String) -> Un
                         }
                         Row(Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(time, fontSize = 11.sp, color = if(mine) Color.White.copy(alpha=.65f) else MaterialTheme.colorScheme.onSurfaceVariant)
-                            if(mine) Icon(when {message.optBoolean("failed")->Icons.Outlined.ErrorOutline;message.optBoolean("pending")->Icons.Outlined.Schedule;!message.isNull("delivered_at")->Icons.Outlined.DoneAll;else->Icons.Outlined.Check},when{message.optBoolean("failed")->"تعذّر الإرسال";message.optBoolean("pending")->"بانتظار الإرسال";!message.isNull("delivered_at")->"وصلت إلى جهاز المستلم";else->"تم إرسال الرسالة"},Modifier.size(14.dp),tint=Color.White.copy(alpha=.7f))
+                            if(mine) Icon(when {message.optBoolean("failed")->Icons.Outlined.ErrorOutline;message.optBoolean("pending")->Icons.Outlined.Schedule;!message.isNull("read_at")->Icons.Outlined.DoneAll;!message.isNull("delivered_at")->Icons.Outlined.DoneAll;else->Icons.Outlined.Check},when{message.optBoolean("failed")->"تعذّر الإرسال";message.optBoolean("pending")->"بانتظار الإرسال";!message.isNull("read_at")->"قرأها المستلم";!message.isNull("delivered_at")->"وصلت إلى جهاز المستلم";else->"تم إرسال الرسالة"},Modifier.size(14.dp),tint=if(!message.isNull("read_at"))Color(0xFFAED0D7)else Color.White.copy(alpha=.7f))
                         }
                     }
                 }

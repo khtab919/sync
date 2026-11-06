@@ -608,7 +608,7 @@ class InternalCallingTests(TestCase):
         def send(token,kind,payload): return self.client.post(path,json.dumps({'kind':kind,'data':payload}),content_type='application/json',HTTP_X_CALL_TOKEN=token)
         self.assertEqual(send(callee,'offer',{'type':'offer','sdp':'fake-test-sdp'}).status_code,403)
         self.assertEqual(send(caller,'offer',{'type':'offer','sdp':'fake-test-sdp'}).status_code,201)
-        self.assertEqual(send(caller,'offer',{'type':'offer','sdp':'fake-test-sdp'}).status_code,409)
+        self.assertEqual(send(caller,'offer',{'type':'offer','sdp':'fake-test-sdp'}).status_code,200)
         events=self.client.get(path,HTTP_X_CALL_TOKEN=callee).json()['events']
         self.assertEqual(events[0]['kind'],'offer')
         self.assertEqual(self.client.get(path,HTTP_X_CALL_TOKEN='forged').status_code,403)
@@ -776,3 +776,41 @@ class ForegroundDeliveryTests(TestCase):
         self.client.post('/api/delivery/acknowledge',json.dumps({'ids':[message.pk]}),content_type='application/json',HTTP_AUTHORIZATION='Bearer '+receiver_token)
         message.refresh_from_db();self.assertIsNotNone(message.delivered_at)
         self.assertEqual(self.client.get('/api/delivery/incoming',HTTP_AUTHORIZATION='Bearer '+receiver_token).json()['items'],[])
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+class PresenceAndReadTests(ReliableChatTests):
+    def test_read_requires_recipient_and_does_not_follow_get_or_delivery(self):
+        from django.utils import timezone
+        from datetime import timedelta
+        response=self.post(f'/api/messages/{self.receiver.pk}',{'body':'Visible only when opened'},self.sender)
+        row=Message.objects.get(pk=response.json()['id'])
+        endpoint=f'/api/messages/{self.sender.pk}/read'
+        self.post(endpoint,{'ids':[row.pk]},self.stranger);row.refresh_from_db();self.assertIsNone(row.read_at)
+        self.post(f'/api/messages/{self.sender.pk}/delivered',{'ids':[row.pk]},self.receiver)
+        row.refresh_from_db();self.assertIsNone(row.read_at);self.assertIsNotNone(row.delivered_at)
+        self.assertEqual(self.post(endpoint,{'ids':[row.pk]},self.receiver).status_code,200)
+        row.refresh_from_db();self.assertIsNotNone(row.read_at);stamp=row.read_at
+        self.post(endpoint,{'ids':[row.pk]},self.receiver);row.refresh_from_db();self.assertEqual(stamp,row.read_at)
+        peer=f'/api/messages/{self.receiver.pk}'
+        def status():return self.client.get(peer,HTTP_AUTHORIZATION='Bearer '+self.tokens[self.sender.pk]).json()['peer']['online']
+        self.assertFalse(status());self.post('/api/presence',{},self.receiver);self.assertTrue(status())
+        Profile.objects.filter(user=self.receiver).update(last_active_at=timezone.now()-timedelta(seconds=26));self.assertFalse(status())
+    def test_read_rejects_invalid_ids(self):
+        self.assertEqual(self.post(f'/api/messages/{self.sender.pk}/read',{'ids':['1']},self.receiver).status_code,400)
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+class RecoverySignalingTests(InternalCallingTests):
+    def test_restart_revisions_and_hangup_are_participant_bound(self):
+        call=self.create();self.call(f'/api/calls/{call}',{'action':'accept'},self.callee_token)
+        caller=self.room_token(call,self.caller_token);callee=self.room_token(call,self.callee_token)
+        path=f'/api/calls/{call}/signal'
+        def send(token,kind,data):return self.client.post(path,json.dumps({'kind':kind,'data':data}),content_type='application/json',HTTP_X_CALL_TOKEN=token)
+        for revision in (0,1):
+            data={'type':'offer','sdp':f'test-sdp-{revision}','revision':revision}
+            self.assertEqual(send(caller,'offer',data).status_code,201)
+            self.assertEqual(send(caller,'offer',data).status_code,200)
+            self.assertEqual(send(caller,'offer',dict(data,sdp='different')).status_code,409)
+        self.assertEqual(send(callee,'offer',{'type':'offer','sdp':'forbidden','revision':2}).status_code,403)
+        self.assertEqual(send(caller,'offer',{'type':'offer','sdp':'too-many','revision':9}).status_code,400)
+        self.assertEqual(send(callee,'hangup',{}).status_code,200)
+        self.assertEqual(self.call(f'/api/calls/{call}').json()['status'],'ended')

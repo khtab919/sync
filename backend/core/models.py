@@ -16,6 +16,7 @@ class Profile(models.Model):
     display_name = models.CharField(max_length=100, blank=True)
     selected_frame = models.PositiveSmallIntegerField(default=0)
     avatar_url = models.URLField(max_length=500, blank=True)
+    last_active_at = models.DateTimeField(null=True, blank=True)
 
 class Service(models.Model):
     image = models.ForeignKey("UploadedMedia", null=True, blank=True, on_delete=models.PROTECT)
@@ -58,6 +59,7 @@ class Withdrawal(models.Model):
 class Message(models.Model):
     client_key = models.UUIDField(null=True, blank=True)
     delivered_at = models.DateTimeField(null=True, blank=True)
+    read_at = models.DateTimeField(null=True, blank=True)
     class Meta:
         constraints = [models.UniqueConstraint(fields=['sender','client_key'], name='unique_message_client_key')]
 
@@ -179,6 +181,7 @@ class PaidSpin(models.Model):
         constraints = [models.UniqueConstraint(fields=['user', 'request_key'], name='unique_paid_spin_request')]
 
 class InternalCall(models.Model):
+    ringing_at = models.DateTimeField(null=True, blank=True)
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     caller = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='outgoing_calls')
     callee = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='incoming_calls')

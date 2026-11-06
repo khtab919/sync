@@ -223,4 +223,14 @@ class ReferenceDesignTest {
         screenshot(file)
     }
 
+    @Test fun readReceiptUsesDistinctServerReadState() {
+        compose.setContent { MyApplicationTheme { Surface { ChatBubble(JSONObject().put("id",1).put("body","قُرئت").put("read_at","2026-11-06T12:00:00Z").put("delivered_at","2026-11-06T12:00:00Z"),true,{}, {}) } } }
+        compose.onNodeWithContentDescription("قرأها المستلم").assertExists()
+    }
+    @Test fun recordingPauseHasRealStateLabel() {
+        compose.setContent { MyApplicationTheme { Surface { RecordingIndicator(12,.4f,listOf(.1f,.3f,.6f,.2f),true) } } }
+        compose.onNodeWithContentDescription("التسجيل متوقف مؤقتًا").assertExists()
+        compose.onNodeWithText("0:12").assertExists()
+    }
+
 }

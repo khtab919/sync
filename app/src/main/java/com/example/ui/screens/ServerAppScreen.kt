@@ -223,7 +223,9 @@ fun ServerAppScreen(baseUrl: String) {
         val inbox=MessageInbox(context,api.origin,profile.optInt("id"))
         while(true){
             try {
-                if(api.request("/health/").optInt("messaging_version")>=2){
+                val messageVersion=api.request("/health/").optInt("messaging_version")
+                if(messageVersion>=3)api.request("/api/presence","POST",JSONObject())
+                if(messageVersion>=2){
                     val received=api.request("/api/delivery/incoming").rows()
                     if(received.isNotEmpty()){
                         withContext(Dispatchers.IO){inbox.save(received)}

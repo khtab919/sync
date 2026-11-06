@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -88,11 +90,10 @@ internal fun InternalCallScreen(api: LayaliApi, baseUrl: String, callId: String,
         onDispose { lifecycle.removeObserver(observer) }
     }
     DisposableEffect(Unit) { onDispose { webView?.stopLoading(); webView?.loadUrl("about:blank"); webView?.destroy(); webView = null } }
-    Surface(Modifier.fillMaxSize()) { Column(Modifier.fillMaxSize().safeDrawingPadding()) {
-        Row(Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(if(call.optString("mode") == "video") "مكالمة فيديو" else "مكالمة صوتية", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f).padding(10.dp))
-            TextButton(onClick = { speaker = !speaker }) { Text(if(speaker) "السماعة الخارجية" else "سماعة الهاتف") }
-            Button(onClick = finish, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("إنهاء") }
+    Surface(Modifier.fillMaxSize(),color=Color(0xFF20191D),contentColor=Color(0xFFF5EFED)) { Column(Modifier.fillMaxSize().safeDrawingPadding()) {
+        if(bootstrap==null || error.isNotBlank()) Row(Modifier.fillMaxWidth().padding(12.dp),verticalAlignment=Alignment.CenterVertically) {
+            Text("اتصال ليالي",Modifier.weight(1f),color=Color(0xFFF5EFED))
+            TextButton(finish){Text("إنهاء",color=Color(0xFFE1A4AA))}
         }
         if(error.isNotBlank()) Text(error, Modifier.padding(20.dp), color = MaterialTheme.colorScheme.error)
         val room = bootstrap
@@ -100,6 +101,18 @@ internal fun InternalCallScreen(api: LayaliApi, baseUrl: String, callId: String,
             AndroidView(modifier = Modifier.weight(1f).fillMaxWidth(), factory = { viewContext ->
                 WebView(viewContext).apply {
                     webView = this
+                    setBackgroundColor(android.graphics.Color.rgb(32,25,29))
+                    addJavascriptInterface(object {
+                        @JavascriptInterface fun toggleSpeaker() { android.os.Handler(android.os.Looper.getMainLooper()).post {
+                            if(trustedCallOrigin(this@apply.url.orEmpty(),baseUrl) && Uri.parse(this@apply.url).path=="/api/calls/$callId/room") {
+                                speaker=!speaker
+                                this@apply.evaluateJavascript("window.updateSpeaker && window.updateSpeaker($speaker)",null)
+                            }
+                        } }
+                        @JavascriptInterface fun endCall() { android.os.Handler(android.os.Looper.getMainLooper()).post {
+                            if(trustedCallOrigin(this@apply.url.orEmpty(),baseUrl) && Uri.parse(this@apply.url).path=="/api/calls/$callId/room") finish()
+                        } }
+                    },"LayaliCall")
                     settings.javaScriptEnabled = true
                     settings.allowFileAccess = false
                     settings.allowContentAccess = false
@@ -108,6 +121,7 @@ internal fun InternalCallScreen(api: LayaliApi, baseUrl: String, callId: String,
                     settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
                     settings.mediaPlaybackRequiresUserGesture = false
                     webViewClient = object : WebViewClient() {
+                        override fun onPageFinished(view:WebView?,url:String?) { if(trustedCallOrigin(url.orEmpty(),baseUrl)) view?.evaluateJavascript("window.updateSpeaker && window.updateSpeaker($speaker)",null) }
                         override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                             val uri = request?.url ?: return true
                             return !trustedCallOrigin(uri.toString(), baseUrl) || uri.path != "/api/calls/$callId/room"

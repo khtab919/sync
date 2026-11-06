@@ -60,7 +60,7 @@ def media_file(request, media_id):
 @endpoint(['POST'])
 def upload(request):
     purpose = request.payload.get('purpose')
-    if purpose not in ('offer', 'receipt', 'chat_image', 'chat_audio', 'reel'):
+    if purpose not in ('offer', 'receipt', 'chat_image', 'chat_audio', 'chat_video', 'reel'):
         raise ApiError('invalid_purpose')
     if purpose in ('offer', 'reel') and not Profile.objects.filter(user=request.actor, creator=True).exists():
         raise ApiError('creator_account_required', 403)
@@ -277,7 +277,7 @@ def review_requests(request):
 
 
 def message_json(request, row):
-    return {'id': row.pk, 'sender_id': row.sender_id, 'recipient_id': row.recipient_id, 'body': row.body, 'created_at': row.created_at, 'attachment_url': grant_url(request, row.attachment) if row.attachment_id else '', 'attachment_mime': row.attachment.mime if row.attachment_id else '', 'client_key': str(row.client_key) if row.client_key else '', 'delivered_at': row.delivered_at, 'recipient_name': row.recipient.username, 'sender_name': row.sender.username, 'call_url': '', 'call_id': str(row.call_id) if row.call_id else '', 'call_mode': row.call.mode if row.call_id else '', 'call_status': row.call.status if row.call_id else ''}
+    return {'id': row.pk, 'sender_id': row.sender_id, 'recipient_id': row.recipient_id, 'body': row.body, 'created_at': row.created_at, 'attachment_url': grant_url(request, row.attachment) if row.attachment_id else '', 'attachment_mime': row.attachment.mime if row.attachment_id else '', 'client_key': str(row.client_key) if row.client_key else '', 'delivered_at': row.delivered_at, 'read_at': row.read_at, 'recipient_name': getattr(getattr(row.recipient,'profile',None),'display_name','') or row.recipient.username, 'sender_name': getattr(getattr(row.sender,'profile',None),'display_name','') or row.sender.username, 'call_url': '', 'call_id': str(row.call_id) if row.call_id else '', 'call_mode': row.call.mode if row.call_id else '', 'call_status': row.call.status if row.call_id else ''}
 
 
 def wheel_settings(config):
