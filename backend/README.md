@@ -99,3 +99,13 @@ Identity verification is not required for reels, creator publication, creator di
 Only service, session and product categories are accepted. Existing educational-category listings are deactivated by migration 0006, not deleted, and are hidden from active lists. The new rose/plum theme uses native shaded surfaces, press depth and ten ornamental vector frames plus a plain ring; no demo level badges or fictional profile identities are introduced. These are native 2.5D lighting/depth effects, not a 3D scene engine.
 
 Run the same documented `git pull` and `backend/deploy.sh` update to apply migrations 0005–0006 before installing Relaxia 8.0. Database volume, user IDs and saved-session origin remain unchanged. Payments and real transfers are still not implemented.
+
+
+### Account administration
+After deploying migrations, authorize an existing account (exactly one email match required):
+```bash
+docker compose exec api python manage.py authorize_creator macitcomah@gmail.com
+```
+This enables publishing and creator discovery; content still requires moderation.
+Create a separate administrator interactively with `docker compose exec api python manage.py createsuperuser`. Never place passwords in shell command arguments.
+At `/admin/`, Users supports ban/unban and account previews. Bans revoke API sessions and hide creator content from public listings. Wallets supports superuser-only positive credit adjustments in integer USD cents, requiring a reason and storing an immutable administrator audit entry. These adjustments are internal credits, not payment-provider deposits. Financial bookings, withdrawals and audit entries cannot be directly rewritten through admin.

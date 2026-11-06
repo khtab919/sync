@@ -1,0 +1,1 @@
+{% extends "admin/base_site.html" %}{% block content %}<h2>{{ wallet.user }} — الرصيد الحالي: {{ wallet.balance_cents }} سنت</h2><p>إضافة إدارية داخلية بالدولار؛ لا تمثل إيداعًا من بوابة دفع.</p><form method="post">{% csrf_token %}{{ form.as_p }}<input type="submit" value="تأكيد إضافة الرصيد"></form>{% endblock %}

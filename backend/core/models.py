@@ -102,3 +102,11 @@ class SupportTicket(models.Model):
     body = models.CharField(max_length=2000)
     reply = models.CharField(max_length=2000, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class BalanceAdjustment(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='balance_adjustments')
+    administrator = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='issued_balance_adjustments')
+    amount_cents = models.PositiveBigIntegerField()
+    reason = models.CharField(max_length=300)
+    created_at = models.DateTimeField(auto_now_add=True)

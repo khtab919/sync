@@ -279,3 +279,52 @@ class RelaxiaRequirementsTests(TestCase):
             self.assertEqual(result.json()['items'], [])
         self.assertEqual(self.post('/api/bookings', {'service_id': service.pk}).status_code, 404)
         self.assertTrue(Service.objects.filter(pk=service.pk).exists())
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+class AdministrationTests(TestCase):
+    def setUp(self):
+        self.admin = get_user_model().objects.create_superuser('administrator', 'admin@example.com', 'unique-admin-pass')
+        self.user = get_user_model().objects.create_user('member', 'macitcomah@gmail.com', 'unique-member-pass')
+        Profile.objects.create(user=self.user)
+        self.wallet = Wallet.objects.create(user=self.user)
+
+    def test_authorize_creator_and_ambiguous_email(self):
+        from django.core.management import call_command, CommandError
+        call_command('authorize_creator', 'MACITCOMAH@gmail.com')
+        self.user.profile.refresh_from_db()
+        self.assertTrue(self.user.profile.creator)
+        get_user_model().objects.create_user('duplicate', 'macitcomah@gmail.com')
+        with self.assertRaises(CommandError):
+            call_command('authorize_creator', 'macitcomah@gmail.com')
+
+    def test_credit_requires_superuser_and_records_audit(self):
+        from .models import BalanceAdjustment
+        url = f'/admin/core/wallet/{self.wallet.pk}/credit/'
+        self.client.force_login(self.user)
+        self.assertEqual(self.client.post(url, {'amount_cents': 500, 'reason': 'support credit'}).status_code, 302)
+        self.user.is_staff = True
+        self.user.save()
+        self.assertEqual(self.client.post(url, {'amount_cents': 500, 'reason': 'support credit'}).status_code, 403)
+        self.client.force_login(self.admin)
+        self.assertEqual(self.client.post(url, {'amount_cents': -1, 'reason': 'invalid'}).status_code, 200)
+        self.assertEqual(self.client.post(url, {'amount_cents': 500, 'reason': 'support credit'}).status_code, 302)
+        self.wallet.refresh_from_db()
+        self.assertEqual(self.wallet.balance_cents, 500)
+        entry = BalanceAdjustment.objects.get()
+        self.assertEqual(entry.administrator, self.admin)
+        self.assertEqual(entry.amount_cents, 500)
+
+    def test_ban_invalidates_sessions_and_preview_is_available(self):
+        from .models import SessionToken
+        from .admin import AccountAdmin
+        from django.contrib import admin
+        from django.test import RequestFactory
+        issue_token(self.user)
+        request = RequestFactory().post('/admin/auth/user/')
+        request.user = self.admin
+        AccountAdmin(get_user_model(), admin.site).ban_accounts(request, get_user_model().objects.filter(pk=self.user.pk))
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.is_active)
+        self.assertFalse(SessionToken.objects.filter(user=self.user).exists())
+        self.client.force_login(self.admin)
+        self.assertContains(self.client.get(f'/admin/auth/user/{self.user.pk}/preview/'), 'macitcomah@gmail.com')
