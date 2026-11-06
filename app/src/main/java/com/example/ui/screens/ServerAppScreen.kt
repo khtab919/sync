@@ -114,6 +114,7 @@ fun ServerAppScreen(baseUrl: String) {
     }
     fun showService(item: JSONObject) { selected = item; open("تفاصيل العرض") }
     fun showCreator(id: Int) {
+        if (id == profile.optInt("id")) { page = ""; tab = 4; return }
         creator = creators.firstOrNull { it.optInt("id") == id } ?: JSONObject().put("id", id)
         if (creator.has("display_name")) open("صفحة المذيعة")
         else { notice = "هذا الملف غير متاح حاليًا." }
@@ -237,7 +238,7 @@ fun ServerAppScreen(baseUrl: String) {
                             val visible = (if (screen == "المحفوظات") rows else services).filter { (category == "الكل" || it.optString("category") == category) && it.optString("title").contains(query, true) }
                             if (visible.isEmpty() && !loading && contentError.isBlank()) item { ReferenceEmpty(Icons.Outlined.Storefront, "لا توجد عروض بعد", "العروض المعتمدة تظهر هنا. يمكنك العودة لاحقًا أو تحديث الصفحة.") }
                             items(visible.chunked(2)) { pair -> Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                pair.forEach { service -> Box(Modifier.weight(1f)) { OfferCard(service) { showService(service) } }
+                                pair.forEach { service -> Box(Modifier.weight(1f)) { OfferCard(service) { showService(service) } } }
                                 if (pair.size == 1) Spacer(Modifier.weight(1f))
                             } }
                         }
