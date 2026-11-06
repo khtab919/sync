@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -31,7 +32,7 @@ import org.json.JSONObject
 import java.io.File
 
 @Composable
-internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, myId: Int, back: () -> Unit) {
+internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, myId: Int, body: String, changeBody: (String) -> Unit, buy: () -> Unit, back: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val uri = LocalUriHandler.current
@@ -39,7 +40,6 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
     val lifecycleOwner = LocalLifecycleOwner.current
     var resumed by remember { mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
     var rows by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
-    var body by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var recording by remember { mutableStateOf(false) }
@@ -99,20 +99,23 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
             delay(3000)
         }
     }
+    var historyLoaded by rememberSaveable(peerId) { mutableStateOf(false) }
+    var previousNewest by rememberSaveable(peerId) { mutableIntStateOf(0) }
     val newest = rows.lastOrNull()?.optInt("id") ?: 0
     LaunchedEffect(newest) {
-        if(rows.isNotEmpty() && (listState.layoutInfo.totalItemsCount == 0 || listState.firstVisibleItemIndex + listState.layoutInfo.visibleItemsInfo.size >= rows.size - 2 || rows.last().optInt("sender_id") == myId)) listState.animateScrollToItem(rows.lastIndex)
+        if(rows.isEmpty()) return@LaunchedEffect
+        val arrived = previousNewest > 0 && newest > previousNewest
+        val atBottom = listState.firstVisibleItemIndex + listState.layoutInfo.visibleItemsInfo.size >= rows.size - 2
+        if(!historyLoaded || (arrived && (atBottom || rows.last().optInt("sender_id") == myId))) listState.scrollToItem(rows.lastIndex)
+        historyLoaded = true; previousNewest = newest
     }
     LaunchedEffect(recording) {
         if(recording) { while(recording && seconds < 60) { delay(1000); seconds++ }; if(recording) finishRecording(true) }
     }
     DisposableEffect(Unit) { onDispose { runCatching { recorder?.stop() }; recorder?.release(); recordingFile?.delete(); player?.release() } }
     Scaffold(
-        topBar = { Surface { Row(Modifier.fillMaxWidth().statusBarsPadding().padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            TextButton(onClick = { if(recording) finishRecording(false); back() }) { Text("رجوع") }
-            Text(peerName, Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
-            TextButton(onClick = { confirmCall = true }, enabled = !busy && !recording) { Text("اتصال") }
-        } } },
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = { ChatHeader(peerName, { if(recording) finishRecording(false); back() }, { confirmCall = true }, buy, !busy && !recording) },
         bottomBar = { Surface(shadowElevation = 8.dp) { Column(Modifier.navigationBarsPadding().imePadding().padding(10.dp)) {
             if(error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
             if(busy) LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -120,38 +123,19 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
                 Text("جارٍ التسجيل · $seconds ثانية · 60 ثانية كحد أقصى")
                 Row { Button(onClick = { finishRecording(true) }) { Text("إرسال التسجيل") }; TextButton(onClick = { finishRecording(false) }) { Text("إلغاء") } }
             } else {
-                OutlinedTextField(body, { body = it.take(2000) }, placeholder = { Text("اكتب رسالتك") }, maxLines = 4, modifier = Modifier.fillMaxWidth(), enabled = !busy)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    TextButton(onClick = { photo.launch("image/*") }, enabled = !busy) { Text("صورة") }
-                    TextButton(onClick = { permission.launch(Manifest.permission.RECORD_AUDIO) }, enabled = !busy) { Text("تسجيل صوتي") }
-                    Button(onClick = { perform { api.request("/api/messages/$peerId", "POST", JSONObject().put("body", body)); body = "" } }, enabled = !busy && body.isNotBlank()) { Text("إرسال") }
+                ChatComposer(body, { changeBody(it.take(2000)) }, busy, { photo.launch("image/*") }, { permission.launch(Manifest.permission.RECORD_AUDIO) }) {
+                    perform { api.request("/api/messages/$peerId", "POST", JSONObject().put("body", body)); changeBody("") }
                 }
             }
         } } }
     ) { padding ->
-        LazyColumn(Modifier.fillMaxSize().padding(padding), state = listState, contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        LazyColumn(Modifier.fillMaxSize().padding(padding), state = listState, contentPadding = PaddingValues(horizontal = 16.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(rows, key = { it.optInt("id") }) { message ->
                 val mine = message.optInt("sender_id") == myId
-                // Explicit LTR positioning keeps outgoing messages on the physical right in Arabic.
-                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = if(mine) Arrangement.End else Arrangement.Start) {
-                        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                            Surface(Modifier.widthIn(max = 300.dp), shape = RoundedCornerShape(18.dp), color = if(mine) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant) {
-                                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    if(message.optString("body").isNotBlank()) Text(message.optString("body"))
-                                    val media = message.optString("attachment_url")
-                                    if(media.isNotBlank() && message.optString("attachment_mime").startsWith("image/")) ReferenceImage(media, Modifier.width(250.dp).height(220.dp))
-                                    if(media.isNotBlank() && message.optString("attachment_mime").startsWith("audio/")) TextButton(onClick = {
-                                        player?.release()
-                                        runCatching { MediaPlayer().also { p -> player = p; p.setDataSource(media); p.setOnPreparedListener { it.start() }; p.setOnCompletionListener { it.release(); if(player == it) player = null }; p.setOnErrorListener { mp, _, _ -> mp.release(); if(player == mp) player = null; error = "تعذّر تشغيل التسجيل."; true }; p.prepareAsync() } }.onFailure { error = "تعذّر تشغيل التسجيل." }
-                                    }) { Text("▶ تشغيل التسجيل الصوتي") }
-                                    if(message.optString("call_url").startsWith("https://meet.jit.si/Relaxia-")) TextButton(onClick = { confirmJoin = message.optString("call_url") }) { Text("الانضمام إلى الاتصال") }
-                                    Text(message.optString("created_at").substringAfter('T').take(5), style = MaterialTheme.typography.labelSmall)
-                                }
-                            }
-                        }
-                    }
-                }
+                ChatBubble(message, mine, { media ->
+                    player?.release()
+                    runCatching { MediaPlayer().also { p -> player = p; p.setDataSource(media); p.setOnPreparedListener { it.start() }; p.setOnCompletionListener { it.release(); if(player == it) player = null }; p.setOnErrorListener { mp, _, _ -> mp.release(); if(player == mp) player = null; error = "تعذّر تشغيل التسجيل."; true }; p.prepareAsync() } }.onFailure { error = "تعذّر تشغيل التسجيل." }
+                }, { confirmJoin = it })
             }
         }
     }

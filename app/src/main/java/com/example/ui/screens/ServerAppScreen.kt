@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -77,6 +78,11 @@ fun ServerAppScreen(baseUrl: String) {
     var rows by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var selected by remember { mutableStateOf(JSONObject()) }
     var creator by remember { mutableStateOf(JSONObject()) }
+    val chatState = rememberSaveableStateHolder()
+    var purchaseReturn by rememberSaveable { mutableStateOf("") }
+    var walletAccountId by remember { mutableIntStateOf(0) }
+    var walletLoading by remember { mutableStateOf(false) }
+    var walletError by remember { mutableStateOf("") }
     var wallet by remember { mutableStateOf(JSONObject()) }
     var query by rememberSaveable { mutableStateOf("") }
     var category by rememberSaveable { mutableStateOf("الكل") }
@@ -105,6 +111,7 @@ fun ServerAppScreen(baseUrl: String) {
     var reason by rememberSaveable { mutableStateOf("") }
 
     fun open(route: String) { page = route; notice = ""; contentError = ""; query = "" }
+    fun buyCredits() { purchaseReturn = page; open("شحن الرصيد") }
     fun back() { page = ""; query = ""; notice = "" }
     fun perform(action: suspend () -> Unit) {
         if (submitting) return
@@ -149,6 +156,16 @@ fun ServerAppScreen(baseUrl: String) {
     }
     val screen = page.ifBlank { destinations[tab] }
     BackHandler(enabled = signedIn && page.isNotBlank()) { back() }
+    LaunchedEffect(signedIn, profile.optInt("id"), screen, revision) {
+        if (!signedIn || profile.optBoolean("is_admin")) return@LaunchedEffect
+        if (screen !in listOf("تصفح", "حسابي", "دردشة", "المحفظة")) return@LaunchedEffect
+        walletLoading = true; walletError = ""
+        val accountId = profile.optInt("id")
+        try { wallet = api.request("/api/wallet"); walletAccountId = accountId }
+        catch (e: CancellationException) { throw e }
+        catch (e: Exception) { walletError = "تعذّر تحديث الرصيد"; if (api.token == null) signedIn = false }
+        finally { walletLoading = false }
+    }
     LaunchedEffect(screen, signedIn, revision) {
         if (!signedIn || profile.optBoolean("is_admin")) return@LaunchedEffect
         loading = true; contentError = ""; rows = emptyList()
@@ -165,7 +182,7 @@ fun ServerAppScreen(baseUrl: String) {
                 "محادثة" -> rows = api.request("/api/messages/$peerId").rows()
                 "المحفوظات" -> rows = api.request("/api/saved").rows()
                 "الحجوزات" -> rows = api.request("/api/bookings").rows()
-                "المحفظة" -> { wallet = api.request("/api/wallet"); rows = api.request("/api/withdrawals").rows() }
+                "المحفظة" -> { rows = api.request("/api/withdrawals").rows() }
                 "الدعم وخدمة العملاء" -> rows = api.request("/api/support").rows()
             }
         } catch (e: CancellationException) { throw e }
@@ -220,7 +237,7 @@ fun ServerAppScreen(baseUrl: String) {
             return@MyApplicationTheme
         }
         if (screen in listOf("شحن الرصيد", "تفعيل البائع", "العجلة")) {
-            CommerceScreen(api, screen) { back(); revision++ }
+            CommerceScreen(api, screen) { page = purchaseReturn; purchaseReturn = ""; notice = ""; revision++ }
             return@MyApplicationTheme
         }
         if (screen == "إضافة عرض") {
@@ -228,7 +245,9 @@ fun ServerAppScreen(baseUrl: String) {
             return@MyApplicationTheme
         }
         if (screen == "محادثة" && peerId.toIntOrNull() != null) {
-            ConversationScreen(api, peerId.toInt(), peerName, profile.optInt("id")) { back(); revision++ }
+            chatState.SaveableStateProvider("conversation-$peerId") {
+                ConversationScreen(api, peerId.toInt(), peerName, profile.optInt("id"), message, { message = it }, { buyCredits() }) { back(); revision++ }
+            }
             return@MyApplicationTheme
         }
         Scaffold(
@@ -245,6 +264,7 @@ fun ServerAppScreen(baseUrl: String) {
                     navigationIcon = { if (page.isNotBlank()) IconButton(onClick = { back() }) { Icon(Icons.Outlined.ArrowForward, "رجوع") } },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
                     actions = {
+                        if (screen in listOf("تصفح", "العرض", "دردشة")) TextButton(onClick = { buyCredits() }) { Icon(Icons.Outlined.AccountBalanceWallet, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("شراء رصيد") }
                         when (screen) {
                             "تصفح" -> IconButton(onClick = { open("المحفوظات") }) { Icon(Icons.Outlined.BookmarkBorder, "المحفوظات") }
                             "العرض" -> {
@@ -283,6 +303,7 @@ fun ServerAppScreen(baseUrl: String) {
                 } else LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     when (screen) {
                         "تصفح" -> {
+                            item { Box(Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) { WalletBalanceCard(if(walletAccountId == profile.optInt("id") && wallet.has("available_cents")) wallet.optLong("available_cents") else null, walletLoading, walletError, { buyCredits() }, { open("المحفظة") }, { revision++ }) } }
                             item { SearchField(query, { query = it }, "ابحث عن مذيعة أو خدمة") }
                             item {
                                 LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -373,6 +394,7 @@ fun ServerAppScreen(baseUrl: String) {
                         "حسابي", "صفحة المذيعة" -> {
                             val own = screen == "حسابي"
                             val person = if (own) profile else creator
+                            if (own) item { Box(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) { WalletBalanceCard(if(walletAccountId == profile.optInt("id") && wallet.has("available_cents")) wallet.optLong("available_cents") else null, walletLoading, walletError, { buyCredits() }, { open("المحفظة") }, { revision++ }) } }
                             item { ProfileHero(person, own, { if (own) open("الإعدادات") else back() }, { if (own) editProfile() else startChat(person.optInt("id"), person.optString("display_name")) }, {
                                 if (own) open("إطاراتي") else perform {
                                     creator = api.request("/api/creators/${person.optInt("id")}/follow", "POST", JSONObject().put("enabled", !person.optBoolean("following")))
@@ -387,7 +409,7 @@ fun ServerAppScreen(baseUrl: String) {
                             if (offers.isEmpty() && !loading) item { ReferenceEmpty(Icons.Outlined.Storefront, "اعرض خدمة، جلسة، أو منتجًا", "تظهر العروض هنا بعد مراجعة الإدارة واعتمادها.") }
                             items(offers) { offer -> Box(Modifier.padding(horizontal = 20.dp)) { OfferCard(offer) { showService(offer) } } }
                             if (own) item { FormColumn {
-                                ReferenceRow(Icons.Outlined.AddCard, "شراء وشحن الرصيد") { open("شحن الرصيد") }
+                                ReferenceRow(Icons.Outlined.AddCard, "شراء رصيد") { buyCredits() }
                                 ReferenceRow(Icons.Outlined.Casino, "عجلة الحظ المدفوعة") { open("العجلة") }
                                 if (!profile.optBoolean("creator")) ReferenceRow(Icons.Outlined.Storefront, "طلب تفعيل البائع") { open("تفعيل البائع") }
                                 ReferenceRow(Icons.Outlined.AccountBalanceWallet, "المحفظة والسحب") { price = ""; open("المحفظة") }
@@ -455,7 +477,7 @@ fun ServerAppScreen(baseUrl: String) {
                                     Text(usd(wallet.optLong("available_cents")), fontSize = 32.sp, fontWeight = FontWeight.Bold)
                                     Text("محجوز: ${usd(wallet.optLong("reserved_cents"))}", color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 } }
-                                ReferencePrimary("شراء رصيد عبر USDT", !submitting) { open("شحن الرصيد") }
+                                ReferencePrimary("شراء رصيد عبر USDT", !submitting) { buyCredits() }
                                 Text("الشحن يعتمد بعد تحقق الإدارة من التحويل. طلب السحب يحجز الرصيد للمراجعة ولا ينفّذ تحويلًا تلقائيًا.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Field(price, { price = it; requestKey = UUID.randomUUID().toString() }, "مبلغ السحب بالدولار", numeric = true)
                                 Field(destination, { destination = it; requestKey = UUID.randomUUID().toString() }, "جهة استلام الأموال")

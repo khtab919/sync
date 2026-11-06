@@ -119,4 +119,39 @@ class ReferenceDesignTest {
         compose.onNodeWithText("إرسال للمراجعة").assertIsNotEnabled()
         screenshot("07-reel-upload")
     }
+
+    @Test fun walletCardMakesCreditPurchaseVisibleAndDoesNotInventBalance() {
+        var bought = 0
+        var opened = 0
+        compose.setContent { MyApplicationTheme { Column(Modifier.fillMaxSize().padding(20.dp)) { WalletBalanceCard(0L, false, "", { bought++ }, { opened++ }, {}) } } }
+        compose.onNodeWithText("بطاقة رصيدك").assertExists()
+        compose.onNodeWithText("0.00 USD").assertExists()
+        compose.onNodeWithText("شراء رصيد").performClick()
+        compose.onNodeWithText("المحفظة").performClick()
+        org.junit.Assert.assertEquals(1, bought)
+        org.junit.Assert.assertEquals(1, opened)
+        screenshot("08-wallet-card")
+    }
+
+    @Test fun chatComposerAndBothMessageDirectionsAreReadable() {
+        var sent = 0
+        val incoming = JSONObject().put("id",1).put("body","أهلًا، متى يناسبك موعد الجلسة؟").put("created_at","2026-11-06T12:00:00Z")
+        val outgoing = JSONObject().put("id",2).put("body","أهلًا بك، يناسبني المساء. سأرسل لك التفاصيل هنا.").put("created_at","2026-11-06T12:01:00Z")
+        compose.setContent { MyApplicationTheme {
+            var draft by remember { mutableStateOf("") }
+            Column(Modifier.fillMaxSize()) {
+                ChatHeader("حساب الاختبار", {}, {}, {}, true)
+                Column(Modifier.weight(1f).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) { ChatBubble(incoming, false, {}, {}); ChatBubble(outgoing, true, {}, {}) }
+                ChatComposer(draft, { draft = it }, false, {}, {}) { sent++; draft = "" }
+            }
+        } }
+        compose.onNodeWithContentDescription("إرسال الرسالة").assertIsNotEnabled()
+        compose.onNode(hasSetTextAction()).performTextInput("رسالة جديدة")
+        compose.onNodeWithContentDescription("إرسال الرسالة").performClick()
+        org.junit.Assert.assertEquals(1, sent)
+        compose.onNodeWithContentDescription("إرسال صورة").assertExists()
+        compose.onNodeWithContentDescription("تسجيل رسالة صوتية").assertExists()
+        compose.onNodeWithText("شراء رصيد").assertExists()
+        screenshot("09-chat-layout")
+    }
 }
