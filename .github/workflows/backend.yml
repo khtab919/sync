@@ -47,6 +47,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Test transient call signaling recovery
+        run: node backend/qa/call_recovery_test.cjs
       - name: Test actual WebRTC audio and video through TURN
         env:
           CALL_SMOKE_CONFIG: ${{ runner.temp }}/relaxia-call-smoke.json
