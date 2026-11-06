@@ -14,6 +14,7 @@ class Profile(models.Model):
     bio = models.CharField(max_length=300, blank=True)
     display_name = models.CharField(max_length=100, blank=True)
     selected_frame = models.PositiveSmallIntegerField(default=0)
+    avatar_url = models.URLField(max_length=500, blank=True)
 
 class Service(models.Model):
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
@@ -21,7 +22,7 @@ class Service(models.Model):
     description = models.TextField(max_length=600)
     price_cents = models.PositiveIntegerField()
     image_url = models.URLField(max_length=500, blank=True)
-    category = models.CharField(max_length=30, default='خدمة')
+    category = models.CharField(max_length=30, default='خدمة', choices=[('خدمة', 'خدمة'), ('جلسة', 'جلسة'), ('منتج', 'منتج')])
     approved = models.BooleanField(default=False)
     active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)

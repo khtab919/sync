@@ -122,7 +122,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Layali-native-previews
+          name: Relaxia-native-previews
           path: app/build/reference-previews/*.png
           if-no-files-found: ignore
 
@@ -130,23 +130,23 @@ jobs:
         run: gradle assembleDebug "-PLAYALI_API_URL=${LAYALI_API_URL}" --no-daemon --stacktrace
 
       - name: Copy APK with Friendly Name
-        run: cp app/build/outputs/apk/debug/app-debug.apk Layali-Lounge-v7.2.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk Relaxia-v8.0.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Layali-Lounge-v7.2-APK
-          path: Layali-Lounge-v7.2.apk
+          name: Relaxia-v8.0-APK
+          path: Relaxia-v8.0.apk
 
       - name: Publish Direct APK to GitHub Releases
         # Only main-branch builds may publish an installable release.
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && env.LAYALI_API_URL != ''
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v7.2.${{ github.run_number }}
-          name: "تطبيق ليالي - إصدار 7.2 (APK جاهز للتثبيت)"
-          body: "اضغط على ملف **Layali-Lounge-v7.2.apk** بالأسفل لتحميل وتثبيت التطبيق مباشرة على هاتفك."
-          files: Layali-Lounge-v7.2.apk
+          tag_name: v8.0.${{ github.run_number }}
+          name: "تطبيق Relaxia - إصدار 8.0 (APK جاهز للتثبيت)"
+          body: "اضغط على ملف **Relaxia-v8.0.apk** بالأسفل لتحميل وتثبيت التطبيق مباشرة على هاتفك."
+          files: Relaxia-v8.0.apk
           draft: false
           prerelease: false
         env:

@@ -24,9 +24,9 @@ class MainActivity : ComponentActivity() {
                 } else {
                     Surface(Modifier.fillMaxSize()) {
                         Column(Modifier.safeDrawingPadding().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                            Text("Layali", style = MaterialTheme.typography.headlineLarge)
+                            Text("Relaxia", style = MaterialTheme.typography.headlineLarge)
                             Text("نسخة إعداد الخادم", style = MaterialTheme.typography.titleLarge)
-                            Text("لم يُربط عنوان الخادم بهذه النسخة بعد. يلزم تثبيت النسخة المربوطة بخادم ليالي بعد اكتمال النشر.")
+                            Text("لم يُربط عنوان الخادم بهذه النسخة بعد. يلزم تثبيت النسخة المربوطة بخادم Relaxia بعد اكتمال النشر.")
                         }
                     }
                 }

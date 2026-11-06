@@ -9,6 +9,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,26 +42,18 @@ internal fun usd(cents: Long): String = String.format(Locale.US, "$%.2f", cents 
 @Composable
 internal fun ReferenceCard(modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
     val colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-    val elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
-    if (onClick != null) Card(onClick = onClick, modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp), colors = colors, elevation = elevation, border = BorderStroke(1.dp, MaterialTheme.colorScheme.surface), content = content)
-    else Card(modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp), colors = colors, elevation = elevation, border = BorderStroke(1.dp, MaterialTheme.colorScheme.surface), content = content)
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) .975f else 1f, spring(stiffness = 550f), label = "card-depth")
+    val layered = modifier.graphicsLayer { scaleX = scale; scaleY = scale; rotationX = if (pressed) 1.5f else 0f; cameraDistance = 12 * density }
+    val elevation = CardDefaults.cardElevation(defaultElevation = 7.dp, pressedElevation = 2.dp)
+    if (onClick != null) Card(onClick = onClick, interactionSource = interaction, modifier = layered.fillMaxWidth(), shape = RoundedCornerShape(22.dp), colors = colors, elevation = elevation, border = BorderStroke(1.dp, MaterialTheme.colorScheme.surface), content = content)
+    else Card(modifier = layered.fillMaxWidth(), shape = RoundedCornerShape(22.dp), colors = colors, elevation = elevation, border = BorderStroke(1.dp, MaterialTheme.colorScheme.surface), content = content)
 }
 
 @Composable
-internal fun ReferenceAvatar(name: String, frame: Int = 0, size: Int = 52) {
-    val palette = when (frame) {
-        1 -> listOf(Color(0xFFE8D8AC), Color(0xFF8A744B), Color(0xFFD8C18F))
-        2 -> listOf(Color(0xFFD8E1E3), Color(0xFF69868C), Color(0xFFC8DCDF))
-        else -> listOf(Color(0xFFB9C6B6), Color(0xFF59705D))
-    }
-    Box(Modifier.size(size.dp).background(Brush.linearGradient(palette), CircleShape).padding(if (frame == 0) 2.dp else 4.dp), contentAlignment = Alignment.Center) {
-        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background, CircleShape).padding(3.dp), contentAlignment = Alignment.Center) {
-            Box(Modifier.fillMaxSize().background(WisalSage, CircleShape), contentAlignment = Alignment.Center) {
-                Text(name.trim().take(1).ifBlank { "L" }, color = WisalInk, fontSize = (size / 3).sp, fontWeight = FontWeight.SemiBold)
-            }
-        }
-        if (frame > 0) Icon(if (frame == 2) Icons.Outlined.Diamond else Icons.Outlined.WorkspacePremium, null, Modifier.align(Alignment.BottomCenter).offset(y = 9.dp).size(18.dp).background(palette.first(), CircleShape), tint = WisalInk)
-    }
+internal fun ReferenceAvatar(name: String, frame: Int = 0, size: Int = 52, imageUrl: String = "") {
+    RelaxiaAvatar(name, frame, size, imageUrl)
 }
 
 @Composable
@@ -89,5 +89,10 @@ internal fun ReferenceRow(icon: ImageVector, title: String, subtitle: String = "
 
 @Composable
 internal fun ReferencePrimary(text: String, enabled: Boolean = true, onClick: () -> Unit) {
-    Button(onClick, Modifier.fillMaxWidth().heightIn(min = 52.dp), enabled = enabled, shape = RoundedCornerShape(16.dp), elevation = ButtonDefaults.buttonElevation(defaultElevation = 3.dp, pressedElevation = 1.dp)) { Text(text, fontWeight = FontWeight.SemiBold) }
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) .975f else 1f, spring(stiffness = 550f), label = "button-depth")
+    Button(onClick, Modifier.fillMaxWidth().heightIn(min = 52.dp).graphicsLayer { scaleX = scale; scaleY = scale }, enabled = enabled, interactionSource = interaction,
+        shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Color.White.copy(alpha = if (enabled) .38f else .1f)),
+        elevation = ButtonDefaults.buttonElevation(defaultElevation = 7.dp, pressedElevation = 2.dp)) { Text(text, fontWeight = FontWeight.SemiBold) }
 }

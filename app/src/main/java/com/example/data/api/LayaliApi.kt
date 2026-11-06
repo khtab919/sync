@@ -27,7 +27,7 @@ class LayaliApi internal constructor(private val baseUrl: String, private val se
     }
     suspend fun forgetSession() = withContext(Dispatchers.IO) { setSession(null) }
     suspend fun requireSimpleRegistration() {
-        if (request("/health/").optInt("registration_version") < 3) throw ApiException("server_update_required")
+        if (request("/health/").optInt("registration_version") < 4) throw ApiException("server_update_required")
     }
     @Synchronized private fun setSession(value: String?) {
         token = value

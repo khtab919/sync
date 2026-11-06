@@ -89,3 +89,13 @@ Registration requires a name (two characters or more; Arabic, English and spaces
 The native client remembers an opaque seven-day server session using AES-GCM with an AndroidKeyStore key. Ciphertext is stored only in the app's no-backup directory, bound to the API origin; passwords are never stored. Expired/revoked sessions are cleared on 401. An offline restore keeps the token and offers retry rather than requiring credentials again. Logout revokes the server token and clears the encrypted local copy. Device keystore failure leaves the current login usable and reports that it could not be remembered. KeyStore support on physical devices remains a separate device test.
 
 Update the API via the documented `git pull` / `backend/deploy.sh` command before installing 7.2. No new database migration is required beyond 0004.
+
+## Relaxia 8.0
+
+The current product is Relaxia: a non-explicit 18+ social/service platform. Name and a valid email are required when creating an account. Password minimum remains eight characters with the adult/policy acknowledgement; date of birth is not collected. Existing accounts remain intact, including accounts created before email was mandatory. Profile editing now supports updating email and an optional HTTPS avatar image.
+
+Identity verification is not required for reels, creator publication, creator discovery/following or withdrawal reservations. Authentication, administrator creator-role approval, content moderation, account bans and all financial safeguards remain enforced. The legacy identity flag stays in the database to preserve history but is hidden in admin and is not an access gate. The health registration capability is now version 4, so a new app can detect an outdated server.
+
+Only service, session and product categories are accepted. Existing educational-category listings are deactivated by migration 0006, not deleted, and are hidden from active lists. The new rose/plum theme uses native shaded surfaces, press depth and ten ornamental vector frames plus a plain ring; no demo level badges or fictional profile identities are introduced. These are native 2.5D lighting/depth effects, not a 3D scene engine.
+
+Run the same documented `git pull` and `backend/deploy.sh` update to apply migrations 0005–0006 before installing Relaxia 8.0. Database volume, user IDs and saved-session origin remain unchanged. Payments and real transfers are still not implemented.

@@ -3,7 +3,8 @@ from .models import Profile, Service, Booking, Wallet, Withdrawal, Reel, Report,
 
 @admin.register(Profile)
 class ProfileAdmin(admin.ModelAdmin):
-    list_display = ('user', 'creator', 'identity_verified')
+    list_display = ('user', 'creator')
+    exclude = ('identity_verified',)
     readonly_fields = ('date_of_birth', 'policy_version', 'policy_accepted_at')
 
 @admin.register(Service)
@@ -36,3 +37,7 @@ class SupportTicketAdmin(admin.ModelAdmin):
     readonly_fields = ('user', 'body', 'created_at')
     def has_add_permission(self, request): return False
     def has_delete_permission(self, request, obj=None): return False
+
+admin.site.site_header = "Relaxia · الإدارة"
+admin.site.site_title = "Relaxia"
+admin.site.index_title = "إدارة الحسابات والمحتوى"

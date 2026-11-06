@@ -12,7 +12,7 @@ class ApiTests(TestCase):
         self.user = get_user_model().objects.create_user('buyer', password='unique-pass-2026!')
         self.creator = get_user_model().objects.create_user('creator', password='unique-pass-2026!')
         for user in (self.user, self.creator):
-            Profile.objects.create(user=user, date_of_birth=date(1990, 1, 1), creator=user == self.creator, identity_verified=True)
+            Profile.objects.create(user=user, date_of_birth=date(1990, 1, 1), creator=user == self.creator, identity_verified=False)
             Wallet.objects.create(user=user)
         self.token = issue_token(self.user)
         self.creator_token = issue_token(self.creator)
@@ -47,24 +47,28 @@ class ApiTests(TestCase):
         profile = Profile.objects.get(user__username='adultnew')
         self.assertIsNone(profile.date_of_birth)
 
-    def test_simple_registration_accepts_two_character_name_and_no_email(self):
+    def test_registration_requires_name_and_email_with_simple_password(self):
         p = {'username': '  لي  ', 'password': 'Sunrise8', 'adult_confirmed': True, 'accept_non_explicit_policy': True}
+        self.assertEqual(self.post('/api/register', p).status_code, 400)
+        p['email'] = ''
+        self.assertEqual(self.post('/api/register', p).status_code, 400)
+        p['email'] = 'member@example.com'
         response = self.post('/api/register', p)
         self.assertEqual(response.status_code, 201)
         user = get_user_model().objects.get(username='لي')
-        self.assertEqual(user.email, '')
+        self.assertEqual(user.email, 'member@example.com')
         self.assertTrue(user.check_password('Sunrise8'))
         self.assertEqual(self.post('/api/login', {'username': 'لي', 'password': 'Sunrise8'}).status_code, 200)
 
     def test_simple_registration_errors_identify_the_field(self):
-        p = {'username': 'newmember', 'password': 'short', 'adult_confirmed': True, 'accept_non_explicit_policy': True}
+        p = {'username': 'newmember', 'email': 'newmember@example.com', 'password': 'short', 'adult_confirmed': True, 'accept_non_explicit_policy': True}
         self.assertEqual(self.post('/api/register', p).json()['error'], 'invalid_password')
         p['password'] = '12345678'
         self.assertEqual(self.post('/api/register', p).json()['error'], 'password_too_common')
         p['password'] = 'Sunrise8'
         p['email'] = 'not-an-email'
         self.assertEqual(self.post('/api/register', p).json()['error'], 'invalid_email')
-        p['email'] = ''
+        p['email'] = 'nour@example.com'
         p['username'] = 'Nour Hassan'
         self.assertEqual(self.post('/api/register', p).status_code, 201)
         self.assertEqual(self.post('/api/login', {'username': ' @NOUR   HASSAN ', 'password': 'Sunrise8'}).status_code, 200)
@@ -72,7 +76,7 @@ class ApiTests(TestCase):
     def test_health_advertises_simplified_registration(self):
         response = self.client.get('/health/')
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()['registration_version'], 3)
+        self.assertEqual(response.json()['registration_version'], 4)
 
     def test_booking_uses_server_price_and_is_unpaid(self):
         service = Service.objects.create(owner=self.creator, title='Call', description='Description', price_cents=200, approved=True)
@@ -126,10 +130,10 @@ class ApiTests(TestCase):
         result = self.client.get(f'/api/messages/{self.creator.pk}', HTTP_AUTHORIZATION='Bearer ' + outsider_token)
         self.assertEqual(result.json()['items'], [])
 
-    def test_unverified_user_cannot_watch_reels_or_publish(self):
+    def test_reels_do_not_require_identity_but_publication_requires_creator_role(self):
         Profile.objects.filter(user=self.user).update(identity_verified=False)
         response = self.client.get('/api/reels', HTTP_AUTHORIZATION='Bearer ' + self.token)
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 200)
         self.assertEqual(self.post('/api/services', {'title': 'test', 'description': 'test description', 'price_cents': 200}).status_code, 403)
 
     def test_login_rate_limit(self):
@@ -188,7 +192,7 @@ class ReferenceInteractionTests(TestCase):
         self.assertEqual(response.json()['selected_frame'], 2)
         self.assertEqual(response.json()['display_name'], 'New display name')
         self.assertFalse(response.json()['creator'])
-        invalid = self.client.patch('/api/me', json.dumps({'selected_frame': 3}), content_type='application/json', HTTP_AUTHORIZATION='Bearer ' + self.token)
+        invalid = self.client.patch('/api/me', json.dumps({'selected_frame': 11}), content_type='application/json', HTTP_AUTHORIZATION='Bearer ' + self.token)
         self.assertEqual(invalid.status_code, 400)
 
     def test_only_creator_can_change_chat_fee(self):
@@ -220,3 +224,58 @@ class ReferenceInteractionTests(TestCase):
         self.assertEqual(self.post('/api/services', data, self.creator_token).status_code, 400)
         data['image_url'] = 'https://example.com/image.jpg'
         self.assertEqual(self.post('/api/services', data, self.creator_token).status_code, 201)
+
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+class RelaxiaRequirementsTests(TestCase):
+    post = ApiTests.post
+    def setUp(self):
+        ApiTests.setUp(self)
+
+    def test_approved_reels_are_visible_without_identity_and_still_require_login(self):
+        from .models import Reel
+        Reel.objects.create(owner=self.creator, video_url='https://example.com/approved.mp4', approved=True)
+        result = self.client.get('/api/reels', HTTP_AUTHORIZATION='Bearer ' + self.token)
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(len(result.json()['items']), 1)
+        self.assertEqual(self.client.get('/api/reels').status_code, 401)
+
+    def test_creator_publication_and_withdrawals_do_not_require_identity(self):
+        self.assertFalse(Profile.objects.get(user=self.creator).identity_verified)
+        result = self.post('/api/services', {'title': 'جلسة صوتية', 'description': 'جلسة تواصل بصوت واضح', 'price_cents': 200, 'category': 'جلسة'}, self.creator_token)
+        self.assertEqual(result.status_code, 201)
+        self.assertEqual(result.json()['status'], 'pending_review')
+        Wallet.objects.filter(user=self.creator).update(balance_cents=1000)
+        result = self.post('/api/withdrawals', {'request_key': str(uuid.uuid4()), 'amount_cents': 500, 'destination': 'test destination'}, self.creator_token)
+        self.assertEqual(result.status_code, 201)
+        self.assertEqual(result.json()['status'], 'pending')
+
+    def test_creator_directory_and_following_do_not_require_identity(self):
+        result = self.client.get('/api/creators', HTTP_AUTHORIZATION='Bearer ' + self.token)
+        self.assertEqual(result.json()['items'][0]['id'], self.creator.pk)
+        self.assertEqual(self.post(f'/api/creators/{self.creator.pk}/follow', {'enabled': True}).status_code, 200)
+
+    def test_eleven_frames_are_stored_and_avatar_urls_are_validated(self):
+        for frame in range(11):
+            response = self.client.patch('/api/me', json.dumps({'selected_frame': frame}), content_type='application/json', HTTP_AUTHORIZATION='Bearer ' + self.token)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()['selected_frame'], frame)
+        response = self.client.patch('/api/me', json.dumps({'avatar_url': 'http://example.com/a.jpg'}), content_type='application/json', HTTP_AUTHORIZATION='Bearer ' + self.token)
+        self.assertEqual(response.status_code, 400)
+        response = self.client.patch('/api/me', json.dumps({'avatar_url': 'https://example.com/a.jpg'}), content_type='application/json', HTTP_AUTHORIZATION='Bearer ' + self.token)
+        self.assertEqual(response.status_code, 200)
+
+    def test_educational_category_is_not_accepted(self):
+        result = self.post('/api/services', {'title': 'عنوان عرض', 'description': 'وصف واضح لهذا العرض', 'price_cents': 200, 'category': 'كورس'}, self.creator_token)
+        self.assertEqual(result.status_code, 400)
+
+
+    def test_legacy_educational_offers_are_hidden_without_deleting_data(self):
+        from .models import ServiceReaction
+        service = Service.objects.create(owner=self.creator, title='Legacy listing', description='Retained history', price_cents=200, approved=True, category='كورس')
+        ServiceReaction.objects.create(user=self.user, service=service, kind='save')
+        for path in ('/api/services', '/api/saved'):
+            result = self.client.get(path, HTTP_AUTHORIZATION='Bearer ' + self.token)
+            self.assertEqual(result.json()['items'], [])
+        self.assertEqual(self.post('/api/bookings', {'service_id': service.pk}).status_code, 404)
+        self.assertTrue(Service.objects.filter(pk=service.pk).exists())

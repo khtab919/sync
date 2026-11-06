@@ -92,6 +92,8 @@ fun ServerAppScreen(baseUrl: String) {
     var message by rememberSaveable { mutableStateOf("") }
     var displayName by rememberSaveable { mutableStateOf("") }
     var bio by rememberSaveable { mutableStateOf("") }
+    var avatarUrl by rememberSaveable { mutableStateOf("") }
+    var profileEmail by rememberSaveable { mutableStateOf("") }
     var chatPrice by rememberSaveable { mutableStateOf("") }
     var destination by rememberSaveable { mutableStateOf("") }
     var requestKey by rememberSaveable { mutableStateOf(UUID.randomUUID().toString()) }
@@ -116,6 +118,8 @@ fun ServerAppScreen(baseUrl: String) {
     fun editProfile() {
         displayName = profile.optString("display_name", profile.optString("username"))
         bio = profile.optString("bio")
+        avatarUrl = profile.optString("avatar_url")
+        profileEmail = profile.optString("email")
         chatPrice = (profile.optInt("chat_price_cents") / 100.0).toString()
         open("تعديل الملف")
     }
@@ -213,7 +217,7 @@ fun ServerAppScreen(baseUrl: String) {
                     title = {
                         if (screen == "تصفح") Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                             Icon(Icons.Outlined.AllInclusive, null, Modifier.size(28.dp))
-                            Text("Layali", fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                            Text("Relaxia", fontSize = 28.sp, fontWeight = FontWeight.Bold)
                         } else Text(if (screen == "محادثة") peerName.ifBlank { "محادثة" } else screen, fontWeight = FontWeight.SemiBold)
                     },
                     navigationIcon = { if (page.isNotBlank()) IconButton(onClick = { back() }) { Icon(Icons.Outlined.ArrowForward, "رجوع") } },
@@ -257,11 +261,11 @@ fun ServerAppScreen(baseUrl: String) {
                 } else LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     when (screen) {
                         "تصفح" -> {
-                            item { SearchField(query, { query = it }, "ابحث عن مذيعة أو اهتمام") }
+                            item { SearchField(query, { query = it }, "ابحث عن مذيعة أو خدمة") }
                             item {
                                 LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                                    item { Story("مساحتك", profile.optInt("selected_frame")) { tab = 4 } }
-                                    items(creators) { person -> Story(person.optString("display_name"), person.optInt("selected_frame")) { creator = person; open("صفحة المذيعة") } }
+                                    item { Story("مساحتك", profile.optInt("selected_frame"), profile.optString("avatar_url")) { tab = 4 } }
+                                    items(creators) { person -> Story(person.optString("display_name"), person.optInt("selected_frame"), person.optString("avatar_url")) { creator = person; open("صفحة المذيعة") } }
                                 }
                             }
                             item { Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -279,9 +283,9 @@ fun ServerAppScreen(baseUrl: String) {
                             }
                         }
                         "العرض", "المحفوظات" -> {
-                            item { SearchField(query, { query = it }, "ابحث عن خدمة أو منتج أو كورس") }
+                            item { SearchField(query, { query = it }, "ابحث عن خدمة أو جلسة أو منتج") }
                             item { LazyRow(contentPadding = PaddingValues(horizontal = 18.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                items(listOf("الكل", "خدمة", "منتج", "كورس")) { label -> FilterChip(category == label, onClick = { category = label }, label = { Text(label) }) }
+                                items(listOf("الكل", "خدمة", "منتج", "جلسة")) { label -> FilterChip(category == label, onClick = { category = label }, label = { Text(label) }) }
                             } }
                             val visible = (if (screen == "المحفوظات") rows else services).filter { (category == "الكل" || it.optString("category") == category) && it.optString("title").contains(query, true) }
                             if (visible.isEmpty() && !loading && contentError.isBlank()) item { ReferenceEmpty(Icons.Outlined.Storefront, "لا توجد عروض بعد", "العروض المعتمدة تظهر هنا. يمكنك العودة لاحقًا أو تحديث الصفحة.") }
@@ -318,7 +322,7 @@ fun ServerAppScreen(baseUrl: String) {
                             items(rows) { person -> Box(Modifier.padding(horizontal = 16.dp)) {
                                 Surface(onClick = { startChat(person.optInt("id"), person.optString("display_name")) }, color = Color.Transparent, shape = RoundedCornerShape(16.dp)) {
                                     Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                                        ReferenceAvatar(person.optString("display_name"), person.optInt("selected_frame"), 55)
+                                        ReferenceAvatar(person.optString("display_name"), person.optInt("selected_frame"), 55, person.optString("avatar_url"))
                                         Column(Modifier.weight(1f)) { Text(person.optString("display_name"), fontWeight = FontWeight.SemiBold); Text(person.optString("last_message"), maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium) }
                                         Icon(Icons.Outlined.ChevronLeft, null)
                                     }
@@ -358,7 +362,7 @@ fun ServerAppScreen(baseUrl: String) {
                             } } }
                             item { Row(Modifier.padding(horizontal = 22.dp), verticalAlignment = Alignment.CenterVertically) { Text(if (own) "عروضي" else "العروض", Modifier.weight(1f), style = MaterialTheme.typography.headlineMedium); if (own) TextButton(onClick = { open("إضافة عرض") }) { Icon(Icons.Outlined.Add, null, Modifier.size(18.dp)); Text("إضافة") } } }
                             val offers = services.filter { it.optInt("owner_id") == person.optInt("id") }
-                            if (offers.isEmpty() && !loading) item { ReferenceEmpty(Icons.Outlined.Storefront, "اعرض مهارة، خدمة، أو منتجًا", "تظهر العروض هنا بعد مراجعة الإدارة واعتمادها.") }
+                            if (offers.isEmpty() && !loading) item { ReferenceEmpty(Icons.Outlined.Storefront, "اعرض خدمة، جلسة، أو منتجًا", "تظهر العروض هنا بعد مراجعة الإدارة واعتمادها.") }
                             items(offers) { offer -> Box(Modifier.padding(horizontal = 20.dp)) { OfferCard(offer) { showService(offer) } } }
                             if (own) item { FormColumn {
                                 ReferenceRow(Icons.Outlined.AccountBalanceWallet, "المحفظة والسحب") { price = ""; open("المحفظة") }
@@ -370,24 +374,22 @@ fun ServerAppScreen(baseUrl: String) {
                         }
                         "تعديل الملف" -> item { FormColumn {
                             Field(displayName, { displayName = it }, "الاسم المعروض")
+                            Field(profileEmail, { profileEmail = it }, "البريد الإلكتروني")
                             Field(bio, { bio = it }, "نبذة عنك", lines = 4)
+                            Field(avatarUrl, { avatarUrl = it }, "رابط صورة ملفك HTTPS · اختياري")
                             if (profile.optBoolean("creator")) Field(chatPrice, { chatPrice = it }, "رسوم المحادثة بالدولار · 0 للمجانية", numeric = true)
                             ReferencePrimary("حفظ التغييرات", !submitting) { perform {
-                                val body = JSONObject().put("display_name", displayName).put("bio", bio)
+                                val body = JSONObject().put("display_name", displayName).put("bio", bio).put("avatar_url", avatarUrl).put("email", profileEmail.trim())
                                 if (profile.optBoolean("creator")) body.put("chat_price_cents", cents(chatPrice))
                                 profile = api.request("/api/me", "PATCH", body)
                                 page = ""; tab = 4; notice = "تم حفظ التغييرات."
                             } }
                         } }
-                        "إطاراتي" -> {
-                            item { FormColumn { Text("اختر الإطار الذي يعبّر عنك", style = MaterialTheme.typography.headlineMedium); Text("اختيارك محفوظ في ملفك على الخادم.", color = MaterialTheme.colorScheme.onSurfaceVariant) } }
-                            items(listOf(0, 1, 2)) { frame -> Box(Modifier.padding(horizontal = 20.dp)) { ReferenceCard(onClick = { perform {
-                                profile = api.request("/api/me", "PATCH", JSONObject().put("selected_frame", frame)); notice = "تم حفظ الإطار."
-                            } }) { Row(Modifier.padding(24.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(22.dp)) {
-                                ReferenceAvatar(profile.optString("display_name"), frame, 74)
-                                Column(Modifier.weight(1f)) { Text(listOf("الطبيعي", "الذهبي الهادئ", "البلاتيني")[frame], fontWeight = FontWeight.SemiBold); Text(if (profile.optInt("selected_frame") == frame) "إطارك الحالي" else "اضغط للاختيار", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                                if (profile.optInt("selected_frame") == frame) Icon(Icons.Outlined.CheckCircle, "محدد")
-                            } } } }
+                        "إطاراتي" -> item {
+                            RelaxiaFramePicker(profile.optInt("selected_frame"), profile.optString("display_name"), profile.optString("avatar_url")) { frame -> perform {
+                                profile = api.request("/api/me", "PATCH", JSONObject().put("selected_frame", frame))
+                                notice = "تم حفظ الإطار."
+                            } }
                         }
                         "الإعدادات" -> item { FormColumn {
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { Text("الوضع الليلي", Modifier.weight(1f)); Switch(dark, { dark = it; prefs.edit().putBoolean("dark", it).apply() }) }
@@ -398,8 +400,8 @@ fun ServerAppScreen(baseUrl: String) {
                             ReferenceRow(Icons.Outlined.Logout, "تسجيل الخروج") { perform { api.request("/api/logout", "POST", JSONObject()); signedIn = false; services = emptyList(); creators = emptyList(); rows = emptyList(); profile = JSONObject(); page = "" } }
                         } }
                         "من نحن", "سياسة الخصوصية" -> item { FormColumn {
-                            Text(if (screen == "من نحن") "Layali" else "خصوصيتك وحدودك أولًا", style = MaterialTheme.typography.headlineLarge)
-                            Text(if (screen == "من نحن") "مساحة عربية للبالغين لاكتشاف المذيعات وخدماتهن والتواصل معهن، بمحتوى غير صريح وواجهات هادئة وواضحة." else "تُحفظ بيانات حسابك ورسائلك وحجوزاتك على خادم ليالي. يُمنع المحتوى الجنسي الصريح والعري والتحرش ومشاركة بيانات الآخرين دون إذن. وصول الريلز يتطلب التوثيق، والخدمات تُراجع قبل ظهورها. لا تضع معلومات دفع حساسة داخل المحادثات.", style = MaterialTheme.typography.bodyLarge)
+                            Text(if (screen == "من نحن") "Relaxia" else "خصوصيتك وحدودك أولًا", style = MaterialTheme.typography.headlineLarge)
+                            Text(if (screen == "من نحن") "مساحة عربية للبالغين لاكتشاف المذيعات وخدماتهن والتواصل معهن، بمحتوى غير صريح وواجهات هادئة وواضحة." else "تُحفظ بيانات حسابك ورسائلك وحجوزاتك على خادم Relaxia. يُمنع المحتوى الجنسي الصريح والعري والتحرش ومشاركة بيانات الآخرين دون إذن. الريلز متاحة للحسابات المسجلة، والخدمات تُراجع قبل ظهورها. لا تضع معلومات دفع حساسة داخل المحادثات.", style = MaterialTheme.typography.bodyLarge)
                         } }
                         "الحجوزات" -> {
                             if (rows.isEmpty() && !loading && contentError.isBlank()) item { ReferenceEmpty(Icons.Outlined.ShoppingBag, "لم تبدأ حجوزاتك بعد", "تصفح العروض وسجّل طلب الخدمة المناسب لك.") }
@@ -410,9 +412,9 @@ fun ServerAppScreen(baseUrl: String) {
                             } } } }
                         }
                         "إضافة عرض" -> item { FormColumn {
-                            Text("اعرض خدمة أو منتجًا أو كورسًا", style = MaterialTheme.typography.headlineMedium)
-                            Text("النشر متاح للحسابات الموثقة والمعتمدة كمذيعات. كل عرض يمر بمراجعة الإدارة.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("خدمة", "منتج", "كورس").forEach { kind -> FilterChip(offerKind == kind, { offerKind = kind }, label = { Text(kind) }) } }
+                            Text("اعرض خدمة أو جلسة أو منتجًا", style = MaterialTheme.typography.headlineMedium)
+                            Text("النشر متاح لحسابات المذيعات بعد تفعيلها من الإدارة. كل عرض يمر بمراجعة الإدارة.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("خدمة", "منتج", "جلسة").forEach { kind -> FilterChip(offerKind == kind, { offerKind = kind }, label = { Text(kind) }) } }
                             Field(title, { title = it }, "عنوان العرض")
                             Field(description, { description = it }, "وصف العرض", lines = 4)
                             Field(price, { price = it }, "السعر بالدولار", numeric = true)
@@ -448,7 +450,7 @@ fun ServerAppScreen(baseUrl: String) {
                                 api.request("/api/reports", "POST", JSONObject().put("target_type", reportKind).put("target_id", reportId.toInt()).put("reason", reason)); reason = ""; notice = "وصل البلاغ إلى الإدارة."
                             } }
                         } }
-                        "ريلز" -> if (!loading && contentError.isBlank()) item { ReferenceEmpty(Icons.Outlined.SmartDisplay, "شاهد اللحظات", "الريلز المعتمدة ستظهر هنا بعد توثيق هويتك.") }
+                        "ريلز" -> if (!loading && contentError.isBlank()) item { ReferenceEmpty(Icons.Outlined.SmartDisplay, "شاهد اللحظات", "الريلز المعتمدة ستظهر هنا فور نشرها.") }
                     }
                 }
             }
@@ -472,12 +474,12 @@ private fun Field(value: String, change: (String) -> Unit, label: String, lines:
 }
 @Composable
 private fun SearchField(value: String, change: (String) -> Unit, hint: String) {
-    OutlinedTextField(value, change, placeholder = { Text(hint, style = MaterialTheme.typography.bodyMedium) }, leadingIcon = { Icon(Icons.Outlined.Search, null) }, modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp), singleLine = true, shape = RoundedCornerShape(18.dp), colors = OutlinedTextFieldDefaults.colors(unfocusedContainerColor = MaterialTheme.colorScheme.surface, focusedContainerColor = MaterialTheme.colorScheme.surface))
+    OutlinedTextField(value, change, placeholder = { Text(hint, style = MaterialTheme.typography.bodyMedium) }, leadingIcon = { Icon(Icons.Outlined.Search, null) }, modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp), singleLine = true, shape = RoundedCornerShape(18.dp), colors = OutlinedTextFieldDefaults.colors(unfocusedContainerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = .65f), focusedContainerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = .65f)))
 }
 @Composable
-private fun Story(name: String, frame: Int, click: () -> Unit) {
-    Column(Modifier.width(74.dp).clickable(onClick = click).padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        ReferenceAvatar(name, frame, 62)
+private fun Story(name: String, frame: Int, imageUrl: String = "", click: () -> Unit) {
+    Column(Modifier.width(84.dp).clickable(onClick = click).padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        ReferenceAvatar(name, frame, 72, imageUrl)
         Text(name.substringBefore(' '), maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp)
     }
 }
@@ -485,7 +487,7 @@ private fun Story(name: String, frame: Int, click: () -> Unit) {
 private fun FeedCard(service: JSONObject, owner: () -> Unit, details: () -> Unit, react: (String) -> Unit, chat: () -> Unit) {
     Box(Modifier.padding(horizontal = 16.dp)) { ReferenceCard {
         Row(Modifier.fillMaxWidth().padding(14.dp).clickable(onClick = owner), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            ReferenceAvatar(service.optString("owner_name"), service.optInt("owner_frame"), 46)
+            ReferenceAvatar(service.optString("owner_name"), service.optInt("owner_frame"), 52, service.optString("owner_avatar_url"))
             Column(Modifier.weight(1f)) { Text(service.optString("owner_name"), fontWeight = FontWeight.SemiBold); Text(service.optString("category", "خدمة"), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             IconButton(onClick = { react("save") }) { Icon(if (service.optBoolean("saved")) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder, "حفظ العرض") }
         }
@@ -515,14 +517,14 @@ private fun OfferCard(service: JSONObject, click: () -> Unit) {
 
 @Composable
 internal fun ProfileHero(person: JSONObject, own: Boolean, settings: () -> Unit, editOrChat: () -> Unit, frameOrFollow: () -> Unit) {
-    Column(Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(Color(0xFF333D36), WisalInk)), RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)).statusBarsPadding().padding(start = 22.dp, end = 22.dp, bottom = 26.dp, top = 12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(Color(0xFF513044), WisalInk)), RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)).statusBarsPadding().padding(start = 22.dp, end = 22.dp, bottom = 26.dp, top = 12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(if (own) "حسابي" else "الملف الشخصي", Modifier.weight(1f), color = Color.White, fontSize = 19.sp)
             IconButton(onClick = settings) { Icon(if (own) Icons.Outlined.Settings else Icons.Outlined.ArrowForward, if (own) "الإعدادات" else "رجوع", tint = Color.White.copy(alpha = .75f)) }
         }
-        ReferenceAvatar(person.optString("display_name", person.optString("username")), person.optInt("selected_frame"), 90)
+        ReferenceAvatar(person.optString("display_name", person.optString("username")), person.optInt("selected_frame"), 124, person.optString("avatar_url"))
         Text(person.optString("display_name", person.optString("username")), color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold)
-        Text("ID ${person.optInt("id")} · ${if (person.optBoolean("identity_verified")) "هوية موثقة" else "بانتظار التوثيق"}", color = Color.White.copy(alpha = .55f), fontSize = 11.sp)
+        Text("حساب #${person.optInt("id")} · 18+", color = Color.White.copy(alpha = .55f), fontSize = 11.sp)
         if (person.optBoolean("creator")) Surface(color = Color.White.copy(alpha = .09f), shape = RoundedCornerShape(30.dp)) { Row(Modifier.padding(horizontal = 14.dp, vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Outlined.WorkspacePremium, null, Modifier.size(15.dp), tint = Color(0xFFD8C18F)); Text("مذيعة معتمدة", color = Color(0xFFD8C18F), fontSize = 11.sp) } }
         if (person.optString("bio").isNotBlank()) Text(person.optString("bio"), color = Color.White.copy(alpha = .7f), fontSize = 13.sp)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
@@ -538,21 +540,20 @@ internal fun ProfileHero(person: JSONObject, own: Boolean, settings: () -> Unit,
 @Composable
 internal fun ReferenceLogin(register: Boolean, busy: Boolean, notice: String, username: String, password: String, email: String, adultConfirmed: Boolean, onUsername: (String) -> Unit, onPassword: (String) -> Unit, onEmail: (String) -> Unit, onAdultConfirmed: (Boolean) -> Unit, toggle: () -> Unit, submit: () -> Unit) {
     var showPassword by remember { mutableStateOf(false) }
-    var emailExpanded by rememberSaveable { mutableStateOf(email.isNotBlank()) }
-    val ready = !busy && username.trim().length >= 2 && password.isNotBlank() && (!register || (password.length >= 8 && adultConfirmed))
+    val ready = !busy && username.trim().length >= 2 && password.isNotBlank() && (!register || (password.length >= 8 && adultConfirmed && email.trim().isNotEmpty()))
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         LazyColumn(modifier = Modifier.fillMaxSize().imePadding(), contentPadding = PaddingValues(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
-            item { Column(Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(Color(0xFF333D36), WisalInk)), RoundedCornerShape(bottomEnd = 72.dp)).statusBarsPadding().heightIn(min = 170.dp).padding(28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            item { Column(Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(Color(0xFF513044), WisalInk)), RoundedCornerShape(bottomEnd = 72.dp)).statusBarsPadding().heightIn(min = 170.dp).padding(28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Outlined.AllInclusive, null, Modifier.size(34.dp), tint = WisalSage); Spacer(Modifier.weight(1f)); Text("18+", color = Color.White.copy(alpha = .7f), fontSize = 12.sp) }
                 Spacer(Modifier.height(6.dp))
-                Text("Layali", color = Color.White, fontSize = 36.sp, fontWeight = FontWeight.Bold)
-                Text("مساحتك تستحق أن تُرى.", color = Color.White.copy(alpha = .7f), fontSize = 15.sp)
+                Text("Relaxia", color = Color.White, fontSize = 36.sp, fontWeight = FontWeight.Bold)
+                Text("لحظات أقرب، بطريقتك.", color = Color.White.copy(alpha = .7f), fontSize = 15.sp)
             } }
             item { Column(Modifier.padding(horizontal = 26.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                 Text(if (register) "مساحتك تبدأ هنا" else "أهلًا بعودتك", fontSize = 27.sp, fontWeight = FontWeight.Bold)
-                Text("اكتشف، شارك، وتواصل بطريقتك.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("اكتشف اللحظات، وتواصل بطريقتك.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (notice.isNotBlank()) Text(notice, color = MaterialTheme.colorScheme.error)
-                OutlinedTextField(username, onUsername, label = { Text("اسم المستخدم") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+                OutlinedTextField(username, onUsername, label = { Text("الاسم") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next), shape = RoundedCornerShape(18.dp),
                     colors = OutlinedTextFieldDefaults.colors(focusedTextColor = MaterialTheme.colorScheme.onSurface, unfocusedTextColor = MaterialTheme.colorScheme.onSurface, unfocusedContainerColor = MaterialTheme.colorScheme.surface, focusedContainerColor = MaterialTheme.colorScheme.surface))
                 OutlinedTextField(password, onPassword, label = { Text("كلمة المرور") },
@@ -564,8 +565,10 @@ internal fun ReferenceLogin(register: Boolean, busy: Boolean, notice: String, us
                     colors = OutlinedTextFieldDefaults.colors(focusedTextColor = MaterialTheme.colorScheme.onSurface, unfocusedTextColor = MaterialTheme.colorScheme.onSurface, unfocusedContainerColor = MaterialTheme.colorScheme.surface, focusedContainerColor = MaterialTheme.colorScheme.surface))
                 if (register) {
                     Text("8 خانات أو أكثر. لا يلزم رمز خاص أو أحرف كبيرة.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    if (emailExpanded) Field(email, onEmail, "البريد الإلكتروني (اختياري)")
-                    else TextButton(onClick = { emailExpanded = true }) { Text("إضافة بريد إلكتروني (اختياري)") }
+                    OutlinedTextField(email, onEmail, label = { Text("البريد الإلكتروني") },
+                        modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(18.dp),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Done),
+                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = MaterialTheme.colorScheme.onSurface, unfocusedTextColor = MaterialTheme.colorScheme.onSurface, unfocusedContainerColor = MaterialTheme.colorScheme.surface, focusedContainerColor = MaterialTheme.colorScheme.surface))
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = adultConfirmed, onCheckedChange = onAdultConfirmed)
                         Text("أؤكد أن عمري 18 عامًا أو أكثر وأوافق على ضوابط المحتوى غير الصريح.", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -574,7 +577,7 @@ internal fun ReferenceLogin(register: Boolean, busy: Boolean, notice: String, us
                 if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                 ReferencePrimary(if (register) "إنشاء حساب" else "دخول", ready) { submit() }
                 TextButton(onClick = toggle, enabled = !busy, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text(if (register) "لديك حساب؟ تسجيل الدخول" else "جديد هنا؟ أنشئ حسابًا") }
-                Text("بياناتك مرتبطة بخادم ليالي · محتوى غير صريح", Modifier.align(Alignment.CenterHorizontally), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("بياناتك مرتبطة بخادم Relaxia · محتوى غير صريح", Modifier.align(Alignment.CenterHorizontally), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             } }
         }
     }
@@ -599,13 +602,13 @@ private fun friendlyError(code: String?): String = when (code) {
     "invalid_username" -> "اكتب اسمًا من حرفين أو أكثر بالعربي أو الإنجليزي. المسافات مسموحة."
     "invalid_password" -> "اختر كلمة مرور من 8 خانات أو أكثر. لا يلزم رمز خاص أو أحرف كبيرة."
     "password_too_common" -> "كلمة المرور شائعة جدًا. اختر كلمة مختلفة يسهل عليك تذكّرها."
-    "invalid_email" -> "البريد الإلكتروني غير صحيح. يمكنك تركه فارغًا؛ إضافته اختيارية."
+    "invalid_email" -> "البريد الإلكتروني إلزامي. أدخل عنوانًا صحيحًا مثل name@example.com."
     "invalid_input" -> "إحدى البيانات غير صحيحة. راجع الحقول ثم حاول مجددًا."
-    "server_update_required" -> "الخادم ما زال يعمل بنسخة التسجيل القديمة. يلزم تحديثه لتفعيل التسجيل المبسّط. بياناتك ليست سبب المشكلة."
+    "server_update_required" -> "يلزم تحديث خادم Relaxia لتفعيل الاسم والبريد الإلزاميين والميزات الجديدة."
     "server_unavailable" -> "الخادم غير متاح الآن. حاول بعد قليل؛ لا تغيّر كلمة المرور."
     "adult_policy_required" -> "فعّل تأكيد 18+ والموافقة على ضوابط المحتوى."
-    "verified_creator_required" -> "يلزم توثيق الهوية واعتماد حساب المذيعة من الإدارة."
-    "identity_verification_required" -> "مشاهدة الريلز تتطلب توثيق الهوية لدى الإدارة."
+    "verified_creator_required", "creator_account_required" -> "النشر وطلبات السحب متاحة لحسابات المذيعات بعد تفعيلها من الإدارة."
+    "identity_verification_required" -> "خادم التطبيق ما زال بالنسخة القديمة. حدّثه لتفعيل عرض الريلز للجميع."
     "paid_chat_requires_verified_payment" -> "المحادثة مدفوعة. الدفع غير مفعّل بعد، ولم تُرسل الرسالة."
     "insufficient_funds" -> "رصيدك المتاح لا يكفي لطلب السحب."
     "too_many_attempts" -> "محاولات كثيرة. حاول بعد 15 دقيقة."
