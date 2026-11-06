@@ -30,12 +30,12 @@ services:
     command:
       - >-
         test -n "$${LAYALI_TURN_SECRET:-}" && test -n "$${LAYALI_TURN_PUBLIC_IP:-}" &&
-        exec turnserver --log-file=stdout --simple-log --fingerprint --no-cli
+        exec turnserver --log-file=stdout --simple-log --fingerprint
         --listening-port=3478 --listening-ip=0.0.0.0
         --external-ip="$${LAYALI_TURN_PUBLIC_IP}" --relay-ip="$${LAYALI_TURN_PUBLIC_IP}"
         --realm="$${LAYALI_DOMAIN}"
         --use-auth-secret --static-auth-secret="$${LAYALI_TURN_SECRET}"
-        --min-port=49160 --max-port=49200 --no-tls --no-dtls
+        --min-port=49160 --max-port=49200 --no-tls
         --no-multicast-peers --no-tcp-relay --user-quota=8 --total-quota=160
         --max-bps=250000 --bps-capacity=10000000
         --denied-peer-ip=0.0.0.0-0.255.255.255
