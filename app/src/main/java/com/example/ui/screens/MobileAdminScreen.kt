@@ -28,10 +28,10 @@ private fun JSONObject.adminItems(): List<JSONObject> {
 private fun cents(value: Long) = BigDecimal.valueOf(value, 2).toPlainString() + " USD"
 
 @Composable
-internal fun MobileAdminScreen(api: LayaliApi, adminName: String, logout: () -> Unit) {
+internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boolean=false, logout: () -> Unit) {
     val scope = rememberCoroutineScope()
     val uriHandler = LocalUriHandler.current
-    var section by remember { mutableStateOf("الحسابات") }
+    var section by remember { mutableStateOf(if(liveOnly)"البث المباشر"else"الحسابات") }
     var query by remember { mutableStateOf("") }
     var offset by remember { mutableIntStateOf(0) }
     var total by remember { mutableIntStateOf(0) }
@@ -64,6 +64,15 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, logout: () -> 
     var reviewNote by remember { mutableStateOf("") }
     var verified by remember { mutableStateOf(false) }
     var requests by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var liveRoom by remember{mutableStateOf<JSONObject?>(null)}
+    var payout by remember{mutableStateOf<JSONObject?>(null)}
+    var payoutReference by remember{mutableStateOf("")}
+    var payoutVerified by remember{mutableStateOf(false)}
+    var refundBooking by remember{mutableStateOf<JSONObject?>(null)}
+    var refundReason by remember{mutableStateOf("")}
+    var livePriceTarget by remember{mutableStateOf<JSONObject?>(null)}
+    var livePriceInput by remember{mutableStateOf("")}
+    var liveStop by remember{mutableStateOf<JSONObject?>(null)}
     var confirmation by remember { mutableStateOf<JSONObject?>(null) }
     fun message(e: Exception): String = when(e.message) {
         "administrator_required", "invalid_session", "authentication_required" -> "لا تملك الجلسة صلاحية الإدارة. سجّل الدخول بحساب المسؤول."
@@ -109,12 +118,16 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, logout: () -> 
             } else if (section == "الدفع") {
                 val data=api.request("/api/admin/payment-settings")
                 gatewayConfigured=data.optBoolean("nowpayments_configured");paymentAccount=data.optString("account");paymentCurrency=data.optString("currency","USD");paymentRate=data.optString("rate","1");paymentInstructions=data.optString("instructions");paymentEnabled=data.optBoolean("enabled")
-            } else if (section == "الطلبات") requests = api.request("/api/admin/requests").adminItems()
+            } else if(section=="البث المباشر")content=api.request("/api/admin/live").adminItems()
+            else if(section=="الحجوزات")content=api.request("/api/admin/bookings").adminItems()
+            else if(section=="السحب")content=api.request("/api/admin/payouts").adminItems()
+            else if (section == "الطلبات") requests = api.request("/api/admin/requests").adminItems()
             else content = api.request("/api/admin/moderation").adminItems()
         } catch(e: CancellationException) { throw e }
         catch(e: Exception) { accounts = emptyList(); content = emptyList(); error = message(e) }
         finally { loading = false }
     }
+    liveRoom?.let{room->LiveRoomView(api.origin,room){liveRoom=null};return}
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         LazyColumn(Modifier.fillMaxSize().safeDrawingPadding(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             item {
@@ -122,7 +135,7 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, logout: () -> 
                 Text("مرحبًا، $adminName", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 TextButton(onClick = logout, enabled = !busy) { Text("تسجيل الخروج") }
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    listOf("الحسابات", "المحتوى", "الطلبات", "العجلة", "الدفع").forEach { name ->
+                    (if(liveOnly)listOf("البث المباشر")else listOf("الحسابات", "البث المباشر", "الحجوزات", "السحب", "المحتوى", "الطلبات", "العجلة", "الدفع")).forEach { name ->
                         FilterChip(selected = section == name, onClick = { selected = null; section = name; offset = 0 }, label = { Text(name) }, enabled = !busy)
                     }
                 }
@@ -130,6 +143,33 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, logout: () -> 
                 if (success.isNotBlank()) Text(success, color = MaterialTheme.colorScheme.primary)
                 if (loading || busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                 TextButton(onClick = { revision++ }, enabled = !busy && !loading) { Text("تحديث") }
+            }
+            if(section=="البث المباشر") {
+                if(content.isEmpty())item{Text("لا توجد بثوث جارية.")}
+                items(content,key={it.getString("id")}){row->Card(Modifier.fillMaxWidth()){Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
+                    Text(row.optString("title"),style=MaterialTheme.typography.titleMedium);Text(row.optString("owner_name"));Text("${row.optInt("viewers")} مشاهد · "+if(row.optBoolean("private"))"خاص: ${row.optLong("price_cents")}"else"عام مجاني")
+                    val reports=row.optJSONArray("reports");if(reports!=null)for(i in 0 until reports.length())Text("بلاغ: "+reports.getJSONObject(i).optString("reason"),color=MaterialTheme.colorScheme.error)
+                    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                        TextButton({perform{liveRoom=api.request("/api/live/${row.getString("id")}/admission","POST",JSONObject())}},enabled=!busy){Text("مشاهدة للإشراف")}
+                        TextButton({liveStop=row},enabled=!busy){Text("إيقاف البث")}
+                        if(reports!=null&&reports.length()>0)TextButton({perform{api.request("/api/admin/live","POST",JSONObject().put("action","resolve").put("id",row.getString("id")));revision++}},enabled=!busy){Text("تمت المراجعة")}
+                    }
+                    if(row.optBoolean("private")&&!liveOnly)TextButton({livePriceTarget=row;livePriceInput=row.optLong("price_cents").toString()}){Text("تعديل السعر قبل البيع")}
+                    Text("لا توجد تسجيلات أو إعادة مشاهدة للتحقيق لاحقًا.",style=MaterialTheme.typography.bodySmall)
+                }}}
+            }
+            if(section=="الحجوزات"){
+                items(content,key={it.getString("id")}){row->Card(Modifier.fillMaxWidth()){Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
+                    Text(row.optString("title"));Text(row.optString("buyer")+" ← "+row.optString("owner"));Text(cents(row.optLong("price_cents")));Text(operationLabel(row.optString("status")))
+                    if(row.optString("payment_status")=="held")TextButton({refundBooking=row;refundReason=""},enabled=!busy){Text("مراجعة استرداد الحجز")}
+                }}}
+            }
+            if(section=="السحب"){
+                if(content.isEmpty())item{Text("لا توجد طلبات سحب.")}
+                items(content,key={it.getString("id")}){row->Card(Modifier.fillMaxWidth()){Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
+                    Text(row.optString("name"));Text(cents(row.optLong("amount_cents")));Text(row.optString("destination"));Text(operationLabel(row.optString("status")));Text(row.optString("payout_reference"))
+                    if(row.optString("status")=="pending")Button({payout=row;payoutReference="";payoutVerified=false},enabled=!busy){Text("مراجعة طلب السحب")}
+                }}}
             }
             val account = selected
             if (account != null && section == "الحسابات") {
@@ -140,9 +180,11 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, logout: () -> 
                         Text(account.optString("display_name"), style = MaterialTheme.typography.titleLarge)
                         Text("#${account.optInt("id")} · ${account.optString("username")}")
                         Text(account.optString("email"))
+                        if(!account.optBoolean("protected"))TextButton({perform{selected=api.request("/api/admin/accounts/${account.optInt("id")}","POST",JSONObject().put("action",if(account.optBoolean("live_moderator"))"moderator_off"else"moderator_on"))}},enabled=!busy){Text(if(account.optBoolean("live_moderator"))"إلغاء إشراف البث"else"منح إشراف البث فقط")}
                         Text(account.optString("bio"))
                         Text(if (account.optBoolean("active")) "الحساب نشط" else "الحساب محظور")
                         Text(if (account.optBoolean("creator")) "النشر والظهور في الاستكشاف مفعّلان" else "صلاحية النشر غير مفعّلة")
+                        if(!account.optBoolean("protected"))TextButton({perform{selected=api.request("/api/admin/accounts/${account.optInt("id")}","POST",JSONObject().put("action",if(account.optBoolean("broadcast_allowed"))"broadcast_off"else"broadcast_on"))}},enabled=!busy){Text(if(account.optBoolean("broadcast_allowed"))"تعطيل صلاحية البث"else"السماح بالبث للحساب المؤهل")}
                         Text("الرصيد: ${cents(account.optLong("balance_cents"))}")
                         Text("المحجوز: ${cents(account.optLong("reserved_cents"))}")
                         if (!account.optBoolean("protected")) {
@@ -222,7 +264,10 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, logout: () -> 
                     OutlinedTextField(paymentInstructions,{paymentInstructions=it.take(500)},label={Text("تعليمات الدفع")},modifier=Modifier.fillMaxWidth())
                     Button(onClick={perform { api.request("/api/admin/payment-settings","POST",JSONObject().put("enabled",paymentEnabled).put("account",paymentAccount).put("currency",paymentCurrency).put("rate",paymentRate).put("instructions",paymentInstructions));success="تم حفظ بيانات الاستلام." }},enabled=!busy){Text("حفظ")}
                 }
-            } else if (section == "الطلبات") {
+            } else if(section=="البث المباشر")content=api.request("/api/admin/live").adminItems()
+            else if(section=="الحجوزات")content=api.request("/api/admin/bookings").adminItems()
+            else if(section=="السحب")content=api.request("/api/admin/payouts").adminItems()
+            else if (section == "الطلبات") {
                 if(requests.isEmpty() && !loading) item { Text("لا توجد طلبات دفع أو بائعين.") }
                 items(requests, key = { it.optString("kind") + it.optString("id") }) { row ->
                     Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -248,7 +293,7 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, logout: () -> 
                         } else Text(row.optString("review_note"))
                     } }
                 }
-            } else {
+            } else if(section=="المحتوى") {
                 if(content.isEmpty() && !loading) item { Text("لا يوجد محتوى للمراجعة حاليًا.") }
                 items(content, key = { it.optString("kind") + it.optInt("id") }) { row ->
                     Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -286,4 +331,10 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, logout: () -> 
             }, enabled = !busy && (!data.has("request_kind") || (reviewNote.trim().length >= 3 && (data.optString("request_kind") != "topup" || data.optString("decision") != "approve" || verified)))) { Text("تأكيد") }
         }, dismissButton = { TextButton(onClick = { confirmation = null }, enabled = !busy) { Text("إلغاء") } }) }
     }
+    liveStop?.let{row->AlertDialog(onDismissRequest={liveStop=null},title={Text("إيقاف البث للجميع")},text={Text("سيُغلق البث وتُعاد الحجوزات المالية التي لم تستوفِ مدة الخدمة. لا يُحفظ فيديو.")},confirmButton={TextButton({liveStop=null;perform{api.request("/api/admin/live","POST",JSONObject().put("action","end").put("id",row.getString("id")));revision++}}){Text("إيقاف")}},dismissButton={TextButton({liveStop=null}){Text("إلغاء")}})}
+    payout?.let{row->AlertDialog(onDismissRequest={payout=null},title={Text("التحقق من السحب")},text={Column(verticalArrangement=Arrangement.spacedBy(8.dp)){Text(row.optString("name"));Text(cents(row.optLong("amount_cents")));Text(row.optString("destination"));Text("نفّذ التحويل الخارجي أولًا ثم سجّل مرجعه. هذا الزر لا يرسل الأموال تلقائيًا.");OutlinedTextField(payoutReference,{payoutReference=it.take(300)},label={Text("مرجع التحويل المنفذ")});Row{Checkbox(payoutVerified,{payoutVerified=it});Text("تحققت من تنفيذ التحويل")}}},confirmButton={TextButton({payout=null;perform{api.request("/api/admin/payouts","POST",JSONObject().put("id",row.getString("id")).put("action","paid").put("paid_verified",true).put("payout_reference",payoutReference));revision++}},enabled=payoutVerified&&payoutReference.length>=6&&!busy){Text("اعتماد السحب")}},dismissButton={TextButton({payout=null;perform{api.request("/api/admin/payouts","POST",JSONObject().put("id",row.getString("id")).put("action","reject"));revision++}},enabled=!busy){Text("رفض وإعادة الحجز")}})}
+
+    refundBooking?.let{row->AlertDialog(onDismissRequest={refundBooking=null},title={Text("استرداد الحجز")},text={Column{Text(row.optString("title"));Text(cents(row.optLong("price_cents")));OutlinedTextField(refundReason,{refundReason=it.take(300)},label={Text("سبب القرار بعد المراجعة")})}},confirmButton={TextButton({refundBooking=null;perform{api.request("/api/admin/bookings","POST",JSONObject().put("id",row.getString("id")).put("action","refund").put("reason",refundReason));revision++}},enabled=refundReason.trim().length>=3&&!busy){Text("إعادة المبلغ")}},dismissButton={TextButton({refundBooking=null}){Text("إلغاء")}})}
+    livePriceTarget?.let{row->AlertDialog(onDismissRequest={livePriceTarget=null},title={Text("سعر دخول البث")},text={Column{Text("يمكن التعديل قبل بيع أي تذكرة فقط، حفاظًا على السعر المتفق عليه.");OutlinedTextField(livePriceInput,{livePriceInput=it.filter{c->c.isDigit()}.take(7)},label={Text("السعر من الرصيد")})}},confirmButton={TextButton({livePriceTarget=null;perform{api.request("/api/admin/live","POST",JSONObject().put("id",row.getString("id")).put("action","price").put("price_cents",livePriceInput.toLong()));revision++}},enabled=(livePriceInput.toLongOrNull()?:0L) in 1L..1000000L&&!busy){Text("حفظ")}},dismissButton={TextButton({livePriceTarget=null}){Text("إلغاء")}})}
+
 }

@@ -31,6 +31,10 @@ internal fun commerceError(e: Exception): String = when(e.message) {
     "invalid_transaction_hash" -> "أدخل رقم المعاملة TxID الكامل المكوّن من 64 خانة."
     "seller_request_pending" -> "طلب تفعيل البائع موجود بالفعل وقيد المراجعة."
     "already_seller" -> "حسابك مفعّل كبائع بالفعل."
+    "live_not_configured", "live_server_unavailable" -> "خادم البث غير جاهز. تحقق من نشر التحديث."
+    "invalid_booking_action" -> "تغيّرت حالة الطلب؛ حدّث الصفحة."
+    "financial_review_required" -> "تحتاج هذه العملية مراجعة الإدارة."
+    "paid_booking_required" -> "يلزم حجز جلسة وقبولها قبل بدء الاتصال المدفوع."
     "paid_price_changed" -> "تغيّر السعر؛ حدّث المحادثة وأكّد السعر الجديد."
     "message_unavailable" -> "المرفق غير متاح لهذا الحساب."
     "insufficient_balance", "insufficient_funds" -> "الرصيد المتاح لا يكفي."
@@ -159,6 +163,8 @@ internal fun SellerPublishScreen(api: LayaliApi, back: () -> Unit) {
     val scope = rememberCoroutineScope()
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
+    var duration by remember { mutableStateOf("30") }
+    var terms by remember { mutableStateOf("") }
     var price by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("خدمة") }
     var media by remember { mutableStateOf(JSONObject()) }
@@ -176,6 +182,7 @@ internal fun SellerPublishScreen(api: LayaliApi, back: () -> Unit) {
         if(note.isNotBlank()) Text(note)
         if(!reel) {
             OutlinedTextField(title, { title = it.take(150) }, label = { Text("عنوان العرض") }, modifier = Modifier.fillMaxWidth())
+            if(!reel){OutlinedTextField(duration,{duration=it.filter{c->c.isDigit()}.take(4)},label={Text("مدة الخدمة بالدقائق")},singleLine=true,modifier=Modifier.fillMaxWidth());OutlinedTextField(terms,{terms=it.take(600)},label={Text("شروط الخدمة والإلغاء")},modifier=Modifier.fillMaxWidth())}
             OutlinedTextField(description, { description = it.take(600) }, label = { Text("وصف العرض") }, minLines = 3, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(price, { price = it }, label = { Text("السعر بالدولار") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth())
             Row { listOf("خدمة", "جلسة", "منتج").forEach { c -> FilterChip(category == c, { category = c }, label = { Text(c) }) } }
@@ -184,7 +191,7 @@ internal fun SellerPublishScreen(api: LayaliApi, back: () -> Unit) {
         if(media.has("id") && !reel) ReferenceImage(media.optString("url"), Modifier.fillMaxWidth().height(200.dp))
         Button(onClick = { perform {
             if(reel) api.request("/api/reels", "POST", JSONObject().put("media_id", media.getString("id")))
-            else api.request("/api/services", "POST", JSONObject().put("title", title).put("description", description).put("price_cents", BigDecimal(price).movePointRight(2).intValueExact()).put("category", category).put("image_id", media.getString("id")))
+            else api.request("/api/services", "POST", JSONObject().put("title", title).put("description", description).put("price_cents", BigDecimal(price).movePointRight(2).intValueExact()).put("category", category).put("image_id", media.getString("id")).put("duration_minutes",duration.toInt()).put("terms",terms))
             media = JSONObject(); title = ""; description = ""; price = ""; note = "أُرسل المحتوى إلى الإدارة للمراجعة."
         } }, enabled = !busy && media.has("id") && (reel || (title.length >= 3 && description.length >= 10 && price.isNotBlank()))) { Text("إرسال للمراجعة") }
     } }

@@ -37,7 +37,7 @@ internal fun CoinPackage(coins:Int,bonus:Int,dollars:String,selected:Boolean,cho
         Column(Modifier.fillMaxWidth().padding(18.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(6.dp)) {
             Text("◉",fontSize=28.sp,color=Color(0xFFC7955D))
             Text("$coins",fontSize=27.sp,fontWeight=FontWeight.Bold)
-            Text("كوينز",fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("رصيد",fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
             if(bonus>0) Text("+$bonus هدية",color=MaterialTheme.colorScheme.primary,fontSize=12.sp)
             Text("$$dollars",fontSize=17.sp,fontWeight=FontWeight.SemiBold)
         }
@@ -70,9 +70,9 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
     LaunchedEffect(Unit){busy=true;try{reload()}catch(e:CancellationException){throw e}catch(e:Exception){note=commerceError(e)}finally{busy=false}}
     LaunchedEffect(quoteText){while(quote!=null){remaining=((Instant.parse(quote.optString("expires_at")).toEpochMilli()-System.currentTimeMillis()-offset)/1000).coerceAtLeast(0);delay(1000)}}
     Surface(Modifier.fillMaxSize(),color=MaterialTheme.colorScheme.background){Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding().verticalScroll(rememberScrollState()).padding(22.dp),verticalArrangement=Arrangement.spacedBy(18.dp)){
-        Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){TextButton(back,enabled=!busy){Text("رجوع")};Spacer(Modifier.weight(1f));Text(if(balance==null)"الرصيد —"else"${balance} كوينز",fontSize=13.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)}
-        Text("متجر الكوينز",style=MaterialTheme.typography.headlineLarge,fontWeight=FontWeight.Bold)
-        Text("اختر باقتك ووسيلة الدفع. كل 100 كوينز = 1 دولار رصيد داخلي.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){TextButton(back,enabled=!busy){Text("رجوع")};Spacer(Modifier.weight(1f));Text(if(balance==null)"الرصيد —"else"${balance} رصيد",fontSize=13.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)}
+        Text("متجر الرصيد",style=MaterialTheme.typography.headlineLarge,fontWeight=FontWeight.Bold)
+        Text("اختر باقتك ووسيلة الدفع. كل 100 رصيد = 1 دولار رصيد داخلي.",color=MaterialTheme.colorScheme.onSurfaceVariant)
         if(note.isNotBlank())Text(note,color=MaterialTheme.colorScheme.primary)
         if(busy)LinearProgressIndicator(Modifier.fillMaxWidth())
         if(quote==null){
@@ -87,7 +87,7 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
             if(!info.optBoolean("shamcash_enabled"))Text("شام كاش ينتظر إعداد بيانات الاستلام من الإدارة.",fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
             Button(onClick={perform{val result=api.request("/api/topup-quotes","POST",JSONObject().put("method",method).put("amount_cents",selected));offset=result.optLong("server_now_ms",System.currentTimeMillis())-System.currentTimeMillis();quoteText=result.toString();invoiceUrl="";receipt="";reference="";preview=""}},enabled=!busy&&info.has("address"),modifier=Modifier.fillMaxWidth().height(54.dp),shape=RoundedCornerShape(17.dp)){Text("متابعة الدفع",fontSize=17.sp)}
         }else{
-            Text("${quote.optInt("coins")} كوينز",fontSize=30.sp,fontWeight=FontWeight.Bold)
+            Text("${quote.optInt("coins")} رصيد",fontSize=30.sp,fontWeight=FontWeight.Bold)
             Text("المطلوب: ${quote.optString("payment_amount")} ${quote.optString("payment_currency")}",style=MaterialTheme.typography.titleLarge)
             Surface(shape=RoundedCornerShape(18.dp),color=MaterialTheme.colorScheme.primaryContainer){Column(Modifier.fillMaxWidth().padding(18.dp),horizontalAlignment=Alignment.CenterHorizontally){
                 Text("مدة صلاحية طلب الشراء",fontSize=12.sp)
@@ -106,7 +106,7 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
                 }},enabled=!busy&&remaining>0,modifier=Modifier.fillMaxWidth().height(52.dp)){Text(if(invoiceUrl.isBlank())"فتح بوابة الدفع"else"فتح فاتورة الدفع مجددًا")}
                 OutlinedButton(onClick={perform{
                     val result=api.request("/api/nowpayments/status/${quote.getString("id")}")
-                    if(result.optBoolean("credited")){quoteText="";reload();note="تم تأكيد الدفع وإضافة الكوينز."}else note="الدفع بانتظار اكتمال تأكيد البوابة. لم يضف الرصيد بعد."
+                    if(result.optBoolean("credited")){quoteText="";reload();note="تم تأكيد الدفع وإضافة الرصيد."}else note="الدفع بانتظار اكتمال تأكيد البوابة. لم يضف الرصيد بعد."
                 }},enabled=!busy&&invoiceUrl.isNotBlank(),modifier=Modifier.fillMaxWidth()){Text("تحقق من الدفع وتحديث الرصيد")}
             } else {
             Text(if(rail=="usdt")"USDT على BEP20 فقط"else"استلام عبر شام كاش",fontWeight=FontWeight.Bold)
@@ -122,6 +122,6 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
             }
             TextButton(onClick={quoteText=""},enabled=!busy){Text("العودة إلى الباقات")}
         }
-        if(rows.isNotEmpty()){Text("طلبات الشراء",style=MaterialTheme.typography.titleLarge);rows.forEach{r->ListItem(headlineContent={Text("${r.optLong("amount_cents")+r.optLong("bonus_cents")} كوينز")},supportingContent={Text(when(r.optString("status")){"pending"->"قيد المراجعة";"approved"->"تمت الإضافة";else->"مرفوض · ${r.optString("review_note")}"})})}}
+        if(rows.isNotEmpty()){Text("طلبات الشراء",style=MaterialTheme.typography.titleLarge);rows.forEach{r->ListItem(headlineContent={Text("${r.optLong("amount_cents")+r.optLong("bonus_cents")} رصيد")},supportingContent={Text(when(r.optString("status")){"pending"->"قيد المراجعة";"approved"->"تمت الإضافة";else->"مرفوض · ${r.optString("review_note")}"})})}}
     }}
 }

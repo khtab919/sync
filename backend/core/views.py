@@ -99,7 +99,7 @@ def issue_token(user):
 def health(request):
     with connection.cursor() as cursor:
         cursor.execute('SELECT 1')
-    return JsonResponse({'status': 'ok', 'registration_version': 4, 'identity_required': False, 'brand': 'Relaxia', 'mobile_admin_version': 1, 'commerce_version': 1, 'calls_version': 2, 'messaging_version': 3, 'paid_chat_version':1, 'shop_version': 2})
+    return JsonResponse({'status': 'ok', 'registration_version': 4, 'identity_required': False, 'brand': 'Relaxia', 'mobile_admin_version': 1, 'commerce_version': 1, 'calls_version': 2, 'messaging_version': 3, 'paid_chat_version':1, 'shop_version': 2, 'live_version':1, 'booking_payment_version':1})
 
 @endpoint(['POST'], authenticated=False)
 def register(request):
@@ -179,7 +179,8 @@ def profile_json(user, viewer):
         'reel_count': Reel.objects.filter(owner=user, approved=True).count(),
         'following': Follow.objects.filter(user=viewer, creator=user).exists(),
         'is_staff': user.is_staff if user == viewer else False,
-        'is_admin': user.is_staff and user.is_superuser if user == viewer else False,
+        'is_admin': user.is_staff and (user.is_superuser or user.has_perm('core.moderate_livebroadcast')) if user == viewer else False,
+        'admin_scope':('full' if user.is_superuser else 'live') if user==viewer and user.is_staff else '',
     }
 
 @endpoint(['GET', 'PATCH'])
@@ -226,7 +227,7 @@ def me(request):
 
 def service_json(service, viewer):
     owner = Profile.objects.get(user=service.owner)
-    return {'id': service.pk, 'owner_id': service.owner_id,
+    return {'duration_minutes':service.duration_minutes,'terms':service.terms,'id': service.pk, 'owner_id': service.owner_id,
             'owner_name': owner.display_name or service.owner.username,
             'owner_frame': owner.selected_frame, 'owner_avatar_url': owner.avatar_url, 'title': service.title,
             'description': service.description, 'price_cents': service.price_cents,
@@ -259,7 +260,11 @@ def services(request):
         if not media:
             raise ApiError('invalid_image')
         image_url = request.build_absolute_uri(f'/api/media/{media.pk}')
-    service = Service.objects.create(image=media, owner=request.actor, title=text(p, 'title', 3, 150), description=text(p, 'description', 10, 600), price_cents=amount(p, 'price_cents'), image_url=image_url, category=category)
+    duration=p.get('duration_minutes',30)
+    if type(duration) is not int or not 1<=duration<=1440:raise ApiError('invalid_duration')
+    terms=p.get('terms','')
+    if not isinstance(terms,str) or len(terms)>600:raise ApiError('invalid_terms')
+    service = Service.objects.create(duration_minutes=duration,terms=terms,image=media, owner=request.actor, title=text(p, 'title', 3, 150), description=text(p, 'description', 10, 600), price_cents=amount(p, 'price_cents'), image_url=image_url, category=category)
     return JsonResponse({'id': service.pk, 'status': 'pending_review'}, status=201)
 
 @endpoint(['POST'])
@@ -331,13 +336,26 @@ def support(request):
 @endpoint(['GET', 'POST'])
 def bookings(request):
     if request.method == 'GET':
-        rows = Booking.objects.filter(buyer=request.actor).order_by('-created_at').values('id', 'service_id', 'service__title', 'price_cents', 'status', 'created_at')[:100]
-        return JsonResponse({'items': list(rows)})
-    service = Service.objects.filter(pk=amount(request.payload, 'service_id'), approved=True, active=True, owner__is_active=True).exclude(category='كورس').first()
-    if not service or service.owner_id == request.actor.pk:
-        raise ApiError('service_unavailable', 404)
-    booking = Booking.objects.create(buyer=request.actor, service=service, price_cents=service.price_cents)
-    return JsonResponse({'id': booking.pk, 'status': booking.status, 'price_cents': booking.price_cents}, status=201)
+        rows=Booking.objects.filter(Q(buyer=request.actor)|Q(service__owner=request.actor)).select_related('service__owner__profile','buyer__profile','operation').order_by('-created_at')[:100]
+        return JsonResponse({'items':[{'id':r.pk,'service_id':r.service_id,'title':r.service.title,'owner_name':r.service.owner.profile.display_name or r.service.owner.username,'buyer_name':r.buyer.profile.display_name or r.buyer.username,'owner_id':r.service.owner_id, 'owner':r.service.owner_id==request.actor.pk,'status':r.status,'price_cents':r.price_cents,'duration_minutes':r.duration_minutes,'terms':r.terms_snapshot,'payment_status':r.operation.status if r.operation_id else 'unpaid','created_at':r.created_at} for r in rows]})
+    from . import finance
+    from .platform_features import blocked
+    service=Service.objects.select_related('owner').filter(pk=amount(request.payload,'service_id'),approved=True,active=True,owner__is_active=True).exclude(category__in=['تعليم','كورس']).first()
+    if not service or service.owner_id==request.actor.pk or blocked(request.actor,service.owner):raise ApiError('service_unavailable',404)
+    paid=request.payload.get('confirmed') is True
+    if paid and (type(request.payload.get('price_cents')) is not int or request.payload['price_cents']!=service.price_cents):raise ApiError('paid_price_changed',409)
+    key=uuid.UUID(text(request.payload,'request_key',36,36)) if paid else None
+    with transaction.atomic():
+        list(User.objects.select_for_update().filter(pk__in=sorted([request.actor.pk,service.owner_id])).order_by('pk'))
+        if key:
+            previous=Booking.objects.filter(buyer=request.actor,request_key=key).first()
+            if previous:
+                if previous.service_id!=service.pk:raise ApiError('payment_request_conflict',409)
+                return JsonResponse({'id':previous.pk,'status':previous.status,'price_cents':previous.price_cents})
+        booking=Booking.objects.create(buyer=request.actor,service=service,price_cents=service.price_cents,request_key=key,terms_snapshot=service.terms or service.description,duration_minutes=service.duration_minutes)
+        if paid:
+            booking.operation=finance.hold(request.actor,service.owner,'booking',key,str(booking.pk),service.price_cents);booking.status='paid_reserved';booking.save(update_fields=['operation','status'])
+    return JsonResponse({'id':booking.pk,'status':booking.status,'price_cents':booking.price_cents},status=201)
 
 @endpoint(['GET', 'POST'])
 def messages(request, peer_id):
@@ -347,9 +365,11 @@ def messages(request, peer_id):
     if not peer or peer == request.actor:
         raise ApiError('recipient_unavailable', 404)
     if request.method == 'GET':
-        rows = Message.objects.filter(Q(sender=request.actor, recipient=peer) | Q(sender=peer, recipient=request.actor)).select_related('attachment', 'call', 'sender__profile', 'recipient__profile').order_by('-id')[:100]
+        rows = Message.objects.filter(Q(sender=request.actor, recipient=peer) | Q(sender=peer, recipient=request.actor)).select_related('attachment', 'call', 'sender__profile', 'recipient__profile','reply_to').order_by('-id')[:100]
         peer_profile = Profile.objects.filter(user=peer).first()
         return JsonResponse({'peer': {'id':peer.pk,'username':peer.username,'display_name':(peer_profile.display_name if peer_profile else '') or peer.username,'avatar_url':peer_profile.avatar_url if peer_profile else '', 'creator':bool(peer_profile and peer_profile.creator), 'chat_price_cents':peer_profile.chat_price_cents if peer_profile else 0, 'online':bool(peer_profile and peer_profile.last_active_at and peer_profile.last_active_at > timezone.now()-timedelta(seconds=25)), 'last_active_at':peer_profile.last_active_at if peer_profile else None}, 'items': [message_json(request, row) for row in rows]})
+    from .platform_features import blocked
+    if blocked(request.actor,peer):raise ApiError('recipient_unavailable',403)
     submitted_body=request.payload.get('body','')
     if not isinstance(submitted_body,str) or len(submitted_body)>2000:raise ApiError('invalid_body')
     client_key = uuid.UUID(text(request.payload,'client_key',36,36)) if request.payload.get('client_key') else None
@@ -360,7 +380,7 @@ def messages(request, peer_id):
         if client_key:
             previous = Message.objects.filter(sender=request.actor, client_key=client_key).first()
             if previous:
-                if previous.recipient_id != peer.pk or previous.body != request.payload.get('body','').strip() or previous.media_price_cents != request.payload.get('media_price_cents',0) or (str(previous.attachment_id) if previous.attachment_id else None) != request.payload.get('attachment_id'):
+                if previous.recipient_id != peer.pk or previous.body != request.payload.get('body','').strip() or previous.reply_to_id != request.payload.get('reply_to') or previous.media_price_cents != request.payload.get('media_price_cents',0) or (str(previous.attachment_id) if previous.attachment_id else None) != request.payload.get('attachment_id'):
                     raise ApiError('message_request_conflict', 409)
                 return JsonResponse(message_json(request, previous))
         profile=Profile.objects.select_for_update().filter(user=peer).first()
@@ -387,10 +407,14 @@ def messages(request, peer_id):
                 if existing.sender_id == request.actor.pk and existing.recipient_id == peer.pk:
                     return JsonResponse(message_json(request, existing))
                 raise ApiError('attachment_already_used', 409)
+        reply=None
+        if p.get('reply_to') is not None:
+            reply=Message.objects.filter(pk=amount(p,'reply_to')).filter(Q(sender=request.actor,recipient=peer)|Q(sender=peer,recipient=request.actor)).first()
+            if not reply:raise ApiError('invalid_reply')
         media_price=p.get('media_price_cents',0)
         if type(media_price) is not int or not 0<=media_price<=1000000:raise ApiError('invalid_media_price')
         if media_price and (not attachment or attachment.purpose not in ('chat_image','chat_video') or not Profile.objects.filter(user=request.actor,creator=True).exists()):raise ApiError('creator_account_required',403)
-        message=Message.objects.create(sender=request.actor,recipient=peer,body=body.strip(),attachment=attachment,client_key=client_key,media_price_cents=media_price)
+        message=Message.objects.create(sender=request.actor,recipient=peer,body=body.strip(),attachment=attachment,client_key=client_key,media_price_cents=media_price,reply_to=reply)
         if price:
             from .commerce import charge_chat
             charge_chat(message,'message',request.actor,peer,price)
@@ -425,7 +449,7 @@ def wallet(request):
 @endpoint(['GET', 'POST'])
 def withdrawals(request):
     if request.method == 'GET':
-        return JsonResponse({'items': list(Withdrawal.objects.filter(user=request.actor).order_by('-created_at').values('id', 'amount_cents', 'status', 'created_at')[:100])})
+        return JsonResponse({'items': list(Withdrawal.objects.filter(user=request.actor).order_by('-created_at').values('id', 'amount_cents', 'status', 'created_at', 'payout_reference','processed_at')[:100])})
     if not Profile.objects.filter(user=request.actor, creator=True).exists():
         raise ApiError('creator_account_required', 403)
     p = request.payload
@@ -465,7 +489,7 @@ def reports(request):
 @endpoint(['GET'])
 def incoming_messages(request):
     from .commerce import message_json
-    rows=Message.objects.filter(recipient=request.actor,delivered_at__isnull=True,sender__is_active=True).select_related('sender__profile','recipient__profile','attachment','call').order_by('id')[:100]
+    rows=Message.objects.filter(recipient=request.actor,delivered_at__isnull=True,sender__is_active=True).select_related('sender__profile','recipient__profile','attachment','call','reply_to').order_by('id')[:100]
     return JsonResponse({'items':[message_json(request,row) for row in rows]})
 
 @endpoint(['POST'])

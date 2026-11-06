@@ -68,8 +68,14 @@ def calls(request):
         peer = people.get(peer_id)
         if not peer or not peer.is_active or (peer.is_staff and peer.is_superuser) or not Profile.objects.filter(user=peer).exists():
             raise ApiError('recipient_unavailable', 404)
-        if Profile.objects.filter(user=peer, chat_price_cents__gt=0).exists():
-            raise ApiError('paid_chat_requires_verified_payment', 409)
+        from .platform_features import blocked
+        if blocked(request.actor,peer):raise ApiError('recipient_unavailable',403)
+        booking=None
+        if request.payload.get('booking_id'):
+            from .models import Booking
+            booking=Booking.objects.filter(pk=request.payload['booking_id'],buyer=request.actor,service__owner=peer,status='accepted',operation__status='held').first()
+            if not booking:raise ApiError('paid_booking_required',409)
+        if Profile.objects.filter(user=peer,chat_price_cents__gt=0).exists() and not booking:raise ApiError('paid_booking_required',409)
         existing = InternalCall.objects.filter(status__in=LIVE).filter(Q(caller_id__in=people) | Q(callee_id__in=people)).first()
         if existing:
             if existing.caller_id == request.actor.pk and existing.callee_id == peer.pk and existing.mode == mode:
@@ -77,7 +83,7 @@ def calls(request):
             raise ApiError('call_busy', 409)
         if InternalCall.objects.filter(caller=request.actor, created_at__gt=timezone.now()-timedelta(minutes=1)).count() >= 5:
             raise ApiError('too_many_calls', 429)
-        row = InternalCall.objects.create(caller=request.actor, callee=peer, mode=mode)
+        row = InternalCall.objects.create(caller=request.actor, callee=peer, mode=mode,booking=booking)
         Message.objects.create(sender=request.actor, recipient=peer, call=row, body='مكالمة فيديو' if mode == 'video' else 'مكالمة صوتية')
     return JsonResponse(call_json(row), status=201)
 

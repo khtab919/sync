@@ -61,10 +61,13 @@ if additions:
     path.chmod(0o600)
 PYTURN
 if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | head -1 | grep -q 'Status: active'; then
+    ufw allow 7881/tcp
+    ufw allow 50000:50100/udp
     ufw allow 3478/tcp
     ufw allow 3478/udp
     ufw allow 49160:49200/udp
 fi
+python3 configure_live.py
 docker compose config --quiet
 docker compose build api
 docker compose up -d --wait db
@@ -75,3 +78,5 @@ printf 'Check HTTPS health at https://%s/health/\n' "$domain"
 echo 'Create your administrator: docker compose exec api python manage.py createsuperuser'
 
 echo "Internal calls: allow TCP/UDP 3478 and UDP 49160-49200 in any DigitalOcean Cloud Firewall attached to this server."
+
+echo "Live broadcasting: allow TCP 7881 and UDP 50000-50100 in the cloud firewall. No recording/DVR/egress service is installed."

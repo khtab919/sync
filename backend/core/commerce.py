@@ -34,7 +34,7 @@ def may_read(media, user):
         return True
     if media.purpose.startswith('chat_'):
         row=Message.objects.filter(attachment=media,recipient=user).first()
-        if not row:return False
+        if not row or row.deleted_at:return False
         from .models import ChatCharge
         return not row.media_price_cents or ChatCharge.objects.filter(message=row,buyer=user,kind='unlock').exists()
     return False
@@ -281,8 +281,8 @@ def review_requests(request):
 
 def message_json(request, row):
     from .models import ChatCharge
-    unlocked=not row.media_price_cents or request.actor.pk==row.sender_id or ChatCharge.objects.filter(message=row,buyer=request.actor,kind='unlock').exists()
-    return {'id': row.pk, 'sender_id': row.sender_id, 'recipient_id': row.recipient_id, 'body': row.body, 'created_at': row.created_at, 'attachment_url': grant_url(request, row.attachment) if row.attachment_id and unlocked else '', 'media_price_cents':row.media_price_cents, 'media_locked':not unlocked, 'attachment_mime': row.attachment.mime if row.attachment_id else '', 'client_key': str(row.client_key) if row.client_key else '', 'delivered_at': row.delivered_at, 'read_at': row.read_at, 'recipient_name': getattr(getattr(row.recipient,'profile',None),'display_name','') or row.recipient.username, 'sender_name': getattr(getattr(row.sender,'profile',None),'display_name','') or row.sender.username, 'call_url': '', 'call_id': str(row.call_id) if row.call_id else '', 'call_mode': row.call.mode if row.call_id else '', 'call_status': row.call.status if row.call_id else ''}
+    unlocked=not row.deleted_at and (not row.media_price_cents or request.actor.pk==row.sender_id or ChatCharge.objects.filter(message=row,buyer=request.actor,kind='unlock').exists())
+    return {'id': row.pk, 'sender_id': row.sender_id, 'recipient_id': row.recipient_id, 'body': 'حُذفت هذه الرسالة' if row.deleted_at else row.body, 'deleted':bool(row.deleted_at), 'reply_to':row.reply_to_id, 'reply_preview':(row.reply_to.body[:100] if row.reply_to and not row.reply_to.deleted_at else '') if row.reply_to_id else '', 'created_at': row.created_at, 'attachment_url': grant_url(request, row.attachment) if row.attachment_id and unlocked else '', 'media_price_cents':row.media_price_cents, 'media_locked':bool(not row.deleted_at and not unlocked), 'attachment_mime': row.attachment.mime if row.attachment_id and not row.deleted_at else '', 'client_key': str(row.client_key) if row.client_key else '', 'delivered_at': row.delivered_at, 'read_at': row.read_at, 'recipient_name': getattr(getattr(row.recipient,'profile',None),'display_name','') or row.recipient.username, 'sender_name': getattr(getattr(row.sender,'profile',None),'display_name','') or row.sender.username, 'call_url': '', 'call_id': str(row.call_id) if row.call_id else '', 'call_mode': row.call.mode if row.call_id else '', 'call_status': row.call.status if row.call_id else ''}
 
 
 def wheel_settings(config):
@@ -392,7 +392,7 @@ def unlock_message(request,message_id):
         # All transfers lock users in the same order as sending to avoid deadlocks.
         list(User.objects.select_for_update().filter(pk__in=sorted([row.sender_id,row.recipient_id])).order_by('pk'))
         row=Message.objects.select_for_update(of=('self',)).select_related('sender__profile','recipient__profile','attachment','call').get(pk=row.pk)
-        if not row.sender.is_active or not row.recipient.is_active:raise ApiError('message_unavailable',404)
+        if row.deleted_at or not row.sender.is_active or not row.recipient.is_active:raise ApiError('message_unavailable',404)
         if not row.attachment_id or row.media_price_cents<=0:raise ApiError('not_paid_media')
         if type(request.payload.get('price_cents')) is not int or request.payload['price_cents']!=row.media_price_cents:raise ApiError('paid_price_changed',409)
         charge_chat(row,'unlock',request.actor,row.sender,row.media_price_cents)

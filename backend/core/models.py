@@ -17,8 +17,11 @@ class Profile(models.Model):
     selected_frame = models.PositiveSmallIntegerField(default=0)
     avatar_url = models.URLField(max_length=500, blank=True)
     last_active_at = models.DateTimeField(null=True, blank=True)
+    broadcast_allowed=models.BooleanField(default=True)
 
 class Service(models.Model):
+    duration_minutes=models.PositiveIntegerField(default=30)
+    terms=models.CharField(max_length=600,blank=True)
     image = models.ForeignKey("UploadedMedia", null=True, blank=True, on_delete=models.PROTECT)
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     title = models.CharField(max_length=150)
@@ -31,6 +34,12 @@ class Service(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
 class Booking(models.Model):
+    class Meta:
+        constraints=[models.UniqueConstraint(fields=["buyer","request_key"],name="unique_booking_request")]
+    operation=models.OneToOneField("FinancialOperation",null=True,blank=True,on_delete=models.PROTECT)
+    request_key=models.UUIDField(null=True,blank=True)
+    terms_snapshot=models.CharField(max_length=600,blank=True)
+    duration_minutes=models.PositiveIntegerField(default=30)
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     buyer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     service = models.ForeignKey(Service, on_delete=models.PROTECT)
@@ -46,6 +55,8 @@ class Wallet(models.Model):
         constraints = [models.CheckConstraint(condition=Q(balance_cents__gte=0) & Q(reserved_cents__gte=0) & Q(balance_cents__gte=models.F('reserved_cents')), name='wallet_valid_balance')]
 
 class Withdrawal(models.Model):
+    payout_reference=models.CharField(max_length=300,blank=True)
+    processed_at=models.DateTimeField(null=True,blank=True)
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     amount_cents = models.PositiveIntegerField()
@@ -57,6 +68,8 @@ class Withdrawal(models.Model):
         constraints = [models.UniqueConstraint(fields=['user', 'request_key'], name='unique_withdrawal_request')]
 
 class Message(models.Model):
+    reply_to=models.ForeignKey("self",null=True,blank=True,on_delete=models.PROTECT)
+    deleted_at=models.DateTimeField(null=True,blank=True)
     client_key = models.UUIDField(null=True, blank=True)
     delivered_at = models.DateTimeField(null=True, blank=True)
     read_at = models.DateTimeField(null=True, blank=True)
@@ -182,6 +195,7 @@ class PaidSpin(models.Model):
         constraints = [models.UniqueConstraint(fields=['user', 'request_key'], name='unique_paid_spin_request')]
 
 class InternalCall(models.Model):
+    booking=models.ForeignKey("Booking",null=True,blank=True,on_delete=models.PROTECT)
     ringing_at = models.DateTimeField(null=True, blank=True)
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     caller = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='outgoing_calls')
@@ -249,3 +263,89 @@ class ChatCharge(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         constraints=[models.UniqueConstraint(fields=['message','kind','buyer'],name='unique_chat_charge'),models.CheckConstraint(condition=Q(amount_cents=models.F('creator_cents')+models.F('platform_cents')),name='chat_charge_conserved')]
+
+class FinancialOperation(models.Model):
+    id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False)
+    buyer=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT,related_name='financial_purchases')
+    creator=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT,related_name='financial_sales')
+    kind=models.CharField(max_length=20)
+    request_key=models.UUIDField()
+    reference=models.CharField(max_length=64)
+    amount_cents=models.PositiveIntegerField()
+    creator_cents=models.PositiveIntegerField(default=0)
+    platform_cents=models.PositiveIntegerField(default=0)
+    status=models.CharField(max_length=16,default='held')
+    reason=models.CharField(max_length=300,blank=True)
+    created_at=models.DateTimeField(auto_now_add=True)
+    settled_at=models.DateTimeField(null=True,blank=True)
+    class Meta:
+        constraints=[models.UniqueConstraint(fields=['buyer','kind','request_key'],name='unique_financial_operation')]
+
+class LiveBroadcast(models.Model):
+    class Meta:
+        permissions=[("moderate_livebroadcast","Moderate live broadcasts without financial administration")]
+    id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False)
+    owner=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT)
+    title=models.CharField(max_length=120)
+    private=models.BooleanField(default=False)
+    invite_only=models.BooleanField(default=False)
+    invited=models.ManyToManyField(settings.AUTH_USER_MODEL,related_name='live_invitations')
+    price_cents=models.PositiveIntegerField(default=0)
+    max_viewers=models.PositiveIntegerField(default=25)
+    minimum_seconds=models.PositiveIntegerField(default=30)
+    status=models.CharField(max_length=20,default='starting')
+    started_at=models.DateTimeField(null=True,blank=True)
+    ended_at=models.DateTimeField(null=True,blank=True)
+    created_at=models.DateTimeField(auto_now_add=True)
+    last_checked_at=models.DateTimeField(null=True,blank=True)
+    host_missing_at=models.DateTimeField(null=True,blank=True)
+    viewers=models.PositiveIntegerField(default=0)
+    gifts_enabled=models.BooleanField(default=False)
+    end_reason=models.CharField(max_length=200,blank=True)
+    cleanup_pending=models.BooleanField(default=False)
+
+class LiveAdmission(models.Model):
+    session=models.ForeignKey(SessionToken,on_delete=models.SET_NULL,null=True,blank=True)
+    broadcast=models.ForeignKey(LiveBroadcast,on_delete=models.PROTECT)
+    user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT)
+    operation=models.OneToOneField(FinancialOperation,on_delete=models.PROTECT,null=True,blank=True)
+    watched_seconds=models.PositiveIntegerField(default=0)
+    connected=models.BooleanField(default=False)
+    token_until=models.DateTimeField(null=True,blank=True)
+    last_seen_at=models.DateTimeField(null=True,blank=True)
+    banned=models.BooleanField(default=False)
+    created_at=models.DateTimeField(auto_now_add=True)
+    class Meta:
+        constraints=[models.UniqueConstraint(fields=['broadcast','user'],name='unique_live_admission')]
+
+class LiveComment(models.Model):
+    broadcast=models.ForeignKey(LiveBroadcast,on_delete=models.CASCADE)
+    user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.CASCADE)
+    text=models.CharField(max_length=300)
+    created_at=models.DateTimeField(auto_now_add=True)
+
+class LiveLike(models.Model):
+    broadcast=models.ForeignKey(LiveBroadcast,on_delete=models.CASCADE)
+    user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.CASCADE)
+    class Meta:
+        constraints=[models.UniqueConstraint(fields=['broadcast','user'],name='unique_live_like')]
+
+class LiveReport(models.Model):
+    broadcast=models.ForeignKey(LiveBroadcast,on_delete=models.PROTECT)
+    user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT)
+    reason=models.CharField(max_length=500)
+    resolved=models.BooleanField(default=False)
+    created_at=models.DateTimeField(auto_now_add=True)
+
+class LiveRoomTicket(models.Model):
+    digest=models.CharField(max_length=64,primary_key=True)
+    admission=models.ForeignKey(LiveAdmission,on_delete=models.CASCADE)
+    session=models.ForeignKey(SessionToken,on_delete=models.CASCADE)
+    expires_at=models.DateTimeField()
+    used_at=models.DateTimeField(null=True,blank=True)
+
+class UserBlock(models.Model):
+    user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.CASCADE,related_name='blocks_made')
+    blocked=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.CASCADE,related_name='blocks_received')
+    class Meta:
+        constraints=[models.UniqueConstraint(fields=['user','blocked'],name='unique_user_block')]

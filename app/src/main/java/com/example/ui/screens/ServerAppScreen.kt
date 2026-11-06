@@ -236,8 +236,8 @@ fun ServerAppScreen(baseUrl: String) {
             delay(4000)
         }
     }
-    LaunchedEffect(signedIn, foreground, profile.optInt("id"), activeCall) {
-        if (!signedIn || !foreground || profile.optBoolean("is_admin") || activeCall.isNotBlank()) { incomingCall = null; return@LaunchedEffect }
+    LaunchedEffect(signedIn, foreground, profile.optInt("id"), activeCall,screen) {
+        if (!signedIn || !foreground || profile.optBoolean("is_admin") || activeCall.isNotBlank() || screen=="البث المباشر") { incomingCall = null; return@LaunchedEffect }
         try { if (api.request("/health/").optInt("calls_version") < 1) return@LaunchedEffect } catch (e: Exception) { return@LaunchedEffect }
         while (true) {
             try { incomingCall = api.request("/api/calls").optJSONObject("incoming") }
@@ -301,7 +301,7 @@ fun ServerAppScreen(baseUrl: String) {
             TextButton(onClick = { perform { api.request("/api/calls/${incoming.getString("id")}", "POST", JSONObject().put("action", "reject")); incomingCall = null } }, enabled = !submitting) { Text("رفض") }
         }) }
         if (profile.optBoolean("is_admin")) {
-            MobileAdminScreen(api, profile.optString("display_name", profile.optString("username"))) {
+            MobileAdminScreen(api, profile.optString("display_name", profile.optString("username")),liveOnly=profile.optString("admin_scope")=="live") {
                 perform { api.request("/api/logout", "POST", JSONObject()); signedIn = false; remembered = false; profile = JSONObject(); page = "" }
             }
             return@MyApplicationTheme
@@ -310,6 +310,10 @@ fun ServerAppScreen(baseUrl: String) {
             CommerceScreen(api, screen) { page = purchaseReturn; purchaseReturn = ""; notice = ""; revision++ }
             return@MyApplicationTheme
         }
+        if(screen=="الحسابات المحظورة"){BlockedAccounts(api){back()};return@MyApplicationTheme}
+        if(screen=="سجل العمليات"){FinancialHistory(api){back()};return@MyApplicationTheme}
+        if(screen=="الحجوزات"){BookingHistory(api){back();revision++};return@MyApplicationTheme}
+        if(screen=="البث المباشر"){LiveLobby(api,baseUrl,{showCreator(it)},{buyCredits()}){back();revision++};return@MyApplicationTheme}
         if (screen == "إضافة عرض") {
             SellerPublishScreen(api) { back(); revision++ }
             return@MyApplicationTheme
@@ -327,16 +331,16 @@ fun ServerAppScreen(baseUrl: String) {
                 if (screen != "حسابي" && screen != "صفحة المذيعة") TopAppBar(
                     title = {
                         if (screen == "تصفح") Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                            Image(painterResource(R.drawable.relaxia_logo), "شعار Relaxia", Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)))
-                            Text("Relaxia", fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                            Image(painterResource(R.drawable.relaxia_logo), "شعار Relaxia", Modifier.size(30.dp).clip(RoundedCornerShape(10.dp)))
+                            Text("Relaxia", fontSize = 24.sp, fontWeight = FontWeight.Bold)
                         } else Text(if (screen == "محادثة") peerName.ifBlank { "محادثة" } else screen, fontWeight = FontWeight.SemiBold)
                     },
                     navigationIcon = { if (page.isNotBlank()) IconButton(onClick = { back() }) { Icon(Icons.Outlined.ArrowForward, "رجوع") } },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
                     actions = {
-                        if (screen in listOf("تصفح", "العرض", "دردشة")) TextButton(onClick = { buyCredits() }) { Icon(Icons.Outlined.AccountBalanceWallet, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("كوينز") }
+                        if (screen in listOf("تصفح", "العرض", "دردشة")) IconButton(onClick={buyCredits()}){Icon(Icons.Outlined.AccountBalanceWallet,"الرصيد",Modifier.size(22.dp))}
                         when (screen) {
-                            "تصفح" -> IconButton(onClick = { open("المحفوظات") }) { Icon(Icons.Outlined.BookmarkBorder, "المحفوظات") }
+                            "تصفح" -> { TextButton({open("البث المباشر")}){Icon(Icons.Outlined.Sensors,null,Modifier.size(18.dp));Spacer(Modifier.width(4.dp));Text("مباشر")};IconButton(onClick = { open("المحفوظات") }) { Icon(Icons.Outlined.BookmarkBorder, "المحفوظات") } }
                             "العرض" -> {
                                 IconButton(onClick = { open("إضافة عرض") }) { Icon(Icons.Outlined.AddCircleOutline, "إضافة عرض") }
                                 IconButton(onClick = { open("الحجوزات") }) { Icon(Icons.Outlined.ShoppingBag, "حجوزاتي") }
@@ -352,7 +356,7 @@ fun ServerAppScreen(baseUrl: String) {
                 if (page.isBlank()) NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp, modifier = Modifier.heightIn(min = 72.dp)) {
                     destinations.forEachIndexed { index, name -> NavigationBarItem(selected = tab == index,
                         onClick = { tab = index; query = ""; category = "الكل"; notice = "" },
-                        icon = { Icon(destinationIcons[index], null, Modifier.size(24.dp)) }, label = { Text(name, fontSize = 11.sp) },
+                        icon = { Icon(destinationIcons[index], null, Modifier.size(24.dp)) }, label = { Text(name, fontSize = 12.sp) },
                         colors = NavigationBarItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.primaryContainer)) }
                 }
             }
@@ -374,6 +378,7 @@ fun ServerAppScreen(baseUrl: String) {
                     when (screen) {
                         "تصفح" -> {
                             item { Box(Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) { WalletSummary(if(walletAccountId == profile.optInt("id") && wallet.has("available_cents")) wallet.optLong("available_cents") else null, walletLoading, walletError, { buyCredits() }, { open("المحفظة") }, { revision++ }) } }
+                            item { ReferenceRow(Icons.Outlined.Sensors,"البث المباشر","جلسات عامة وخاصة · دون تسجيل"){open("البث المباشر")} }
                             item { SearchField(query, { query = it }, "ابحث عن مذيعة أو خدمة") }
                             item {
                                 LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -415,10 +420,7 @@ fun ServerAppScreen(baseUrl: String) {
                                 Text(usd(selected.optLong("price_cents")), fontSize = 25.sp, fontWeight = FontWeight.Bold)
                                 Text(selected.optString("description"), style = MaterialTheme.typography.bodyLarge)
                                 ReferenceRow(Icons.Outlined.PersonOutline, selected.optString("owner_name"), "عرض الملف الشخصي") { showCreator(selected.optInt("owner_id")) }
-                                ReferencePrimary("طلب حجز", !submitting && selected.optInt("owner_id") != profile.optInt("id")) { perform {
-                                    api.request("/api/bookings", "POST", JSONObject().put("service_id", selected.optInt("id")))
-                                    open("الحجوزات"); notice = "تم تسجيل طلبك بانتظار الدفع. لم تُخصم أموال."
-                                } }
+                                ServiceBookingButton(api,selected){open("الحجوزات");notice="حُجز المبلغ بانتظار قبول مقدم الخدمة."}
                                 OutlinedButton(onClick = { reportKind = "service"; reportId = selected.optInt("id").toString(); open("إرسال بلاغ") }, modifier = Modifier.fillMaxWidth()) { Text("الإبلاغ عن العرض") }
                             } }
                         }
@@ -484,12 +486,15 @@ fun ServerAppScreen(baseUrl: String) {
                             if (offers.isEmpty() && !loading) item { ReferenceEmpty(Icons.Outlined.Storefront, "اعرض خدمة، جلسة، أو منتجًا", "تظهر العروض هنا بعد مراجعة الإدارة واعتمادها.") }
                             items(offers) { offer -> Box(Modifier.padding(horizontal = 20.dp)) { OfferCard(offer) { showService(offer) } } }
                             if (own) item { FormColumn {
-                                ReferenceRow(Icons.Outlined.AddCard, "متجر الكوينز") { buyCredits() }
+                                ReferenceRow(Icons.Outlined.AddCard, "متجر الرصيد") { buyCredits() }
                                 ReferenceRow(Icons.Outlined.Casino, "عجلة الحظ المدفوعة") { open("العجلة") }
                                 if (!profile.optBoolean("creator")) ReferenceRow(Icons.Outlined.Storefront, "طلب تفعيل البائع") { open("تفعيل البائع") }
                                 ReferenceRow(Icons.Outlined.AccountBalanceWallet, "المحفظة والسحب") { price = ""; open("المحفظة") }
+                                ReferenceRow(Icons.Outlined.Sensors,"إعدادات البث والبثوث النشطة"){open("البث المباشر")}
+                                ReferenceRow(Icons.Outlined.ReceiptLong,"سجل العمليات"){open("سجل العمليات")}
                                 ReferenceRow(Icons.Outlined.ShoppingBag, "حجوزاتي") { open("الحجوزات") }
                                 ReferenceRow(Icons.Outlined.SupportAgent, "الدعم وخدمة العملاء") { message = ""; open("الدعم وخدمة العملاء") }
+                                ReferenceRow(Icons.Outlined.Block,"الحسابات المحظورة"){open("الحسابات المحظورة")}
                                 ReferenceRow(Icons.Outlined.Shield, "سياسة الخصوصية") { open("سياسة الخصوصية") }
                                 ReferenceRow(Icons.Outlined.Info, "من نحن") { open("من نحن") }
                             } }
@@ -552,7 +557,8 @@ fun ServerAppScreen(baseUrl: String) {
                                     Text(usd(wallet.optLong("available_cents")), fontSize = 32.sp, fontWeight = FontWeight.Bold)
                                     Text("محجوز: ${usd(wallet.optLong("reserved_cents"))}", color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 } }
-                                ReferencePrimary("شراء رصيد عبر USDT", !submitting) { buyCredits() }
+                                ReferenceRow(Icons.Outlined.ReceiptLong,"سجل العمليات والإيصالات"){open("سجل العمليات")}
+                                ReferencePrimary("شراء رصيد", !submitting) { buyCredits() }
                                 Text("الشحن يعتمد بعد تحقق الإدارة من التحويل. طلب السحب يحجز الرصيد للمراجعة ولا ينفّذ تحويلًا تلقائيًا.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Field(price, { price = it; requestKey = UUID.randomUUID().toString() }, "مبلغ السحب بالدولار", numeric = true)
                                 Field(destination, { destination = it; requestKey = UUID.randomUUID().toString() }, "جهة استلام الأموال")

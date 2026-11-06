@@ -7,6 +7,12 @@
     request_body {
         max_size 32MB
     }
+    handle_path /livekit/* {
+        forward_auth api:8000 {
+            uri /api/live/authorize
+        }
+        reverse_proxy livekit:7880
+    }
     handle_path /static/* {
         root * /srv/static
         file_server

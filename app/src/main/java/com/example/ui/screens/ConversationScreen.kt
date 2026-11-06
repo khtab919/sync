@@ -66,6 +66,11 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
     var stagedCost by remember { mutableLongStateOf(0L) }
     var mediaPriceInput by remember { mutableStateOf("0") }
     var unlockTarget by remember { mutableStateOf<JSONObject?>(null) }
+    var replyTarget by remember{mutableStateOf<JSONObject?>(null)}
+    var deleteTarget by remember{mutableStateOf<JSONObject?>(null)}
+    var blockConfirm by remember{mutableStateOf(false)}
+    var paidCallChoices by remember{mutableStateOf<List<JSONObject>>(emptyList())}
+    var pendingCallMode by remember{mutableStateOf("audio")}
     var retryKey by remember { mutableStateOf("") }
     var amplitude by remember { mutableFloatStateOf(0f) }
     var rows by remember { mutableStateOf<List<JSONObject>>(cached) }
@@ -91,8 +96,9 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
     }
     fun clearTemporary(source:Uri?) { if(source?.scheme=="file")source.path?.let{File(it)}?.takeIf{it.parentFile==context.cacheDir && it.name.startsWith("relaxia-voice-")}?.delete() }
     fun queueActual(source:Uri?,kind:String,text:String,cost:Long,mediaPrice:Long) {
-        if(source==null){try{outbox.text(text,cost);pending=outbox.read();if(body.trim()==text)changeBody("");error=""}catch(e:Exception){error="تعذّر حفظ الرسالة للإرسال."};return}
-        scope.launch { try{withContext(Dispatchers.IO){outbox.file(source,kind,cost,mediaPrice)};pending=withContext(Dispatchers.IO){outbox.read()};error=""}catch(e:Exception){error="تعذّر حفظ الملف. الحد الأقصى 8MB."}finally{clearTemporary(source)} }
+        val replyId=replyTarget?.optInt("id")?.takeIf{it>0};replyTarget=null
+        if(source==null){try{outbox.text(text,cost,replyId);pending=outbox.read();if(body.trim()==text)changeBody("");error=""}catch(e:Exception){error="تعذّر حفظ الرسالة للإرسال."};return}
+        scope.launch { try{withContext(Dispatchers.IO){outbox.file(source,kind,cost,mediaPrice,replyId)};pending=withContext(Dispatchers.IO){outbox.read()};error=""}catch(e:Exception){error="تعذّر حفظ الملف. الحد الأقصى 8MB."}finally{clearTemporary(source)} }
     }
     fun enqueue(source:Uri?,kind:String) {
         if(peerPrice>0 || (isSeller && kind in listOf("chat_image","chat_video"))) {
@@ -103,6 +109,14 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
         if(busy) return
         busy = true; error = ""
         scope.launch { try { block(); refresh() } catch(e: CancellationException) { throw e } catch(e: Exception) { error = if(e.message == "calls_setup_required" || e.message == "server_unavailable") "خادم الاتصال غير جاهز بعد. حدّث الخادم لتفعيل الاتصال الداخلي." else if(e.message == "call_busy") "أحد الطرفين مشغول بمكالمة أخرى." else if(e.message == "paid_chat_requires_verified_payment") "هذه المحادثة مدفوعة؛ لم تُرسل الرسالة ولم يُخصم رصيد." else commerceError(e) } finally { busy = false } }
+    }
+    fun beginCall(mode:String){
+        if(peerPrice>0)perform{
+            val result=api.request("/api/bookings").optJSONArray("items")
+            val choices=if(result==null)emptyList()else(0 until result.length()).map{result.getJSONObject(it)}.filter{it.optInt("owner_id")==peerId&&it.optString("status")=="accepted"}
+            if(choices.isEmpty())throw IllegalStateException("paid_booking_required")
+            pendingCallMode=mode;paidCallChoices=choices
+        }else perform{val call=api.request("/api/calls","POST",JSONObject().put("peer_id",peerId).put("mode",mode));openCall(call.getString("id"))}
     }
     fun finishRecording(send: Boolean) {
         val current = recorder; recorder = null; recording = false; recordingPaused = false
@@ -151,6 +165,7 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
                         first.put("attachment_id",media.getString("id"));withContext(Dispatchers.IO){outbox.update(first)}
                     }
                     val payload=JSONObject().put("client_key",first.getString("client_key")).put("body",first.optString("body")).put("price_consent",first.optLong("price_consent")).put("media_price_cents",first.optLong("media_price_cents"))
+                    if(first.has("reply_to"))payload.put("reply_to",first.getInt("reply_to"))
                     if(first.has("attachment_id"))payload.put("attachment_id",first.getString("attachment_id"))
                     try{val sent=api.request("/api/messages/$peerId","POST",payload);rows=rows.filterNot{it.optString("client_key")==first.optString("client_key")}+sent;withContext(Dispatchers.IO){outbox.remove(first.getString("client_key"))};error=""}
                     catch(e:Exception){if(e.message in listOf("paid_chat_requires_verified_payment","recipient_unavailable","invalid_body","invalid_attachment","message_request_conflict","paid_price_changed","insufficient_balance","creator_account_required","invalid_media_price")){first.put("failed",true).put("failure_reason",if(e.message=="insufficient_balance")"الرصيد غير كافٍ"else if(e.message=="paid_price_changed")"تغيّر سعر الرسالة. أعد تأكيد السعر."else"تعذّر الإرسال");withContext(Dispatchers.IO){outbox.update(first)}}else throw e}
@@ -189,8 +204,9 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
     DisposableEffect(Unit) { onDispose { clearTemporary(stagedUri);runCatching { recorder?.stop() }; recorder?.release(); recordingFile?.delete(); voice.close() } }
     Scaffold(
         containerColor = conversationColors().background,
-        topBar = { ChatHeader(actualPeer.ifBlank { "المحادثة" }, { if(recording) finishRecording(false); back() }, { confirmCall = true }, buy, !busy && !recording, peerHandle, peerAvatar, video = { perform { val call = api.request("/api/calls", "POST", JSONObject().put("peer_id", peerId).put("mode", "video")); openCall(call.getString("id")) } }, verified = peerVerified, priceCoins = peerPrice, online = peerOnline, presenceKnown = presenceKnown) },
+        topBar = { ChatHeader(actualPeer.ifBlank { "المحادثة" }, { if(recording) finishRecording(false); back() }, { confirmCall = true }, buy, !busy && !recording, peerHandle, peerAvatar, video = { beginCall("video") }, verified = peerVerified, priceCoins = peerPrice, online = peerOnline, presenceKnown = presenceKnown, block={blockConfirm=true}) },
         bottomBar = { Surface(color = conversationColors().background) { Column(Modifier.navigationBarsPadding().imePadding()) {
+            if(replyTarget!=null)Row(Modifier.fillMaxWidth().padding(horizontal=16.dp),verticalAlignment=Alignment.CenterVertically){Text("رد: "+replyTarget!!.optString("body").ifBlank{"مرفق"},Modifier.weight(1f),maxLines=1,style=MaterialTheme.typography.bodySmall);TextButton({replyTarget=null}){Text("إلغاء")}}
             if(error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
             if(recording) {
                 RecordingIndicator(seconds, amplitude, amplitudeHistory, recordingPaused)
@@ -219,32 +235,35 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
                     when(date) { java.time.LocalDate.now() -> "اليوم"; java.time.LocalDate.now().minusDays(1) -> "أمس"; else -> date.format(java.time.format.DateTimeFormatter.ofPattern("d MMM", java.util.Locale.forLanguageTag("ar"))) }
                 }.getOrDefault(day))
                 CompositionLocalProvider(LocalVoicePlayback provides voice) {
-                    ChatBubble(message,mine,{}, {openCall(it)}, {key->scope.launch{val row=outbox.read().firstOrNull{it.optString("client_key")==key};if(row!=null){if(row.optString("failure_reason").contains("سعر")){retryKey=key;stagedCost=peerPrice;stagedText=row.optString("body");stagedUri=null;stagedKind="retry";mediaPriceInput="0";staged=true}else{row.remove("failed");withContext(Dispatchers.IO){outbox.update(row)};pending=outbox.read()}}}}, {key->scope.launch{withContext(Dispatchers.IO){outbox.remove(key)};pending=outbox.read()}}, peerName = actualPeer, peerAvatar = peerAvatar, unlock = { unlockTarget=message })
+                    ChatBubble(message,mine,{}, {openCall(it)}, {key->scope.launch{val row=outbox.read().firstOrNull{it.optString("client_key")==key};if(row!=null){if(row.optString("failure_reason").contains("سعر")){retryKey=key;stagedCost=peerPrice;stagedText=row.optString("body");stagedUri=null;stagedKind="retry";mediaPriceInput="0";staged=true}else{row.remove("failed");withContext(Dispatchers.IO){outbox.update(row)};pending=outbox.read()}}}}, {key->scope.launch{withContext(Dispatchers.IO){outbox.remove(key)};pending=outbox.read()}}, peerName = actualPeer, peerAvatar = peerAvatar, unlock = { unlockTarget=message }, reply={replyTarget=message},delete={deleteTarget=message})
                 }
             }
         }
         }
     }
+    deleteTarget?.let{target->AlertDialog(onDismissRequest={deleteTarget=null},title={Text("حذف الرسالة للجميع")},text={Text("يُحذف محتوى الرسالة من المحادثة. تبقى سجلات العملية المالية الضرورية.")},confirmButton={TextButton({deleteTarget=null;perform{api.request("/api/messages/${target.optInt("id")}/action","POST",JSONObject().put("action","delete"))}}){Text("حذف")}},dismissButton={TextButton({deleteTarget=null}){Text("إلغاء")}})}
+    if(blockConfirm)AlertDialog(onDismissRequest={blockConfirm=false},title={Text("حظر $actualPeer")},text={Text("لن تتاح الرسائل والمكالمات والبث بينكما. يمكنك إلغاء الحظر من إعدادات الخصوصية.")},confirmButton={TextButton({blockConfirm=false;perform{api.request("/api/blocks","POST",JSONObject().put("user_id",peerId).put("blocked",true));back()}}){Text("حظر")}},dismissButton={TextButton({blockConfirm=false}){Text("إلغاء")}})
+    if(paidCallChoices.isNotEmpty())AlertDialog(onDismissRequest={paidCallChoices=emptyList()},title={Text("اختر الحجز المقبول")},text={Column{paidCallChoices.forEach{booking->TextButton({paidCallChoices=emptyList();perform{val call=api.request("/api/calls","POST",JSONObject().put("peer_id",peerId).put("mode",pendingCallMode).put("booking_id",booking.getString("id")));openCall(call.getString("id"))}}){Text(booking.optString("title")+" · "+booking.optInt("duration_minutes")+" دقيقة")}}}},confirmButton={TextButton({paidCallChoices=emptyList()}){Text("إغلاق")}})
     if(staged) AlertDialog(onDismissRequest={staged=false;clearTemporary(stagedUri);stagedUri=null},title={Text("تأكيد الإرسال")},text={Column(verticalArrangement=Arrangement.spacedBy(10.dp)){
-        Text(if(stagedCost>0)"سيُخصم $stagedCost كوينز من رصيدك لإرسال هذه الرسالة. يصل لصاحب الحساب 80٪ من المبلغ."else"إرسال مرفق خاص إلى $actualPeer")
+        Text(if(stagedCost>0)"سيُخصم $stagedCost رصيد من رصيدك لإرسال هذه الرسالة. يصل لصاحب الحساب 80٪ من المبلغ."else"إرسال مرفق خاص إلى $actualPeer")
         if(isSeller && stagedKind in listOf("chat_image","chat_video")) {
             Text("سعر فتح المرفق للمستلم · 0 للإرسال مجانًا")
-            OutlinedTextField(mediaPriceInput,{mediaPriceInput=it.filter{c->c.isDigit()}.take(7)},label={Text("كوينز")},singleLine=true)
+            OutlinedTextField(mediaPriceInput,{mediaPriceInput=it.filter{c->c.isDigit()}.take(7)},label={Text("رصيد")},singleLine=true)
             Text("تحصل على 80٪ عند الشراء. لا يُخصم من المستلم دون تأكيده.",style=MaterialTheme.typography.bodySmall)
         }
     }},confirmButton={TextButton(onClick={
         val price=mediaPriceInput.toLongOrNull()
-        if(price==null || price !in 0..1000000){error="أدخل سعرًا صحيحًا حتى 1000000 كوينز.";return@TextButton}
+        if(price==null || price !in 0..1000000){error="أدخل سعرًا صحيحًا حتى 1000000 رصيد.";return@TextButton}
         staged=false
         if(stagedKind=="retry")scope.launch{val row=outbox.read().firstOrNull{it.optString("client_key")==retryKey};if(row!=null){row.remove("failed");row.put("price_consent",stagedCost);withContext(Dispatchers.IO){outbox.update(row)};pending=outbox.read()}}
         else queueActual(stagedUri,stagedKind,stagedText,stagedCost,price)
         stagedUri=null
     }){Text(if(stagedCost>0)"تأكيد وخصم $stagedCost"else"إرسال")}},dismissButton={TextButton({staged=false;clearTemporary(stagedUri);stagedUri=null}){Text("إلغاء")}})
-    unlockTarget?.let { target -> AlertDialog(onDismissRequest={unlockTarget=null},title={Text("فتح المرفق الخاص")},text={Text("سيُخصم ${target.optLong("media_price_cents")} كوينز مرة واحدة من رصيدك. تحصل الجهة الناشرة على 80٪. يبقى المرفق متاحًا لك بعد الشراء.")},confirmButton={TextButton({unlockTarget=null;perform{api.request("/api/messages/${target.optInt("id")}/unlock","POST",JSONObject().put("price_cents",target.optLong("media_price_cents")))}}){Text("تأكيد الشراء")}},dismissButton={TextButton({unlockTarget=null}){Text("إلغاء")}}) }
+    unlockTarget?.let { target -> AlertDialog(onDismissRequest={unlockTarget=null},title={Text("فتح المرفق الخاص")},text={Text("سيُخصم ${target.optLong("media_price_cents")} رصيد مرة واحدة من رصيدك. تحصل الجهة الناشرة على 80٪. يبقى المرفق متاحًا لك بعد الشراء.")},confirmButton={TextButton({unlockTarget=null;perform{api.request("/api/messages/${target.optInt("id")}/unlock","POST",JSONObject().put("price_cents",target.optLong("media_price_cents")))}}){Text("تأكيد الشراء")}},dismissButton={TextButton({unlockTarget=null}){Text("إلغاء")}}) }
     if(chooseAttachment) AlertDialog(onDismissRequest={chooseAttachment=false},title={Text("إرسال مرفق")},text={Text("اختر صورة أو فيديو MP4. الحد الأقصى 8MB.")},confirmButton={TextButton({chooseAttachment=false;photo.launch("image/*")}){Text("صورة")}},dismissButton={TextButton({chooseAttachment=false;videoPicker.launch("video/mp4")}){Text("فيديو")}})
     if(confirmCall) AlertDialog(onDismissRequest = { confirmCall = false }, title = { Text("اتصال داخل Relaxia") }, text = { Text("اختر نوع المكالمة. سيفتح الميكروفون أو الكاميرا بعد إذنك. الطرف الآخر يحتاج أن يكون التطبيق مفتوحًا لاستقبال الرنين.") }, confirmButton = {
-        TextButton(onClick = { confirmCall = false; perform { val call = api.request("/api/calls", "POST", JSONObject().put("peer_id", peerId).put("mode", "audio")); openCall(call.getString("id")) } }) { Text("اتصال صوتي") }
+        TextButton(onClick = { confirmCall = false; beginCall("audio") }) { Text("اتصال صوتي") }
     }, dismissButton = {
-        TextButton(onClick = { confirmCall = false; perform { val call = api.request("/api/calls", "POST", JSONObject().put("peer_id", peerId).put("mode", "video")); openCall(call.getString("id")) } }) { Text("اتصال فيديو") }
+        TextButton(onClick = { confirmCall = false; beginCall("video") }) { Text("اتصال فيديو") }
     })
 }

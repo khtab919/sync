@@ -21,7 +21,7 @@ def account_json(user):
     wallet, _ = Wallet.objects.get_or_create(user=user)
     return {'id': user.pk, 'username': user.username, 'email': user.email, 'display_name': profile.display_name or user.username,
             'bio': profile.bio, 'avatar_url': profile.avatar_url, 'selected_frame': profile.selected_frame,
-            'active': user.is_active, 'creator': profile.creator, 'protected': user.is_superuser,
+            'active': user.is_active, 'creator': profile.creator, 'live_moderator':user.has_perm('core.moderate_livebroadcast'), 'broadcast_allowed':profile.broadcast_allowed, 'protected': user.is_superuser,
             'balance_cents': wallet.balance_cents, 'reserved_cents': wallet.reserved_cents}
 
 
@@ -47,7 +47,7 @@ def account(request, user_id):
         raise ApiError('account_unavailable', 404)
     if request.method == 'POST':
         action = request.payload.get('action')
-        if action not in ('ban', 'unban', 'creator_on', 'creator_off', 'credit'):
+        if action not in ('ban', 'unban', 'creator_on', 'creator_off', 'broadcast_on','broadcast_off','moderator_on','moderator_off','credit'):
             raise ApiError('invalid_action')
         with transaction.atomic():
             locked = {u.pk: u for u in User.objects.select_for_update().filter(pk__in=sorted({user_id, request.actor.pk})).order_by("pk")}
@@ -59,6 +59,13 @@ def account(request, user_id):
                 user.save(update_fields=['is_active'])
                 if action == 'ban':
                     SessionToken.objects.filter(user=user).delete()
+            elif action in ('moderator_on','moderator_off'):
+                from django.contrib.auth.models import Permission
+                permission=Permission.objects.get(content_type__app_label='core',codename='moderate_livebroadcast')
+                if action=='moderator_on':user.is_staff=True;user.save(update_fields=['is_staff']);user.user_permissions.add(permission)
+                else:user.user_permissions.remove(permission)
+            elif action in ('broadcast_on','broadcast_off'):
+                profile,_=Profile.objects.get_or_create(user=user);profile.broadcast_allowed=action=='broadcast_on';profile.save(update_fields=['broadcast_allowed'])
             elif action in ('creator_on', 'creator_off'):
                 profile, _ = Profile.objects.get_or_create(user=user)
                 profile.creator = action == 'creator_on'

@@ -126,8 +126,8 @@ class ReferenceDesignTest {
         var opened = 0
         compose.setContent { MyApplicationTheme { Column(Modifier.fillMaxSize().padding(20.dp)) { WalletSummary(0L, false, "", { bought++ }, { opened++ }, {}) } } }
         compose.onNodeWithText("رصيدك").assertExists()
-        compose.onNodeWithText("0 كوينز").assertExists()
-        compose.onNodeWithText("متجر الكوينز").performClick()
+        compose.onNodeWithText("0 رصيد").assertExists()
+        compose.onNodeWithText("متجر الرصيد").performClick()
         compose.onNodeWithContentDescription("المحفظة").performClick()
         org.junit.Assert.assertEquals(1, bought)
         org.junit.Assert.assertEquals(1, opened)
@@ -236,9 +236,17 @@ class ReferenceDesignTest {
     @Test fun lockedMediaOffersExplicitPurchaseWithoutExposingAttachment() {
         var requested=false
         compose.setContent { MyApplicationTheme { Surface { ChatBubble(JSONObject().put("id",1).put("body","").put("media_locked",true).put("media_price_cents",100).put("attachment_mime","image/jpeg"),false,{}, {},unlock={requested=true}) } } }
-        compose.onNodeWithText("فتح مقابل 100 كوينز").performClick()
+        compose.onNodeWithText("فتح مقابل 100 رصيد").performClick()
         org.junit.Assert.assertTrue(requested)
         compose.onNodeWithContentDescription("صورة في المحادثة").assertDoesNotExist()
+    }
+
+    @Test fun liveCardShowsRealMetadataAndEntryAction(){
+        var opened=false
+        compose.setContent { MyApplicationTheme { Surface(Modifier.width(320.dp)) { Column(Modifier.padding(16.dp)) { LiveBroadcastCard(JSONObject().put("owner_name","حساب الاختبار").put("title","جلسة مباشرة").put("viewers",12).put("private",true).put("price_cents",100)){opened=true} } } } }
+        compose.onNodeWithText("جلسة مباشرة").performClick();org.junit.Assert.assertTrue(opened)
+        compose.onNodeWithText("12 مشاهد · دخول مدفوع: 100").assertExists()
+        screenshot("15-live-card-small-screen")
     }
 
 }

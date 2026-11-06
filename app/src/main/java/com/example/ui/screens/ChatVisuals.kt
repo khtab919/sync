@@ -14,6 +14,9 @@ import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.foundation.border
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.runtime.CompositionLocalProvider
@@ -46,7 +49,7 @@ internal fun ChatAvatar(name:String, size:Int, url:String="") {
 }
 
 @Composable
-internal fun ChatHeader(name: String, back: () -> Unit, call: () -> Unit, buy: () -> Unit, enabled: Boolean, handle: String = "", avatar: String = "", video: () -> Unit = call, verified: Boolean = false, priceCoins: Long = 0, online: Boolean = false, presenceKnown: Boolean = false) {
+internal fun ChatHeader(name: String, back: () -> Unit, call: () -> Unit, buy: () -> Unit, enabled: Boolean, handle: String = "", avatar: String = "", video: () -> Unit = call, verified: Boolean = false, priceCoins: Long = 0, online: Boolean = false, presenceKnown: Boolean = false, block: () -> Unit = {}) {
     val colors = conversationColors()
     Column(Modifier.background(colors.background).statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -67,13 +70,14 @@ internal fun ChatHeader(name: String, back: () -> Unit, call: () -> Unit, buy: (
                 Icon(if(priceCoins > 0) Icons.Outlined.Lock else Icons.Outlined.ChatBubbleOutline, null, Modifier.size(24.dp), tint = colors.accent)
                 Column(Modifier.weight(1f)) {
                     Text(if(priceCoins > 0) "رسائل $name مدفوعة" else "مساحتكما الخاصة", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                    Text(if(priceCoins > 0) "$priceCoins كوينز لكل رسالة · بتأكيدك قبل الإرسال" else "رسائل وصور وتسجيلات صوتية", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(if(priceCoins > 0) "$priceCoins رصيد لكل رسالة · بتأكيدك قبل الإرسال" else "رسائل وصور وتسجيلات صوتية", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Button(buy, enabled = enabled, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp), colors = ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = Color.White), shape = RoundedCornerShape(20.dp)) { Text("شراء رصيد", fontSize = 12.sp) }
             }
         }
         else Row(Modifier.fillMaxWidth().padding(horizontal=16.dp),verticalAlignment=Alignment.CenterVertically) {
-            Text("محادثة خاصة",Modifier.weight(1f),fontSize=11.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
+            TextButton(block,contentPadding=PaddingValues(0.dp)){Text("خيارات الخصوصية",fontSize=11.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)}
+            Spacer(Modifier.weight(1f))
             TextButton(buy,enabled=enabled,contentPadding=PaddingValues(horizontal=8.dp,vertical=0.dp)){Text("شراء رصيد",fontSize=12.sp,color=colors.accent)}
         }
     }
@@ -101,11 +105,15 @@ internal fun ChatDayLabel(label: String) {
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-internal fun ChatBubble(message: JSONObject, mine: Boolean, play: (String) -> Unit, join: (String) -> Unit, retry: (String) -> Unit = {}, remove: (String) -> Unit = {}, peerName: String = "", peerAvatar: String = "", unlock: () -> Unit = {}) {
+internal fun ChatBubble(message: JSONObject, mine: Boolean, play: (String) -> Unit, join: (String) -> Unit, retry: (String) -> Unit = {}, remove: (String) -> Unit = {}, peerName: String = "", peerAvatar: String = "", unlock: () -> Unit = {}, reply: () -> Unit = {}, delete: () -> Unit = {}) {
     val colors = conversationColors()
     val outgoing = Color(0xFF754451)
     val bubbleColor by animateColorAsState(if(mine)outgoing else colors.incoming,animationSpec=androidx.compose.animation.core.tween(150),label="messageColor")
+    val clipboard=LocalClipboardManager.current
+    var showActions by remember{mutableStateOf(false)}
+    if(showActions)AlertDialog(onDismissRequest={showActions=false},title={Text("خيارات الرسالة")},text={Column{TextButton({showActions=false;reply()}){Text("رد")};if(message.optString("body").isNotBlank())TextButton({clipboard.setText(AnnotatedString(message.optString("body")));showActions=false}){Text("نسخ النص")};if(mine&&!message.optBoolean("deleted")&&!message.optBoolean("pending"))TextButton({showActions=false;delete()}){Text("حذف للجميع")}}},confirmButton={TextButton({showActions=false}){Text("إغلاق")}})
     var showMedia by remember { mutableStateOf(false) }
     if(showMedia) ChatMediaViewer(message.optString("attachment_url"),message.optString("attachment_mime").startsWith("video/")){showMedia=false}
     val time = runCatching { Instant.parse(message.optString("created_at")).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("HH:mm")) }.getOrDefault("")
@@ -113,14 +121,15 @@ internal fun ChatBubble(message: JSONObject, mine: Boolean, play: (String) -> Un
         Row(Modifier.fillMaxWidth(), horizontalArrangement = if(mine) Arrangement.End else Arrangement.Start, verticalAlignment = Alignment.Bottom) {
             if(!mine && peerName.isNotBlank()) { ChatAvatar(peerName, 28, peerAvatar); Spacer(Modifier.width(6.dp)) }
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                Surface(Modifier.widthIn(max = 300.dp).weight(1f, fill = false), shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp, bottomStart = if(mine) 22.dp else 5.dp, bottomEnd = if(mine) 5.dp else 22.dp), shadowElevation = 0.dp, color = bubbleColor, contentColor = if(mine) Color.White else MaterialTheme.colorScheme.onSurface) {
+                Surface(Modifier.widthIn(max = 300.dp).weight(1f, fill = false).combinedClickable(onClick={},onLongClick={showActions=true}), shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp, bottomStart = if(mine) 22.dp else 5.dp, bottomEnd = if(mine) 5.dp else 22.dp), shadowElevation = 0.dp, color = bubbleColor, contentColor = if(mine) Color.White else MaterialTheme.colorScheme.onSurface) {
                     Column(Modifier.padding(horizontal = 14.dp, vertical = 7.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        if(message.optString("body").isNotBlank() && message.optString("call_id").isBlank()) SelectionContainer { Text(message.optString("body"), fontSize = 16.sp, lineHeight = 23.sp) }
+                        if(message.has("reply_to")&&!message.isNull("reply_to"))Text("رد: "+message.optString("reply_preview").ifBlank{"مرفق"},fontSize=12.sp,color=LocalContentColor.current.copy(alpha=.65f),maxLines=2)
+                        if(message.optString("body").isNotBlank() && message.optString("call_id").isBlank()) Text(message.optString("body"), fontSize = 16.sp, lineHeight = 23.sp)
                         if(message.optBoolean("media_locked")) Surface(onClick=unlock,shape=RoundedCornerShape(16.dp),color=colors.soft) {
                             Column(Modifier.widthIn(min=180.dp).padding(20.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(8.dp)) {
                                 Icon(Icons.Outlined.Lock,"مرفق مدفوع",tint=MaterialTheme.colorScheme.onSurface)
                                 Text(if(message.optString("attachment_mime").startsWith("video/"))"فيديو خاص"else"صورة خاصة",color=MaterialTheme.colorScheme.onSurface)
-                                Text("فتح مقابل ${message.optLong("media_price_cents")} كوينز",color=colors.accent,fontSize=13.sp)
+                                Text("فتح مقابل ${message.optLong("media_price_cents")} رصيد",color=colors.accent,fontSize=13.sp)
                             }
                         }
                         val media = message.optString("attachment_url")

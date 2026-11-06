@@ -12,6 +12,7 @@ services:
       timeout: 5s
       retries: 20
   api:
+    image: layali-api
     build: .
     restart: unless-stopped
     env_file: .env
@@ -47,6 +48,27 @@ services:
         --denied-peer-ip=::1
         --denied-peer-ip=fc00::-fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
         --denied-peer-ip=fe80::-febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+  livekit:
+    image: livekit/livekit-server:v1.13.11
+    restart: unless-stopped
+    command: ["--config", "/etc/livekit.yaml"]
+    read_only: true
+    tmpfs: ["/tmp:size=32m,noexec,nosuid"]
+    volumes:
+      - ./livekit.generated.yaml:/etc/livekit.yaml:ro
+    ports:
+      - '7881:7881/tcp'
+      - '50000-50100:50000-50100/udp'
+    logging:
+      options: {max-size: "5m", max-file: "2"}
+  live-maintenance:
+    image: layali-api
+    restart: unless-stopped
+    env_file: .env
+    command: ["python", "manage.py", "reconcile_live", "--loop"]
+    depends_on:
+      db: {condition: service_healthy}
+      livekit: {condition: service_started}
   proxy:
     image: caddy:2
     restart: unless-stopped

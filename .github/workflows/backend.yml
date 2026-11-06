@@ -62,3 +62,54 @@ jobs:
             sleep 1
           done
           NODE_PATH="$RUNNER_TEMP/rtc-node/node_modules" node backend/qa/webrtc_smoke.cjs
+
+      - name: Test actual ephemeral SFU broadcast with twelve viewers
+        env:
+          LIVE_SMOKE_CONFIG: ${{ runner.temp }}/live-smoke.json
+        run: |
+          python backend/fetch_live_sdk.py
+          cat > "$RUNNER_TEMP/livekit-smoke.yaml" <<'YAML'
+          port: 7880
+          rtc:
+            tcp_port: 7881
+            port_range_start: 50000
+            port_range_end: 50100
+            use_external_ip: false
+            node_ip: 127.0.0.1
+          room:
+            auto_create: false
+            empty_timeout: 60
+            departure_timeout: 10
+          keys:
+            smoke-key: smoke-secret-at-least-thirty-two-characters
+          logging:
+            level: warn
+          YAML
+          cat > "$RUNNER_TEMP/live-caddy" <<'CADDY'
+          :8880 {
+            handle_path /livekit/* {
+              forward_auth 127.0.0.1:8766 {
+                uri /api/live/authorize
+              }
+              reverse_proxy 127.0.0.1:7880
+            }
+            handle {
+              reverse_proxy 127.0.0.1:8766
+            }
+          }
+          CADDY
+          docker run -d --name relaxia-live-sfu --read-only --tmpfs /tmp:size=32m --network host -v "$RUNNER_TEMP/livekit-smoke.yaml:/etc/livekit.yaml:ro" livekit/livekit-server:v1.13.11 --config /etc/livekit.yaml
+          docker run -d --name relaxia-live-gateway --network host -v "$RUNNER_TEMP/live-caddy:/etc/caddy/Caddyfile:ro" caddy:2
+          python backend/qa/live_smoke_server.py &
+          live_server_pid=$!
+          trap 'kill "$live_server_pid" 2>/dev/null || true; docker logs relaxia-live-sfu | tail -30; docker logs relaxia-live-gateway | tail -20; docker rm -f relaxia-live-sfu relaxia-live-gateway >/dev/null 2>&1 || true' EXIT
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:8880/health/ >/dev/null; then break; fi
+            sleep 1
+          done
+          NODE_PATH="$RUNNER_TEMP/rtc-node/node_modules" node backend/qa/live_smoke.cjs
+          test "$(docker inspect -f '{{.HostConfig.ReadonlyRootfs}}' relaxia-live-sfu)" = true
+          if docker export relaxia-live-sfu | tar -tf - | grep -E '\.(mp4|mkv|webm|flv|m3u8|wav|m4a)$'; then
+            echo 'Unexpected persistent media file in SFU filesystem'
+            exit 1
+          fi
