@@ -18,7 +18,7 @@ jobs:
           POSTGRES_DB: layali
         ports: ['5432:5432']
         options: >-
-          --health-cmd 'pg_isready -U layali'
+          --health-cmd "pg_isready -U layali"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -37,3 +37,9 @@ jobs:
       - run: pip install -r backend/requirements.txt
       - run: python backend/manage.py makemigrations --check --dry-run
       - run: python backend/manage.py test core --verbosity 2
+      - name: Validate deployment containers
+        run: |
+          cp backend/.env.example backend/.env
+          docker compose -f backend/compose.yaml config --quiet
+          docker build -t layali-backend-ci backend
+          docker run --rm -e LAYALI_DOMAIN=api.example.com -v "$PWD/backend/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2 caddy validate --config /etc/caddy/Caddyfile
