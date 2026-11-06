@@ -143,7 +143,7 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
                     pending=withContext(Dispatchers.IO){outbox.read()}
                 } else if(first!=null&&!reliable) error=if(versionKnown)"حدّث الخادم لتفعيل الإرسال الموثوق وحالات تسليم الرسائل."else"بانتظار الاتصال لإرسال الرسائل…"
             }catch(e:CancellationException){throw e}catch(e:Exception){error="بانتظار الاتصال لإرسال الرسائل…"}
-            try { refresh() }catch(e:CancellationException){throw e}catch(e:Exception){if(pending.isEmpty())error=commerceError(e)}
+            try { refresh() }catch(e:CancellationException){throw e}catch(e:Exception){peerOnline=false;presenceKnown=false;if(pending.isEmpty())error=commerceError(e)}
             delay(if(pending.isEmpty())1500 else 900)
         }
     }

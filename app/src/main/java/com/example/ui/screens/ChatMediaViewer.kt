@@ -21,6 +21,12 @@ import androidx.compose.ui.unit.dp
 @Composable internal fun ChatMediaViewer(url:String, video:Boolean, close:()->Unit) {
     var view by remember { mutableStateOf<VideoView?>(null) }
     var error by remember { mutableStateOf(false) }
+    val owner=androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(owner) {
+        val observer=androidx.lifecycle.LifecycleEventObserver { _,event -> if(event==androidx.lifecycle.Lifecycle.Event.ON_PAUSE)view?.pause() }
+        owner.lifecycle.addObserver(observer)
+        onDispose { owner.lifecycle.removeObserver(observer) }
+    }
     DisposableEffect(Unit){onDispose{view?.stopPlayback()}}
     Dialog(close,properties=DialogProperties(usePlatformDefaultWidth=false)) {
         Box(Modifier.fillMaxSize().background(Color(0xFF171317)).safeDrawingPadding()) {
