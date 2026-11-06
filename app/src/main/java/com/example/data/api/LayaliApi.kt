@@ -6,9 +6,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
-/** Native HTTPS client. Session credentials are kept only in memory. */
-class LayaliApi(private val baseUrl: String) {
-    var token: String? = null
+internal class ApiException(val code: String) : Exception(code)
+
+/** Passwords stay in memory; only revocable session tokens can be persisted. */
+class LayaliApi internal constructor(private val baseUrl: String, private val sessionStore: SessionStore? = null) {
+    @Volatile var token: String? = null
+        private set
+    var sessionSaved: Boolean = false
         private set
 
     init {
@@ -16,35 +20,53 @@ class LayaliApi(private val baseUrl: String) {
         require(url.protocol == "https" && url.host.isNotBlank() && url.userInfo == null)
     }
 
-    suspend fun request(path: String, method: String = "GET", body: JSONObject? = null): JSONObject =
-        withContext(Dispatchers.IO) {
-            require(path.startsWith("/api/"))
-            val connection = URL(baseUrl.trimEnd('/') + path).openConnection() as HttpURLConnection
-            try {
-                connection.requestMethod = method
-                connection.connectTimeout = 15000
-                connection.readTimeout = 15000
-                connection.instanceFollowRedirects = false
-                connection.setRequestProperty("Accept", "application/json")
-                token?.let { connection.setRequestProperty("Authorization", "Bearer $it") }
-                if (body != null) {
-                    connection.doOutput = true
-                    connection.setRequestProperty("Content-Type", "application/json")
-                    connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
-                }
-                val status = connection.responseCode
-                val stream = if (status in 200..299) connection.inputStream else connection.errorStream
-                val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
-                val json = runCatching { JSONObject(raw) }.getOrElse { JSONObject() }
-                if (status !in 200..299) {
-                    if (status == 401) token = null
-                    error(json.optString("error", "server_error_$status"))
-                }
-                if (path == "/api/login" || path == "/api/register") token = json.getString("token")
-                if (path == "/api/logout") token = null
-                json
-            } finally {
-                connection.disconnect()
+    suspend fun restoreSession(): Boolean = withContext(Dispatchers.IO) {
+        token = sessionStore?.read()
+        sessionSaved = token != null
+        token != null
+    }
+    suspend fun forgetSession() = withContext(Dispatchers.IO) { setSession(null) }
+    suspend fun requireSimpleRegistration() {
+        if (request("/health/").optInt("registration_version") < 3) throw ApiException("server_update_required")
+    }
+    @Synchronized private fun setSession(value: String?) {
+        token = value
+        sessionSaved = false
+        try {
+            if (value == null) sessionStore?.clear()
+            else if (sessionStore != null) { sessionStore.write(value); sessionSaved = true }
+        } catch (_: Exception) { /* A keystore failure must not turn a successful login into a failed one. */ }
+    }
+
+    @Synchronized private fun invalidateSession(expected: String?) { if (token == expected) setSession(null) }
+
+    suspend fun request(path: String, method: String = "GET", body: JSONObject? = null): JSONObject = withContext(Dispatchers.IO) {
+        require(path.startsWith("/api/") || path == "/health/")
+        val requestToken = token
+        val connection = URL(baseUrl.trimEnd('/') + path).openConnection() as HttpURLConnection
+        try {
+            connection.requestMethod = method
+            connection.connectTimeout = 15000
+            connection.readTimeout = 15000
+            connection.instanceFollowRedirects = false
+            connection.setRequestProperty("Accept", "application/json")
+            requestToken?.let { connection.setRequestProperty("Authorization", "Bearer $it") }
+            if (body != null) {
+                connection.doOutput = true
+                connection.setRequestProperty("Content-Type", "application/json")
+                connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
             }
-        }
+            val status = connection.responseCode
+            val stream = if (status in 200..299) connection.inputStream else connection.errorStream
+            val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+            val json = runCatching { JSONObject(raw) }.getOrElse { JSONObject() }
+            if (status !in 200..299) {
+                if (status == 401) invalidateSession(requestToken)
+                throw ApiException(if (status >= 500) "server_unavailable" else json.optString("error", "server_error_$status"))
+            }
+            if (path == "/api/login" || path == "/api/register") setSession(json.getString("token"))
+            if (path == "/api/logout") setSession(null)
+            json
+        } finally { connection.disconnect() }
+    }
 }

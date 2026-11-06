@@ -81,3 +81,11 @@ The redesigned login is the first screen. Registration requires date of birth an
 ## Registration update (7.1)
 
 Registration no longer asks for a date of birth. It requires an explicit 18+ and non-explicit-policy acknowledgement; this is self-declaration, not identity verification. New registrations store no invented birth date. Existing dates remain intact. The API continues to validate birth dates supplied by older app versions. Apply migration 0004 and restart the API before installing 7.1.
+
+## Simplified sign-in (7.2)
+
+Registration requires a name (two characters or more; Arabic, English and spaces supported), a password of at least eight characters, and the explicit 18+ / policy checkbox. Email is optional. No uppercase or symbol rule is imposed; very common passwords remain rejected. Field-specific errors replace the earlier generic password message. The public health response advertises `registration_version: 3`; the app checks this before registration and identifies an outdated server rather than blaming credentials. Existing accounts and old registration clients remain supported.
+
+The native client remembers an opaque seven-day server session using AES-GCM with an AndroidKeyStore key. Ciphertext is stored only in the app's no-backup directory, bound to the API origin; passwords are never stored. Expired/revoked sessions are cleared on 401. An offline restore keeps the token and offers retry rather than requiring credentials again. Logout revokes the server token and clears the encrypted local copy. Device keystore failure leaves the current login usable and reports that it could not be remembered. KeyStore support on physical devices remains a separate device test.
+
+Update the API via the documented `git pull` / `backend/deploy.sh` command before installing 7.2. No new database migration is required beyond 0004.

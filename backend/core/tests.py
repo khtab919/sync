@@ -47,6 +47,33 @@ class ApiTests(TestCase):
         profile = Profile.objects.get(user__username='adultnew')
         self.assertIsNone(profile.date_of_birth)
 
+    def test_simple_registration_accepts_two_character_name_and_no_email(self):
+        p = {'username': '  لي  ', 'password': 'Sunrise8', 'adult_confirmed': True, 'accept_non_explicit_policy': True}
+        response = self.post('/api/register', p)
+        self.assertEqual(response.status_code, 201)
+        user = get_user_model().objects.get(username='لي')
+        self.assertEqual(user.email, '')
+        self.assertTrue(user.check_password('Sunrise8'))
+        self.assertEqual(self.post('/api/login', {'username': 'لي', 'password': 'Sunrise8'}).status_code, 200)
+
+    def test_simple_registration_errors_identify_the_field(self):
+        p = {'username': 'newmember', 'password': 'short', 'adult_confirmed': True, 'accept_non_explicit_policy': True}
+        self.assertEqual(self.post('/api/register', p).json()['error'], 'invalid_password')
+        p['password'] = '12345678'
+        self.assertEqual(self.post('/api/register', p).json()['error'], 'password_too_common')
+        p['password'] = 'Sunrise8'
+        p['email'] = 'not-an-email'
+        self.assertEqual(self.post('/api/register', p).json()['error'], 'invalid_email')
+        p['email'] = ''
+        p['username'] = 'Nour Hassan'
+        self.assertEqual(self.post('/api/register', p).status_code, 201)
+        self.assertEqual(self.post('/api/login', {'username': ' @NOUR   HASSAN ', 'password': 'Sunrise8'}).status_code, 200)
+
+    def test_health_advertises_simplified_registration(self):
+        response = self.client.get('/health/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['registration_version'], 3)
+
     def test_booking_uses_server_price_and_is_unpaid(self):
         service = Service.objects.create(owner=self.creator, title='Call', description='Description', price_cents=200, approved=True)
         response = self.post('/api/bookings', {'service_id': service.pk, 'price_cents': 1, 'status': 'confirmed'})

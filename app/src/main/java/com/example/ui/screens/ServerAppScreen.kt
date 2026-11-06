@@ -15,6 +15,7 @@ import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -29,11 +30,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.data.api.LayaliApi
+import com.example.data.api.SecureSessionStore
 import com.example.ui.theme.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -50,9 +54,12 @@ fun ServerAppScreen(baseUrl: String) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("layali_appearance", 0) }
     var dark by rememberSaveable { mutableStateOf(prefs.getBoolean("dark", false)) }
-    val api = remember(baseUrl) { LayaliApi(baseUrl) }
+    val api = remember(baseUrl) { LayaliApi(baseUrl, SecureSessionStore(context.applicationContext, baseUrl.trimEnd('/'))) }
     val scope = rememberCoroutineScope()
     var signedIn by remember { mutableStateOf(false) }
+    var restoring by remember { mutableStateOf(true) }
+    var remembered by remember { mutableStateOf(false) }
+    var resumeRevision by remember { mutableIntStateOf(0) }
     var register by rememberSaveable { mutableStateOf(false) }
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var page by rememberSaveable { mutableStateOf("") }
@@ -102,7 +109,7 @@ fun ServerAppScreen(baseUrl: String) {
             try { action() }
             catch (e: CancellationException) { throw e }
             catch (e: Exception) { notice = friendlyError(e.message) }
-            finally { if (api.token == null) signedIn = false; submitting = false }
+            finally { if (api.token == null) { signedIn = false; remembered = false } else if (!signedIn) remembered = true; submitting = false }
         }
     }
     fun startChat(id: Int, name: String) { peerId = id.toString(); peerName = name; message = ""; open("محادثة") }
@@ -118,6 +125,19 @@ fun ServerAppScreen(baseUrl: String) {
         creator = creators.firstOrNull { it.optInt("id") == id } ?: JSONObject().put("id", id)
         if (creator.has("display_name")) open("صفحة المذيعة")
         else { notice = "هذا الملف غير متاح حاليًا." }
+    }
+    LaunchedEffect(api, resumeRevision) {
+        restoring = true
+        try {
+            if (api.token != null || api.restoreSession()) {
+                profile = api.request("/api/me")
+                signedIn = true
+                remembered = true
+                notice = ""
+            }
+        } catch (e: CancellationException) { throw e }
+        catch (e: Exception) { notice = friendlyError(e.message); remembered = api.token != null }
+        finally { restoring = false }
     }
     val screen = page.ifBlank { destinations[tab] }
     BackHandler(enabled = signedIn && page.isNotBlank()) { back() }
@@ -146,15 +166,42 @@ fun ServerAppScreen(baseUrl: String) {
     }
 
     MyApplicationTheme(darkTheme = dark) {
+        if (restoring) {
+            Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                Column(Modifier.safeDrawingPadding().padding(28.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator()
+                    Spacer(Modifier.height(20.dp))
+                    Text("جاري فتح حسابك…")
+                }
+            }
+            return@MyApplicationTheme
+        }
+        if (!signedIn && remembered) {
+            Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                Column(Modifier.safeDrawingPadding().padding(28.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                    Text("أهلًا بعودتك", style = MaterialTheme.typography.headlineLarge)
+                    Text("دخولك محفوظ. تعذّر الاتصال بالخادم الآن، ولا تحتاج لإعادة كتابة كلمة المرور.")
+                    if (notice.isNotBlank()) Text(notice, color = MaterialTheme.colorScheme.error)
+                    ReferencePrimary("إعادة المحاولة", !submitting) { resumeRevision++ }
+                    TextButton(onClick = { perform { api.forgetSession(); remembered = false; notice = "" } }, enabled = !submitting) { Text("استخدام حساب آخر") }
+                }
+            }
+            return@MyApplicationTheme
+        }
         if (!signedIn) {
             ReferenceLogin(register, submitting, notice, username, password, email, adultConfirmed,
                 { username = it }, { password = it }, { email = it }, { adultConfirmed = it },
                 { register = !register; notice = "" }, { perform {
                     val body = JSONObject().put("username", username).put("password", password)
-                    if (register) body.put("email", email).put("adult_confirmed", adultConfirmed).put("accept_non_explicit_policy", true)
+                    if (register) {
+                        api.requireSimpleRegistration()
+                        body.put("adult_confirmed", adultConfirmed).put("accept_non_explicit_policy", true)
+                        if (email.isNotBlank()) body.put("email", email.trim())
+                    }
                     api.request(if (register) "/api/register" else "/api/login", "POST", body)
                     profile = api.request("/api/me")
                     password = ""; signedIn = true; tab = 0; page = ""
+                    if (!api.sessionSaved) notice = "تم الدخول. تعذّر حفظ الجلسة على هذا الجهاز، وقد تحتاج للدخول مجددًا عند إغلاق التطبيق."
                 } })
             return@MyApplicationTheme
         }
@@ -489,29 +536,42 @@ internal fun ProfileHero(person: JSONObject, own: Boolean, settings: () -> Unit,
 
 @Composable
 internal fun ReferenceLogin(register: Boolean, busy: Boolean, notice: String, username: String, password: String, email: String, adultConfirmed: Boolean, onUsername: (String) -> Unit, onPassword: (String) -> Unit, onEmail: (String) -> Unit, onAdultConfirmed: (Boolean) -> Unit, toggle: () -> Unit, submit: () -> Unit) {
+    var showPassword by remember { mutableStateOf(false) }
+    var emailExpanded by rememberSaveable { mutableStateOf(email.isNotBlank()) }
+    val ready = !busy && username.trim().length >= 2 && password.isNotBlank() && (!register || (password.length >= 8 && adultConfirmed))
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        LazyColumn(contentPadding = PaddingValues(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
-            item { Column(Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(Color(0xFF333D36), WisalInk)), RoundedCornerShape(bottomEnd = 72.dp)).statusBarsPadding().heightIn(min = 265.dp).padding(28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        LazyColumn(modifier = Modifier.fillMaxSize().imePadding(), contentPadding = PaddingValues(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
+            item { Column(Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(Color(0xFF333D36), WisalInk)), RoundedCornerShape(bottomEnd = 72.dp)).statusBarsPadding().heightIn(min = 170.dp).padding(28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Outlined.AllInclusive, null, Modifier.size(34.dp), tint = WisalSage); Spacer(Modifier.weight(1f)); Text("18+", color = Color.White.copy(alpha = .7f), fontSize = 12.sp) }
-                Spacer(Modifier.height(40.dp))
-                Text("Layali", color = Color.White, fontSize = 48.sp, fontWeight = FontWeight.Bold)
-                Text("مساحتك تستحق أن تُرى.", color = Color.White.copy(alpha = .7f), fontSize = 18.sp)
+                Spacer(Modifier.height(6.dp))
+                Text("Layali", color = Color.White, fontSize = 36.sp, fontWeight = FontWeight.Bold)
+                Text("مساحتك تستحق أن تُرى.", color = Color.White.copy(alpha = .7f), fontSize = 15.sp)
             } }
             item { Column(Modifier.padding(horizontal = 26.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                 Text(if (register) "مساحتك تبدأ هنا" else "أهلًا بعودتك", fontSize = 27.sp, fontWeight = FontWeight.Bold)
                 Text("اكتشف، شارك، وتواصل بطريقتك.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (notice.isNotBlank()) Text(notice, color = MaterialTheme.colorScheme.error)
-                Field(username, onUsername, "اسم المستخدم")
-                OutlinedTextField(password, onPassword, label = { Text("كلمة المرور") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(18.dp), colors = OutlinedTextFieldDefaults.colors(unfocusedContainerColor = MaterialTheme.colorScheme.surface))
+                OutlinedTextField(username, onUsername, label = { Text("اسم المستخدم") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next), shape = RoundedCornerShape(18.dp),
+                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = MaterialTheme.colorScheme.onSurface, unfocusedTextColor = MaterialTheme.colorScheme.onSurface, unfocusedContainerColor = MaterialTheme.colorScheme.surface, focusedContainerColor = MaterialTheme.colorScheme.surface))
+                OutlinedTextField(password, onPassword, label = { Text("كلمة المرور") },
+                    visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = { IconButton(onClick = { showPassword = !showPassword }) { Icon(if (showPassword) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility, if (showPassword) "إخفاء كلمة المرور" else "إظهار كلمة المرور") } },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { if (ready) submit() }),
+                    modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(18.dp),
+                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = MaterialTheme.colorScheme.onSurface, unfocusedTextColor = MaterialTheme.colorScheme.onSurface, unfocusedContainerColor = MaterialTheme.colorScheme.surface, focusedContainerColor = MaterialTheme.colorScheme.surface))
                 if (register) {
-                    Field(email, onEmail, "البريد الإلكتروني")
+                    Text("8 خانات أو أكثر. لا يلزم رمز خاص أو أحرف كبيرة.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (emailExpanded) Field(email, onEmail, "البريد الإلكتروني (اختياري)")
+                    else TextButton(onClick = { emailExpanded = true }) { Text("إضافة بريد إلكتروني (اختياري)") }
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = adultConfirmed, onCheckedChange = onAdultConfirmed)
                         Text("أؤكد أن عمري 18 عامًا أو أكثر وأوافق على ضوابط المحتوى غير الصريح.", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-                ReferencePrimary(if (register) "إنشاء حساب" else "دخول", !busy && (!register || adultConfirmed)) { submit() }
+                ReferencePrimary(if (register) "إنشاء حساب" else "دخول", ready) { submit() }
                 TextButton(onClick = toggle, enabled = !busy, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text(if (register) "لديك حساب؟ تسجيل الدخول" else "جديد هنا؟ أنشئ حسابًا") }
                 Text("بياناتك مرتبطة بخادم ليالي · محتوى غير صريح", Modifier.align(Alignment.CenterHorizontally), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             } }
@@ -533,16 +593,25 @@ private fun NativeReel(url: String, active: Boolean) {
 }
 
 private fun friendlyError(code: String?): String = when (code) {
-    "authentication_required", "invalid_session", "invalid_credentials" -> "تحقق من اسم المستخدم وكلمة المرور أو سجّل الدخول مجددًا."
-    "adult_policy_required" -> "يجب أن تكون قد أتممت 18 عامًا وتوافق على ضوابط المحتوى."
+    "authentication_required", "invalid_session" -> "انتهت جلسة الدخول. أدخل اسم المستخدم وكلمة المرور للمتابعة."
+    "invalid_credentials" -> "اسم المستخدم أو كلمة المرور غير صحيحين. إذا لم تُنشئ حسابًا بعد، اضغط «أنشئ حسابًا»."
+    "invalid_username" -> "اكتب اسمًا من حرفين أو أكثر بالعربي أو الإنجليزي. المسافات مسموحة."
+    "invalid_password" -> "اختر كلمة مرور من 8 خانات أو أكثر. لا يلزم رمز خاص أو أحرف كبيرة."
+    "password_too_common" -> "كلمة المرور شائعة جدًا. اختر كلمة مختلفة يسهل عليك تذكّرها."
+    "invalid_email" -> "البريد الإلكتروني غير صحيح. يمكنك تركه فارغًا؛ إضافته اختيارية."
+    "invalid_input" -> "إحدى البيانات غير صحيحة. راجع الحقول ثم حاول مجددًا."
+    "server_update_required" -> "الخادم ما زال يعمل بنسخة التسجيل القديمة. يلزم تحديثه لتفعيل التسجيل المبسّط. بياناتك ليست سبب المشكلة."
+    "server_unavailable" -> "الخادم غير متاح الآن. حاول بعد قليل؛ لا تغيّر كلمة المرور."
+    "adult_policy_required" -> "فعّل تأكيد 18+ والموافقة على ضوابط المحتوى."
     "verified_creator_required" -> "يلزم توثيق الهوية واعتماد حساب المذيعة من الإدارة."
     "identity_verification_required" -> "مشاهدة الريلز تتطلب توثيق الهوية لدى الإدارة."
     "paid_chat_requires_verified_payment" -> "المحادثة مدفوعة. الدفع غير مفعّل بعد، ولم تُرسل الرسالة."
     "insufficient_funds" -> "رصيدك المتاح لا يكفي لطلب السحب."
     "too_many_attempts" -> "محاولات كثيرة. حاول بعد 15 دقيقة."
-    "username_unavailable", "conflict" -> "اسم المستخدم أو الطلب مستخدم بالفعل."
-    "invalid_input", "invalid_password", "invalid_email", "invalid_username", "invalid_chat_price" -> "تحقق من البيانات. كلمة المرور الجديدة يجب ألا تقل عن 12 حرفًا وألا تكون شائعة."
+    "username_unavailable" -> "هذا الاسم مستخدم بالفعل. اختر اسمًا آخر أو ادخل بحسابك الموجود."
+    "conflict" -> "الطلب موجود بالفعل. حدّث الصفحة قبل إعادة المحاولة."
+    "invalid_chat_price" -> "أدخل سعر محادثة صحيحًا، أو صفرًا للمحادثة المجانية."
     "invalid_image_url" -> "أدخل رابط صورة صحيحًا يبدأ بـ https://."
     "recipient_unavailable", "creator_unavailable" -> "الحساب غير متاح حاليًا."
-    else -> "تعذّر إتمام الطلب. تحقق من الاتصال ثم حاول مجددًا."
+    else -> "تعذّر الاتصال بالخادم. تحقق من الإنترنت ثم أعد المحاولة."
 }

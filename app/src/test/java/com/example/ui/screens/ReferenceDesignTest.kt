@@ -39,17 +39,25 @@ class ReferenceDesignTest {
         compose.setContent {
             var register by remember { mutableStateOf(false) }
             var adultConfirmed by remember { mutableStateOf(false) }
+            var name by remember { mutableStateOf("") }
+            var password by remember { mutableStateOf("") }
             MyApplicationTheme {
-                ReferenceLogin(register, false, "", "", "", "", adultConfirmed, {}, {}, {}, { adultConfirmed = it }, { register = !register }, {})
+                ReferenceLogin(register, false, "", name, password, "", adultConfirmed, { name = it }, { password = it }, {}, { adultConfirmed = it }, { register = !register }, {})
             }
         }
         compose.onNodeWithText("أهلًا بعودتك").assertExists()
         screenshot("01-login")
         compose.onNodeWithText("جديد هنا؟ أنشئ حسابًا").performScrollTo().performClick()
-        compose.onNodeWithText("البريد الإلكتروني").assertExists()
+        compose.onNodeWithText("البريد الإلكتروني (اختياري)").assertDoesNotExist()
+        compose.onNodeWithText("إضافة بريد إلكتروني (اختياري)").assertExists()
         compose.onNodeWithText("تاريخ الميلاد YYYY-MM-DD").assertDoesNotExist()
         compose.onNodeWithText("إنشاء حساب").performScrollTo().assertIsNotEnabled()
         compose.onNode(isToggleable()).performScrollTo().performClick()
+        compose.onNodeWithText("إنشاء حساب").assertIsNotEnabled()
+        compose.onNodeWithText("اسم المستخدم").performScrollTo().performTextInput("نور")
+        compose.onNodeWithText("كلمة المرور").performScrollTo().performTextInput("Sunrise8")
+        compose.onNodeWithContentDescription("إظهار كلمة المرور").performClick()
+        compose.onNodeWithContentDescription("إخفاء كلمة المرور").assertExists()
         compose.onNodeWithText("إنشاء حساب").assertIsEnabled()
         screenshot("02-register")
     }

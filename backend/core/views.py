@@ -86,7 +86,7 @@ def amount(data, key):
 
 def password_value(data, minimum=1):
     value = data.get('password')
-    if not isinstance(value, str) or not minimum <= len(value) <= 128:
+    if not isinstance(value, str) or not value.strip() or not minimum <= len(value) <= 128:
         raise ApiError('invalid_password')
     return value
 
@@ -99,18 +99,23 @@ def issue_token(user):
 def health(request):
     with connection.cursor() as cursor:
         cursor.execute('SELECT 1')
-    return JsonResponse({'status': 'ok'})
+    return JsonResponse({'status': 'ok', 'registration_version': 3})
 
 @endpoint(['POST'], authenticated=False)
 def register(request):
     p = request.payload
-    username = text(p, 'username', 3, 50)
-    if not all(c.isalnum() or c in '._-' for c in username):
+    username = ' '.join(text(p, 'username', 2, 50).split()).removeprefix('@')
+    import unicodedata
+    if len(username) < 2 or not all(unicodedata.category(c)[0] in 'LMN' or c in '._- ' for c in username):
         raise ApiError('invalid_username')
-    email = text(p, 'email', 3, 150)
-    from django.core.validators import validate_email
-    validate_email(email)
-    password = password_value(p, 12)
+    email = text(p, 'email', 0, 150) if 'email' in p else ''
+    if email:
+        from django.core.validators import validate_email
+        try:
+            validate_email(email)
+        except ValidationError:
+            raise ApiError('invalid_email')
+    password = password_value(p, 8)
     if p.get('accept_non_explicit_policy') is not True:
         raise ApiError('adult_policy_required')
     born = None
@@ -124,7 +129,12 @@ def register(request):
     elif p.get('adult_confirmed') is not True:
         raise ApiError('adult_policy_required')
     user = User(username=username, email=email)
-    validate_password(password, user=user)
+    from django.contrib.auth.password_validation import MinimumLengthValidator, CommonPasswordValidator
+    try:
+        validate_password(password, user=user, password_validators=[MinimumLengthValidator(8), CommonPasswordValidator()])
+    except ValidationError as error:
+        codes = {item.code for item in error.error_list}
+        raise ApiError('password_too_common' if 'password_too_common' in codes else 'invalid_password')
     with transaction.atomic():
         # Case-insensitive handles must be unique even during concurrent requests.
         if User.objects.filter(username__iexact=username).exists():
@@ -140,7 +150,7 @@ def register(request):
 @endpoint(['POST'], authenticated=False)
 def login(request):
     p = request.payload
-    user = authenticate(username=text(p, 'username', 3, 50).lower(), password=password_value(p))
+    user = authenticate(username=' '.join(text(p, 'username', 2, 50).split()).removeprefix('@').lower(), password=password_value(p))
     if user is None or not Profile.objects.filter(user=user).exists():
         raise ApiError('invalid_credentials', 401)
     return JsonResponse({'token': issue_token(user), 'user_id': user.pk})
