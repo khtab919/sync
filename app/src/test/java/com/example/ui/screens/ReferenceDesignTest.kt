@@ -146,7 +146,8 @@ class ReferenceDesignTest {
                 ChatComposer(draft, { draft = it }, false, {}, {}) { sent++; draft = "" }
             }
         } }
-        compose.onNodeWithContentDescription("إرسال الرسالة").assertIsNotEnabled()
+        compose.onNodeWithContentDescription("إرسال الرسالة").assertDoesNotExist()
+        compose.onNodeWithContentDescription("تسجيل رسالة صوتية").assertExists()
         compose.onNode(hasSetTextAction()).performTextInput("رسالة جديدة")
         compose.onNodeWithContentDescription("إرسال الرسالة").performClick()
         org.junit.Assert.assertEquals(1, sent)
@@ -193,4 +194,33 @@ class ReferenceDesignTest {
         org.junit.Assert.assertTrue(chosen)
         screenshot("12-coin-package")
     }
+    @Test fun chatReferenceLight() { referenceChat(false, "13-chat-reference-light") }
+    @Test fun chatReferenceDark() { referenceChat(true, "14-chat-reference-dark") }
+    private fun referenceChat(dark: Boolean, file: String) {
+        var audio=0; var video=0
+        compose.setContent { MyApplicationTheme(darkTheme=dark) {
+            Surface(Modifier.fillMaxSize(),color=conversationColors().background) {
+                Column {
+                    ChatHeader("نور", {}, {audio++}, {}, true, handle="nour", video={video++}, verified=true)
+                    Column(Modifier.weight(1f).padding(horizontal=16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+                        ChatDayLabel("اليوم")
+                        ChatBubble(JSONObject().put("body","مرحبًا 👋").put("created_at","2026-11-06T11:20:00Z"),false,{}, {}, peerName="نور")
+                        ChatBubble(JSONObject().put("body","أهلًا نور 🌹").put("created_at","2026-11-06T11:22:00Z").put("delivered_at","2026-11-06T11:22:01Z"),true,{}, {})
+                        ChatBubble(JSONObject().put("body","كيف حالك اليوم؟").put("created_at","2026-11-06T11:24:00Z"),false,{}, {}, peerName="نور")
+                        ChatBubble(JSONObject().put("body","بخير، هل أنت متاحة الآن؟").put("created_at","2026-11-06T11:25:00Z"),true,{}, {})
+                        ChatBubble(JSONObject().put("call_id","test-fixture").put("call_status","missed").put("call_mode","audio").put("created_at","2026-11-06T11:29:00Z"),true,{}, {})
+                    }
+                    ChatComposer("", {}, false, {}, {}, {})
+                }
+            }
+        } }
+        compose.onNodeWithContentDescription("بدء اتصال").performClick()
+        compose.onNodeWithContentDescription("اتصال فيديو").performClick()
+        org.junit.Assert.assertEquals(1,audio);org.junit.Assert.assertEquals(1,video)
+        compose.onNodeWithContentDescription("حساب معتمد").assertExists()
+        compose.onNodeWithText("لم يتم الرد").assertExists()
+        compose.onNodeWithText("متصلة الآن").assertDoesNotExist()
+        screenshot(file)
+    }
+
 }

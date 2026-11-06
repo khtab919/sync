@@ -50,14 +50,25 @@ internal fun VoiceMessage(url:String,messageKey:String="") {
     val active=controller.url==identity
     DisposableEffect(Unit){onDispose{own.close()}}
     LaunchedEffect(controller,controller.playing){if(shared==null)while(controller.playing){controller.tick();delay(200)}}
-    Column(Modifier.widthIn(min=200.dp,max=270.dp)){
-        Row(verticalAlignment=Alignment.CenterVertically){
-            IconButton({controller.toggle(url,identity)}){if(active&&controller.loading)CircularProgressIndicator(Modifier.size(22.dp),strokeWidth=2.dp)else Icon(if(active&&controller.playing)Icons.Outlined.PauseCircleOutline else Icons.Outlined.PlayCircleOutline,"تشغيل أو إيقاف الرسالة الصوتية",Modifier.size(32.dp))}
-            Column(Modifier.weight(1f)){Text("رسالة صوتية",style=MaterialTheme.typography.labelMedium);Slider(value=if(active&&controller.duration>0)controller.position.toFloat()/controller.duration else 0f,onValueChange={controller.seek((it*controller.duration).toInt())},enabled=active&&controller.duration>0,colors=SliderDefaults.colors(thumbColor=LocalContentColor.current,activeTrackColor=LocalContentColor.current,inactiveTrackColor=LocalContentColor.current.copy(alpha=.25f)),modifier=Modifier.height(28.dp))}
-            val value=if(active)if(controller.playing)controller.position else controller.duration else 0
-            Text(if(active)"${value/60000}:${((value/1000)%60).toString().padStart(2,'0')}"else"صوت",style=MaterialTheme.typography.labelSmall)
+    Column(Modifier.widthIn(min=205.dp,max=255.dp)) {
+        CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Ltr) {
+            Row(verticalAlignment=Alignment.CenterVertically, horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+                FilledIconButton({controller.toggle(url,identity)}, modifier=Modifier.size(42.dp), shape=androidx.compose.foundation.shape.CircleShape,
+                    colors=IconButtonDefaults.filledIconButtonColors(containerColor=LocalContentColor.current.copy(alpha=.16f),contentColor=LocalContentColor.current)) {
+                    if(active&&controller.loading) CircularProgressIndicator(Modifier.size(20.dp),strokeWidth=2.dp,color=LocalContentColor.current)
+                    else Icon(if(active&&controller.playing)Icons.Outlined.Pause else Icons.Outlined.PlayArrow,"تشغيل أو إيقاف الرسالة الصوتية",Modifier.size(28.dp))
+                }
+                Column(Modifier.weight(1f)) {
+                    Text("رسالة صوتية",style=MaterialTheme.typography.labelSmall)
+                    Slider(value=if(active&&controller.duration>0)controller.position.toFloat()/controller.duration else 0f,
+                        onValueChange={controller.seek((it*controller.duration).toInt())},enabled=active&&controller.duration>0,
+                        colors=SliderDefaults.colors(thumbColor=LocalContentColor.current,activeTrackColor=LocalContentColor.current,inactiveTrackColor=LocalContentColor.current.copy(alpha=.2f),disabledInactiveTrackColor=LocalContentColor.current.copy(alpha=.2f),disabledThumbColor=LocalContentColor.current.copy(alpha=.5f)),modifier=Modifier.height(28.dp))
+                }
+                val value=if(active)if(controller.playing)controller.position else controller.duration else 0
+                Text(if(active)"${value/60000}:${((value/1000)%60).toString().padStart(2,'0')}"else"تشغيل",style=MaterialTheme.typography.labelSmall)
+            }
         }
-        if(active&&controller.error.isNotBlank())Text(controller.error,style=MaterialTheme.typography.labelSmall)
+        if(active&&controller.error.isNotBlank()) Text(controller.error,style=MaterialTheme.typography.labelSmall)
     }
 }
 

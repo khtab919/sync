@@ -349,7 +349,7 @@ def messages(request, peer_id):
     if request.method == 'GET':
         rows = Message.objects.filter(Q(sender=request.actor, recipient=peer) | Q(sender=peer, recipient=request.actor)).select_related('attachment', 'call', 'sender', 'recipient').order_by('-id')[:100]
         peer_profile = Profile.objects.filter(user=peer).first()
-        return JsonResponse({'peer': {'id':peer.pk,'username':peer.username,'display_name':(peer_profile.display_name if peer_profile else '') or peer.username,'avatar_url':peer_profile.avatar_url if peer_profile else ''}, 'items': [message_json(request, row) for row in rows]})
+        return JsonResponse({'peer': {'id':peer.pk,'username':peer.username,'display_name':(peer_profile.display_name if peer_profile else '') or peer.username,'avatar_url':peer_profile.avatar_url if peer_profile else '', 'creator':bool(peer_profile and peer_profile.creator), 'chat_price_cents':peer_profile.chat_price_cents if peer_profile else 0}, 'items': [message_json(request, row) for row in rows]})
     submitted_body=request.payload.get('body','')
     if not isinstance(submitted_body,str) or len(submitted_body)>2000:raise ApiError('invalid_body')
     client_key = uuid.UUID(text(request.payload,'client_key',36,36)) if request.payload.get('client_key') else None

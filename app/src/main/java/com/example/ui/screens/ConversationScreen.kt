@@ -50,6 +50,8 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
     var actualPeer by remember { mutableStateOf(peerName.takeUnless { it.startsWith("حساب #") }.orEmpty().ifBlank{cached.lastOrNull()?.let{if(it.optInt("sender_id")==myId)it.optString("recipient_name")else it.optString("sender_name")}.orEmpty()}) }
     var peerHandle by remember { mutableStateOf("") }
     var peerAvatar by remember { mutableStateOf("") }
+    var peerVerified by remember { mutableStateOf(false) }
+    var peerPrice by remember { mutableLongStateOf(0L) }
     var amplitude by remember { mutableFloatStateOf(0f) }
     var rows by remember { mutableStateOf<List<JSONObject>>(cached) }
     var error by remember { mutableStateOf("") }
@@ -62,7 +64,7 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
     var confirmCall by remember { mutableStateOf(false) }
     suspend fun refresh() {
         val result=api.request("/api/messages/$peerId")
-        result.optJSONObject("peer")?.let { actualPeer=it.optString("display_name",it.optString("username"));peerHandle=it.optString("username");peerAvatar=it.optString("avatar_url") }
+        result.optJSONObject("peer")?.let { actualPeer=it.optString("display_name",it.optString("username"));peerHandle=it.optString("username");peerAvatar=it.optString("avatar_url");peerVerified=it.optBoolean("creator");peerPrice=it.optLong("chat_price_cents") }
         val a=result.optJSONArray("items")
         val loaded=if(a==null)emptyList()else(0 until a.length()).map{a.getJSONObject(it)}.reversed()
         val acknowledged=loaded.map{it.optString("client_key")}.filter{it.isNotBlank()}.toSet()
@@ -157,9 +159,9 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
     }
     DisposableEffect(Unit) { onDispose { runCatching { recorder?.stop() }; recorder?.release(); recordingFile?.delete(); voice.close() } }
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = { ChatHeader(actualPeer.ifBlank { "المحادثة" }, { if(recording) finishRecording(false); back() }, { confirmCall = true }, buy, !busy && !recording, peerHandle, peerAvatar) },
-        bottomBar = { Surface(shadowElevation = 8.dp) { Column(Modifier.navigationBarsPadding().imePadding().padding(10.dp)) {
+        containerColor = conversationColors().background,
+        topBar = { ChatHeader(actualPeer.ifBlank { "المحادثة" }, { if(recording) finishRecording(false); back() }, { confirmCall = true }, buy, !busy && !recording, peerHandle, peerAvatar, video = { perform { val call = api.request("/api/calls", "POST", JSONObject().put("peer_id", peerId).put("mode", "video")); openCall(call.getString("id")) } }, verified = peerVerified, priceCoins = peerPrice) },
+        bottomBar = { Surface(color = conversationColors().background) { Column(Modifier.navigationBarsPadding().imePadding()) {
             if(error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
             if(recording) {
                 RecordingIndicator(seconds, amplitude)
@@ -176,8 +178,15 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
         LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(horizontal = 16.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(displayed, key = { it.optString("client_key").ifBlank { it.optInt("id").toString() } }) { message ->
                 val mine = message.optInt("sender_id") == myId
+                val index = displayed.indexOf(message)
+                val day = message.optString("created_at").take(10)
+                val previousDay = displayed.getOrNull(index - 1)?.optString("created_at")?.take(10)
+                if(day.isNotBlank() && day != previousDay) ChatDayLabel(runCatching {
+                    val date = java.time.LocalDate.parse(day)
+                    when(date) { java.time.LocalDate.now() -> "اليوم"; java.time.LocalDate.now().minusDays(1) -> "أمس"; else -> date.format(java.time.format.DateTimeFormatter.ofPattern("d MMM", java.util.Locale.forLanguageTag("ar"))) }
+                }.getOrDefault(day))
                 CompositionLocalProvider(LocalVoicePlayback provides voice) {
-                    ChatBubble(message,mine,{}, {openCall(it)}, {key->scope.launch{val row=outbox.read().firstOrNull{it.optString("client_key")==key};if(row!=null){row.remove("failed");withContext(Dispatchers.IO){outbox.update(row)};pending=outbox.read()}}}, {key->scope.launch{withContext(Dispatchers.IO){outbox.remove(key)};pending=outbox.read()}})
+                    ChatBubble(message,mine,{}, {openCall(it)}, {key->scope.launch{val row=outbox.read().firstOrNull{it.optString("client_key")==key};if(row!=null){row.remove("failed");withContext(Dispatchers.IO){outbox.update(row)};pending=outbox.read()}}}, {key->scope.launch{withContext(Dispatchers.IO){outbox.remove(key)};pending=outbox.read()}}, peerName = actualPeer, peerAvatar = peerAvatar)
                 }
             }
         }
