@@ -21,6 +21,32 @@ services:
     volumes:
       - static_data:/app/staticfiles
       - media_data:/app/media
+  turn:
+    image: coturn/coturn:4.18.0
+    restart: unless-stopped
+    network_mode: host
+    env_file: .env
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - >-
+        test -n "$${LAYALI_TURN_SECRET:-}" && test -n "$${LAYALI_TURN_PUBLIC_IP:-}" &&
+        exec turnserver --log-file=stdout --simple-log --fingerprint --no-cli
+        --listening-port=3478 --listening-ip=0.0.0.0
+        --external-ip="$${LAYALI_TURN_PUBLIC_IP}" --relay-ip="$${LAYALI_TURN_PUBLIC_IP}"
+        --realm="$${LAYALI_DOMAIN}"
+        --use-auth-secret --static-auth-secret="$${LAYALI_TURN_SECRET}"
+        --min-port=49160 --max-port=49200 --no-tls --no-dtls
+        --no-multicast-peers --no-tcp-relay --user-quota=8 --total-quota=160
+        --max-bps=250000 --bps-capacity=10000000
+        --denied-peer-ip=0.0.0.0-0.255.255.255
+        --denied-peer-ip=10.0.0.0-10.255.255.255
+        --denied-peer-ip=127.0.0.0-127.255.255.255
+        --denied-peer-ip=169.254.0.0-169.254.255.255
+        --denied-peer-ip=172.16.0.0-172.31.255.255
+        --denied-peer-ip=192.168.0.0-192.168.255.255
+        --denied-peer-ip=::1
+        --denied-peer-ip=fc00::-fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+        --denied-peer-ip=fe80::-febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff
   proxy:
     image: caddy:2
     restart: unless-stopped

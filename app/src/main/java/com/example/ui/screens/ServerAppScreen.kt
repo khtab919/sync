@@ -3,6 +3,10 @@ package com.example.ui.screens
 import androidx.compose.foundation.Image
 import androidx.compose.ui.res.painterResource
 import com.example.R
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlinx.coroutines.delay
 import android.content.Intent
 import android.net.Uri
 import android.widget.MediaController
@@ -60,6 +64,15 @@ fun ServerAppScreen(baseUrl: String) {
     var dark by rememberSaveable { mutableStateOf(prefs.getBoolean("dark", false)) }
     val api = remember(baseUrl) { LayaliApi(baseUrl, SecureSessionStore(context.applicationContext, baseUrl.trimEnd('/'))) }
     val scope = rememberCoroutineScope()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var foreground by remember { mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
+    var activeCall by rememberSaveable { mutableStateOf("") }
+    var incomingCall by remember { mutableStateOf<JSONObject?>(null) }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, _ -> foreground = lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     var signedIn by remember { mutableStateOf(false) }
     var restoring by remember { mutableStateOf(true) }
     var remembered by remember { mutableStateOf(false) }
@@ -124,6 +137,17 @@ fun ServerAppScreen(baseUrl: String) {
             finally { if (api.token == null) { signedIn = false; remembered = false } else if (!signedIn) remembered = true; submitting = false }
         }
     }
+    fun finishInternalCall() {
+        val id = activeCall
+        activeCall = ""
+        if (id.isNotBlank()) scope.launch { runCatching { api.request("/api/calls/$id", "POST", JSONObject().put("action", "end")) } }
+    }
+    fun openInternalCall(id: String) { perform {
+        val row = api.request("/api/calls/$id")
+        if (row.optInt("callee_id") == profile.optInt("id") && row.optString("status") == "ringing") api.request("/api/calls/$id", "POST", JSONObject().put("action", "accept"))
+        if (row.optString("status") in listOf("ringing", "accepted")) { incomingCall = null; activeCall = id }
+        else notice = "هذه المكالمة انتهت بالفعل. يمكنك بدء مكالمة جديدة."
+    } }
     fun startChat(id: Int, name: String) { peerId = id.toString(); peerName = name; message = ""; open("محادثة") }
     fun editProfile() {
         displayName = profile.optString("display_name", profile.optString("username"))
@@ -191,6 +215,21 @@ fun ServerAppScreen(baseUrl: String) {
         finally { loading = false }
     }
 
+    LaunchedEffect(signedIn, foreground, profile.optInt("id"), activeCall) {
+        if (!signedIn || !foreground || profile.optBoolean("is_admin") || activeCall.isNotBlank()) { incomingCall = null; return@LaunchedEffect }
+        try { if (api.request("/health/").optInt("calls_version") < 1) return@LaunchedEffect } catch (e: Exception) { return@LaunchedEffect }
+        while (true) {
+            try { incomingCall = api.request("/api/calls").optJSONObject("incoming") }
+            catch (e: CancellationException) { throw e }
+            catch (e: Exception) { incomingCall = null }
+            delay(3000)
+        }
+    }
+    DisposableEffect(incomingCall?.optString("id"), foreground) {
+        val tone = if(incomingCall != null && foreground) runCatching { android.media.RingtoneManager.getRingtone(context, android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_RINGTONE)) }.getOrNull() else null
+        runCatching { tone?.play() }
+        onDispose { runCatching { tone?.stop() } }
+    }
     MyApplicationTheme(darkTheme = dark) {
         if (restoring) {
             Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -231,6 +270,15 @@ fun ServerAppScreen(baseUrl: String) {
                 } })
             return@MyApplicationTheme
         }
+        if (activeCall.isNotBlank() && signedIn) {
+            InternalCallScreen(api, baseUrl, activeCall) { finishInternalCall() }
+            return@MyApplicationTheme
+        }
+        incomingCall?.let { incoming -> AlertDialog(onDismissRequest = {}, title = { Text(if(incoming.optString("mode") == "video") "مكالمة فيديو واردة" else "مكالمة صوتية واردة") }, text = { Text(incoming.optString("caller_name")) }, confirmButton = {
+            TextButton(onClick = { openInternalCall(incoming.getString("id")) }, enabled = !submitting) { Text("قبول") }
+        }, dismissButton = {
+            TextButton(onClick = { perform { api.request("/api/calls/${incoming.getString("id")}", "POST", JSONObject().put("action", "reject")); incomingCall = null } }, enabled = !submitting) { Text("رفض") }
+        }) }
         if (profile.optBoolean("is_admin")) {
             MobileAdminScreen(api, profile.optString("display_name", profile.optString("username"))) {
                 perform { api.request("/api/logout", "POST", JSONObject()); signedIn = false; remembered = false; profile = JSONObject(); page = "" }
@@ -247,7 +295,7 @@ fun ServerAppScreen(baseUrl: String) {
         }
         if (screen == "محادثة" && peerId.toIntOrNull() != null) {
             chatState.SaveableStateProvider("conversation-$peerId") {
-                ConversationScreen(api, peerId.toInt(), peerName, profile.optInt("id"), message, { message = it }, { buyCredits() }) { back(); revision++ }
+                ConversationScreen(api, peerId.toInt(), peerName, profile.optInt("id"), message, { message = it }, { buyCredits() }, { openInternalCall(it) }) { back(); revision++ }
             }
             return@MyApplicationTheme
         }

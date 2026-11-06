@@ -165,4 +165,11 @@ class ReferenceDesignTest {
         org.junit.Assert.assertTrue(opened)
         screenshot("10-conversation-row")
     }
+
+    @Test fun callCaptureIsRestrictedToTheApplicationServer() {
+        org.junit.Assert.assertTrue(trustedCallOrigin("https://165-227-128-113.sslip.io", "https://165-227-128-113.sslip.io"))
+        org.junit.Assert.assertFalse(trustedCallOrigin("http://165-227-128-113.sslip.io", "https://165-227-128-113.sslip.io"))
+        org.junit.Assert.assertFalse(trustedCallOrigin("https://evil.example", "https://165-227-128-113.sslip.io"))
+        org.junit.Assert.assertFalse(trustedCallOrigin("https://165-227-128-113.sslip.io:444", "https://165-227-128-113.sslip.io"))
+    }
 }

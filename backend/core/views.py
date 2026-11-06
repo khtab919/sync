@@ -99,7 +99,7 @@ def issue_token(user):
 def health(request):
     with connection.cursor() as cursor:
         cursor.execute('SELECT 1')
-    return JsonResponse({'status': 'ok', 'registration_version': 4, 'identity_required': False, 'brand': 'Relaxia', 'mobile_admin_version': 1, 'commerce_version': 1})
+    return JsonResponse({'status': 'ok', 'registration_version': 4, 'identity_required': False, 'brand': 'Relaxia', 'mobile_admin_version': 1, 'commerce_version': 1, 'calls_version': 1})
 
 @endpoint(['POST'], authenticated=False)
 def register(request):
@@ -347,7 +347,7 @@ def messages(request, peer_id):
     if not peer or peer == request.actor:
         raise ApiError('recipient_unavailable', 404)
     if request.method == 'GET':
-        rows = Message.objects.filter(Q(sender=request.actor, recipient=peer) | Q(sender=peer, recipient=request.actor)).select_related('attachment').order_by('-id')[:100]
+        rows = Message.objects.filter(Q(sender=request.actor, recipient=peer) | Q(sender=peer, recipient=request.actor)).select_related('attachment', 'call').order_by('-id')[:100]
         return JsonResponse({'items': [message_json(request, row) for row in rows]})
     profile = Profile.objects.filter(user=peer).first()
     if not profile or profile.chat_price_cents:
@@ -363,8 +363,7 @@ def messages(request, peer_id):
         raise ApiError('invalid_body')
     call_url = ''
     if p.get('start_call') is True:
-        call_url = 'https://meet.jit.si/Relaxia-' + secrets.token_urlsafe(32)
-        body = 'دعوة اتصال عبر Jitsi — افتح الرابط للانضمام'
+        raise ApiError('update_app_for_internal_calls', 409)
     if not body.strip() and not attachment and not call_url:
         raise ApiError('invalid_body')
     if attachment:

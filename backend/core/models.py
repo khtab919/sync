@@ -2,6 +2,7 @@ import uuid
 from django.conf import settings
 from django.db import models
 from django.db.models import Q
+from django.utils import timezone
 
 class Profile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
@@ -55,6 +56,7 @@ class Withdrawal(models.Model):
         constraints = [models.UniqueConstraint(fields=['user', 'request_key'], name='unique_withdrawal_request')]
 
 class Message(models.Model):
+    call = models.OneToOneField("InternalCall", null=True, blank=True, on_delete=models.PROTECT)
     attachment = models.OneToOneField("UploadedMedia", null=True, blank=True, on_delete=models.PROTECT)
     call_url = models.URLField(blank=True)
     sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='sent_messages')
@@ -162,3 +164,29 @@ class PaidSpin(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         constraints = [models.UniqueConstraint(fields=['user', 'request_key'], name='unique_paid_spin_request')]
+
+class InternalCall(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    caller = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='outgoing_calls')
+    callee = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='incoming_calls')
+    mode = models.CharField(max_length=8, default='audio')
+    status = models.CharField(max_length=12, default='ringing')
+    created_at = models.DateTimeField(auto_now_add=True)
+    accepted_at = models.DateTimeField(null=True)
+    ended_at = models.DateTimeField(null=True)
+    caller_seen_at = models.DateTimeField(default=timezone.now)
+    callee_seen_at = models.DateTimeField(null=True)
+
+class CallSignal(models.Model):
+    call = models.ForeignKey(InternalCall, on_delete=models.CASCADE)
+    sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    kind = models.CharField(max_length=12)
+    data = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+class CallTicket(models.Model):
+    digest = models.CharField(max_length=64, unique=True)
+    call = models.ForeignKey(InternalCall, on_delete=models.CASCADE)
+    session = models.ForeignKey(SessionToken, on_delete=models.CASCADE)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True)

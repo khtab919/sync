@@ -43,3 +43,22 @@ jobs:
           docker compose -f backend/compose.yaml config --quiet
           docker build -t layali-backend-ci backend
           docker run --rm -e LAYALI_DOMAIN=api.example.com -v "$PWD/backend/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2 caddy validate --config /etc/caddy/Caddyfile
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test actual WebRTC audio and video through TURN
+        env:
+          CALL_SMOKE_CONFIG: ${{ runner.temp }}/relaxia-call-smoke.json
+        run: |
+          npm install --prefix "$RUNNER_TEMP/rtc-node" playwright@1.56.1
+          "$RUNNER_TEMP/rtc-node/node_modules/.bin/playwright" install --with-deps chromium
+          docker run -d --name relaxia-rtc-test-turn --network host --entrypoint turnserver coturn/coturn:4.18.0 --log-file=stdout --no-cli --no-tls --no-dtls --listening-ip=127.0.0.1 --relay-ip=127.0.0.1 --listening-port=3478 --min-port=49160 --max-port=49200 --use-auth-secret --static-auth-secret=local-rtc-test-secret --realm=localhost --allow-loopback-peers --no-multicast-peers
+          python backend/qa/webrtc_smoke_server.py &
+          rtc_server_pid=$!
+          trap 'kill "$rtc_server_pid" 2>/dev/null || true; docker logs relaxia-rtc-test-turn | tail -30; docker rm -f relaxia-rtc-test-turn >/dev/null 2>&1 || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8765/health/ >/dev/null; then break; fi
+            sleep 1
+          done
+          NODE_PATH="$RUNNER_TEMP/rtc-node/node_modules" node backend/qa/webrtc_smoke.cjs

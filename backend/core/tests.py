@@ -549,3 +549,95 @@ class CommerceConcurrencyTests(TransactionTestCase):
         self.assertEqual(sorted(codes), [200,201])
         self.assertEqual(PaidSpin.objects.count(),1)
         self.assertEqual(Wallet.objects.get(user=self.user).balance_cents,450)
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+class InternalCallingTests(TestCase):
+    def setUp(self):
+        from unittest.mock import patch
+        self.environment = patch.dict('os.environ', {'LAYALI_TURN_SECRET':'test-relay-secret-not-production', 'LAYALI_TURN_HOST':'turn.example.com'})
+        self.environment.start(); self.addCleanup(self.environment.stop)
+        self.caller = get_user_model().objects.create_user('callingone', password='unique-pass')
+        self.callee = get_user_model().objects.create_user('callingtwo', password='unique-pass')
+        self.stranger = get_user_model().objects.create_user('outsider', password='unique-pass')
+        for user in (self.caller,self.callee,self.stranger): Profile.objects.create(user=user); Wallet.objects.create(user=user)
+        self.caller_token=issue_token(self.caller); self.callee_token=issue_token(self.callee); self.stranger_token=issue_token(self.stranger)
+
+    def call(self,path,data=None,token=None):
+        kwargs={'HTTP_AUTHORIZATION':'Bearer '+(token or self.caller_token)}
+        if data is None: return self.client.get(path,**kwargs)
+        return self.client.post(path,json.dumps(data),content_type='application/json',**kwargs)
+
+    def create(self, mode='audio'):
+        response=self.call('/api/calls',{'peer_id':self.callee.pk,'mode':mode})
+        self.assertEqual(response.status_code,201)
+        return response.json()['id']
+
+    def room_token(self, call_id, token):
+        import re
+        bootstrap=self.call(f'/api/calls/{call_id}/ticket',{},token).json()
+        room=self.client.post(f'/api/calls/{call_id}/room',{'ticket':bootstrap['ticket']})
+        self.assertEqual(room.status_code,200)
+        self.assertEqual(self.client.post(f'/api/calls/{call_id}/room',{'ticket':bootstrap['ticket']}).status_code,403)
+        self.assertNotIn('test-relay-secret-not-production',room.content.decode())
+        self.assertIn("frame-ancestors 'none'",room['Content-Security-Policy'])
+        config=json.loads(re.search(r'<script id="config" type="application/json">(.*?)</script>',room.content.decode(),re.S).group(1))
+        return config['token']
+
+    def test_invite_accept_reject_permissions_and_busy_state(self):
+        call_id=self.create('video')
+        url=f'/api/calls/{call_id}'
+        self.assertEqual(self.call('/api/calls',{'peer_id':self.callee.pk,'mode':'video'}).status_code,200)
+        self.assertEqual(self.call(url,{'action':'accept'}).status_code,403)
+        self.assertEqual(self.call(url,token=self.stranger_token).status_code,404)
+        self.assertEqual(self.call(url+'/ticket',{},self.callee_token).status_code,409)
+        self.assertEqual(self.call('/api/calls',token=self.callee_token).json()['incoming']['id'],call_id)
+        self.assertEqual(self.call('/api/calls',{'peer_id':self.callee.pk,'mode':'audio'},self.stranger_token).status_code,409)
+        self.assertEqual(self.call(url,{'action':'accept'},self.callee_token).json()['status'],'accepted')
+        self.assertEqual(self.call(url,{'action':'end'}).json()['status'],'ended')
+        self.assertEqual(self.call(url,{'action':'accept'},self.callee_token).status_code,409)
+        self.assertEqual(self.call('/api/calls',token=self.callee_token).json()['incoming'],None)
+        from .models import InternalCall
+        self.assertEqual(InternalCall.objects.count(),1)
+        self.assertEqual(Wallet.objects.get(user=self.caller).balance_cents,0)
+
+    def test_one_use_tickets_and_scoped_signaling(self):
+        call_id=self.create()
+        self.call(f'/api/calls/{call_id}',{'action':'accept'},self.callee_token)
+        caller=self.room_token(call_id,self.caller_token); callee=self.room_token(call_id,self.callee_token)
+        path=f'/api/calls/{call_id}/signal'
+        def send(token,kind,payload): return self.client.post(path,json.dumps({'kind':kind,'data':payload}),content_type='application/json',HTTP_X_CALL_TOKEN=token)
+        self.assertEqual(send(callee,'offer',{'type':'offer','sdp':'fake-test-sdp'}).status_code,403)
+        self.assertEqual(send(caller,'offer',{'type':'offer','sdp':'fake-test-sdp'}).status_code,201)
+        self.assertEqual(send(caller,'offer',{'type':'offer','sdp':'fake-test-sdp'}).status_code,409)
+        events=self.client.get(path,HTTP_X_CALL_TOKEN=callee).json()['events']
+        self.assertEqual(events[0]['kind'],'offer')
+        self.assertEqual(self.client.get(path,HTTP_X_CALL_TOKEN='forged').status_code,403)
+        self.assertEqual(self.client.get(f'/api/calls/{uuid.uuid4()}/signal',HTTP_X_CALL_TOKEN=caller).status_code,403)
+        self.assertEqual(self.call(f'/api/calls/{call_id}/ticket',{},self.stranger_token).status_code,404)
+        self.call('/api/logout',{},self.callee_token)
+        self.assertEqual(self.client.get(path,HTTP_X_CALL_TOKEN=callee).status_code,401)
+
+    def test_ban_revokes_call_room_and_signaling(self):
+        call_id=self.create(); caller=self.room_token(call_id,self.caller_token)
+        self.callee.is_active=False; self.callee.save()
+        self.assertEqual(self.client.get(f'/api/calls/{call_id}/signal',HTTP_X_CALL_TOKEN=caller).status_code,403)
+        self.assertEqual(self.call(f'/api/calls/{call_id}').status_code,403)
+
+    def test_no_reply_and_stale_media_sessions_expire(self):
+        from .models import InternalCall
+        from django.utils import timezone
+        from datetime import timedelta
+        call_id=self.create()
+        InternalCall.objects.filter(pk=call_id).update(created_at=timezone.now()-timedelta(seconds=61))
+        self.assertEqual(self.call(f'/api/calls/{call_id}').json()['status'],'missed')
+        second=self.create(); self.call(f'/api/calls/{second}',{'action':'accept'},self.callee_token)
+        InternalCall.objects.filter(pk=second).update(callee_seen_at=timezone.now()-timedelta(seconds=46))
+        self.assertEqual(self.call(f'/api/calls/{second}').json()['status'],'ended')
+
+    def test_setup_and_paid_chat_gate(self):
+        from unittest.mock import patch
+        with patch.dict('os.environ',{'LAYALI_TURN_SECRET':''}):
+            self.assertEqual(self.call('/api/calls',{'peer_id':self.callee.pk}).status_code,503)
+        profile=self.callee.profile; profile.chat_price_cents=100; profile.save()
+        self.assertEqual(self.call('/api/calls',{'peer_id':self.callee.pk}).status_code,409)
+        self.assertEqual(self.call(f'/api/messages/{self.callee.pk}',{'start_call':True}).status_code,409)

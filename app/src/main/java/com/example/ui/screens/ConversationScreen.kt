@@ -32,7 +32,7 @@ import org.json.JSONObject
 import java.io.File
 
 @Composable
-internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, myId: Int, body: String, changeBody: (String) -> Unit, buy: () -> Unit, back: () -> Unit) {
+internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, myId: Int, body: String, changeBody: (String) -> Unit, buy: () -> Unit, openCall: (String) -> Unit, back: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val uri = LocalUriHandler.current
@@ -48,7 +48,6 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
     var recordingFile by remember { mutableStateOf<File?>(null) }
     var player by remember { mutableStateOf<MediaPlayer?>(null) }
     var confirmCall by remember { mutableStateOf(false) }
-    var confirmJoin by remember { mutableStateOf("") }
     suspend fun refresh() {
         val a = api.request("/api/messages/$peerId").optJSONArray("items")
         rows = if(a == null) emptyList() else (0 until a.length()).map { a.getJSONObject(it) }.reversed()
@@ -56,7 +55,7 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
     fun perform(block: suspend () -> Unit) {
         if(busy) return
         busy = true; error = ""
-        scope.launch { try { block(); refresh() } catch(e: CancellationException) { throw e } catch(e: Exception) { error = if(e.message == "paid_chat_requires_verified_payment") "هذه المحادثة مدفوعة؛ لم تُرسل الرسالة ولم يُخصم رصيد." else commerceError(e) } finally { busy = false } }
+        scope.launch { try { block(); refresh() } catch(e: CancellationException) { throw e } catch(e: Exception) { error = if(e.message == "calls_setup_required" || e.message == "server_unavailable") "خادم الاتصال غير جاهز بعد. حدّث الخادم لتفعيل الاتصال الداخلي." else if(e.message == "call_busy") "أحد الطرفين مشغول بمكالمة أخرى." else if(e.message == "paid_chat_requires_verified_payment") "هذه المحادثة مدفوعة؛ لم تُرسل الرسالة ولم يُخصم رصيد." else commerceError(e) } finally { busy = false } }
     }
     fun finishRecording(send: Boolean) {
         val current = recorder; recorder = null; recording = false
@@ -137,11 +136,14 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
                 ChatBubble(message, mine, { media ->
                     player?.release()
                     runCatching { MediaPlayer().also { p -> player = p; p.setDataSource(media); p.setOnPreparedListener { it.start() }; p.setOnCompletionListener { it.release(); if(player == it) player = null }; p.setOnErrorListener { mp, _, _ -> mp.release(); if(player == mp) player = null; error = "تعذّر تشغيل التسجيل."; true }; p.prepareAsync() } }.onFailure { error = "تعذّر تشغيل التسجيل." }
-                }, { confirmJoin = it })
+                }, { openCall(it) })
             }
         }
         }
     }
-    if(confirmCall) AlertDialog(onDismissRequest = { confirmCall = false }, title = { Text("اتصال عبر Jitsi") }, text = { Text("سيُرسل رابط غرفة خاصة للطرف الآخر. الاتصال يفتح عبر خدمة Jitsi الخارجية وقد تتطلب من المضيف تسجيل الدخول. الكاميرا والميكروفون بإذنك، ولا توجد رنّة أو مكالمة خلفية داخل التطبيق.") }, confirmButton = { TextButton(onClick = { confirmCall = false; perform { val call = api.request("/api/messages/$peerId", "POST", JSONObject().put("start_call", true)); confirmJoin = call.getString("call_url") } }) { Text("إرسال دعوة اتصال") } }, dismissButton = { TextButton({ confirmCall = false }) { Text("إلغاء") } })
-    if(confirmJoin.isNotBlank()) AlertDialog(onDismissRequest = { confirmJoin = "" }, title = { Text("فتح غرفة الاتصال") }, text = { Text("ستنتقل إلى Jitsi للانضمام؛ لا تُفتح الكاميرا أو الميكروفون تلقائيًا.") }, confirmButton = { TextButton(onClick = { runCatching { uri.openUri(confirmJoin) }; confirmJoin = "" }) { Text("فتح الاتصال") } }, dismissButton = { TextButton({ confirmJoin = "" }) { Text("إلغاء") } })
+    if(confirmCall) AlertDialog(onDismissRequest = { confirmCall = false }, title = { Text("اتصال داخل Relaxia") }, text = { Text("اختر نوع المكالمة. سيفتح الميكروفون أو الكاميرا بعد إذنك. الطرف الآخر يحتاج أن يكون التطبيق مفتوحًا لاستقبال الرنين.") }, confirmButton = {
+        TextButton(onClick = { confirmCall = false; perform { val call = api.request("/api/calls", "POST", JSONObject().put("peer_id", peerId).put("mode", "audio")); openCall(call.getString("id")) } }) { Text("اتصال صوتي") }
+    }, dismissButton = {
+        TextButton(onClick = { confirmCall = false; perform { val call = api.request("/api/calls", "POST", JSONObject().put("peer_id", peerId).put("mode", "video")); openCall(call.getString("id")) } }) { Text("اتصال فيديو") }
+    })
 }
