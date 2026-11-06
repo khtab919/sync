@@ -12,6 +12,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -22,14 +23,14 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 @Composable
-internal fun ChatHeader(name: String, back: () -> Unit, call: () -> Unit, buy: () -> Unit, enabled: Boolean) {
+internal fun ChatHeader(name: String, back: () -> Unit, call: () -> Unit, buy: () -> Unit, enabled: Boolean, handle: String = "", avatar: String = "") {
     Surface(shadowElevation = 2.dp, color = MaterialTheme.colorScheme.surface) {
         Column(Modifier.statusBarsPadding()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(back) { Icon(Icons.Outlined.ArrowForward, "رجوع") }
-                RelaxiaAvatar(name, 0, 44)
+                RelaxiaAvatar(name, 0, 44, avatar)
                 Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) { Text(name, fontWeight = FontWeight.Bold, fontSize = 18.sp, maxLines = 1); Text("المحادثة", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp) }
+                Column(Modifier.weight(1f)) { Text(name, fontWeight = FontWeight.Bold, fontSize = 18.sp, maxLines = 1); Text(if(handle.isNotBlank()&&handle!=name) "@$handle" else "المحادثة", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp) }
                 IconButton(call, enabled = enabled) { Icon(Icons.Outlined.Call, "بدء اتصال") }
             }
             Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 16.dp, bottom = 7.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -52,8 +53,8 @@ internal fun ChatComposer(body: String, change: (String) -> Unit, busy: Boolean,
 }
 
 @Composable
-internal fun ChatBubble(message: JSONObject, mine: Boolean, play: (String) -> Unit, join: (String) -> Unit) {
-    val outgoing = Color(0xFF65364F)
+internal fun ChatBubble(message: JSONObject, mine: Boolean, play: (String) -> Unit, join: (String) -> Unit, retry: (String) -> Unit = {}, remove: (String) -> Unit = {}) {
+    val outgoing = Color(0xFF752846)
     val time = runCatching { Instant.parse(message.optString("created_at")).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("HH:mm")) }.getOrDefault("")
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = if(mine) Arrangement.End else Arrangement.Start) {
@@ -62,13 +63,14 @@ internal fun ChatBubble(message: JSONObject, mine: Boolean, play: (String) -> Un
                     Column(Modifier.padding(horizontal = 15.dp, vertical = 11.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         if(message.optString("body").isNotBlank()) SelectionContainer { Text(message.optString("body"), fontSize = 17.sp, lineHeight = 26.sp) }
                         val media = message.optString("attachment_url")
-                        if(media.isNotBlank() && message.optString("attachment_mime").startsWith("image/")) ReferenceImage(media, Modifier.width(250.dp).height(220.dp))
-                        if(media.isNotBlank() && message.optString("attachment_mime").startsWith("audio/")) TextButton(onClick = { play(media) }, colors = ButtonDefaults.textButtonColors(contentColor = if(mine) Color.White else MaterialTheme.colorScheme.primary)) { Icon(Icons.Outlined.PlayCircleOutline, null, Modifier.size(32.dp)); Spacer(Modifier.width(8.dp)); Text("رسالة صوتية") }
+                        if(media.isNotBlank() && message.optString("attachment_mime").startsWith("image/")) coil.compose.AsyncImage(model=coil.request.ImageRequest.Builder(LocalContext.current).data(media).memoryCacheKey(media.substringBefore('?')).diskCachePolicy(coil.request.CachePolicy.DISABLED).build(),contentDescription="صورة في المحادثة",modifier=Modifier.width(250.dp).height(220.dp),contentScale=androidx.compose.ui.layout.ContentScale.Crop)
+                        if(media.isNotBlank() && message.optString("attachment_mime").startsWith("audio/")) VoiceMessage(media,message.optString("client_key").ifBlank{"message-${message.optInt("id")}"})
+                        if(message.optBoolean("failed")) Row { TextButton({retry(message.optString("client_key"))},colors=ButtonDefaults.textButtonColors(contentColor=if(mine)Color.White else MaterialTheme.colorScheme.primary)){Text("إعادة المحاولة")};TextButton({remove(message.optString("client_key"))},colors=ButtonDefaults.textButtonColors(contentColor=if(mine)Color.White else MaterialTheme.colorScheme.primary)){Text("حذف")}}
                         if(message.optString("call_id").isNotBlank() && message.optString("call_status") in listOf("ringing", "accepted")) TextButton(onClick = { join(message.optString("call_id")) }, colors = ButtonDefaults.textButtonColors(contentColor = if(mine) Color.White else MaterialTheme.colorScheme.primary)) { Icon(Icons.Outlined.Call, null); Spacer(Modifier.width(6.dp)); Text("فتح المكالمة") }
                         if(message.optString("call_id").isNotBlank() && message.optString("call_status") !in listOf("ringing", "accepted")) Text(when(message.optString("call_status")) { "missed" -> "لم يتم الرد"; "rejected" -> "تم رفض الاتصال"; else -> "انتهت المكالمة" }, fontSize = 12.sp)
                         Row(Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(time, fontSize = 10.sp, color = if(mine) Color.White.copy(alpha=.65f) else MaterialTheme.colorScheme.onSurfaceVariant)
-                            if(mine) Icon(Icons.Outlined.Check, "تم إرسال الرسالة", Modifier.size(13.dp), tint = Color.White.copy(alpha=.7f))
+                            if(mine) Icon(when {message.optBoolean("failed")->Icons.Outlined.ErrorOutline;message.optBoolean("pending")->Icons.Outlined.Schedule;!message.isNull("delivered_at")->Icons.Outlined.DoneAll;else->Icons.Outlined.Check},when{message.optBoolean("failed")->"تعذّر الإرسال";message.optBoolean("pending")->"بانتظار الإرسال";!message.isNull("delivered_at")->"وصلت إلى جهاز المستلم";else->"تم إرسال الرسالة"},Modifier.size(14.dp),tint=Color.White.copy(alpha=.7f))
                         }
                     }
                 }

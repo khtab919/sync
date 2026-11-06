@@ -57,4 +57,15 @@ class SecureSessionStoreTest {
         secondDir.listFiles()!!.single().writeBytes(firstDir.listFiles()!!.single().readBytes())
         assertNull(second.read())
     }
+
+    @Test fun encryptedOutboxMetadataSupportsLongMessagesWithoutChangingSessionBounds() {
+        val key=key();val directory=temp.newFolder()
+        val payload="{\"items\":[\""+"رسالة خاصة ".repeat(500)+"\"]}"
+        val store=SecureSessionStore.forTest(directory,"$origin/outbox/1/2",key,200000)
+        store.write(payload)
+        assertEquals(payload,SecureSessionStore.forTest(directory,"$origin/outbox/1/2",key,200000).read())
+        assertFalse(directory.listFiles()!!.single().readBytes().toString(Charsets.UTF_8).contains("رسالة خاصة"))
+        val normal=SecureSessionStore.forTest(temp.newFolder(),origin,key)
+        assertThrows(IllegalArgumentException::class.java){normal.write(payload)}
+    }
 }

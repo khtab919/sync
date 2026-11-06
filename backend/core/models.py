@@ -56,6 +56,11 @@ class Withdrawal(models.Model):
         constraints = [models.UniqueConstraint(fields=['user', 'request_key'], name='unique_withdrawal_request')]
 
 class Message(models.Model):
+    client_key = models.UUIDField(null=True, blank=True)
+    delivered_at = models.DateTimeField(null=True, blank=True)
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['sender','client_key'], name='unique_message_client_key')]
+
     call = models.OneToOneField("InternalCall", null=True, blank=True, on_delete=models.PROTECT)
     attachment = models.OneToOneField("UploadedMedia", null=True, blank=True, on_delete=models.PROTECT)
     call_url = models.URLField(blank=True)
@@ -138,11 +143,15 @@ class SellerApplication(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
 class TopUp(models.Model):
+    quote = models.OneToOneField("TopUpQuote", null=True, blank=True, on_delete=models.PROTECT)
+    method = models.CharField(max_length=12, default='usdt')
+    late_submission = models.BooleanField(default=False)
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     amount_cents = models.PositiveIntegerField()
     bonus_cents = models.PositiveIntegerField(default=0)
-    transaction_hash = models.CharField(max_length=66, unique=True)
+    transaction_hash = models.CharField(max_length=120, unique=True)
     receipt = models.OneToOneField(UploadedMedia, on_delete=models.PROTECT)
     status = models.CharField(max_length=16, default='pending')
     review_note = models.CharField(max_length=300, blank=True)
@@ -151,7 +160,11 @@ class TopUp(models.Model):
 
 class PaidWheelConfiguration(models.Model):
     enabled = models.BooleanField(default=False)
-    cost_cents = models.PositiveIntegerField(default=100)
+    cost_cents = models.PositiveIntegerField(default=350)
+    price_step_cents = models.PositiveIntegerField(default=50)
+    maximum_cost_cents = models.PositiveIntegerField(default=1000)
+    first_reward_cents = models.PositiveIntegerField(default=500)
+    grand_unlock_spend_cents = models.PositiveIntegerField(default=20000)
     prizes = models.JSONField(default=list)
     bankroll_cents = models.PositiveBigIntegerField(default=0)
 
@@ -190,3 +203,32 @@ class CallTicket(models.Model):
     session = models.ForeignKey(SessionToken, on_delete=models.CASCADE)
     expires_at = models.DateTimeField()
     used_at = models.DateTimeField(null=True)
+
+class PaymentSettings(models.Model):
+    shamcash_enabled = models.BooleanField(default=False)
+    shamcash_account = models.CharField(max_length=160, blank=True)
+    shamcash_currency = models.CharField(max_length=3, default='USD', choices=[('USD','USD'),('SYP','SYP')])
+    shamcash_rate = models.DecimalField(max_digits=16, decimal_places=6, default=1)
+    shamcash_instructions = models.CharField(max_length=500, blank=True)
+
+class TopUpQuote(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    method = models.CharField(max_length=12)
+    amount_cents = models.PositiveIntegerField()
+    bonus_cents = models.PositiveIntegerField()
+    payment_amount = models.DecimalField(max_digits=18, decimal_places=2)
+    payment_currency = models.CharField(max_length=4)
+    destination = models.CharField(max_length=160)
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+class GatewayInvoice(models.Model):
+    quote = models.OneToOneField(TopUpQuote,on_delete=models.PROTECT)
+    invoice_id = models.CharField(max_length=64,null=True,blank=True,unique=True)
+    payment_id = models.CharField(max_length=64,null=True,blank=True,unique=True)
+    invoice_url = models.URLField(max_length=500,blank=True)
+    status = models.CharField(max_length=32,default='creating')
+    credited_at = models.DateTimeField(null=True,blank=True)
+    review_required = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)

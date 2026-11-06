@@ -32,12 +32,21 @@ internal fun commerceError(e: Exception): String = when(e.message) {
     "seller_request_pending" -> "طلب تفعيل البائع موجود بالفعل وقيد المراجعة."
     "already_seller" -> "حسابك مفعّل كبائع بالفعل."
     "insufficient_funds" -> "الرصيد المتاح لا يكفي."
+    "nowpayments_not_configured" -> "بوابة NOWPayments تنتظر إعداد مفاتيح حساب التاجر."
+    "invoice_creation_pending" -> "تعذّر تأكيد إنشاء الفاتورة. راجع الدعم قبل تكرار الدفع."
+    "quote_expired" -> "انتهت مهلة هذا الطلب. أنشئ طلب شراء جديدًا."
+    "provider_check_pending" -> "التحقق من البوابة لم يكتمل بعد. حاول لاحقًا."
+    "update_app_for_wheel_rules" -> "حدّث التطبيق لعرض قواعد العجلة الجديدة قبل الدفع."
+    "shamcash_not_configured" -> "بيانات استلام شام كاش غير مفعلة بعد."
+    "invalid_transaction_reference" -> "أدخل رقم إشعار الدفع الصحيح."
+    "wheel_configuration_changed" -> "تغيّر سعر اللفة أو قواعدها. حدّث الصفحة قبل الدفع."
     "wheel_unavailable" -> "العجلة غير مفعّلة حاليًا."
     else -> "تعذّر تنفيذ الطلب. تحقق من البيانات والاتصال وتحديث الخادم."
 }
 
 @Composable
 internal fun CommerceScreen(api: LayaliApi, kind: String, back: () -> Unit) {
+    if(kind == "شحن الرصيد") { CoinShopScreen(api, back); return }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var info by remember { mutableStateOf(JSONObject()) }
@@ -51,6 +60,7 @@ internal fun CommerceScreen(api: LayaliApi, kind: String, back: () -> Unit) {
     var description by remember { mutableStateOf("") }
     var wheelKey by remember { mutableStateOf(java.util.UUID.randomUUID().toString()) }
     var wheelRotation by remember { mutableFloatStateOf(0f) }
+    var showRules by remember { mutableStateOf(false) }
     var confirmSpin by remember { mutableStateOf(false) }
     suspend fun refresh() {
         val result = api.request(if(kind == "شحن الرصيد") "/api/topups" else "/api/seller-requests")
@@ -104,8 +114,12 @@ internal fun CommerceScreen(api: LayaliApi, kind: String, back: () -> Unit) {
                 Text("لفة مدفوعة من الرصيد. راجع السعر واحتمالات الجوائز قبل التأكيد.")
                 if(info.optBoolean("enabled")) {
                     Text("سعر اللفة: ${BigDecimal.valueOf(info.optLong("cost_cents"), 2)} USD")
+                    if(info.optBoolean("first_spin_guaranteed")) Text("أول لفة: جائزة ${BigDecimal.valueOf(info.optLong("first_reward_cents"),2)} دولار مضمونة.")
+                    Text("يزيد سعر اللفة ${BigDecimal.valueOf(info.optLong("price_step_cents"),2)} دولار، حتى ${BigDecimal.valueOf(info.optLong("maximum_cost_cents"),2)} دولار.",style=MaterialTheme.typography.bodySmall)
+                    if(!info.optBoolean("grand_unlocked")) Text("جائزة 100 دولار تُفتح بعد إنفاق ${BigDecimal.valueOf(info.optLong("grand_unlock_spend_cents"),2)} دولار تراكميًا. إنفاقك: ${BigDecimal.valueOf(info.optLong("spent_cents"),2)} دولار.",style=MaterialTheme.typography.bodySmall)
+                    TextButton({ showRules = !showRules }) { Text("القواعد والاحتمالات") }
                     val prizes = info.optJSONArray("prizes")
-                    if(prizes != null) for(i in 0 until prizes.length()) { val p = prizes.getJSONObject(i); Text("${BigDecimal.valueOf(p.optLong("amount_cents"),2)} USD · احتمال ${p.optString("chance_percent")}%") }
+                    if(showRules && prizes != null) for(i in 0 until prizes.length()) { val p = prizes.getJSONObject(i); Text("${if(p.optLong("amount_cents")==0L) "حظ أوفر · جرّب مرة أخرى" else BigDecimal.valueOf(p.optLong("amount_cents"),2).toPlainString()+" دولار"} · احتمال ${p.optString("chance_percent")}%") }
                     Button(onClick = { confirmSpin = true }, enabled = !busy) { Text("لف العجلة — خصم من الرصيد") }
                 } else Text("العجلة غير مفعّلة حتى تحدد الإدارة سعر اللفة والجوائز واحتمالاتها.")
             }
@@ -118,8 +132,8 @@ internal fun CommerceScreen(api: LayaliApi, kind: String, back: () -> Unit) {
                 } } }
             }
         }
-        if(confirmSpin) AlertDialog(onDismissRequest = { confirmSpin = false }, title = { Text("تأكيد اللفة المدفوعة") }, text = { Text("سيُخصم سعر اللفة من رصيدك. قد تكون الجائزة صفرًا. النتائج السابقة لا تضمن فوزًا جديدًا.") }, confirmButton = { TextButton(onClick = { confirmSpin = false; perform {
-            val result = api.request("/api/promotion/wheel", "POST", JSONObject().put("request_key", wheelKey).put("config_version", info.optString("config_version")))
+        if(confirmSpin) AlertDialog(onDismissRequest = { confirmSpin = false }, title = { Text("تأكيد اللفة المدفوعة") }, text = { Text(if(info.optBoolean("first_spin_guaranteed")) "سعر هذه اللفة ${BigDecimal.valueOf(info.optLong("cost_cents"),2)} دولار وجائزتها المضمونة ${BigDecimal.valueOf(info.optLong("first_reward_cents"),2)} دولار." else "سيُخصم ${BigDecimal.valueOf(info.optLong("cost_cents"),2)} دولار. قد تكون الجائزة صفرًا. قواعد فتح الجائزة الكبرى والأسعار المتزايدة معروضة قبل الدفع.") }, confirmButton = { TextButton(onClick = { confirmSpin = false; perform {
+            val result = api.request("/api/promotion/wheel", "POST", JSONObject().put("request_key", wheelKey).put("rules_version",2).put("config_version", info.optString("config_version")))
             val prizes = info.optJSONArray("prizes")
             var accumulated = 0f
             var center = 0f
@@ -131,7 +145,8 @@ internal fun CommerceScreen(api: LayaliApi, kind: String, back: () -> Unit) {
             }
             wheelRotation += 1800f + ((360f - center - wheelRotation % 360f + 360f) % 360f)
             wheelKey = java.util.UUID.randomUUID().toString()
-            note = "الجائزة: ${BigDecimal.valueOf(result.optLong("prize_cents"),2)} USD · الرصيد: ${BigDecimal.valueOf(result.optLong("balance_cents"),2)} USD"
+            info = api.request("/api/promotion/wheel")
+            note = if(result.optLong("prize_cents")==0L) "حظ أوفر · جرّب مرة أخرى" else "الجائزة: ${BigDecimal.valueOf(result.optLong("prize_cents"),2)} USD · الرصيد: ${BigDecimal.valueOf(result.optLong("balance_cents"),2)} USD"
         } }) { Text("تأكيد الخصم واللفة") } }, dismissButton = { TextButton({ confirmSpin = false }) { Text("إلغاء") } })
     }
 }
@@ -200,7 +215,7 @@ private fun RewardWheel(prizes: org.json.JSONArray?, rotation: Float) {
                 drawArc(palette[i % palette.size], start, sweep, true, topLeft = androidx.compose.ui.geometry.Offset(ring,ring), size = androidx.compose.ui.geometry.Size(size.width - ring*2, size.height - ring*2))
                 if(sweep >= 15f) {
                     val angle = Math.toRadians((start + sweep / 2).toDouble())
-                    val text = if(prizes != null && prizes.length() > 0) BigDecimal.valueOf(prizes.getJSONObject(i).optLong("amount_cents"),2).toPlainString() else "✦"
+                    val text = if(prizes != null && prizes.length() > 0) { val amount=prizes.getJSONObject(i).optLong("amount_cents");if(amount==0L)"حظ أوفر"else BigDecimal.valueOf(amount,2).toPlainString() } else "✦"
                     drawContext.canvas.nativeCanvas.drawText(text, center.x + kotlin.math.cos(angle).toFloat() * size.width * .32f, center.y + kotlin.math.sin(angle).toFloat() * size.height * .32f + 5.dp.toPx(), paint)
                 }
                 start += sweep

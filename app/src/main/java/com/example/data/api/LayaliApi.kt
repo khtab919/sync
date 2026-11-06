@@ -10,6 +10,7 @@ internal class ApiException(val code: String) : Exception(code)
 
 /** Passwords stay in memory; only revocable session tokens can be persisted. */
 class LayaliApi internal constructor(private val baseUrl: String, private val sessionStore: SessionStore? = null) {
+    val origin: String get() = baseUrl.trimEnd('/')
     @Volatile var token: String? = null
         private set
     var sessionSaved: Boolean = false

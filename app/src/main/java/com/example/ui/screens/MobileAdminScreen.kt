@@ -1,6 +1,8 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
@@ -48,6 +50,16 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, logout: () -> 
     var wheelCost by remember { mutableStateOf("") }
     var wheelBank by remember { mutableStateOf("") }
     var wheelPrizes by remember { mutableStateOf("") }
+    var gatewayConfigured by remember { mutableStateOf(false) }
+    var paymentAccount by remember { mutableStateOf("") }
+    var paymentCurrency by remember { mutableStateOf("USD") }
+    var paymentRate by remember { mutableStateOf("1") }
+    var paymentInstructions by remember { mutableStateOf("") }
+    var paymentEnabled by remember { mutableStateOf(false) }
+    var wheelStep by remember { mutableStateOf("") }
+    var wheelMaximum by remember { mutableStateOf("") }
+    var firstReward by remember { mutableStateOf("") }
+    var grandUnlock by remember { mutableStateOf("") }
     var wheelEnabled by remember { mutableStateOf(false) }
     var reviewNote by remember { mutableStateOf("") }
     var verified by remember { mutableStateOf(false) }
@@ -88,8 +100,15 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, logout: () -> 
                 wheelCost = BigDecimal.valueOf(wheelConfig.optLong("cost_cents"),2).toPlainString()
                 wheelBank = BigDecimal.valueOf(wheelConfig.optLong("bankroll_cents"),2).toPlainString()
                 wheelEnabled = wheelConfig.optBoolean("enabled")
+                wheelStep = BigDecimal.valueOf(wheelConfig.optLong("price_step_cents"),2).toPlainString()
+                wheelMaximum = BigDecimal.valueOf(wheelConfig.optLong("maximum_cost_cents"),2).toPlainString()
+                firstReward = BigDecimal.valueOf(wheelConfig.optLong("first_reward_cents"),2).toPlainString()
+                grandUnlock = BigDecimal.valueOf(wheelConfig.optLong("grand_unlock_spend_cents"),2).toPlainString()
                 val prizes = wheelConfig.optJSONArray("prizes")
                 wheelPrizes = if(prizes == null) "" else (0 until prizes.length()).joinToString("\n") { i -> val p = prizes.getJSONObject(i); "${BigDecimal.valueOf(p.optLong("amount_cents"),2)}:${p.optInt("weight")}" }
+            } else if (section == "الدفع") {
+                val data=api.request("/api/admin/payment-settings")
+                gatewayConfigured=data.optBoolean("nowpayments_configured");paymentAccount=data.optString("account");paymentCurrency=data.optString("currency","USD");paymentRate=data.optString("rate","1");paymentInstructions=data.optString("instructions");paymentEnabled=data.optBoolean("enabled")
             } else if (section == "الطلبات") requests = api.request("/api/admin/requests").adminItems()
             else content = api.request("/api/admin/moderation").adminItems()
         } catch(e: CancellationException) { throw e }
@@ -102,8 +121,8 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, logout: () -> 
                 Text("إدارة Relaxia", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
                 Text("مرحبًا، $adminName", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 TextButton(onClick = logout, enabled = !busy) { Text("تسجيل الخروج") }
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    listOf("الحسابات", "المحتوى", "الطلبات", "العجلة").forEach { name ->
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    listOf("الحسابات", "المحتوى", "الطلبات", "العجلة", "الدفع").forEach { name ->
                         FilterChip(selected = section == name, onClick = { selected = null; section = name; offset = 0 }, label = { Text(name) }, enabled = !busy)
                     }
                 }
@@ -177,30 +196,52 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, logout: () -> 
                     Text("غير مفعّلة افتراضيًا. كل جائزة واحتمالها يظهران للمستخدم قبل الدفع. احتياطي الجوائز منفصل ويُحدّث مع كل لفة.")
                     Row { Switch(wheelEnabled, { wheelEnabled = it }, enabled = !busy); Text("تفعيل العجلة") }
                     OutlinedTextField(wheelCost, { wheelCost = it }, label = { Text("سعر اللفة بالدولار") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(wheelStep, { wheelStep=it }, label={Text("زيادة السعر بعد كل لفة بالدولار")},modifier=Modifier.fillMaxWidth())
+                    OutlinedTextField(wheelMaximum, { wheelMaximum=it }, label={Text("أعلى سعر للفة بالدولار")},modifier=Modifier.fillMaxWidth())
+                    OutlinedTextField(firstReward, { firstReward=it }, label={Text("جائزة أول لفة المضمونة بالدولار")},modifier=Modifier.fillMaxWidth())
+                    OutlinedTextField(grandUnlock, { grandUnlock=it }, label={Text("إنفاق مطلوب لفتح جائزة 100 دولار")},modifier=Modifier.fillMaxWidth())
                     OutlinedTextField(wheelBank, { wheelBank = it }, label = { Text("احتياطي الجوائز بالدولار") }, modifier = Modifier.fillMaxWidth())
                     OutlinedTextField(wheelPrizes, { wheelPrizes = it }, label = { Text("كل سطر: الجائزة بالدولار:الوزن") }, minLines = 5, modifier = Modifier.fillMaxWidth())
                     Text("مجموع الأوزان يحدد نسب الاحتمالات. الوزن 20 من مجموع 100 يعني احتمال 20%. الجائزة صفر تعني خسارة سعر اللفة.")
                     Button(onClick = { perform {
                         val list = org.json.JSONArray()
                         wheelPrizes.lines().filter { it.isNotBlank() }.forEach { line -> val parts = line.split(":"); require(parts.size == 2); list.put(JSONObject().put("amount_cents", BigDecimal(parts[0].trim()).movePointRight(2).intValueExact()).put("weight", parts[1].trim().toInt())) }
-                        api.request("/api/admin/wheel", "POST", JSONObject().put("enabled", wheelEnabled).put("cost_cents", BigDecimal(wheelCost).movePointRight(2).intValueExact()).put("bankroll_cents", BigDecimal(wheelBank).movePointRight(2).longValueExact()).put("expected_bankroll_cents", wheelConfig.optLong("bankroll_cents")).put("prizes", list))
+                        api.request("/api/admin/wheel", "POST", JSONObject().put("enabled", wheelEnabled).put("cost_cents", BigDecimal(wheelCost).movePointRight(2).intValueExact()).put("bankroll_cents", BigDecimal(wheelBank).movePointRight(2).longValueExact()).put("expected_bankroll_cents", wheelConfig.optLong("bankroll_cents")).put("prizes", list).put("price_step_cents",BigDecimal(wheelStep).movePointRight(2).intValueExact()).put("maximum_cost_cents",BigDecimal(wheelMaximum).movePointRight(2).intValueExact()).put("first_reward_cents",BigDecimal(firstReward).movePointRight(2).intValueExact()).put("grand_unlock_spend_cents",BigDecimal(grandUnlock).movePointRight(2).intValueExact()))
                         revision++; success = "تم حفظ إعدادات العجلة."
                     } }, enabled = !busy && !loading) { Text("حفظ الإعدادات") }
+                }
+            } else if (section == "الدفع") {
+                item {
+                    Text(if(gatewayConfigured)"NOWPayments: مفاتيح الخادم مضبوطة"else"NOWPayments: ينتظر مفاتيح حساب التاجر",style=MaterialTheme.typography.titleMedium)
+                    Text("مفاتيح البوابة تضبط على الخادم وتبقى سرية. اختبر دفعة حقيقية قبل الإطلاق.",style=MaterialTheme.typography.bodySmall)
+                    Text("استلام شام كاش",style=MaterialTheme.typography.titleLarge)
+                    Row { Switch(paymentEnabled,{paymentEnabled=it},enabled=!busy);Text("تفعيل وسيلة الدفع") }
+                    OutlinedTextField(paymentAccount,{paymentAccount=it.take(160)},label={Text("عنوان محفظة الاستلام")},modifier=Modifier.fillMaxWidth())
+                    Row { listOf("USD","SYP").forEach{c->FilterChip(paymentCurrency==c,{paymentCurrency=c;if(c=="USD")paymentRate="1"},label={Text(c)})} }
+                    if(paymentCurrency=="SYP")OutlinedTextField(paymentRate,{paymentRate=it},label={Text("ليرة سورية لكل دولار من الرصيد")},modifier=Modifier.fillMaxWidth())
+                    OutlinedTextField(paymentInstructions,{paymentInstructions=it.take(500)},label={Text("تعليمات الدفع")},modifier=Modifier.fillMaxWidth())
+                    Button(onClick={perform { api.request("/api/admin/payment-settings","POST",JSONObject().put("enabled",paymentEnabled).put("account",paymentAccount).put("currency",paymentCurrency).put("rate",paymentRate).put("instructions",paymentInstructions));success="تم حفظ بيانات الاستلام." }},enabled=!busy){Text("حفظ")}
                 }
             } else if (section == "الطلبات") {
                 if(requests.isEmpty() && !loading) item { Text("لا توجد طلبات دفع أو بائعين.") }
                 items(requests, key = { it.optString("kind") + it.optString("id") }) { row ->
                     Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text(if(row.optString("kind") == "topup") "طلب شحن رصيد" else "طلب تفعيل بائع", style = MaterialTheme.typography.titleLarge)
+                        Text(when(row.optString("kind")){"topup"->"طلب شحن رصيد";"gateway"->"دفعة NOWPayments";else->"طلب تفعيل بائع"}, style = MaterialTheme.typography.titleLarge)
                         Text("${row.optString("username")} · #${row.optInt("user_id")}")
-                        Text(when(row.optString("status")) { "pending" -> "قيد المراجعة"; "approved" -> "معتمد"; else -> "مرفوض" })
+                        Text(when(row.optString("status")) { "pending" -> "قيد المراجعة"; "approved" -> "معتمد"; else -> if(row.optString("kind")=="gateway") row.optString("status") else "مرفوض" })
                         if(row.optString("kind") == "topup") {
                             Text("المحوّل: ${cents(row.optLong("amount_cents"))} · المكافأة: ${cents(row.optLong("bonus_cents"))}")
+                            Text("${row.optString("method","usdt")} · المطلوب: ${row.optString("payment_amount")} ${row.optString("payment_currency")}")
+                            if(row.optBoolean("late_submission"))Text("إيصال أُرسل بعد انتهاء مهلة الطلب — راجع وقت التحويل.")
                             Text(row.optString("transaction_hash"))
                             ReferenceImage(row.optString("receipt_url"), Modifier.fillMaxWidth().height(220.dp))
-                            TextButton(onClick = { runCatching { uriHandler.openUri("https://bscscan.com/tx/" + row.optString("transaction_hash")) } }) { Text("فحص التحويل على BscScan") }
+                            if(row.optString("method","usdt")=="usdt") TextButton(onClick = { runCatching { uriHandler.openUri("https://bscscan.com/tx/" + row.optString("transaction_hash")) } }) { Text("فحص التحويل على BscScan") }
+                        } else if(row.optString("kind")=="gateway") {
+                            Text("${cents(row.optLong("amount_cents"))} · المكافأة ${cents(row.optLong("bonus_cents"))}")
+                            Text("رقم البوابة: ${row.optString("provider_id")}")
+                            Text("الاعتماد آلي بعد التحقق من إشعار البوابة. لا يعتمد بمجرد صورة دفع.",style=MaterialTheme.typography.bodySmall)
                         } else Text(row.optString("description"))
-                        if(row.optString("status") == "pending") Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        if(row.optString("status") == "pending" && row.optString("kind")!="gateway") Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             listOf("approve" to "اعتماد", "reject" to "رفض").forEach { (decision, label) ->
                                 OutlinedButton(onClick = { reviewNote = ""; verified = false; confirmation = JSONObject().put("request_kind", row.optString("kind")).put("id", row.optString("id")).put("decision", decision).put("label", "$label الطلب") }, enabled = !busy) { Text(label) }
                             }
@@ -224,7 +265,7 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, logout: () -> 
             if(data.has("request_kind")) {
                 OutlinedTextField(reviewNote, { reviewNote = it.take(300) }, label = { Text("سبب القرار / تفاصيل التحقق") })
                 if(data.optString("request_kind") == "topup" && data.optString("decision") == "approve") {
-                    Text("تحقق من نجاح التحويل، USDT على BEP20، والعنوان والمبلغ. الإيصال وحده لا يثبت الدفع.")
+                    Text("تحقق من وصول المبلغ الصحيح إلى الحساب الصحيح عبر وسيلة الدفع المختارة. الإيصال وحده لا يثبت الدفع.")
                     Row { Checkbox(verified, { verified = it }); Text("تحققت من وصول التحويل فعليًا") }
                 }
             }

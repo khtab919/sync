@@ -124,11 +124,11 @@ class ReferenceDesignTest {
     @Test fun walletCardMakesCreditPurchaseVisibleAndDoesNotInventBalance() {
         var bought = 0
         var opened = 0
-        compose.setContent { MyApplicationTheme { Column(Modifier.fillMaxSize().padding(20.dp)) { WalletBalanceCard(0L, false, "", { bought++ }, { opened++ }, {}) } } }
-        compose.onNodeWithText("بطاقة رصيدك").assertExists()
-        compose.onNodeWithText("0.00 USD").assertExists()
-        compose.onNodeWithText("شراء رصيد").performClick()
-        compose.onNodeWithText("المحفظة").performClick()
+        compose.setContent { MyApplicationTheme { Column(Modifier.fillMaxSize().padding(20.dp)) { WalletSummary(0L, false, "", { bought++ }, { opened++ }, {}) } } }
+        compose.onNodeWithText("رصيدك").assertExists()
+        compose.onNodeWithText("0 كوينز").assertExists()
+        compose.onNodeWithText("متجر الكوينز").performClick()
+        compose.onNodeWithContentDescription("المحفظة").performClick()
         org.junit.Assert.assertEquals(1, bought)
         org.junit.Assert.assertEquals(1, opened)
         screenshot("08-wallet-card")
@@ -171,5 +171,26 @@ class ReferenceDesignTest {
         org.junit.Assert.assertFalse(trustedCallOrigin("http://165-227-128-113.sslip.io", "https://165-227-128-113.sslip.io"))
         org.junit.Assert.assertFalse(trustedCallOrigin("https://evil.example", "https://165-227-128-113.sslip.io"))
         org.junit.Assert.assertFalse(trustedCallOrigin("https://165-227-128-113.sslip.io:444", "https://165-227-128-113.sslip.io"))
+    }
+
+    @Test fun chatStatusIconsReflectPendingServerAndRecipientStates() {
+        compose.setContent { MyApplicationTheme { Surface(Modifier.fillMaxSize(),color=MaterialTheme.colorScheme.background) { Column(Modifier.padding(18.dp),verticalArrangement=Arrangement.spacedBy(14.dp)) {
+            ChatBubble(JSONObject().put("id",1).put("body","بانتظار الشبكة").put("pending",true),true,{}, {})
+            ChatBubble(JSONObject().put("id",2).put("body","أُرسلت إلى الخادم"),true,{}, {})
+            ChatBubble(JSONObject().put("id",3).put("body","وصلت إلى جهاز المستلم").put("delivered_at","2026-11-06T12:00:00Z"),true,{}, {})
+        } } } }
+        compose.onNodeWithContentDescription("بانتظار الإرسال").assertExists()
+        compose.onNodeWithContentDescription("تم إرسال الرسالة").assertExists()
+        compose.onNodeWithContentDescription("وصلت إلى جهاز المستلم").assertExists()
+        screenshot("11-message-delivery-states")
+    }
+
+    @Test fun coinPackageShowsPriceAndActualBonus() {
+        var chosen=false
+        compose.setContent { MyApplicationTheme { Surface(Modifier.fillMaxSize(),color=MaterialTheme.colorScheme.background) { Column(Modifier.padding(22.dp)) { CoinPackage(2500,100,"25.00",true){chosen=true} } } } }
+        compose.onNodeWithText("2500").assertExists()
+        compose.onNodeWithText("+100 هدية").performClick()
+        org.junit.Assert.assertTrue(chosen)
+        screenshot("12-coin-package")
     }
 }

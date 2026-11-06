@@ -99,7 +99,7 @@ def issue_token(user):
 def health(request):
     with connection.cursor() as cursor:
         cursor.execute('SELECT 1')
-    return JsonResponse({'status': 'ok', 'registration_version': 4, 'identity_required': False, 'brand': 'Relaxia', 'mobile_admin_version': 1, 'commerce_version': 1, 'calls_version': 1})
+    return JsonResponse({'status': 'ok', 'registration_version': 4, 'identity_required': False, 'brand': 'Relaxia', 'mobile_admin_version': 1, 'commerce_version': 1, 'calls_version': 1, 'messaging_version': 2, 'shop_version': 2})
 
 @endpoint(['POST'], authenticated=False)
 def register(request):
@@ -347,33 +347,52 @@ def messages(request, peer_id):
     if not peer or peer == request.actor:
         raise ApiError('recipient_unavailable', 404)
     if request.method == 'GET':
-        rows = Message.objects.filter(Q(sender=request.actor, recipient=peer) | Q(sender=peer, recipient=request.actor)).select_related('attachment', 'call').order_by('-id')[:100]
-        return JsonResponse({'items': [message_json(request, row) for row in rows]})
-    profile = Profile.objects.filter(user=peer).first()
-    if not profile or profile.chat_price_cents:
-        raise ApiError('paid_chat_requires_verified_payment', 409)
-    p = request.payload
-    attachment = None
-    if p.get('attachment_id'):
-        attachment = UploadedMedia.objects.filter(pk=uuid.UUID(text(p, 'attachment_id', 36, 36)), owner=request.actor, purpose__in=['chat_image', 'chat_audio']).first()
-        if not attachment:
-            raise ApiError('invalid_attachment')
-    body = p.get('body', '')
-    if not isinstance(body, str) or len(body) > 2000:
-        raise ApiError('invalid_body')
-    call_url = ''
-    if p.get('start_call') is True:
-        raise ApiError('update_app_for_internal_calls', 409)
-    if not body.strip() and not attachment and not call_url:
-        raise ApiError('invalid_body')
-    if attachment:
-        existing = Message.objects.filter(attachment=attachment).first()
-        if existing:
-            if existing.sender_id == request.actor.pk and existing.recipient_id == peer.pk:
-                return JsonResponse(message_json(request, existing))
-            raise ApiError('attachment_already_used', 409)
-    message = Message.objects.create(sender=request.actor, recipient=peer, body=body.strip(), attachment=attachment, call_url=call_url)
+        rows = Message.objects.filter(Q(sender=request.actor, recipient=peer) | Q(sender=peer, recipient=request.actor)).select_related('attachment', 'call', 'sender').order_by('-id')[:100]
+        peer_profile = Profile.objects.filter(user=peer).first()
+        return JsonResponse({'peer': {'id':peer.pk,'username':peer.username,'display_name':(peer_profile.display_name if peer_profile else '') or peer.username,'avatar_url':peer_profile.avatar_url if peer_profile else ''}, 'items': [message_json(request, row) for row in rows]})
+    submitted_body=request.payload.get('body','')
+    if not isinstance(submitted_body,str) or len(submitted_body)>2000:raise ApiError('invalid_body')
+    client_key = uuid.UUID(text(request.payload,'client_key',36,36)) if request.payload.get('client_key') else None
+    with transaction.atomic():
+        User.objects.select_for_update().get(pk=request.actor.pk)
+        if client_key:
+            previous = Message.objects.filter(sender=request.actor, client_key=client_key).first()
+            if previous:
+                if previous.recipient_id != peer.pk or previous.body != request.payload.get('body','').strip() or (str(previous.attachment_id) if previous.attachment_id else None) != request.payload.get('attachment_id'):
+                    raise ApiError('message_request_conflict', 409)
+                return JsonResponse(message_json(request, previous))
+        profile = Profile.objects.filter(user=peer).first()
+        if not profile or profile.chat_price_cents:
+            raise ApiError('paid_chat_requires_verified_payment', 409)
+        p = request.payload
+        attachment = None
+        if p.get('attachment_id'):
+            attachment = UploadedMedia.objects.filter(pk=uuid.UUID(text(p, 'attachment_id', 36, 36)), owner=request.actor, purpose__in=['chat_image', 'chat_audio']).first()
+            if not attachment:
+                raise ApiError('invalid_attachment')
+        body = p.get('body', '')
+        if not isinstance(body, str) or len(body) > 2000:
+            raise ApiError('invalid_body')
+        if p.get('start_call') is True:
+            raise ApiError('update_app_for_internal_calls', 409)
+        if not body.strip() and not attachment:
+            raise ApiError('invalid_body')
+        if attachment:
+            existing = Message.objects.filter(attachment=attachment).first()
+            if existing:
+                if existing.sender_id == request.actor.pk and existing.recipient_id == peer.pk:
+                    return JsonResponse(message_json(request, existing))
+                raise ApiError('attachment_already_used', 409)
+        message = Message.objects.create(sender=request.actor, recipient=peer, body=body.strip(), attachment=attachment, client_key=client_key)
     return JsonResponse(message_json(request, message), status=201)
+
+@endpoint(['POST'])
+def delivered(request, peer_id):
+    ids = request.payload.get('ids')
+    if not isinstance(ids,list) or len(ids)>100 or not all(type(value) is int and value>0 for value in ids):
+        raise ApiError('invalid_message_ids')
+    Message.objects.filter(pk__in=ids,sender_id=peer_id,recipient=request.actor,delivered_at__isnull=True).update(delivered_at=timezone.now())
+    return JsonResponse({'ok':True})
 
 @endpoint(['GET', 'POST'])
 def reels(request):

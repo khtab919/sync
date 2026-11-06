@@ -313,7 +313,7 @@ fun ServerAppScreen(baseUrl: String) {
                     navigationIcon = { if (page.isNotBlank()) IconButton(onClick = { back() }) { Icon(Icons.Outlined.ArrowForward, "رجوع") } },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
                     actions = {
-                        if (screen in listOf("تصفح", "العرض", "دردشة")) TextButton(onClick = { buyCredits() }) { Icon(Icons.Outlined.AccountBalanceWallet, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("شراء رصيد") }
+                        if (screen in listOf("تصفح", "العرض", "دردشة")) TextButton(onClick = { buyCredits() }) { Icon(Icons.Outlined.AccountBalanceWallet, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("كوينز") }
                         when (screen) {
                             "تصفح" -> IconButton(onClick = { open("المحفوظات") }) { Icon(Icons.Outlined.BookmarkBorder, "المحفوظات") }
                             "العرض" -> {
@@ -352,7 +352,7 @@ fun ServerAppScreen(baseUrl: String) {
                 } else LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     when (screen) {
                         "تصفح" -> {
-                            item { Box(Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) { WalletBalanceCard(if(walletAccountId == profile.optInt("id") && wallet.has("available_cents")) wallet.optLong("available_cents") else null, walletLoading, walletError, { buyCredits() }, { open("المحفظة") }, { revision++ }) } }
+                            item { Box(Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) { WalletSummary(if(walletAccountId == profile.optInt("id") && wallet.has("available_cents")) wallet.optLong("available_cents") else null, walletLoading, walletError, { buyCredits() }, { open("المحفظة") }, { revision++ }) } }
                             item { SearchField(query, { query = it }, "ابحث عن مذيعة أو خدمة") }
                             item {
                                 LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -448,7 +448,7 @@ fun ServerAppScreen(baseUrl: String) {
                         "حسابي", "صفحة المذيعة" -> {
                             val own = screen == "حسابي"
                             val person = if (own) profile else creator
-                            if (own) item { Box(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) { WalletBalanceCard(if(walletAccountId == profile.optInt("id") && wallet.has("available_cents")) wallet.optLong("available_cents") else null, walletLoading, walletError, { buyCredits() }, { open("المحفظة") }, { revision++ }) } }
+                            if (own) item { Box(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) { WalletSummary(if(walletAccountId == profile.optInt("id") && wallet.has("available_cents")) wallet.optLong("available_cents") else null, walletLoading, walletError, { buyCredits() }, { open("المحفظة") }, { revision++ }) } }
                             item { ProfileHero(person, own, { if (own) open("الإعدادات") else back() }, { if (own) editProfile() else startChat(person.optInt("id"), person.optString("display_name")) }, {
                                 if (own) open("إطاراتي") else perform {
                                     creator = api.request("/api/creators/${person.optInt("id")}/follow", "POST", JSONObject().put("enabled", !person.optBoolean("following")))
@@ -463,7 +463,7 @@ fun ServerAppScreen(baseUrl: String) {
                             if (offers.isEmpty() && !loading) item { ReferenceEmpty(Icons.Outlined.Storefront, "اعرض خدمة، جلسة، أو منتجًا", "تظهر العروض هنا بعد مراجعة الإدارة واعتمادها.") }
                             items(offers) { offer -> Box(Modifier.padding(horizontal = 20.dp)) { OfferCard(offer) { showService(offer) } } }
                             if (own) item { FormColumn {
-                                ReferenceRow(Icons.Outlined.AddCard, "شراء رصيد") { buyCredits() }
+                                ReferenceRow(Icons.Outlined.AddCard, "متجر الكوينز") { buyCredits() }
                                 ReferenceRow(Icons.Outlined.Casino, "عجلة الحظ المدفوعة") { open("العجلة") }
                                 if (!profile.optBoolean("creator")) ReferenceRow(Icons.Outlined.Storefront, "طلب تفعيل البائع") { open("تفعيل البائع") }
                                 ReferenceRow(Icons.Outlined.AccountBalanceWallet, "المحفظة والسحب") { price = ""; open("المحفظة") }

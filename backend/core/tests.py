@@ -498,9 +498,9 @@ class CommerceTests(TestCase):
         self.assertFalse(self.call('/api/promotion/wheel').json()['enabled'])
         self.assertEqual(self.call('/api/promotion/wheel', {'request_key': str(uuid.uuid4())}).status_code, 409)
         config = PaidWheelConfiguration.objects.get(pk=1)
-        config.enabled = True; config.cost_cents = 100; config.prizes = [{'amount_cents': 50, 'weight': 1}]; config.bankroll_cents = 10000; config.save()
+        config.enabled = True; config.first_reward_cents = 0; config.price_step_cents = 0; config.cost_cents = 100; config.prizes = [{'amount_cents': 50, 'weight': 1}]; config.bankroll_cents = 10000; config.save()
         info = self.call('/api/promotion/wheel').json()
-        data = {'request_key': str(uuid.uuid4()), 'config_version': info['config_version']}
+        data = {'rules_version':2,'request_key': str(uuid.uuid4()), 'config_version': info['config_version']}
         self.assertEqual(self.call('/api/promotion/wheel', data).status_code, 409)
         wallet = Wallet.objects.get(user=self.user); wallet.balance_cents = 500; wallet.save()
         self.assertEqual(self.call('/api/promotion/wheel', data).status_code, 201)
@@ -542,10 +542,10 @@ class CommerceConcurrencyTests(TransactionTestCase):
 
     def test_concurrent_spin_retry_charges_once(self):
         from .models import PaidWheelConfiguration, PaidSpin
-        from .commerce import wheel_settings
-        config = PaidWheelConfiguration.objects.create(pk=1, enabled=True, cost_cents=100, bankroll_cents=10000, prizes=[{'amount_cents':50,'weight':1}])
+        from .commerce import wheel_offer
+        config = PaidWheelConfiguration.objects.update_or_create(pk=1, defaults=dict(enabled=True, cost_cents=100, first_reward_cents=0, price_step_cents=0, bankroll_cents=10000, prizes=[{'amount_cents':50,'weight':1}]))[0]
         wallet = Wallet.objects.get(user=self.user); wallet.balance_cents=500; wallet.save()
-        codes = self.parallel_post('/api/promotion/wheel', {'request_key':str(uuid.uuid4()),'config_version':wheel_settings(config)[2]}, self.token)
+        codes = self.parallel_post('/api/promotion/wheel', {'rules_version':2,'request_key':str(uuid.uuid4()),'config_version':wheel_offer(config,self.user)['config_version']}, self.token)
         self.assertEqual(sorted(codes), [200,201])
         self.assertEqual(PaidSpin.objects.count(),1)
         self.assertEqual(Wallet.objects.get(user=self.user).balance_cents,450)
@@ -641,3 +641,120 @@ class InternalCallingTests(TestCase):
         profile=self.callee.profile; profile.chat_price_cents=100; profile.save()
         self.assertEqual(self.call('/api/calls',{'peer_id':self.callee.pk}).status_code,409)
         self.assertEqual(self.call(f'/api/messages/{self.callee.pk}',{'start_call':True}).status_code,409)
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+class ReliableChatTests(TestCase):
+    def setUp(self):
+        self.sender=get_user_model().objects.create_user('actual_sender',password='unique-pass')
+        self.receiver=get_user_model().objects.create_user('actual_receiver',password='unique-pass')
+        self.stranger=get_user_model().objects.create_user('other_receiver',password='unique-pass')
+        for user in (self.sender,self.receiver,self.stranger):Profile.objects.create(user=user);Wallet.objects.create(user=user)
+        self.tokens={u.pk:issue_token(u) for u in (self.sender,self.receiver,self.stranger)}
+    def post(self,path,body,user):return self.client.post(path,json.dumps(body),content_type='application/json',HTTP_AUTHORIZATION='Bearer '+self.tokens[user.pk])
+    def test_retry_and_recipient_acknowledgement_are_real(self):
+        key=str(uuid.uuid4());path=f'/api/messages/{self.receiver.pk}';payload={'body':'A real queued message','client_key':key}
+        first=self.post(path,payload,self.sender);self.assertEqual(first.status_code,201)
+        self.assertEqual(self.post(path,payload,self.sender).status_code,200)
+        self.assertEqual(Message.objects.count(),1)
+        self.assertEqual(self.post(path,dict(payload,body='changed'),self.sender).status_code,409)
+        self.assertEqual(self.post(path,dict(payload,body=5),self.sender).status_code,400)
+        row=Message.objects.get();self.assertIsNone(row.delivered_at)
+        received=self.client.get(f'/api/messages/{self.sender.pk}',HTTP_AUTHORIZATION='Bearer '+self.tokens[self.receiver.pk]).json()
+        self.assertEqual(received['peer']['username'],'actual_sender')
+        row.refresh_from_db();self.assertIsNone(row.delivered_at)
+        ack=f'/api/messages/{self.sender.pk}/delivered'
+        self.assertEqual(self.post(ack,{'ids':[row.pk]},self.stranger).status_code,200)
+        row.refresh_from_db();self.assertIsNone(row.delivered_at)
+        self.assertEqual(self.post(ack,{'ids':[row.pk]},self.receiver).status_code,200)
+        row.refresh_from_db();self.assertIsNotNone(row.delivered_at)
+        stamp=row.delivered_at;self.post(ack,{'ids':[row.pk]},self.receiver);row.refresh_from_db();self.assertEqual(row.delivered_at,stamp)
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+class NewFundingAndWheelTests(CommerceTests):
+    def test_quote_has_real_thirty_minute_expiration_and_snapshot_destination(self):
+        from .models import PaymentSettings,TopUpQuote
+        from django.utils import timezone
+        import qrcode
+        from unittest.mock import patch
+        settings=PaymentSettings.objects.get(pk=1)
+        self.assertEqual(settings.shamcash_account,'42c9f2bd84250c5ab6c444616b8ef0c2')
+        first=self.call('/api/topup-quotes',{'method':'shamcash','amount_cents':1000});self.assertEqual(first.status_code,201)
+        quote=first.json();again=self.call('/api/topup-quotes',{'method':'shamcash','amount_cents':1000}).json();self.assertEqual(quote['id'],again['id']);self.assertEqual(quote['expires_at'],again['expires_at'])
+        row=TopUpQuote.objects.get(pk=quote['id']);self.assertAlmostEqual((row.expires_at-row.created_at).total_seconds(),1800,delta=1)
+        settings.shamcash_account='new-operator-destination';settings.save()
+        with patch('qrcode.make',wraps=qrcode.make) as make:
+            self.assertEqual(self.client.get(quote['qr_url']).status_code,200)
+            make.assert_called_once_with('42c9f2bd84250c5ab6c444616b8ef0c2')
+        row.expires_at=timezone.now()-__import__('datetime').timedelta(seconds=1);row.save()
+        receipt=self.upload()
+        paid=self.call('/api/topups',{'quote_id':str(row.pk),'receipt_id':receipt['id'],'transaction_hash':'SHAM-123456'})
+        self.assertEqual(paid.status_code,201);self.assertTrue(paid.json()['late_submission'])
+        from .models import TopUp
+        self.assertEqual(TopUp.objects.get(pk=paid.json()['id']).method,'shamcash')
+        self.assertEqual(Wallet.objects.get(user=self.user).balance_cents,0)
+
+    def test_first_win_increasing_cost_and_explicit_grand_prize_gate(self):
+        from .models import PaidWheelConfiguration,PaidSpin
+        config=PaidWheelConfiguration.objects.get(pk=1);config.enabled=True;config.bankroll_cents=100000;config.save()
+        wallet=Wallet.objects.get(user=self.user);wallet.balance_cents=10000;wallet.save()
+        offer=self.call('/api/promotion/wheel').json()
+        self.assertTrue(offer['first_spin_guaranteed']);self.assertEqual(offer['cost_cents'],350)
+        paid=self.call('/api/promotion/wheel',{'rules_version':2,'request_key':str(uuid.uuid4()),'config_version':offer['config_version']})
+        self.assertEqual(paid.status_code,201);self.assertEqual(paid.json()['prize_cents'],500)
+        wallet.refresh_from_db();self.assertEqual(wallet.balance_cents,10150)
+        second=self.call('/api/promotion/wheel').json();self.assertEqual(second['cost_cents'],400);self.assertFalse(second['first_spin_guaranteed']);self.assertFalse(second['grand_unlocked'])
+        self.assertNotIn(10000,[p['amount_cents'] for p in second['prizes']])
+        PaidSpin.objects.create(user=self.user,request_key=uuid.uuid4(),cost_cents=19650,prize_cents=0,prizes_snapshot=[])
+        unlocked=self.call('/api/promotion/wheel').json();self.assertTrue(unlocked['grand_unlocked']);self.assertIn(10000,[p['amount_cents'] for p in unlocked['prizes']])
+        self.assertEqual(self.call('/api/promotion/wheel',{'request_key':str(uuid.uuid4()),'config_version':unlocked['config_version']}).status_code,409)
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+class NOWPaymentsTests(TestCase):
+    def setUp(self):
+        from unittest.mock import patch
+        self.environment=patch.dict('os.environ',{'NOWPAYMENTS_API_KEY':'test-api-not-real','NOWPAYMENTS_IPN_SECRET':'test-ipn-not-real'})
+        self.environment.start();self.addCleanup(self.environment.stop)
+        self.user=get_user_model().objects.create_user('gatewaybuyer',password='unique-pass')
+        Profile.objects.create(user=self.user);Wallet.objects.create(user=self.user);self.token=issue_token(self.user)
+    def post(self,path,data):return self.client.post(path,json.dumps(data),content_type='application/json',HTTP_AUTHORIZATION='Bearer '+self.token)
+    def invoice(self):
+        from unittest.mock import patch
+        quote=self.post('/api/topup-quotes',{'method':'nowpayments','amount_cents':2500}).json()
+        with patch('core.nowpayments.provider_request',return_value={'id':12345,'invoice_url':'https://nowpayments.io/payment/?iid=12345'}) as provider:
+            response=self.post('/api/nowpayments/invoices',{'quote_id':quote['id']});self.assertEqual(response.status_code,201)
+            self.assertEqual(provider.call_args.args[1]['price_amount'],'25')
+        return quote
+    def notify(self,data,valid=True):
+        import hashlib,hmac
+        body=json.dumps(data,sort_keys=True,separators=(',',':'),ensure_ascii=False)
+        signature=hmac.new(b'test-ipn-not-real',body.encode(),hashlib.sha512).hexdigest() if valid else '0'*128
+        return self.client.post('/api/nowpayments/ipn',body,content_type='application/json',HTTP_X_NOWPAYMENTS_SIG=signature)
+    def payload(self,quote,status='finished'):
+        return {'order_id':quote['id'],'invoice_id':12345,'payment_id':98765,'price_amount':25,'price_currency':'usd','payment_status':status,'pay_amount':25,'actually_paid':25,'pay_currency':'usdtbsc'}
+    def test_signed_finished_callback_credits_once_and_return_url_never_credits(self):
+        quote=self.invoice();data=self.payload(quote)
+        self.client.get('/api/nowpayments/return?status=finished')
+        self.assertEqual(Wallet.objects.get(user=self.user).balance_cents,0)
+        self.assertEqual(self.notify(data,False).status_code,403)
+        self.assertEqual(self.notify(self.payload(quote,'confirming')).status_code,200)
+        self.assertEqual(Wallet.objects.get(user=self.user).balance_cents,0)
+        self.assertEqual(self.notify(data).status_code,200)
+        self.assertEqual(self.notify(data).status_code,200)
+        self.assertEqual(Wallet.objects.get(user=self.user).balance_cents,2600)
+        status=self.client.get('/api/nowpayments/status/'+quote['id'],HTTP_AUTHORIZATION='Bearer '+self.token).json()
+        self.assertTrue(status['credited'])
+        another=self.post('/api/topup-quotes',{'method':'nowpayments','amount_cents':2500}).json()
+        self.assertNotEqual(quote['id'],another['id'])
+    def test_wrong_order_amount_or_underpayment_never_credits(self):
+        quote=self.invoice();base=self.payload(quote)
+        for data in [dict(base,price_amount=20),dict(base,actually_paid=24),dict(base,invoice_id=999),dict(base,order_id=str(uuid.uuid4()))]:
+            self.assertEqual(self.notify(data).status_code,400)
+        self.assertEqual(Wallet.objects.get(user=self.user).balance_cents,0)
+    def test_gateway_requires_credentials_and_reuses_created_invoice(self):
+        from unittest.mock import patch
+        with patch.dict('os.environ',{'NOWPAYMENTS_API_KEY':''}):
+            self.assertEqual(self.post('/api/topup-quotes',{'method':'nowpayments','amount_cents':1000}).status_code,409)
+        quote=self.invoice()
+        with patch('core.nowpayments.provider_request') as provider:
+            self.assertEqual(self.post('/api/nowpayments/invoices',{'quote_id':quote['id']}).status_code,200)
+            provider.assert_not_called()

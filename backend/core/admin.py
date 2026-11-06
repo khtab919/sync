@@ -151,3 +151,7 @@ class PaidWheelConfigurationAdmin(admin.ModelAdmin):
                     raise forms.ValidationError('حدد سعرًا موجبًا وجوائز بصيغة amount_cents وweight قبل التفعيل.')
                 return data
         return CheckedForm
+
+from .models import GatewayInvoice, PaymentSettings, TopUpQuote
+admin.site.register(GatewayInvoice,FinancialReadOnlyAdmin)
+admin.site.register(TopUpQuote,FinancialReadOnlyAdmin)

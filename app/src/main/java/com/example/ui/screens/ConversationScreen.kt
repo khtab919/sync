@@ -25,6 +25,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.platform.LocalLayoutDirection
 import com.example.data.api.LayaliApi
+import com.example.data.api.MessageOutbox
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -39,6 +42,12 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
     val listState = rememberLazyListState()
     val lifecycleOwner = LocalLifecycleOwner.current
     var resumed by remember { mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
+    val outbox = remember(api.origin, myId, peerId) { MessageOutbox(context, api.origin, myId, peerId) }
+    var pending by remember { mutableStateOf(runCatching { outbox.read() }.getOrDefault(emptyList())) }
+    var actualPeer by remember { mutableStateOf(peerName.takeUnless { it.startsWith("حساب #") }.orEmpty()) }
+    var peerHandle by remember { mutableStateOf("") }
+    var peerAvatar by remember { mutableStateOf("") }
+    var amplitude by remember { mutableFloatStateOf(0f) }
     var rows by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var error by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
@@ -46,11 +55,22 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
     var seconds by remember { mutableIntStateOf(0) }
     var recorder by remember { mutableStateOf<MediaRecorder?>(null) }
     var recordingFile by remember { mutableStateOf<File?>(null) }
-    var player by remember { mutableStateOf<MediaPlayer?>(null) }
+    val voice = remember { VoicePlayback(context) }
     var confirmCall by remember { mutableStateOf(false) }
     suspend fun refresh() {
-        val a = api.request("/api/messages/$peerId").optJSONArray("items")
-        rows = if(a == null) emptyList() else (0 until a.length()).map { a.getJSONObject(it) }.reversed()
+        val result=api.request("/api/messages/$peerId")
+        result.optJSONObject("peer")?.let { actualPeer=it.optString("display_name",it.optString("username"));peerHandle=it.optString("username");peerAvatar=it.optString("avatar_url") }
+        val a=result.optJSONArray("items")
+        val loaded=if(a==null)emptyList()else(0 until a.length()).map{a.getJSONObject(it)}.reversed()
+        val acknowledged=loaded.map{it.optString("client_key")}.filter{it.isNotBlank()}.toSet()
+        withContext(Dispatchers.IO){outbox.read().filter{it.optString("client_key") in acknowledged}.forEach{outbox.remove(it.optString("client_key"))}}
+        rows=loaded;pending=withContext(Dispatchers.IO){outbox.read()}
+        val delivered=org.json.JSONArray(loaded.filter{it.optInt("sender_id")!=myId&&it.isNull("delivered_at")}.map{it.optInt("id")})
+        if(delivered.length()>0)api.request("/api/messages/$peerId/delivered","POST",JSONObject().put("ids",delivered))
+    }
+    fun enqueue(uri:Uri?,kind:String) {
+        if(uri==null){try{outbox.text(body.trim());pending=outbox.read();changeBody("");error=""}catch(e:Exception){error="تعذّر حفظ الرسالة للإرسال."};return}
+        scope.launch { try { withContext(Dispatchers.IO){outbox.file(uri,kind)};pending=withContext(Dispatchers.IO){outbox.read()};error="" }catch(e:Exception){error="تعذّر حفظ الملف. الحد الأقصى 8MB."} }
     }
     fun perform(block: suspend () -> Unit) {
         if(busy) return
@@ -62,14 +82,14 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
         val file = recordingFile; recordingFile = null
         val valid = runCatching { current?.stop(); true }.getOrDefault(false)
         current?.release()
-        if(send && valid && file != null) perform { try {
-            val media = api.upload(context, Uri.fromFile(file), "chat_audio")
-            api.request("/api/messages/$peerId", "POST", JSONObject().put("attachment_id", media.getString("id")))
-        } finally { file.delete() } } else file?.delete()
+        if(send&&valid&&file!=null) {
+            scope.launch { try { withContext(Dispatchers.IO){outbox.file(Uri.fromFile(file),"chat_audio")};pending=withContext(Dispatchers.IO){outbox.read()} } catch(e:Exception){error="تعذّر حفظ التسجيل للإرسال."} finally{file.delete()} }
+        } else file?.delete()
     }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if(granted && !busy && !recording) {
             runCatching {
+                voice.pause()
                 val file = File.createTempFile("relaxia-voice-", ".m4a", context.cacheDir)
                 recordingFile = file
                 @Suppress("DEPRECATION") val r = MediaRecorder()
@@ -79,25 +99,45 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
             }.onFailure { recorder?.release(); recorder = null; recordingFile?.delete(); recordingFile = null; error = "تعذّر بدء تسجيل الصوت." }
         } else if(!granted) error = "اسمح باستخدام الميكروفون لتسجيل رسالة صوتية."
     }
-    val photo = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { selected -> if(selected != null) perform {
-        val media = api.upload(context, selected, "chat_image")
-        api.request("/api/messages/$peerId", "POST", JSONObject().put("attachment_id", media.getString("id")))
-    } }
+    val photo=rememberLauncherForActivityResult(ActivityResultContracts.GetContent()){selected->if(selected!=null)enqueue(selected,"chat_image")}
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             resumed = lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
-            if(event == Lifecycle.Event.ON_PAUSE) { if(recording) finishRecording(false); player?.release(); player = null }
+            if(event == Lifecycle.Event.ON_PAUSE) { if(recording) finishRecording(false); voice.pause() }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
-    LaunchedEffect(peerId, resumed) {
-        if(!resumed) return@LaunchedEffect
+    LaunchedEffect(peerId,resumed) {
+        if(!resumed)return@LaunchedEffect
+        var reliable=false
+        var versionKnown=false
+        var checkedAt=0L
         while(true) {
-            try { refresh() } catch(e: CancellationException) { throw e } catch(e: Exception) { error = commerceError(e) }
-            delay(3000)
+            if(!reliable&&System.currentTimeMillis()-checkedAt>10000){checkedAt=System.currentTimeMillis();try{reliable=api.request("/health/").optInt("messaging_version")>=2;versionKnown=true}catch(e:CancellationException){throw e}catch(e:Exception){versionKnown=false}}
+            try {
+                val first=withContext(Dispatchers.IO){outbox.read().firstOrNull{!it.optBoolean("failed")}}
+                if(first!=null&&reliable) {
+                    if(first.optString("kind")!="text"&&!first.has("attachment_id")) {
+                        val media=api.upload(context,Uri.fromFile(outbox.fileFor(first)),first.getString("kind"))
+                        first.put("attachment_id",media.getString("id"));withContext(Dispatchers.IO){outbox.update(first)}
+                    }
+                    val payload=JSONObject().put("client_key",first.getString("client_key")).put("body",first.optString("body"))
+                    if(first.has("attachment_id"))payload.put("attachment_id",first.getString("attachment_id"))
+                    try{val sent=api.request("/api/messages/$peerId","POST",payload);rows=rows.filterNot{it.optString("client_key")==first.optString("client_key")}+sent;withContext(Dispatchers.IO){outbox.remove(first.getString("client_key"))};error=""}
+                    catch(e:Exception){if(e.message in listOf("paid_chat_requires_verified_payment","recipient_unavailable","invalid_body","invalid_attachment","message_request_conflict")){first.put("failed",true);withContext(Dispatchers.IO){outbox.update(first)}}else throw e}
+                    pending=withContext(Dispatchers.IO){outbox.read()}
+                } else if(first!=null&&!reliable) error=if(versionKnown)"حدّث الخادم لتفعيل الإرسال الموثوق وحالات تسليم الرسائل."else"بانتظار الاتصال لإرسال الرسائل…"
+            }catch(e:CancellationException){throw e}catch(e:Exception){error="بانتظار الاتصال لإرسال الرسائل…"}
+            try { refresh() }catch(e:CancellationException){throw e}catch(e:Exception){if(pending.isEmpty())error=commerceError(e)}
+            delay(if(pending.isEmpty())2500 else 900)
         }
     }
+    LaunchedEffect(recording) { while(recording){amplitude=runCatching{(recorder?.maxAmplitude?:0)/32767f}.getOrDefault(0f);delay(120)};amplitude=0f }
+    val confirmedKeys=rows.map{it.optString("client_key")}.filter{it.isNotBlank()}.toSet()
+    val displayed=rows+pending.filterNot{it.optString("client_key") in confirmedKeys}.map{outbox.pendingJson(it,myId)}
+    LaunchedEffect(voice.playing){while(voice.playing){voice.tick();delay(200)}}
+    LaunchedEffect(pending.lastOrNull()?.optString("client_key")){if(pending.isNotEmpty())listState.scrollToItem(displayed.lastIndex)}
     var historyLoaded by rememberSaveable(peerId) { mutableStateOf(false) }
     var previousNewest by rememberSaveable(peerId) { mutableIntStateOf(0) }
     val newest = rows.lastOrNull()?.optInt("id") ?: 0
@@ -111,32 +151,30 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
     LaunchedEffect(recording) {
         if(recording) { while(recording && seconds < 60) { delay(1000); seconds++ }; if(recording) finishRecording(true) }
     }
-    DisposableEffect(Unit) { onDispose { runCatching { recorder?.stop() }; recorder?.release(); recordingFile?.delete(); player?.release() } }
+    DisposableEffect(Unit) { onDispose { runCatching { recorder?.stop() }; recorder?.release(); recordingFile?.delete(); voice.close() } }
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        topBar = { ChatHeader(peerName, { if(recording) finishRecording(false); back() }, { confirmCall = true }, buy, !busy && !recording) },
+        topBar = { ChatHeader(actualPeer.ifBlank { "المحادثة" }, { if(recording) finishRecording(false); back() }, { confirmCall = true }, buy, !busy && !recording, peerHandle, peerAvatar) },
         bottomBar = { Surface(shadowElevation = 8.dp) { Column(Modifier.navigationBarsPadding().imePadding().padding(10.dp)) {
             if(error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
-            if(busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             if(recording) {
-                Text("جارٍ التسجيل · $seconds ثانية · 60 ثانية كحد أقصى")
+                RecordingIndicator(seconds, amplitude)
                 Row { Button(onClick = { finishRecording(true) }) { Text("إرسال التسجيل") }; TextButton(onClick = { finishRecording(false) }) { Text("إلغاء") } }
             } else {
                 ChatComposer(body, { changeBody(it.take(2000)) }, busy, { photo.launch("image/*") }, { permission.launch(Manifest.permission.RECORD_AUDIO) }) {
-                    perform { api.request("/api/messages/$peerId", "POST", JSONObject().put("body", body)); changeBody("") }
+                    enqueue(null, "text")
                 }
             }
         } } }
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
-        if(rows.isEmpty() && error.isBlank()) Column(Modifier.align(Alignment.Center).padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) { Text("مساحة لحديثكما", style = MaterialTheme.typography.titleLarge); Text("اكتب رسالة أو أرسل صورة أو تسجيلًا صوتيًا.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        if(displayed.isEmpty() && error.isBlank()) Column(Modifier.align(Alignment.Center).padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) { Text("مساحة لحديثكما", style = MaterialTheme.typography.titleLarge); Text("اكتب رسالة أو أرسل صورة أو تسجيلًا صوتيًا.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
         LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(horizontal = 16.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            items(rows, key = { it.optInt("id") }) { message ->
+            items(displayed, key = { it.optString("client_key").ifBlank { it.optInt("id").toString() } }) { message ->
                 val mine = message.optInt("sender_id") == myId
-                ChatBubble(message, mine, { media ->
-                    player?.release()
-                    runCatching { MediaPlayer().also { p -> player = p; p.setDataSource(media); p.setOnPreparedListener { it.start() }; p.setOnCompletionListener { it.release(); if(player == it) player = null }; p.setOnErrorListener { mp, _, _ -> mp.release(); if(player == mp) player = null; error = "تعذّر تشغيل التسجيل."; true }; p.prepareAsync() } }.onFailure { error = "تعذّر تشغيل التسجيل." }
-                }, { openCall(it) })
+                CompositionLocalProvider(LocalVoicePlayback provides voice) {
+                    ChatBubble(message,mine,{}, {openCall(it)}, {key->scope.launch{val row=outbox.read().firstOrNull{it.optString("client_key")==key};if(row!=null){row.remove("failed");withContext(Dispatchers.IO){outbox.update(row)};pending=outbox.read()}}}, {key->scope.launch{withContext(Dispatchers.IO){outbox.remove(key)};pending=outbox.read()}})
+                }
             }
         }
         }

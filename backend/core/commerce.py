@@ -102,41 +102,122 @@ def upload(request):
     return JsonResponse({'id': row.pk, 'url': grant_url(request, row), 'mime': mime}, status=201)
 
 
+def funding_settings():
+    from .models import PaymentSettings
+    return PaymentSettings.objects.get_or_create(pk=1)[0]
+
+
+def bonus_for(cents):
+    return cents * (8 if cents >= 10000 else 6 if cents >= 5000 else 4 if cents >= 2500 else 0) // 100
+
+
 @endpoint(['GET'])
 def payment_info(request):
-    return JsonResponse({'network': 'BNB Smart Chain (BEP20)', 'currency': 'USDT', 'address': ADDRESS, 'qr_url': request.build_absolute_uri('/api/payment-qr'), 'packages_cents': [1000, 2500, 5000, 10000], 'offers': [{'amount_cents': 2500, 'bonus_percent': 4}, {'amount_cents': 5000, 'bonus_percent': 6}, {'amount_cents': 10000, 'bonus_percent': 8}], 'credit_rate': '1 USDT = 1 USD internal balance', 'manual_review': True})
+    from .nowpayments import configured
+    settings = funding_settings()
+    return JsonResponse({'network':'BNB Smart Chain (BEP20)', 'currency':'USDT', 'address':ADDRESS, 'qr_url':request.build_absolute_uri('/api/payment-qr'), 'packages_cents':[100,1000,2500,5000,10000], 'coin_rate':100, 'credit_rate':'100 coins = 1 USD internal balance', 'manual_review':True, 'nowpayments_enabled':configured(), 'shamcash_enabled':bool(settings.shamcash_enabled and settings.shamcash_account and settings.shamcash_rate>0), 'shamcash_account':settings.shamcash_account if settings.shamcash_enabled else '', 'shamcash_currency':settings.shamcash_currency, 'shamcash_instructions':settings.shamcash_instructions})
 
 
 def payment_qr(request):
     import qrcode
-    output = io.BytesIO()
-    qrcode.make(ADDRESS).save(output, format='PNG')
-    return HttpResponse(output.getvalue(), content_type='image/png')
+    destination=ADDRESS
+    if request.GET.get('quote'):
+        from .models import TopUpQuote
+        try:
+            data=signing.loads(request.GET.get('grant',''),salt='payment-qr',max_age=86400)
+            if data['quote']!=request.GET['quote']:return HttpResponse(status=403)
+            destination=TopUpQuote.objects.get(pk=data['quote'],user_id=data['user']).destination
+        except (signing.BadSignature,ValueError,KeyError,TopUpQuote.DoesNotExist):return HttpResponse(status=403)
+    elif request.GET.get('method')=='shamcash':
+        settings=funding_settings()
+        if not settings.shamcash_enabled or not settings.shamcash_account:return HttpResponse(status=404)
+        destination=settings.shamcash_account
+    output=io.BytesIO();qrcode.make(destination).save(output,format='PNG')
+    return HttpResponse(output.getvalue(),content_type='image/png')
+
+
+def quote_json(row,request):
+    return {'qr_url': request.build_absolute_uri('/api/payment-qr?quote='+str(row.pk)+'&grant='+signing.dumps({'quote':str(row.pk),'user':row.user_id},salt='payment-qr')), 'id':str(row.pk),'method':row.method,'amount_cents':row.amount_cents,'bonus_cents':row.bonus_cents,'coins':row.amount_cents+row.bonus_cents,'payment_amount':str(row.payment_amount),'payment_currency':row.payment_currency,'destination':row.destination,'expires_at':row.expires_at,'duration_seconds':1800,'server_now_ms':int(timezone.now().timestamp()*1000)}
+
+
+@endpoint(['POST'])
+def quotes(request):
+    from .models import TopUpQuote
+    from decimal import Decimal, ROUND_HALF_UP
+    cents=amount(request.payload,'amount_cents')
+    if cents<100: raise ApiError('minimum_topup_one_usdt')
+    method=request.payload.get('method','usdt')
+    if method not in ('usdt','shamcash','nowpayments'): raise ApiError('invalid_payment_method')
+    with transaction.atomic():
+        User.objects.select_for_update().get(pk=request.actor.pk)
+        existing=TopUpQuote.objects.filter(user=request.actor,method=method,amount_cents=cents,expires_at__gt=timezone.now(),topup__isnull=True,gatewayinvoice__credited_at__isnull=True).exclude(gatewayinvoice__status__in=['failed','expired','refunded']).first()
+        if existing:return JsonResponse(quote_json(existing,request))
+        settings=funding_settings()
+        if method=='nowpayments':
+            from .nowpayments import configured
+            if not configured():raise ApiError('nowpayments_not_configured',409)
+        if method=='shamcash' and not(settings.shamcash_enabled and settings.shamcash_account and settings.shamcash_rate>0): raise ApiError('shamcash_not_configured',409)
+        rate=settings.shamcash_rate if method=='shamcash' else Decimal(1)
+        row=TopUpQuote.objects.create(user=request.actor,method=method,amount_cents=cents,bonus_cents=bonus_for(cents),payment_amount=(Decimal(cents)*rate/100).quantize(Decimal('.01'),rounding=ROUND_HALF_UP),payment_currency=settings.shamcash_currency if method=='shamcash' else 'USD' if method=='nowpayments' else 'USDT',destination=settings.shamcash_account if method=='shamcash' else 'NOWPayments hosted checkout' if method=='nowpayments' else ADDRESS,expires_at=timezone.now()+timedelta(minutes=30))
+    return JsonResponse(quote_json(row,request),status=201)
 
 
 @endpoint(['GET', 'POST'])
 def topups(request):
-    if request.method == 'GET':
-        return JsonResponse({'items': [{'id': r.pk, 'amount_cents': r.amount_cents, 'bonus_cents': r.bonus_cents, 'status': r.status, 'transaction_hash': r.transaction_hash, 'review_note': r.review_note} for r in TopUp.objects.filter(user=request.actor).order_by('-created_at')[:100]]})
-    cents = amount(request.payload, 'amount_cents')
-    if cents < 100:
-        raise ApiError('minimum_topup_one_usdt')
-    tx = text(request.payload, 'transaction_hash', 64, 66).lower().removeprefix('0x')
-    if not re.fullmatch('[0-9a-f]{64}', tx):
-        raise ApiError('invalid_transaction_hash')
+    from .models import TopUpQuote
+    if request.method=='GET':
+        from .models import GatewayInvoice
+        manual=[{'id':r.pk,'method':r.method,'amount_cents':r.amount_cents,'bonus_cents':r.bonus_cents,'status':r.status,'transaction_hash':r.transaction_hash,'review_note':r.review_note,'late_submission':r.late_submission} for r in TopUp.objects.filter(user=request.actor).order_by('-created_at')[:100]]
+        automatic=[{'id':str(r.quote_id),'method':'nowpayments','amount_cents':r.quote.amount_cents,'bonus_cents':r.quote.bonus_cents,'status':'approved' if r.credited_at else 'rejected' if r.status in ('failed','expired','refunded') else 'pending','review_note':r.status} for r in GatewayInvoice.objects.filter(quote__user=request.actor).select_related('quote').order_by('-created_at')[:100]]
+        return JsonResponse({'items':automatic+manual})
     with transaction.atomic():
         User.objects.select_for_update().get(pk=request.actor.pk)
-        previous = TopUp.objects.filter(transaction_hash='0x' + tx).first()
+        quote=None
+        if request.payload.get('quote_id'):
+            quote=TopUpQuote.objects.filter(pk=uuid.UUID(text(request.payload,'quote_id',36,36)),user=request.actor).first()
+            if not quote:raise ApiError('invalid_quote')
+        cents=quote.amount_cents if quote else amount(request.payload,'amount_cents')
+        if cents<100:raise ApiError('minimum_topup_one_usdt')
+        method=quote.method if quote else 'usdt'
+        if method=='nowpayments':raise ApiError('gateway_invoice_required',409)
+        reference=text(request.payload,'transaction_hash',4,100).strip()
+        if method=='usdt':
+            reference=reference.lower().removeprefix('0x')
+            if not re.fullmatch('[0-9a-f]{64}',reference):raise ApiError('invalid_transaction_hash')
+            reference='0x'+reference
+        else:
+            if not re.fullmatch('[A-Za-z0-9_-]{4,80}',reference):raise ApiError('invalid_transaction_reference')
+            reference='shamcash:'+reference
+        previous=TopUp.objects.filter(transaction_hash=reference).first()
         if previous:
-            if previous.user_id == request.actor.pk and previous.amount_cents == cents and str(previous.receipt_id) == request.payload.get('receipt_id'):
-                return JsonResponse({'id': previous.pk, 'status': previous.status})
-            raise ApiError('transaction_already_submitted', 409)
-        receipt = UploadedMedia.objects.filter(pk=uuid.UUID(text(request.payload, 'receipt_id', 36, 36)), owner=request.actor, purpose='receipt').first()
-        if not receipt:
-            raise ApiError('receipt_required')
-        bonus = cents * (8 if cents >= 10000 else 6 if cents >= 5000 else 4 if cents >= 2500 else 0) // 100
-        row = TopUp.objects.create(user=request.actor, amount_cents=cents, transaction_hash='0x' + tx, receipt=receipt, bonus_cents=bonus)
-    return JsonResponse({'id': row.pk, 'status': row.status, 'bonus_cents': bonus}, status=201)
+            if previous.user_id==request.actor.pk and previous.amount_cents==cents and str(previous.receipt_id)==request.payload.get('receipt_id'):return JsonResponse({'id':previous.pk,'status':previous.status})
+            raise ApiError('transaction_already_submitted',409)
+        receipt=UploadedMedia.objects.filter(pk=uuid.UUID(text(request.payload,'receipt_id',36,36)),owner=request.actor,purpose='receipt').first()
+        if not receipt:raise ApiError('receipt_required')
+        row=TopUp.objects.create(user=request.actor,method=method,quote=quote,late_submission=bool(quote and quote.expires_at<timezone.now()),amount_cents=cents,transaction_hash=reference,receipt=receipt,bonus_cents=quote.bonus_cents if quote else bonus_for(cents))
+    return JsonResponse({'id':row.pk,'status':row.status,'bonus_cents':row.bonus_cents,'late_submission':row.late_submission},status=201)
+
+
+@endpoint(['GET','POST'])
+def payment_settings(request):
+    require_admin(request)
+    from decimal import Decimal, InvalidOperation
+    from .models import PaymentSettings
+    with transaction.atomic():
+        settings=funding_settings();settings=PaymentSettings.objects.select_for_update().get(pk=settings.pk)
+        if request.method=='POST':
+            p=request.payload
+            if type(p.get('enabled')) is not bool or p.get('currency') not in ('USD','SYP'):raise ApiError('invalid_payment_settings')
+            account=p.get('account','')
+            if not isinstance(account,str) or len(account)>160:raise ApiError('invalid_payment_settings')
+            account=account.strip()
+            try:rate=Decimal(str(p.get('rate','1')))
+            except InvalidOperation:raise ApiError('invalid_payment_settings')
+            if not rate.is_finite() or not 0<rate<=1000000 or (p['currency']=='USD' and rate!=1) or (p['enabled'] and not account):raise ApiError('invalid_payment_settings')
+            settings.shamcash_enabled=p['enabled'];settings.shamcash_account=account;settings.shamcash_currency=p['currency'];settings.shamcash_rate=rate;settings.shamcash_instructions=str(p.get('instructions',''))[:500];settings.save()
+            audit(request.actor,settings,'Sham Cash destination, currency and conversion settings updated')
+    from .nowpayments import configured
+    return JsonResponse({'nowpayments_configured':configured(),'enabled':settings.shamcash_enabled,'account':settings.shamcash_account,'currency':settings.shamcash_currency,'rate':str(settings.shamcash_rate),'instructions':settings.shamcash_instructions})
 
 
 @endpoint(['GET', 'POST'])
@@ -176,7 +257,7 @@ def review_requests(request):
                 if wanted == 'approved':
                     if kind == 'topup':
                         if request.payload.get('payment_verified') is not True:
-                            raise ApiError('verify_transaction_on_chain')
+                            raise ApiError('payment_verification_required')
                         Wallet.objects.get_or_create(user=row.user)
                         wallet = Wallet.objects.select_for_update().get(user=row.user)
                         wallet.balance_cents += row.amount_cents + row.bonus_cents
@@ -188,62 +269,71 @@ def review_requests(request):
                 row.status, row.reviewer, row.review_note = wanted, request.actor, note
                 row.save(update_fields=['status', 'reviewer', 'review_note'])
                 audit(request.actor, row, f'{wanted}: {note}')
-    payments = [{'id': str(r.pk), 'kind': 'topup', 'user_id': r.user_id, 'username': r.user.username, 'amount_cents': r.amount_cents, 'bonus_cents': r.bonus_cents, 'transaction_hash': r.transaction_hash, 'receipt_url': grant_url(request, r.receipt), 'status': r.status, 'review_note': r.review_note} for r in TopUp.objects.select_related('user', 'receipt').order_by(Case(When(status='pending', then=Value(0)), default=Value(1), output_field=IntegerField()), '-created_at')[:100]]
+    payments = [{'id': str(r.pk), 'kind': 'topup', 'user_id': r.user_id, 'username': r.user.username, 'amount_cents': r.amount_cents, 'bonus_cents': r.bonus_cents, 'transaction_hash': r.transaction_hash, 'method': r.method, 'payment_amount': str(r.quote.payment_amount) if r.quote_id else str(r.amount_cents / 100), 'payment_currency': r.quote.payment_currency if r.quote_id else 'USDT', 'late_submission': r.late_submission, 'receipt_url': grant_url(request, r.receipt), 'status': r.status, 'review_note': r.review_note} for r in TopUp.objects.select_related('user', 'receipt').order_by(Case(When(status='pending', then=Value(0)), default=Value(1), output_field=IntegerField()), '-created_at')[:100]]
     sellers = [{'id': str(r.pk), 'kind': 'seller', 'user_id': r.user_id, 'username': r.user.username, 'description': r.description, 'status': r.status, 'review_note': r.review_note} for r in SellerApplication.objects.select_related('user').order_by(Case(When(status='pending', then=Value(0)), default=Value(1), output_field=IntegerField()), '-id')[:100]]
-    return JsonResponse({'items': payments + sellers})
+    from .models import GatewayInvoice
+    gateway=[{'id':str(r.quote_id),'kind':'gateway','username':r.quote.user.username,'user_id':r.quote.user_id,'amount_cents':r.quote.amount_cents,'bonus_cents':r.quote.bonus_cents,'status':'approved' if r.credited_at else r.status,'review_note':'تحتاج مراجعة التاجر' if r.review_required else '','provider_id':r.payment_id or r.invoice_id or ''} for r in GatewayInvoice.objects.select_related('quote__user').order_by('-created_at')[:100]]
+    return JsonResponse({'items': payments + sellers + gateway})
 
 
 def message_json(request, row):
-    return {'id': row.pk, 'sender_id': row.sender_id, 'recipient_id': row.recipient_id, 'body': row.body, 'created_at': row.created_at, 'attachment_url': grant_url(request, row.attachment) if row.attachment_id else '', 'attachment_mime': row.attachment.mime if row.attachment_id else '', 'call_url': '', 'call_id': str(row.call_id) if row.call_id else '', 'call_mode': row.call.mode if row.call_id else '', 'call_status': row.call.status if row.call_id else ''}
+    return {'id': row.pk, 'sender_id': row.sender_id, 'recipient_id': row.recipient_id, 'body': row.body, 'created_at': row.created_at, 'attachment_url': grant_url(request, row.attachment) if row.attachment_id else '', 'attachment_mime': row.attachment.mime if row.attachment_id else '', 'client_key': str(row.client_key) if row.client_key else '', 'delivered_at': row.delivered_at, 'sender_name': row.sender.username, 'call_url': '', 'call_id': str(row.call_id) if row.call_id else '', 'call_mode': row.call.mode if row.call_id else '', 'call_status': row.call.status if row.call_id else ''}
 
 
 def wheel_settings(config):
-    import hashlib, json
-    prizes = config.prizes
-    valid = isinstance(prizes, list) and 1 <= len(prizes) <= 20 and all(isinstance(p, dict) and type(p.get('amount_cents')) is int and 0 <= p['amount_cents'] <= 1000000 and type(p.get('weight')) is int and 1 <= p['weight'] <= 1000000 for p in prizes)
-    valid = valid and 1 <= config.cost_cents <= 10000
-    total = sum(p['weight'] for p in prizes) if valid else 0
-    version = hashlib.sha256(json.dumps([config.cost_cents, prizes], sort_keys=True).encode()).hexdigest()
-    return valid, total, version
+    import hashlib,json
+    prizes=config.prizes
+    valid=isinstance(prizes,list) and 1<=len(prizes)<=20 and all(isinstance(p,dict) and type(p.get('amount_cents')) is int and 0<=p['amount_cents']<=1000000 and type(p.get('weight')) is int and 1<=p['weight']<=1000000 for p in prizes)
+    valid=valid and 1<=config.cost_cents<=config.maximum_cost_cents<=10000 and 0<=config.price_step_cents<=10000 and 0<=config.first_reward_cents<=1000000
+    total=sum(p['weight'] for p in prizes) if valid else 0
+    version=hashlib.sha256(json.dumps([config.cost_cents,prizes,config.price_step_cents,config.maximum_cost_cents,config.first_reward_cents,config.grand_unlock_spend_cents],sort_keys=True).encode()).hexdigest()
+    return valid,total,version
 
 
-@endpoint(['GET', 'POST'])
+def wheel_offer(config,user):
+    from .models import PaidSpin
+    from django.db.models import Count
+    import hashlib,json
+    history=PaidSpin.objects.filter(user=user).aggregate(count=Count('id'),spent=Sum('cost_cents'))
+    count,spent=history['count'],history['spent'] or 0
+    valid,_,version=wheel_settings(config)
+    cost=min(config.maximum_cost_cents,config.cost_cents+count*config.price_step_cents)
+    first=count==0 and config.first_reward_cents>0
+    grand=spent>=config.grand_unlock_spend_cents
+    prizes=([{'amount_cents':config.first_reward_cents,'weight':1}] if first else [p for p in config.prizes if p['amount_cents']<10000 or grand]) if valid else []
+    total=sum(p['weight'] for p in prizes)
+    quote_version=hashlib.sha256(json.dumps([version,count,spent,cost,prizes],sort_keys=True).encode()).hexdigest()
+    return {'enabled':bool(config.enabled and valid and total), 'cost_cents':cost,'config_version':quote_version,'first_spin_guaranteed':first,'first_reward_cents':config.first_reward_cents,'spin_count':count,'spent_cents':spent,'grand_unlocked':grand,'grand_unlock_spend_cents':config.grand_unlock_spend_cents,'price_step_cents':config.price_step_cents,'maximum_cost_cents':config.maximum_cost_cents,'prizes':[dict(p,chance_percent=format(p['weight']*100/total,'.8f')) for p in prizes] if total else []}
+
+
+@endpoint(['GET','POST'])
 def paid_wheel(request):
-    from .models import PaidWheelConfiguration, PaidSpin
-    config, _ = PaidWheelConfiguration.objects.get_or_create(pk=1)
-    valid, total, version = wheel_settings(config)
-    if request.method == 'GET':
-        return JsonResponse({'enabled': bool(config.enabled and valid), 'cost_cents': config.cost_cents, 'config_version': version, 'prizes': [dict(amount_cents=p['amount_cents'], chance_percent=format(p['weight'] * 100 / total, '.8f')) for p in config.prizes] if valid else []})
-    key = uuid.UUID(text(request.payload, 'request_key', 36, 36))
+    from .models import PaidWheelConfiguration,PaidSpin
+    config,_=PaidWheelConfiguration.objects.get_or_create(pk=1)
+    if request.method=='GET':return JsonResponse(wheel_offer(config,request.actor))
+    if request.payload.get('rules_version')!=2:raise ApiError('update_app_for_wheel_rules',409)
+    key=uuid.UUID(text(request.payload,'request_key',36,36))
     with transaction.atomic():
-        config = PaidWheelConfiguration.objects.select_for_update().get(pk=1)
-        valid, total, version = wheel_settings(config)
-        previous = PaidSpin.objects.filter(user=request.actor, request_key=key).first()
+        config=PaidWheelConfiguration.objects.select_for_update().get(pk=1)
+        previous=PaidSpin.objects.filter(user=request.actor,request_key=key).first()
         if previous:
-            wallet = Wallet.objects.get(user=request.actor)
-            return JsonResponse({'prize_cents': previous.prize_cents, 'balance_cents': wallet.balance_cents, 'replayed': True})
-        if not config.enabled or not valid:
-            raise ApiError('wheel_unavailable', 409)
-        if request.payload.get('config_version') != version:
-            raise ApiError('wheel_configuration_changed', 409)
-        wallet = Wallet.objects.select_for_update().get(user=request.actor)
-        if wallet.balance_cents - wallet.reserved_cents < config.cost_cents:
-            raise ApiError('insufficient_funds', 409)
-        if config.bankroll_cents + config.cost_cents < max(p['amount_cents'] for p in config.prizes):
-            raise ApiError('wheel_unavailable', 409)
-        # Uniform cryptographic draw over documented integer weights; no per-user odds.
-        pick = secrets.randbelow(total)
-        prize = 0
-        for p in config.prizes:
-            if pick < p['weight']:
-                prize = p['amount_cents']; break
-            pick -= p['weight']
-        wallet.balance_cents += prize - config.cost_cents
-        wallet.save(update_fields=['balance_cents'])
-        config.bankroll_cents += config.cost_cents - prize
-        config.save(update_fields=['bankroll_cents'])
-        PaidSpin.objects.create(user=request.actor, request_key=key, cost_cents=config.cost_cents, prize_cents=prize, prizes_snapshot=config.prizes)
-    return JsonResponse({'prize_cents': prize, 'balance_cents': wallet.balance_cents}, status=201)
+            wallet=Wallet.objects.get(user=request.actor)
+            return JsonResponse({'prize_cents':previous.prize_cents,'balance_cents':wallet.balance_cents,'replayed':True})
+        offer=wheel_offer(config,request.actor)
+        if not offer['enabled']:raise ApiError('wheel_unavailable',409)
+        if request.payload.get('config_version')!=offer['config_version']:raise ApiError('wheel_configuration_changed',409)
+        wallet=Wallet.objects.select_for_update().get(user=request.actor)
+        cost=offer['cost_cents'];prizes=offer['prizes']
+        if wallet.balance_cents-wallet.reserved_cents<cost:raise ApiError('insufficient_funds',409)
+        if config.bankroll_cents+cost<max(p['amount_cents'] for p in prizes):raise ApiError('wheel_unavailable',409)
+        pick=secrets.randbelow(sum(p['weight'] for p in prizes));prize=0
+        for p in prizes:
+            if pick<p['weight']:prize=p['amount_cents'];break
+            pick-=p['weight']
+        wallet.balance_cents+=prize-cost;wallet.save(update_fields=['balance_cents'])
+        config.bankroll_cents+=cost-prize;config.save(update_fields=['bankroll_cents'])
+        PaidSpin.objects.create(user=request.actor,request_key=key,cost_cents=cost,prize_cents=prize,prizes_snapshot={'prizes':prizes,'first_guarantee':offer['first_spin_guaranteed'],'spent_before':offer['spent_cents']})
+    return JsonResponse({'prize_cents':prize,'balance_cents':wallet.balance_cents,'cost_cents':cost},status=201)
 
 
 @endpoint(['GET', 'POST'])
@@ -262,10 +352,14 @@ def wheel_configuration(request):
                 raise ApiError('wheel_configuration_changed', 409)
             config.enabled, config.cost_cents, config.prizes = p['enabled'], p['cost_cents'], p.get('prizes')
             config.bankroll_cents = p['bankroll_cents']
+            for field in ('price_step_cents','maximum_cost_cents','first_reward_cents','grand_unlock_spend_cents'):
+                if field in p:
+                    if type(p[field]) is not int or not 0<=p[field]<=1000000:raise ApiError('invalid_wheel_configuration')
+                    setattr(config,field,p[field])
             valid, _, _ = wheel_settings(config)
-            if not valid or (config.enabled and config.bankroll_cents < max(prize['amount_cents'] for prize in config.prizes)):
+            if not valid or (config.enabled and (config.first_reward_cents <= config.cost_cents or config.bankroll_cents < max(config.first_reward_cents,max(prize['amount_cents'] for prize in config.prizes)))):
                 raise ApiError('invalid_wheel_configuration')
             config.save()
             import json
             audit(request.actor, config, json.dumps({'before': previous_settings, 'after': {'enabled': config.enabled, 'cost_cents': config.cost_cents, 'prizes': config.prizes, 'bankroll_cents': config.bankroll_cents}}))
-    return JsonResponse({'enabled': config.enabled, 'cost_cents': config.cost_cents, 'prizes': config.prizes, 'bankroll_cents': config.bankroll_cents})
+    return JsonResponse({'enabled': config.enabled, 'cost_cents': config.cost_cents, 'prizes': config.prizes, 'bankroll_cents': config.bankroll_cents,'price_step_cents':config.price_step_cents,'maximum_cost_cents':config.maximum_cost_cents,'first_reward_cents':config.first_reward_cents,'grand_unlock_spend_cents':config.grand_unlock_spend_cents})
