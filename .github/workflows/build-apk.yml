@@ -106,6 +106,9 @@ jobs:
             keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           fi
 
+      - name: Test adult access age boundaries
+        run: gradle testDebugUnitTest --tests com.example.ui.auth.AdultWelcomeScreenTest --no-daemon
+
       - name: Build Debug APK
         run: gradle assembleDebug --no-daemon --stacktrace
 

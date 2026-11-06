@@ -13,6 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.platform.LocalContext
 import com.example.security.SuperAdminSecurityManager
+import com.example.ui.auth.AdultWelcomeScreen
 import com.example.ui.auth.AuthScreen
 import com.example.ui.screens.MainFeatureScreen
 import com.example.ui.theme.MyApplicationTheme
@@ -46,6 +47,11 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun AppNavigation(auth: FirebaseAuth = Firebase.auth) {
+    var adultPolicyAccepted by rememberSaveable { mutableStateOf(false) }
+    if (!adultPolicyAccepted) {
+        AdultWelcomeScreen(onContinue = { adultPolicyAccepted = true })
+        return
+    }
     val context = LocalContext.current
     val authFlow = remember(auth) { auth.authStateFlow() }
     val currentUser by authFlow.collectAsStateWithLifecycle(initialValue = auth.currentUser)
