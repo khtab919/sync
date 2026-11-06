@@ -14,7 +14,7 @@ on:
 
 
 env:
-  LAYALI_API_URL: ${{ inputs.api_url || vars.LAYALI_API_URL || '' }}
+  LAYALI_API_URL: ${{ inputs.api_url || vars.LAYALI_API_URL || 'https://165-227-128-113.sslip.io' }}
 
 permissions:
   contents: write

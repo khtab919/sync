@@ -4,18 +4,20 @@ This branch adds a self-hosted Django API, PostgreSQL, and Caddy HTTPS. It is a 
 
 ## On the DigitalOcean server
 
-1. Point an API domain's A record to `165.227.128.113`. Open inbound TCP 80 and 443 in the provider firewall. Keep PostgreSQL and the API's port 8000 private; Compose exposes only Caddy.
-2. Install Docker Engine and Compose using the official Docker Ubuntu packages. The deployment script requires `docker compose` and Python 3.
+1. The configured default is `165-227-128-113.sslip.io`, a free IP-based DNS hostname. No domain purchase or DNS account is needed. Alternatively point your own API domain's A record to `165.227.128.113`. Open inbound TCP 80 and 443 in the provider firewall. Keep PostgreSQL and the API's port 8000 private; Compose exposes only Caddy.
+2. `bootstrap-ubuntu.sh` installs Docker Engine and Compose from the official Docker Ubuntu apt repository if Docker is not installed. It stops rather than replacing an existing incompatible container installation.
 3. Update the checked-out branch, then run:
 
 ```bash
 cd /opt/layali
 git pull --ff-only origin feat/layali-adult-non-explicit
 cd backend
-bash deploy.sh api.your-domain.com
+bash bootstrap-ubuntu.sh 165-227-128-113.sslip.io
 docker compose exec api python manage.py createsuperuser
-curl --fail https://api.your-domain.com/health/
+curl --fail https://165-227-128-113.sslip.io/health/
 ```
+
+The default origin is also configured in gradle.properties and the APK workflow. A free third-party hostname depends on that DNS service and the IP remaining available; it is not a purchased domain owned by the user. The deployment checks DNS before starting containers.
 
 The deployment generates database and Django secrets on the server, in an ignored `.env` with private permissions. It does not overwrite existing secrets, delete volumes, remove other applications, or reset existing data. It runs migrations before bringing up the proxy. HTTPS issuance requires working DNS and reachable ports. The final health request must succeed before calling the deployment operational.
 
@@ -26,7 +28,7 @@ The administrator is created interactively, with no default password. Use `/admi
 Build the server-backed native UI with:
 
 ```bash
-gradle assembleDebug -PLAYALI_API_URL=https://api.your-domain.com
+gradle assembleDebug -PLAYALI_API_URL=https://165-227-128-113.sslip.io
 ```
 
 With this build property, the application selects `ServerAppScreen` as the sole application navigation. It uses server-issued, seven-day opaque bearer tokens stored only in memory, not local administrator credentials. Register with a new username and a password of at least 12 characters. The birth date and policy acceptance are also validated server-side. Google login is not part of this server mode.
