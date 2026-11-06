@@ -74,7 +74,7 @@ fun ServerAppScreen(baseUrl: String) {
     var username by rememberSaveable { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var email by rememberSaveable { mutableStateOf("") }
-    var birth by rememberSaveable { mutableStateOf("") }
+    var adultConfirmed by rememberSaveable { mutableStateOf(false) }
     var title by rememberSaveable { mutableStateOf("") }
     var description by rememberSaveable { mutableStateOf("") }
     var price by rememberSaveable { mutableStateOf("") }
@@ -147,11 +147,11 @@ fun ServerAppScreen(baseUrl: String) {
 
     MyApplicationTheme(darkTheme = dark) {
         if (!signedIn) {
-            ReferenceLogin(register, submitting, notice, username, password, email, birth,
-                { username = it }, { password = it }, { email = it }, { birth = it },
+            ReferenceLogin(register, submitting, notice, username, password, email, adultConfirmed,
+                { username = it }, { password = it }, { email = it }, { adultConfirmed = it },
                 { register = !register; notice = "" }, { perform {
                     val body = JSONObject().put("username", username).put("password", password)
-                    if (register) body.put("email", email).put("date_of_birth", birth).put("accept_non_explicit_policy", true)
+                    if (register) body.put("email", email).put("adult_confirmed", adultConfirmed).put("accept_non_explicit_policy", true)
                     api.request(if (register) "/api/register" else "/api/login", "POST", body)
                     profile = api.request("/api/me")
                     password = ""; signedIn = true; tab = 0; page = ""
@@ -488,7 +488,7 @@ internal fun ProfileHero(person: JSONObject, own: Boolean, settings: () -> Unit,
 }
 
 @Composable
-internal fun ReferenceLogin(register: Boolean, busy: Boolean, notice: String, username: String, password: String, email: String, birth: String, onUsername: (String) -> Unit, onPassword: (String) -> Unit, onEmail: (String) -> Unit, onBirth: (String) -> Unit, toggle: () -> Unit, submit: () -> Unit) {
+internal fun ReferenceLogin(register: Boolean, busy: Boolean, notice: String, username: String, password: String, email: String, adultConfirmed: Boolean, onUsername: (String) -> Unit, onPassword: (String) -> Unit, onEmail: (String) -> Unit, onAdultConfirmed: (Boolean) -> Unit, toggle: () -> Unit, submit: () -> Unit) {
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         LazyColumn(contentPadding = PaddingValues(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
             item { Column(Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(Color(0xFF333D36), WisalInk)), RoundedCornerShape(bottomEnd = 72.dp)).statusBarsPadding().heightIn(min = 265.dp).padding(28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -505,11 +505,13 @@ internal fun ReferenceLogin(register: Boolean, busy: Boolean, notice: String, us
                 OutlinedTextField(password, onPassword, label = { Text("كلمة المرور") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(18.dp), colors = OutlinedTextFieldDefaults.colors(unfocusedContainerColor = MaterialTheme.colorScheme.surface))
                 if (register) {
                     Field(email, onEmail, "البريد الإلكتروني")
-                    Field(birth, onBirth, "تاريخ الميلاد YYYY-MM-DD")
-                    Text("بإنشاء الحساب تؤكد صحة تاريخ الميلاد وموافقتك على ضوابط المحتوى غير الصريح.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = adultConfirmed, onCheckedChange = onAdultConfirmed)
+                        Text("أؤكد أن عمري 18 عامًا أو أكثر وأوافق على ضوابط المحتوى غير الصريح.", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
                 if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-                ReferencePrimary(if (register) "إنشاء حساب" else "دخول", !busy) { submit() }
+                ReferencePrimary(if (register) "إنشاء حساب" else "دخول", !busy && (!register || adultConfirmed)) { submit() }
                 TextButton(onClick = toggle, enabled = !busy, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text(if (register) "لديك حساب؟ تسجيل الدخول" else "جديد هنا؟ أنشئ حسابًا") }
                 Text("بياناتك مرتبطة بخادم ليالي · محتوى غير صريح", Modifier.align(Alignment.CenterHorizontally), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             } }

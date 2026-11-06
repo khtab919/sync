@@ -38,15 +38,19 @@ class ReferenceDesignTest {
     @Test fun loginSwitchesToRealRegistrationFields() {
         compose.setContent {
             var register by remember { mutableStateOf(false) }
+            var adultConfirmed by remember { mutableStateOf(false) }
             MyApplicationTheme {
-                ReferenceLogin(register, false, "", "", "", "", "", {}, {}, {}, {}, { register = !register }, {})
+                ReferenceLogin(register, false, "", "", "", "", adultConfirmed, {}, {}, {}, { adultConfirmed = it }, { register = !register }, {})
             }
         }
         compose.onNodeWithText("أهلًا بعودتك").assertExists()
         screenshot("01-login")
         compose.onNodeWithText("جديد هنا؟ أنشئ حسابًا").performScrollTo().performClick()
         compose.onNodeWithText("البريد الإلكتروني").assertExists()
-        compose.onNodeWithText("تاريخ الميلاد YYYY-MM-DD").assertExists()
+        compose.onNodeWithText("تاريخ الميلاد YYYY-MM-DD").assertDoesNotExist()
+        compose.onNodeWithText("إنشاء حساب").performScrollTo().assertIsNotEnabled()
+        compose.onNode(isToggleable()).performScrollTo().performClick()
+        compose.onNodeWithText("إنشاء حساب").assertIsEnabled()
         screenshot("02-register")
     }
 

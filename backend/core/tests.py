@@ -32,6 +32,21 @@ class ApiTests(TestCase):
         self.assertFalse(user.is_staff)
         self.assertTrue(user.check_password(p['password']))
 
+    def test_registration_without_birth_date_requires_explicit_adult_confirmation(self):
+        p = {'username': 'adultnew', 'email': 'adult@example.com', 'password': 'unique-new-account-pass-2026!', 'accept_non_explicit_policy': True}
+        self.assertEqual(self.post('/api/register', p).status_code, 400)
+        p['adult_confirmed'] = 'true'
+        self.assertEqual(self.post('/api/register', p).status_code, 400)
+        p['adult_confirmed'] = False
+        self.assertEqual(self.post('/api/register', p).status_code, 400)
+        p['adult_confirmed'] = True
+        p['accept_non_explicit_policy'] = False
+        self.assertEqual(self.post('/api/register', p).status_code, 400)
+        p['accept_non_explicit_policy'] = True
+        self.assertEqual(self.post('/api/register', p).status_code, 201)
+        profile = Profile.objects.get(user__username='adultnew')
+        self.assertIsNone(profile.date_of_birth)
+
     def test_booking_uses_server_price_and_is_unpaid(self):
         service = Service.objects.create(owner=self.creator, title='Call', description='Description', price_cents=200, approved=True)
         response = self.post('/api/bookings', {'service_id': service.pk, 'price_cents': 1, 'status': 'confirmed'})

@@ -111,10 +111,17 @@ def register(request):
     from django.core.validators import validate_email
     validate_email(email)
     password = password_value(p, 12)
-    born = date.fromisoformat(text(p, 'date_of_birth', 10, 10))
-    today = timezone.localdate()
-    age = today.year - born.year - ((today.month, today.day) < (born.month, born.day))
-    if born > today or not 18 <= age <= 120 or p.get('accept_non_explicit_policy') is not True:
+    if p.get('accept_non_explicit_policy') is not True:
+        raise ApiError('adult_policy_required')
+    born = None
+    if 'date_of_birth' in p:
+        # Compatibility with existing clients; supplied dates remain validated.
+        born = date.fromisoformat(text(p, 'date_of_birth', 10, 10))
+        today = timezone.localdate()
+        age = today.year - born.year - ((today.month, today.day) < (born.month, born.day))
+        if born > today or not 18 <= age <= 120:
+            raise ApiError('adult_policy_required')
+    elif p.get('adult_confirmed') is not True:
         raise ApiError('adult_policy_required')
     user = User(username=username, email=email)
     validate_password(password, user=user)

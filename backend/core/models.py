@@ -5,7 +5,7 @@ from django.db.models import Q
 
 class Profile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    date_of_birth = models.DateField()
+    date_of_birth = models.DateField(null=True, blank=True)
     policy_version = models.CharField(max_length=32, default='2026-11-06')
     policy_accepted_at = models.DateTimeField(auto_now_add=True)
     creator = models.BooleanField(default=False)

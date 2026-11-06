@@ -77,3 +77,7 @@ bash backend/deploy.sh
 ```
 
 The redesigned login is the first screen. Registration requires date of birth and explicitly states acceptance of the non-explicit policy; age is validated by the backend. The server account role and identity flags remain administrator-controlled. The Noto font files come from the user-provided archive; see the included OFL license.
+
+## Registration update (7.1)
+
+Registration no longer asks for a date of birth. It requires an explicit 18+ and non-explicit-policy acknowledgement; this is self-declaration, not identity verification. New registrations store no invented birth date. Existing dates remain intact. The API continues to validate birth dates supplied by older app versions. Apply migration 0004 and restart the API before installing 7.1.
