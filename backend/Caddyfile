@@ -1,0 +1,17 @@
+{$LAYALI_DOMAIN} {
+    encode zstd gzip
+    header {
+        X-Content-Type-Options nosniff
+        Referrer-Policy same-origin
+    }
+    request_body {
+        max_size 64KB
+    }
+    handle_path /static/* {
+        root * /srv/static
+        file_server
+    }
+    reverse_proxy api:8000 {
+        header_up X-Real-IP {remote_host}
+    }
+}

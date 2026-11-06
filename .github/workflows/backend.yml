@@ -1,0 +1,39 @@
+name: Self-hosted backend tests
+on:
+  push:
+    paths: ['backend/**', '.github/workflows/backend.yml']
+  pull_request:
+    paths: ['backend/**', '.github/workflows/backend.yml']
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: test-password
+          POSTGRES_USER: layali
+          POSTGRES_DB: layali
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd 'pg_isready -U layali'
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DJANGO_SECRET_KEY: test-only-ci-key
+      POSTGRES_PASSWORD: test-password
+      POSTGRES_USER: layali
+      POSTGRES_DB: layali
+      DB_HOST: localhost
+      ALLOWED_HOSTS: localhost,testserver
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r backend/requirements.txt
+      - run: python backend/manage.py makemigrations --check --dry-run
+      - run: python backend/manage.py test core --verbosity 2

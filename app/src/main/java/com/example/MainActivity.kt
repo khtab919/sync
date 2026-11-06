@@ -39,7 +39,11 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             MyApplicationTheme {
-                AppNavigation()
+                if (BuildConfig.LAYALI_API_URL.isNotBlank()) {
+                    com.example.ui.screens.ServerAppScreen(BuildConfig.LAYALI_API_URL)
+                } else {
+                    AppNavigation()
+                }
             }
         }
     }

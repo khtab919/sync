@@ -6,6 +6,15 @@ on:
   pull_request:
     branches: [ "**" ]
   workflow_dispatch:
+    inputs:
+      api_url:
+        description: 'HTTPS origin for the self-hosted API'
+        required: false
+        type: string
+
+
+env:
+  LAYALI_API_URL: ${{ inputs.api_url || vars.LAYALI_API_URL || '' }}
 
 permissions:
   contents: write
@@ -110,26 +119,26 @@ jobs:
         run: gradle testDebugUnitTest --tests com.example.ui.auth.AdultWelcomeScreenTest --no-daemon
 
       - name: Build Debug APK
-        run: gradle assembleDebug --no-daemon --stacktrace
+        run: gradle assembleDebug "-PLAYALI_API_URL=${LAYALI_API_URL}" --no-daemon --stacktrace
 
       - name: Copy APK with Friendly Name
-        run: cp app/build/outputs/apk/debug/app-debug.apk Layali-Lounge-v5.0.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk Layali-Lounge-v6.0.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Layali-Lounge-v5.0-APK
-          path: Layali-Lounge-v5.0.apk
+          name: Layali-Lounge-v6.0-APK
+          path: Layali-Lounge-v6.0.apk
 
       - name: Publish Direct APK to GitHub Releases
         # Only main-branch builds may publish an installable release.
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v5.0.${{ github.run_number }}
-          name: "تطبيق ليالي - إصدار 5.0 (APK جاهز للتثبيت)"
-          body: "اضغط على ملف **Layali-Lounge-v5.0.apk** بالأسفل لتحميل وتثبيت التطبيق مباشرة على هاتفك."
-          files: Layali-Lounge-v5.0.apk
+          tag_name: v6.0.${{ github.run_number }}
+          name: "تطبيق ليالي - إصدار 6.0 (APK جاهز للتثبيت)"
+          body: "اضغط على ملف **Layali-Lounge-v6.0.apk** بالأسفل لتحميل وتثبيت التطبيق مباشرة على هاتفك."
+          files: Layali-Lounge-v6.0.apk
           draft: false
           prerelease: false
         env:

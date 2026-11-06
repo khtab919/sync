@@ -17,8 +17,13 @@ android {
     applicationId = "com.aistudio.layalilounge.x9m4kp"
     minSdk = 24
     targetSdk = 36
-    versionCode = 5
-    versionName = "5.0"
+    val backendUrl = providers.gradleProperty("LAYALI_API_URL").orElse("").get()
+    require(backendUrl.isBlank() || backendUrl.matches(Regex("https://[a-zA-Z0-9.-]+(?::[0-9]+)?"))) {
+      "LAYALI_API_URL must be an HTTPS origin"
+    }
+    buildConfigField("String", "LAYALI_API_URL", "\"$backendUrl\"")
+    versionCode = 6
+    versionName = "6.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
