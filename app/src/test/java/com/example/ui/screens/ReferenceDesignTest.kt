@@ -1,10 +1,12 @@
 package com.example.ui.screens
 
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.view.View
+import androidx.activity.ComponentActivity
 import androidx.compose.runtime.*
-import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import com.example.ui.theme.MyApplicationTheme
 import org.json.JSONObject
 import org.junit.Rule
@@ -19,13 +21,17 @@ import java.io.File
 @Config(sdk = [35], qualifiers = "ar-rSA-w390dp-h844dp-port-mdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class ReferenceDesignTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
     private fun screenshot(name: String) {
         val output = File("build/reference-previews/$name.png")
         output.parentFile?.mkdirs()
-        output.outputStream().use { stream ->
-            compose.onRoot().captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, stream)
+        compose.runOnIdle {
+            val view = compose.activity.findViewById<View>(android.R.id.content)
+            val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+            view.draw(Canvas(bitmap))
+            output.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            bitmap.recycle()
         }
     }
 
