@@ -99,4 +99,24 @@ class ReferenceDesignTest {
         screenshot("05-frames-last")
     }
 
+
+    @Test fun supportChooserOffersBothRequestedChannels() {
+        compose.setContent { MyApplicationTheme { SupportFloatingButton() } }
+        compose.onNodeWithText("الدعم").performClick()
+        compose.onNodeWithText("واتساب").assertExists()
+        compose.onNodeWithText("تلجرام").assertExists()
+    }
+
+    @Test fun sellerUploadsUsePhonePickerInsteadOfUrlField() {
+        compose.setContent { MyApplicationTheme { SellerPublishScreen(com.example.data.api.LayaliApi("https://example.invalid"), {}) } }
+        compose.onNodeWithText("مساحة النشر").assertExists()
+        compose.onNodeWithText("رفع صورة من الهاتف · حتى 8MB").performScrollTo().assertExists()
+        compose.onNodeWithText("رابط صورة HTTPS · اختياري").assertDoesNotExist()
+        compose.onNodeWithText("إرسال للمراجعة").performScrollTo().assertIsNotEnabled()
+        screenshot("06-seller-upload")
+        compose.onNodeWithText("ريلز").performScrollTo().performClick()
+        compose.onNodeWithText("اختيار فيديو MP4 من الهاتف · حتى 20MB").performScrollTo().assertExists()
+        compose.onNodeWithText("إرسال للمراجعة").assertIsNotEnabled()
+        screenshot("07-reel-upload")
+    }
 }

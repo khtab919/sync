@@ -1,5 +1,8 @@
 package com.example.ui.screens
 
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import android.Manifest
 import android.media.MediaPlayer
 import android.media.MediaRecorder
@@ -33,6 +36,8 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
     val scope = rememberCoroutineScope()
     val uri = LocalUriHandler.current
     val listState = rememberLazyListState()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var resumed by remember { mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
     var rows by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var body by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
@@ -79,7 +84,16 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
         val media = api.upload(context, selected, "chat_image")
         api.request("/api/messages/$peerId", "POST", JSONObject().put("attachment_id", media.getString("id")))
     } }
-    LaunchedEffect(peerId) {
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            resumed = lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+            if(event == Lifecycle.Event.ON_PAUSE) { if(recording) finishRecording(false); player?.release(); player = null }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(peerId, resumed) {
+        if(!resumed) return@LaunchedEffect
         while(true) {
             try { refresh() } catch(e: CancellationException) { throw e } catch(e: Exception) { error = commerceError(e) }
             delay(3000)

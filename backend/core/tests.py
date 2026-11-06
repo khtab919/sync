@@ -510,3 +510,42 @@ class CommerceTests(TestCase):
         self.assertEqual(wallet.balance_cents, 450)
         self.assertEqual(config.bankroll_cents, 10050)
         self.assertEqual(self.call('/api/admin/wheel').status_code, 403)
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+class CommerceConcurrencyTests(TransactionTestCase):
+    def setUp(self):
+        from django.db import connection
+        if connection.vendor != 'postgresql': self.skipTest('Row locking requires PostgreSQL')
+        self.user = get_user_model().objects.create_user('concurrentpayer', password='unique-pass')
+        self.admin = get_user_model().objects.create_superuser('concurrentboss', 'admin@example.com', 'unique-pass')
+        for user in (self.user, self.admin):
+            Profile.objects.create(user=user); Wallet.objects.create(user=user)
+        self.token = issue_token(self.user); self.admin_token = issue_token(self.admin)
+
+    def parallel_post(self, path, data, token):
+        from concurrent.futures import ThreadPoolExecutor
+        from django.db import close_old_connections
+        from django.test import Client
+        def send(_):
+            close_old_connections()
+            try: return Client().post(path, json.dumps(data), content_type='application/json', HTTP_AUTHORIZATION='Bearer ' + token).status_code
+            finally: close_old_connections()
+        with ThreadPoolExecutor(max_workers=2) as pool: return list(pool.map(send, range(2)))
+
+    def test_concurrent_topup_approval_credits_once(self):
+        from .models import TopUp, UploadedMedia
+        receipt = UploadedMedia.objects.create(owner=self.user, purpose='receipt', file='test-only.jpg', mime='image/jpeg', size=100)
+        row = TopUp.objects.create(user=self.user, amount_cents=1000, transaction_hash='0x'+'b'*64, receipt=receipt)
+        codes = self.parallel_post('/api/admin/requests', {'kind':'topup','id':str(row.pk),'decision':'approve','review_note':'Verified on chain','payment_verified':True}, self.admin_token)
+        self.assertEqual(codes, [200, 200])
+        self.assertEqual(Wallet.objects.get(user=self.user).balance_cents, 1000)
+
+    def test_concurrent_spin_retry_charges_once(self):
+        from .models import PaidWheelConfiguration, PaidSpin
+        from .commerce import wheel_settings
+        config = PaidWheelConfiguration.objects.create(pk=1, enabled=True, cost_cents=100, bankroll_cents=10000, prizes=[{'amount_cents':50,'weight':1}])
+        wallet = Wallet.objects.get(user=self.user); wallet.balance_cents=500; wallet.save()
+        codes = self.parallel_post('/api/promotion/wheel', {'request_key':str(uuid.uuid4()),'config_version':wheel_settings(config)[2]}, self.token)
+        self.assertEqual(sorted(codes), [200,201])
+        self.assertEqual(PaidSpin.objects.count(),1)
+        self.assertEqual(Wallet.objects.get(user=self.user).balance_cents,450)
