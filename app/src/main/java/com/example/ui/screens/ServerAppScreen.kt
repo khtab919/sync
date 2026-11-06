@@ -2,38 +2,75 @@ package com.example.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import android.widget.MediaController
+import android.widget.VideoView
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.VerticalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import com.example.data.api.LayaliApi
-import com.example.ui.auth.AdultWelcomeScreen
+import com.example.ui.theme.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import org.json.JSONObject
+import java.math.BigDecimal
 import java.util.UUID
 
+private val destinations = listOf("تصفح", "ريلز", "العرض", "دردشة", "حسابي")
+private val destinationIcons = listOf(Icons.Outlined.Home, Icons.Outlined.SmartDisplay, Icons.Outlined.Storefront, Icons.Outlined.ChatBubbleOutline, Icons.Outlined.PersonOutline)
+
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun ServerAppScreen(baseUrl: String) {
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("layali_appearance", 0) }
+    var dark by rememberSaveable { mutableStateOf(prefs.getBoolean("dark", false)) }
     val api = remember(baseUrl) { LayaliApi(baseUrl) }
     val scope = rememberCoroutineScope()
-    val context = LocalContext.current
-    var policyAccepted by rememberSaveable { mutableStateOf(false) }
     var signedIn by remember { mutableStateOf(false) }
-    var register by remember { mutableStateOf(false) }
-    var tab by rememberSaveable { mutableStateOf("الخدمات") }
-    var busy by remember { mutableStateOf(false) }
+    var register by rememberSaveable { mutableStateOf(false) }
+    var tab by rememberSaveable { mutableIntStateOf(0) }
+    var page by rememberSaveable { mutableStateOf("") }
+    var revision by remember { mutableIntStateOf(0) }
+    var loading by remember { mutableStateOf(false) }
+    var submitting by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf("") }
-    var items by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
-    var wallet by remember { mutableStateOf(JSONObject()) }
+    var contentError by remember { mutableStateOf("") }
     var profile by remember { mutableStateOf(JSONObject()) }
+    var services by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var creators by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var rows by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var selected by remember { mutableStateOf(JSONObject()) }
+    var creator by remember { mutableStateOf(JSONObject()) }
+    var wallet by remember { mutableStateOf(JSONObject()) }
+    var query by rememberSaveable { mutableStateOf("") }
+    var category by rememberSaveable { mutableStateOf("الكل") }
+    var followingOnly by rememberSaveable { mutableStateOf(false) }
     var username by rememberSaveable { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var email by rememberSaveable { mutableStateOf("") }
@@ -41,183 +78,468 @@ fun ServerAppScreen(baseUrl: String) {
     var title by rememberSaveable { mutableStateOf("") }
     var description by rememberSaveable { mutableStateOf("") }
     var price by rememberSaveable { mutableStateOf("") }
-    var peer by rememberSaveable { mutableStateOf("") }
+    var image by rememberSaveable { mutableStateOf("") }
+    var offerKind by rememberSaveable { mutableStateOf("خدمة") }
+    var peerId by rememberSaveable { mutableStateOf("") }
+    var peerName by rememberSaveable { mutableStateOf("") }
     var message by rememberSaveable { mutableStateOf("") }
+    var displayName by rememberSaveable { mutableStateOf("") }
+    var bio by rememberSaveable { mutableStateOf("") }
+    var chatPrice by rememberSaveable { mutableStateOf("") }
     var destination by rememberSaveable { mutableStateOf("") }
-    var withdrawalKey by rememberSaveable { mutableStateOf(UUID.randomUUID().toString()) }
-    var reportType by rememberSaveable { mutableStateOf("service") }
+    var requestKey by rememberSaveable { mutableStateOf(UUID.randomUUID().toString()) }
+    var reportKind by rememberSaveable { mutableStateOf("service") }
     var reportId by rememberSaveable { mutableStateOf("") }
     var reason by rememberSaveable { mutableStateOf("") }
 
-    suspend fun load() {
-        val path = when (tab) {
-            "الخدمات" -> "/api/services"
-            "الحجوزات" -> "/api/bookings"
-            "الريلز" -> "/api/reels"
-            "المحفظة" -> "/api/wallet"
-            "حسابي" -> "/api/me"
-            "الرسائل" -> if (peer.toIntOrNull() != null) "/api/messages/$peer" else return
-            else -> return
-        }
-        val response = api.request(path)
-        if (tab == "المحفظة") wallet = response
-        else if (tab == "حسابي") profile = response
-        else {
-            val array = response.getJSONArray("items")
-            items = (0 until array.length()).map { array.getJSONObject(it) }
-        }
-    }
+    fun open(route: String) { page = route; notice = ""; contentError = ""; query = "" }
+    fun back() { page = ""; query = ""; notice = "" }
     fun perform(action: suspend () -> Unit) {
-        if (busy) return
-        busy = true
+        if (submitting) return
+        submitting = true
         notice = ""
         scope.launch {
             try { action() }
             catch (e: CancellationException) { throw e }
             catch (e: Exception) { notice = friendlyError(e.message) }
-            finally {
-                if (api.token == null) signedIn = false
-                busy = false
-            }
+            finally { if (api.token == null) signedIn = false; submitting = false }
         }
     }
-    LaunchedEffect(tab, signedIn) {
-        items = emptyList()
-        if (signedIn) perform { load() }
+    fun startChat(id: Int, name: String) { peerId = id.toString(); peerName = name; message = ""; open("محادثة") }
+    fun editProfile() {
+        displayName = profile.optString("display_name", profile.optString("username"))
+        bio = profile.optString("bio")
+        chatPrice = (profile.optInt("chat_price_cents") / 100.0).toString()
+        open("تعديل الملف")
     }
-    if (!policyAccepted) {
-        AdultWelcomeScreen { policyAccepted = true }
-        return
+    fun showService(item: JSONObject) { selected = item; open("تفاصيل العرض") }
+    fun showCreator(id: Int) {
+        creator = creators.firstOrNull { it.optInt("id") == id } ?: JSONObject().put("id", id)
+        if (creator.has("display_name")) open("صفحة المذيعة")
+        else { notice = "هذا الملف غير متاح حاليًا." }
     }
-    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-        Surface(Modifier.fillMaxSize()) {
-            Column(Modifier.safeDrawingPadding().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text("Layali", style = MaterialTheme.typography.headlineLarge)
-                Text("للبالغين 18+ · محتوى غير صريح", style = MaterialTheme.typography.bodyMedium)
-                if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-                if (notice.isNotBlank()) Text(notice, style = MaterialTheme.typography.bodyLarge)
-                if (!signedIn) {
-                    Text(if (register) "إنشاء حساب" else "تسجيل الدخول", style = MaterialTheme.typography.titleLarge)
-                    OutlinedTextField(username, { username = it }, label = { Text("اسم المستخدم") }, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(password, { password = it }, label = { Text("كلمة المرور") }, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
-                    if (register) {
-                        OutlinedTextField(email, { email = it }, label = { Text("البريد الإلكتروني") }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(birth, { birth = it }, label = { Text("تاريخ الميلاد YYYY-MM-DD") }, modifier = Modifier.fillMaxWidth())
-                        Text("بإنشاء الحساب تؤكد صحة تاريخ الميلاد وموافقتك على ضوابط المحتوى التي وافقت عليها في شاشة البداية.")
+    val screen = page.ifBlank { destinations[tab] }
+    BackHandler(enabled = signedIn && page.isNotBlank()) { back() }
+    LaunchedEffect(screen, signedIn, revision) {
+        if (!signedIn) return@LaunchedEffect
+        loading = true; contentError = ""; rows = emptyList()
+        try {
+            when (screen) {
+                "تصفح", "العرض", "صفحة المذيعة" -> {
+                    services = api.request("/api/services").rows()
+                    creators = api.request("/api/creators").rows()
+                    if (screen == "صفحة المذيعة") creator = creators.firstOrNull { it.optInt("id") == creator.optInt("id") } ?: creator
+                }
+                "حسابي" -> { profile = api.request("/api/me"); services = api.request("/api/services").rows() }
+                "ريلز" -> rows = api.request("/api/reels").rows()
+                "دردشة" -> rows = api.request("/api/conversations").rows()
+                "محادثة" -> rows = api.request("/api/messages/$peerId").rows()
+                "المحفوظات" -> rows = api.request("/api/saved").rows()
+                "الحجوزات" -> rows = api.request("/api/bookings").rows()
+                "المحفظة" -> { wallet = api.request("/api/wallet"); rows = api.request("/api/withdrawals").rows() }
+                "الدعم وخدمة العملاء" -> rows = api.request("/api/support").rows()
+            }
+        } catch (e: CancellationException) { throw e }
+        catch (e: Exception) { contentError = friendlyError(e.message); if (api.token == null) signedIn = false }
+        finally { loading = false }
+    }
+
+    MyApplicationTheme(darkTheme = dark) {
+        if (!signedIn) {
+            ReferenceLogin(register, submitting, notice, username, password, email, birth,
+                { username = it }, { password = it }, { email = it }, { birth = it },
+                { register = !register; notice = "" }, { perform {
+                    val body = JSONObject().put("username", username).put("password", password)
+                    if (register) body.put("email", email).put("date_of_birth", birth).put("accept_non_explicit_policy", true)
+                    api.request(if (register) "/api/register" else "/api/login", "POST", body)
+                    profile = api.request("/api/me")
+                    password = ""; signedIn = true; tab = 0; page = ""
+                } })
+            return@MyApplicationTheme
+        }
+        Scaffold(
+            containerColor = MaterialTheme.colorScheme.background,
+            topBar = {
+                if (screen != "حسابي" && screen != "صفحة المذيعة") TopAppBar(
+                    title = {
+                        if (screen == "تصفح") Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                            Icon(Icons.Outlined.AllInclusive, null, Modifier.size(28.dp))
+                            Text("Layali", fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                        } else Text(if (screen == "محادثة") peerName.ifBlank { "محادثة" } else screen, fontWeight = FontWeight.SemiBold)
+                    },
+                    navigationIcon = { if (page.isNotBlank()) IconButton(onClick = { back() }) { Icon(Icons.Outlined.ArrowForward, "رجوع") } },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
+                    actions = {
+                        when (screen) {
+                            "تصفح" -> IconButton(onClick = { open("المحفوظات") }) { Icon(Icons.Outlined.BookmarkBorder, "المحفوظات") }
+                            "العرض" -> {
+                                IconButton(onClick = { open("إضافة عرض") }) { Icon(Icons.Outlined.AddCircleOutline, "إضافة عرض") }
+                                IconButton(onClick = { open("الحجوزات") }) { Icon(Icons.Outlined.ShoppingBag, "حجوزاتي") }
+                            }
+                            "دردشة" -> IconButton(onClick = { open("محادثة جديدة") }) { Icon(Icons.Outlined.EditNote, "محادثة جديدة") }
+                        }
+                        if (screen in destinations || screen in listOf("المحفوظات", "الحجوزات", "المحفظة", "محادثة", "الدعم وخدمة العملاء"))
+                            IconButton(enabled = !loading, onClick = { revision++ }) { Icon(Icons.Outlined.Refresh, "تحديث") }
                     }
-                    Button(enabled = !busy, onClick = { perform {
-                        val payload = JSONObject().put("username", username).put("password", password)
-                        if (register) payload.put("email", email).put("date_of_birth", birth).put("accept_non_explicit_policy", true)
-                        api.request(if (register) "/api/register" else "/api/login", "POST", payload)
-                        password = ""
-                        signedIn = true
-                    } }) { Text(if (register) "إنشاء الحساب والموافقة" else "دخول") }
-                    TextButton(enabled = !busy, onClick = { register = !register }) { Text(if (register) "لدي حساب" else "إنشاء حساب جديد") }
-                } else {
-                    listOf(listOf("الخدمات", "الحجوزات", "الريلز"), listOf("الرسائل", "المحفظة", "حسابي"), listOf("بلاغ", "نشر خدمة")).forEach { row ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            row.forEach { name -> FilterChip(selected = tab == name, enabled = !busy, onClick = { tab = name }, label = { Text(name) }) }
+                )
+            },
+            bottomBar = {
+                if (page.isBlank()) NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp, modifier = Modifier.heightIn(min = 72.dp)) {
+                    destinations.forEachIndexed { index, name -> NavigationBarItem(selected = tab == index,
+                        onClick = { tab = index; query = ""; category = "الكل"; notice = "" },
+                        icon = { Icon(destinationIcons[index], null, Modifier.size(24.dp)) }, label = { Text(name, fontSize = 11.sp) },
+                        colors = NavigationBarItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.primaryContainer)) }
+                }
+            }
+        ) { padding ->
+            Column(Modifier.fillMaxSize().padding(padding)) {
+                if (loading || submitting) LinearProgressIndicator(Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.primary)
+                if (notice.isNotBlank() || contentError.isNotBlank()) Surface(color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), shape = RoundedCornerShape(14.dp)) {
+                    Text(notice.ifBlank { contentError }, Modifier.padding(14.dp), style = MaterialTheme.typography.bodyMedium)
+                }
+                if (screen == "ريلز" && rows.isNotEmpty()) {
+                    val pager = rememberPagerState(pageCount = { rows.size })
+                    VerticalPager(state = pager, modifier = Modifier.weight(1f)) { index ->
+                        Box(Modifier.fillMaxSize().background(Color.Black)) {
+                            NativeReel(rows[index].optString("video_url"), pager.currentPage == index)
+                            Text("${index + 1} / ${rows.size}", Modifier.align(Alignment.BottomStart).padding(24.dp), color = Color.White)
                         }
                     }
-                    Text(tab, style = MaterialTheme.typography.titleLarge)
-                    if (tab in listOf("الخدمات", "الحجوزات", "الريلز")) {
-                        TextButton(enabled = !busy, onClick = { perform { load() } }) { Text("تحديث") }
-                        if (items.isEmpty() && !busy) Text("لا توجد عناصر متاحة حاليًا.")
-                        items.forEach { item ->
-                            Card(Modifier.fillMaxWidth()) {
-                                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    Text(item.optString("title", "#${item.optString("id")}"), style = MaterialTheme.typography.titleMedium)
-                                    if (tab == "الخدمات") {
-                                        Text(item.optString("description"))
-                                        Text("${item.optInt("price_cents") / 100.0} USD · المذيعة #${item.optInt("owner_id")}")
-                                        Button(enabled = !busy, onClick = { perform {
-                                            api.request("/api/bookings", "POST", JSONObject().put("service_id", item.getInt("id")))
-                                            tab = "الحجوزات"
-                                            notice = "تم تسجيل الطلب بانتظار الدفع. لم تُخصم أموال."
-                                        } }) { Text("طلب حجز") }
-                                    } else if (tab == "الحجوزات") {
-                                        Text("${item.optInt("price_cents") / 100.0} USD")
-                                        Text(if (item.optString("status") == "awaiting_payment") "بانتظار الدفع" else item.optString("status"))
-                                    } else {
-                                        Button(onClick = {
-                                            val uri = Uri.parse(item.optString("video_url"))
-                                            if (uri.scheme == "https") context.startActivity(Intent(Intent.ACTION_VIEW, uri))
-                                        }) { Text("مشاهدة الريل") }
-                                    }
+                } else LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    when (screen) {
+                        "تصفح" -> {
+                            item { SearchField(query, { query = it }, "ابحث عن مذيعة أو اهتمام") }
+                            item {
+                                LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                                    item { Story("مساحتك", profile.optInt("selected_frame")) { tab = 4 } }
+                                    items(creators) { person -> Story(person.optString("display_name"), person.optInt("selected_frame")) { creator = person; open("صفحة المذيعة") } }
                                 }
                             }
+                            item { Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+                                TextButton(onClick = { followingOnly = false }) { Text("لك", fontSize = 23.sp, fontWeight = if (!followingOnly) FontWeight.Bold else FontWeight.Normal) }
+                                TextButton(onClick = { followingOnly = true }) { Text("أتابعهم", color = if (followingOnly) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }
+                            } }
+                            val ids = creators.filter { it.optBoolean("following") }.map { it.optInt("id") }.toSet()
+                            val visible = services.filter { (!followingOnly || it.optInt("owner_id") in ids) && (it.optString("title") + it.optString("owner_name")).contains(query, true) }
+                            if (visible.isEmpty() && !loading && contentError.isBlank()) item { ReferenceEmpty(Icons.Outlined.Explore, "مساحتك لاكتشاف الجديد", "ستظهر هنا عروض المذيعات المعتمدة فور نشرها.") }
+                            items(visible, key = { it.optInt("id") }) { service ->
+                                FeedCard(service, { showCreator(service.optInt("owner_id")) }, { showService(service) }, { kind -> perform {
+                                    val updated = api.request("/api/services/${service.optInt("id")}/reaction", "POST", JSONObject().put("kind", kind).put("enabled", !service.optBoolean(if (kind == "like") "liked" else "saved")))
+                                    services = services.map { if (it.optInt("id") == updated.optInt("id")) updated else it }
+                                } }, { startChat(service.optInt("owner_id"), service.optString("owner_name")) })
+                            }
                         }
+                        "العرض", "المحفوظات" -> {
+                            item { SearchField(query, { query = it }, "ابحث عن خدمة أو منتج أو كورس") }
+                            item { LazyRow(contentPadding = PaddingValues(horizontal = 18.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                items(listOf("الكل", "خدمة", "منتج", "كورس")) { label -> FilterChip(category == label, onClick = { category = label }, label = { Text(label) }) }
+                            } }
+                            val visible = (if (screen == "المحفوظات") rows else services).filter { (category == "الكل" || it.optString("category") == category) && it.optString("title").contains(query, true) }
+                            if (visible.isEmpty() && !loading && contentError.isBlank()) item { ReferenceEmpty(Icons.Outlined.Storefront, "لا توجد عروض بعد", "العروض المعتمدة تظهر هنا. يمكنك العودة لاحقًا أو تحديث الصفحة.") }
+                            items(visible.chunked(2)) { pair -> Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                pair.forEach { service -> Box(Modifier.weight(1f)) { OfferCard(service) { showService(service) } }
+                                if (pair.size == 1) Spacer(Modifier.weight(1f))
+                            } }
+                        }
+                        "تفاصيل العرض" -> {
+                            item { ReferenceImage(selected.optString("image_url"), Modifier.fillMaxWidth().height(290.dp)) }
+                            item { Column(Modifier.padding(horizontal = 22.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                                Text(selected.optString("category", "خدمة"), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(selected.optString("title"), style = MaterialTheme.typography.headlineLarge)
+                                Text(usd(selected.optLong("price_cents")), fontSize = 25.sp, fontWeight = FontWeight.Bold)
+                                Text(selected.optString("description"), style = MaterialTheme.typography.bodyLarge)
+                                ReferenceRow(Icons.Outlined.PersonOutline, selected.optString("owner_name"), "عرض الملف الشخصي") { showCreator(selected.optInt("owner_id")) }
+                                ReferencePrimary("طلب حجز", !submitting && selected.optInt("owner_id") != profile.optInt("id")) { perform {
+                                    api.request("/api/bookings", "POST", JSONObject().put("service_id", selected.optInt("id")))
+                                    open("الحجوزات"); notice = "تم تسجيل طلبك بانتظار الدفع. لم تُخصم أموال."
+                                } }
+                                OutlinedButton(onClick = { reportKind = "service"; reportId = selected.optInt("id").toString(); open("إرسال بلاغ") }, modifier = Modifier.fillMaxWidth()) { Text("الإبلاغ عن العرض") }
+                            } }
+                        }
+                        "دردشة" -> {
+                            item { Box(Modifier.padding(horizontal = 16.dp)) { Surface(onClick = { message = ""; open("الدعم وخدمة العملاء") }, color = MaterialTheme.colorScheme.primaryContainer, shape = RoundedCornerShape(20.dp), shadowElevation = 2.dp) {
+                                Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                                    Icon(Icons.Outlined.SupportAgent, null, Modifier.size(30.dp))
+                                    Column(Modifier.weight(1f)) { Text("الدعم وخدمة العملاء", fontWeight = FontWeight.SemiBold); Text("مثبت دائمًا · تواصل مع الإدارة", style = MaterialTheme.typography.bodyMedium) }
+                                    Icon(Icons.Outlined.PushPin, null, Modifier.size(18.dp))
+                                }
+                            } } }
+                            item { Text("المحادثات", Modifier.padding(horizontal = 24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                            if (rows.isEmpty() && !loading && contentError.isBlank()) item { ReferenceEmpty(Icons.Outlined.ChatBubbleOutline, "ابدأ حديثًا جديدًا", "اختر مذيعة من ملفها الشخصي أو أدخل رقم حساب المستلم.") }
+                            items(rows) { person -> Box(Modifier.padding(horizontal = 16.dp)) {
+                                Surface(onClick = { startChat(person.optInt("id"), person.optString("display_name")) }, color = Color.Transparent, shape = RoundedCornerShape(16.dp)) {
+                                    Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                                        ReferenceAvatar(person.optString("display_name"), person.optInt("selected_frame"), 55)
+                                        Column(Modifier.weight(1f)) { Text(person.optString("display_name"), fontWeight = FontWeight.SemiBold); Text(person.optString("last_message"), maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium) }
+                                        Icon(Icons.Outlined.ChevronLeft, null)
+                                    }
+                                }
+                            } }
+                        }
+                        "محادثة جديدة" -> item { FormColumn {
+                            Field(peerId, { peerId = it.filter(Char::isDigit) }, "رقم حساب المستلم", numeric = true)
+                            ReferencePrimary("فتح المحادثة", peerId.toIntOrNull() != null) { startChat(peerId.toInt(), "حساب #$peerId") }
+                        } }
+                        "محادثة", "الدعم وخدمة العملاء" -> {
+                            if (rows.isEmpty() && !loading && contentError.isBlank()) item { ReferenceEmpty(if (screen == "محادثة") Icons.Outlined.ChatBubbleOutline else Icons.Outlined.SupportAgent, "هنا تبدأ المحادثة", "الرسائل تُرسل إلى الخادم. لا توجد ردود تلقائية أو حسابات تجريبية.") }
+                            items(rows.asReversed()) { row -> Column(Modifier.padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                val mine = screen != "محادثة" || row.optInt("sender_id") == profile.optInt("id")
+                                Surface(shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = if (mine) 4.dp else 18.dp, bottomEnd = if (mine) 18.dp else 4.dp), color = if (mine) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface, modifier = Modifier.align(if (mine) Alignment.Start else Alignment.End).widthIn(max = 300.dp)) { Text(row.optString("body"), Modifier.padding(14.dp)) }
+                                if (row.optString("reply").isNotBlank()) Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(18.dp), modifier = Modifier.align(Alignment.End).widthIn(max = 300.dp)) { Text(row.optString("reply"), Modifier.padding(14.dp)) }
+                            } }
+                            item { FormColumn {
+                                Field(message, { message = it }, "اكتب رسالتك", lines = 4)
+                                ReferencePrimary("إرسال", !submitting && message.isNotBlank()) { perform {
+                                    api.request(if (screen == "محادثة") "/api/messages/$peerId" else "/api/support", "POST", JSONObject().put("body", message))
+                                    message = ""; revision++
+                                } }
+                            } }
+                        }
+                        "حسابي", "صفحة المذيعة" -> {
+                            val own = screen == "حسابي"
+                            val person = if (own) profile else creator
+                            item { ProfileHero(person, own, { if (own) open("الإعدادات") else back() }, { if (own) editProfile() else startChat(person.optInt("id"), person.optString("display_name")) }, {
+                                if (own) open("إطاراتي") else perform {
+                                    creator = api.request("/api/creators/${person.optInt("id")}/follow", "POST", JSONObject().put("enabled", !person.optBoolean("following")))
+                                    creators = creators.map { if (it.optInt("id") == creator.optInt("id")) creator else it }
+                                }
+                            }) }
+                            item { Box(Modifier.padding(horizontal = 20.dp)) { ReferenceCard {
+                                ReferenceRow(Icons.Outlined.ChatBubbleOutline, if (own) "سعر التحدث معي" else "سعر المحادثة", if (person.optInt("chat_price_cents") == 0) "محادثة مجانية" else "${usd(person.optLong("chat_price_cents"))} · تتطلب التحقق من الدفع") { if (own) editProfile() else startChat(person.optInt("id"), person.optString("display_name")) }
+                            } } }
+                            item { Row(Modifier.padding(horizontal = 22.dp), verticalAlignment = Alignment.CenterVertically) { Text(if (own) "عروضي" else "العروض", Modifier.weight(1f), style = MaterialTheme.typography.headlineMedium); if (own) TextButton(onClick = { open("إضافة عرض") }) { Icon(Icons.Outlined.Add, null, Modifier.size(18.dp)); Text("إضافة") } } }
+                            val offers = services.filter { it.optInt("owner_id") == person.optInt("id") }
+                            if (offers.isEmpty() && !loading) item { ReferenceEmpty(Icons.Outlined.Storefront, "اعرض مهارة، خدمة، أو منتجًا", "تظهر العروض هنا بعد مراجعة الإدارة واعتمادها.") }
+                            items(offers) { offer -> Box(Modifier.padding(horizontal = 20.dp)) { OfferCard(offer) { showService(offer) } } }
+                            if (own) item { FormColumn {
+                                ReferenceRow(Icons.Outlined.AccountBalanceWallet, "المحفظة والسحب") { price = ""; open("المحفظة") }
+                                ReferenceRow(Icons.Outlined.ShoppingBag, "حجوزاتي") { open("الحجوزات") }
+                                ReferenceRow(Icons.Outlined.SupportAgent, "الدعم وخدمة العملاء") { message = ""; open("الدعم وخدمة العملاء") }
+                                ReferenceRow(Icons.Outlined.Shield, "سياسة الخصوصية") { open("سياسة الخصوصية") }
+                                ReferenceRow(Icons.Outlined.Info, "من نحن") { open("من نحن") }
+                            } }
+                        }
+                        "تعديل الملف" -> item { FormColumn {
+                            Field(displayName, { displayName = it }, "الاسم المعروض")
+                            Field(bio, { bio = it }, "نبذة عنك", lines = 4)
+                            if (profile.optBoolean("creator")) Field(chatPrice, { chatPrice = it }, "رسوم المحادثة بالدولار · 0 للمجانية", numeric = true)
+                            ReferencePrimary("حفظ التغييرات", !submitting) { perform {
+                                val body = JSONObject().put("display_name", displayName).put("bio", bio)
+                                if (profile.optBoolean("creator")) body.put("chat_price_cents", cents(chatPrice))
+                                profile = api.request("/api/me", "PATCH", body)
+                                page = ""; tab = 4; notice = "تم حفظ التغييرات."
+                            } }
+                        } }
+                        "إطاراتي" -> {
+                            item { FormColumn { Text("اختر الإطار الذي يعبّر عنك", style = MaterialTheme.typography.headlineMedium); Text("اختيارك محفوظ في ملفك على الخادم.", color = MaterialTheme.colorScheme.onSurfaceVariant) } }
+                            items(listOf(0, 1, 2)) { frame -> Box(Modifier.padding(horizontal = 20.dp)) { ReferenceCard(onClick = { perform {
+                                profile = api.request("/api/me", "PATCH", JSONObject().put("selected_frame", frame)); notice = "تم حفظ الإطار."
+                            } }) { Row(Modifier.padding(24.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+                                ReferenceAvatar(profile.optString("display_name"), frame, 74)
+                                Column(Modifier.weight(1f)) { Text(listOf("الطبيعي", "الذهبي الهادئ", "البلاتيني")[frame], fontWeight = FontWeight.SemiBold); Text(if (profile.optInt("selected_frame") == frame) "إطارك الحالي" else "اضغط للاختيار", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                                if (profile.optInt("selected_frame") == frame) Icon(Icons.Outlined.CheckCircle, "محدد")
+                            } } } }
+                        }
+                        "الإعدادات" -> item { FormColumn {
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { Text("الوضع الليلي", Modifier.weight(1f)); Switch(dark, { dark = it; prefs.edit().putBoolean("dark", it).apply() }) }
+                            ReferenceRow(Icons.Outlined.PersonOutline, "تعديل الملف الشخصي") { editProfile() }
+                            ReferenceRow(Icons.Outlined.Shield, "الخصوصية وضوابط المحتوى") { open("سياسة الخصوصية") }
+                            ReferenceRow(Icons.Outlined.Flag, "إرسال بلاغ") { open("إرسال بلاغ") }
+                            if (profile.optBoolean("is_staff")) ReferenceRow(Icons.Outlined.AdminPanelSettings, "لوحة الإدارة") { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(baseUrl.trimEnd('/') + "/admin/"))) }
+                            ReferenceRow(Icons.Outlined.Logout, "تسجيل الخروج") { perform { api.request("/api/logout", "POST", JSONObject()); signedIn = false; services = emptyList(); creators = emptyList(); rows = emptyList(); profile = JSONObject(); page = "" } }
+                        } }
+                        "من نحن", "سياسة الخصوصية" -> item { FormColumn {
+                            Text(if (screen == "من نحن") "Layali" else "خصوصيتك وحدودك أولًا", style = MaterialTheme.typography.headlineLarge)
+                            Text(if (screen == "من نحن") "مساحة عربية للبالغين لاكتشاف المذيعات وخدماتهن والتواصل معهن، بمحتوى غير صريح وواجهات هادئة وواضحة." else "تُحفظ بيانات حسابك ورسائلك وحجوزاتك على خادم ليالي. يُمنع المحتوى الجنسي الصريح والعري والتحرش ومشاركة بيانات الآخرين دون إذن. وصول الريلز يتطلب التوثيق، والخدمات تُراجع قبل ظهورها. لا تضع معلومات دفع حساسة داخل المحادثات.", style = MaterialTheme.typography.bodyLarge)
+                        } }
+                        "الحجوزات" -> {
+                            if (rows.isEmpty() && !loading && contentError.isBlank()) item { ReferenceEmpty(Icons.Outlined.ShoppingBag, "لم تبدأ حجوزاتك بعد", "تصفح العروض وسجّل طلب الخدمة المناسب لك.") }
+                            items(rows) { row -> Box(Modifier.padding(horizontal = 18.dp)) { ReferenceCard { Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text(row.optString("service__title", "حجز #${row.optString("id").take(8)}"), style = MaterialTheme.typography.titleMedium)
+                                Text(usd(row.optLong("price_cents")), fontWeight = FontWeight.Bold)
+                                Text(if (row.optString("status") == "awaiting_payment") "بانتظار الدفع · لم يُؤكَّد الحجز بعد" else row.optString("status"), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            } } } }
+                        }
+                        "إضافة عرض" -> item { FormColumn {
+                            Text("اعرض خدمة أو منتجًا أو كورسًا", style = MaterialTheme.typography.headlineMedium)
+                            Text("النشر متاح للحسابات الموثقة والمعتمدة كمذيعات. كل عرض يمر بمراجعة الإدارة.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("خدمة", "منتج", "كورس").forEach { kind -> FilterChip(offerKind == kind, { offerKind = kind }, label = { Text(kind) }) } }
+                            Field(title, { title = it }, "عنوان العرض")
+                            Field(description, { description = it }, "وصف العرض", lines = 4)
+                            Field(price, { price = it }, "السعر بالدولار", numeric = true)
+                            Field(image, { image = it }, "رابط صورة HTTPS · اختياري")
+                            ReferencePrimary("إرسال للمراجعة", !submitting) { perform {
+                                api.request("/api/services", "POST", JSONObject().put("title", title).put("description", description).put("price_cents", cents(price)).put("category", offerKind).put("image_url", image))
+                                title = ""; description = ""; price = ""; image = ""; page = ""; tab = 2; notice = "أُرسل عرضك إلى الإدارة للمراجعة."
+                            } }
+                        } }
+                        "المحفظة" -> {
+                            item { FormColumn {
+                                ReferenceCard { Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    Text("الرصيد المتاح", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(usd(wallet.optLong("available_cents")), fontSize = 32.sp, fontWeight = FontWeight.Bold)
+                                    Text("محجوز: ${usd(wallet.optLong("reserved_cents"))}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                } }
+                                Text("الدفع والتحويل الفعلي غير مفعّلين بعد. طلب السحب يحجز مبلغًا من رصيدك المتاح للمراجعة ولا ينفّذ تحويلًا.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Field(price, { price = it; requestKey = UUID.randomUUID().toString() }, "مبلغ السحب بالدولار", numeric = true)
+                                Field(destination, { destination = it; requestKey = UUID.randomUUID().toString() }, "جهة استلام الأموال")
+                                ReferencePrimary("طلب سحب", !submitting) { perform {
+                                    api.request("/api/withdrawals", "POST", JSONObject().put("amount_cents", cents(price)).put("destination", destination).put("request_key", requestKey))
+                                    price = ""; destination = ""; requestKey = UUID.randomUUID().toString(); revision++; notice = "سُجّل الطلب للمراجعة. لم يتم تحويل الأموال."
+                                } }
+                                Text("طلبات السحب", style = MaterialTheme.typography.titleLarge)
+                            } }
+                            items(rows) { row -> Box(Modifier.padding(horizontal = 22.dp)) { ReferenceCard { Text("${usd(row.optLong("amount_cents"))} · ${if (row.optString("status") == "pending") "قيد المراجعة" else row.optString("status")}", Modifier.padding(18.dp)) } } }
+                        }
+                        "إرسال بلاغ" -> item { FormColumn {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("service" to "عرض", "reel" to "ريل", "user" to "حساب", "message" to "رسالة").forEach { (kind, label) -> FilterChip(reportKind == kind, { reportKind = kind }, label = { Text(label) }) } }
+                            Field(reportId, { reportId = it.filter(Char::isDigit) }, "رقم العنصر", numeric = true)
+                            Field(reason, { reason = it }, "سبب البلاغ", lines = 4)
+                            ReferencePrimary("إرسال البلاغ", !submitting && reportId.toIntOrNull() != null) { perform {
+                                api.request("/api/reports", "POST", JSONObject().put("target_type", reportKind).put("target_id", reportId.toInt()).put("reason", reason)); reason = ""; notice = "وصل البلاغ إلى الإدارة."
+                            } }
+                        } }
+                        "ريلز" -> if (!loading && contentError.isBlank()) item { ReferenceEmpty(Icons.Outlined.SmartDisplay, "شاهد اللحظات", "الريلز المعتمدة ستظهر هنا بعد توثيق هويتك.") }
                     }
-                    if (tab == "الرسائل") {
-                        OutlinedTextField(peer, { peer = it.filter(Char::isDigit) }, label = { Text("رقم حساب المستلم") })
-                        TextButton(enabled = !busy, onClick = { perform { load() } }) { Text("فتح المحادثة / تحديث") }
-                        items.asReversed().forEach { Text("#${it.optInt("sender_id")}: ${it.optString("body")}") }
-                        OutlinedTextField(message, { message = it }, label = { Text("رسالتك") })
-                        Button(enabled = !busy && peer.toIntOrNull() != null && message.isNotBlank(), onClick = { perform {
-                            api.request("/api/messages/$peer", "POST", JSONObject().put("body", message))
-                            message = ""
-                            load()
-                        } }) { Text("إرسال") }
-                    }
-                    if (tab == "نشر خدمة") {
-                        Text("يتطلب حساب مذيعة موثّقًا. تظهر الخدمة بعد مراجعة الإدارة.")
-                        OutlinedTextField(title, { title = it }, label = { Text("العنوان") })
-                        OutlinedTextField(description, { description = it }, label = { Text("الوصف") })
-                        OutlinedTextField(price, { price = it.filter(Char::isDigit) }, label = { Text("السعر بالسنت الأمريكي، 200 = دولاران") })
-                        Button(enabled = !busy && price.toIntOrNull() != null, onClick = { perform {
-                            api.request("/api/services", "POST", JSONObject().put("title", title).put("description", description).put("price_cents", price.toInt()))
-                            title = ""; description = ""; price = ""
-                            notice = "أُرسلت الخدمة للمراجعة."
-                        } }) { Text("إرسال للمراجعة") }
-                    }
-                    if (tab == "المحفظة") {
-                        Text("الرصيد المتاح: ${wallet.optLong("available_cents") / 100.0} USD")
-                        Text("المبلغ المحجوز: ${wallet.optLong("reserved_cents") / 100.0} USD")
-                        Text("الدفع والتحويل الفعلي غير متاحين بعد. طلب السحب يحجز مبلغًا من رصيد حقيقي متاح فقط.")
-                        OutlinedTextField(price, { price = it.filter(Char::isDigit); withdrawalKey = UUID.randomUUID().toString() }, label = { Text("مبلغ السحب بالسنت") })
-                        OutlinedTextField(destination, { destination = it; withdrawalKey = UUID.randomUUID().toString() }, label = { Text("جهة الاستلام") })
-                        Button(enabled = !busy && price.toIntOrNull() != null, onClick = { perform {
-                            api.request("/api/withdrawals", "POST", JSONObject().put("amount_cents", price.toInt()).put("destination", destination).put("request_key", withdrawalKey))
-                            withdrawalKey = UUID.randomUUID().toString()
-                            price = ""; destination = ""
-                            load(); notice = "سُجّل طلب السحب. لم يتم تحويل الأموال بعد."
-                        } }) { Text("طلب سحب") }
-                        TextButton(enabled = !busy, onClick = { perform { load() } }) { Text("تحديث الرصيد") }
-                    }
-                    if (tab == "حسابي") {
-                        Text("${profile.optString("username")} · رقم الحساب ${profile.optInt("id")}")
-                        Text(if (profile.optBoolean("identity_verified")) "الهوية موثقة" else "الهوية غير موثقة")
-                        TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(baseUrl.trimEnd('/') + "/admin/"))) }) { Text("لوحة المسؤول") }
-                    }
-                    if (tab == "بلاغ") {
-                        Text("النوع: service للخدمة، reel للريل، user للحساب، message للرسالة")
-                        OutlinedTextField(reportType, { reportType = it }, label = { Text("نوع البلاغ") })
-                        OutlinedTextField(reportId, { reportId = it.filter(Char::isDigit) }, label = { Text("رقم العنصر") })
-                        OutlinedTextField(reason, { reason = it }, label = { Text("سبب البلاغ") })
-                        Button(enabled = !busy && reportId.toIntOrNull() != null, onClick = { perform {
-                            api.request("/api/reports", "POST", JSONObject().put("target_type", reportType).put("target_id", reportId.toInt()).put("reason", reason))
-                            reason = ""; notice = "وصل البلاغ إلى الإدارة."
-                        } }) { Text("إرسال البلاغ") }
-                    }
-                    TextButton(enabled = !busy, onClick = { perform {
-                        api.request("/api/logout", "POST", JSONObject())
-                        signedIn = false; items = emptyList(); wallet = JSONObject(); profile = JSONObject()
-                    } }) { Text("تسجيل الخروج") }
                 }
             }
         }
     }
 }
 
+private fun cents(value: String): Int {
+    val decimal = value.trim().toBigDecimalOrNull() ?: error("invalid_input")
+    return try { decimal.multiply(BigDecimal(100)).intValueExact().also { require(it >= 0) } }
+    catch (_: Exception) { error("invalid_input") }
+}
+
+@Composable
+private fun FormColumn(content: @Composable ColumnScope.() -> Unit) {
+    Column(Modifier.padding(horizontal = 22.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(18.dp), content = content)
+}
+@Composable
+private fun Field(value: String, change: (String) -> Unit, label: String, lines: Int = 1, numeric: Boolean = false) {
+    OutlinedTextField(value, change, label = { Text(label) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), minLines = lines, maxLines = if (lines == 1) 1 else 6, keyboardOptions = KeyboardOptions(keyboardType = if (numeric) KeyboardType.Decimal else KeyboardType.Text), colors = OutlinedTextFieldDefaults.colors(unfocusedContainerColor = MaterialTheme.colorScheme.surface, focusedContainerColor = MaterialTheme.colorScheme.surface))
+}
+@Composable
+private fun SearchField(value: String, change: (String) -> Unit, hint: String) {
+    OutlinedTextField(value, change, placeholder = { Text(hint, style = MaterialTheme.typography.bodyMedium) }, leadingIcon = { Icon(Icons.Outlined.Search, null) }, modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp), singleLine = true, shape = RoundedCornerShape(18.dp), colors = OutlinedTextFieldDefaults.colors(unfocusedContainerColor = MaterialTheme.colorScheme.surface, focusedContainerColor = MaterialTheme.colorScheme.surface))
+}
+@Composable
+private fun Story(name: String, frame: Int, click: () -> Unit) {
+    Column(Modifier.width(74.dp).clickable(onClick = click).padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        ReferenceAvatar(name, frame, 62)
+        Text(name.substringBefore(' '), maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 12.sp)
+    }
+}
+@Composable
+private fun FeedCard(service: JSONObject, owner: () -> Unit, details: () -> Unit, react: (String) -> Unit, chat: () -> Unit) {
+    Box(Modifier.padding(horizontal = 16.dp)) { ReferenceCard {
+        Row(Modifier.fillMaxWidth().padding(14.dp).clickable(onClick = owner), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            ReferenceAvatar(service.optString("owner_name"), service.optInt("owner_frame"), 46)
+            Column(Modifier.weight(1f)) { Text(service.optString("owner_name"), fontWeight = FontWeight.SemiBold); Text(service.optString("category", "خدمة"), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            IconButton(onClick = { react("save") }) { Icon(if (service.optBoolean("saved")) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder, "حفظ العرض") }
+        }
+        ReferenceImage(service.optString("image_url"), Modifier.fillMaxWidth().aspectRatio(1.14f).clip(RoundedCornerShape(15.dp)).clickable(onClick = details))
+        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = { react("like") }) { Icon(if (service.optBoolean("liked")) Icons.Outlined.Favorite else Icons.Outlined.FavoriteBorder, "إعجاب", tint = if (service.optBoolean("liked")) Color(0xFF9C5F56) else MaterialTheme.colorScheme.onSurface) }
+            Text(service.optInt("like_count").toString(), fontSize = 12.sp)
+            IconButton(onClick = chat) { Icon(Icons.Outlined.ChatBubbleOutline, "التحدث مع المذيعة") }
+            Spacer(Modifier.weight(1f))
+            TextButton(onClick = details) { Text("عرض التفاصيل") }
+        }
+        Text(service.optString("title"), Modifier.padding(horizontal = 16.dp), fontWeight = FontWeight.SemiBold)
+        Text(service.optString("description"), Modifier.padding(start = 16.dp, end = 16.dp, bottom = 18.dp, top = 8.dp), maxLines = 3, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    } }
+}
+@Composable
+private fun OfferCard(service: JSONObject, click: () -> Unit) {
+    ReferenceCard(onClick = click) {
+        ReferenceImage(service.optString("image_url"), Modifier.fillMaxWidth().height(155.dp).clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)))
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Text(service.optString("category", "خدمة"), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(service.optString("title"), maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Text(usd(service.optLong("price_cents")), fontSize = 17.sp, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+internal fun ProfileHero(person: JSONObject, own: Boolean, settings: () -> Unit, editOrChat: () -> Unit, frameOrFollow: () -> Unit) {
+    Column(Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(Color(0xFF333D36), WisalInk)), RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)).statusBarsPadding().padding(start = 22.dp, end = 22.dp, bottom = 26.dp, top = 12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(if (own) "حسابي" else "الملف الشخصي", Modifier.weight(1f), color = Color.White, fontSize = 19.sp)
+            IconButton(onClick = settings) { Icon(if (own) Icons.Outlined.Settings else Icons.Outlined.ArrowForward, if (own) "الإعدادات" else "رجوع", tint = Color.White.copy(alpha = .75f)) }
+        }
+        ReferenceAvatar(person.optString("display_name", person.optString("username")), person.optInt("selected_frame"), 90)
+        Text(person.optString("display_name", person.optString("username")), color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold)
+        Text("ID ${person.optInt("id")} · ${if (person.optBoolean("identity_verified")) "هوية موثقة" else "بانتظار التوثيق"}", color = Color.White.copy(alpha = .55f), fontSize = 11.sp)
+        if (person.optBoolean("creator")) Surface(color = Color.White.copy(alpha = .09f), shape = RoundedCornerShape(30.dp)) { Row(Modifier.padding(horizontal = 14.dp, vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Outlined.WorkspacePremium, null, Modifier.size(15.dp), tint = Color(0xFFD8C18F)); Text("مذيعة معتمدة", color = Color(0xFFD8C18F), fontSize = 11.sp) } }
+        if (person.optString("bio").isNotBlank()) Text(person.optString("bio"), color = Color.White.copy(alpha = .7f), fontSize = 13.sp)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
+            listOf("المتابعون" to person.optInt("followers_count"), "أتابع" to person.optInt("following_count"), "العروض" to person.optInt("service_count"), "الريلز" to person.optInt("reel_count")).forEach { (label, count) -> Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(count.toString(), color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold); Text(label, color = Color.White.copy(alpha = .55f), fontSize = 11.sp) } }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedButton(editOrChat, Modifier.weight(1f).heightIn(min = 48.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)) { Text(if (own) "تعديل الملف" else "محادثة", fontSize = 13.sp) }
+            Button(frameOrFollow, Modifier.weight(1f).heightIn(min = 48.dp), colors = ButtonDefaults.buttonColors(containerColor = WisalSage, contentColor = WisalInk)) { Text(if (own) "إطاراتي" else if (person.optBoolean("following")) "إلغاء المتابعة" else "متابعة", fontSize = 13.sp) }
+        }
+    }
+}
+
+@Composable
+internal fun ReferenceLogin(register: Boolean, busy: Boolean, notice: String, username: String, password: String, email: String, birth: String, onUsername: (String) -> Unit, onPassword: (String) -> Unit, onEmail: (String) -> Unit, onBirth: (String) -> Unit, toggle: () -> Unit, submit: () -> Unit) {
+    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        LazyColumn(contentPadding = PaddingValues(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
+            item { Column(Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(Color(0xFF333D36), WisalInk)), RoundedCornerShape(bottomEnd = 72.dp)).statusBarsPadding().heightIn(min = 265.dp).padding(28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Outlined.AllInclusive, null, Modifier.size(34.dp), tint = WisalSage); Spacer(Modifier.weight(1f)); Text("18+", color = Color.White.copy(alpha = .7f), fontSize = 12.sp) }
+                Spacer(Modifier.height(40.dp))
+                Text("Layali", color = Color.White, fontSize = 48.sp, fontWeight = FontWeight.Bold)
+                Text("مساحتك تستحق أن تُرى.", color = Color.White.copy(alpha = .7f), fontSize = 18.sp)
+            } }
+            item { Column(Modifier.padding(horizontal = 26.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                Text(if (register) "مساحتك تبدأ هنا" else "أهلًا بعودتك", fontSize = 27.sp, fontWeight = FontWeight.Bold)
+                Text("اكتشف، شارك، وتواصل بطريقتك.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (notice.isNotBlank()) Text(notice, color = MaterialTheme.colorScheme.error)
+                Field(username, onUsername, "اسم المستخدم")
+                OutlinedTextField(password, onPassword, label = { Text("كلمة المرور") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(18.dp), colors = OutlinedTextFieldDefaults.colors(unfocusedContainerColor = MaterialTheme.colorScheme.surface))
+                if (register) {
+                    Field(email, onEmail, "البريد الإلكتروني")
+                    Field(birth, onBirth, "تاريخ الميلاد YYYY-MM-DD")
+                    Text("بإنشاء الحساب تؤكد صحة تاريخ الميلاد وموافقتك على ضوابط المحتوى غير الصريح.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+                ReferencePrimary(if (register) "إنشاء حساب" else "دخول", !busy) { submit() }
+                TextButton(onClick = toggle, enabled = !busy, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text(if (register) "لديك حساب؟ تسجيل الدخول" else "جديد هنا؟ أنشئ حسابًا") }
+                Text("بياناتك مرتبطة بخادم ليالي · محتوى غير صريح", Modifier.align(Alignment.CenterHorizontally), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } }
+        }
+    }
+}
+
+@Composable
+private fun NativeReel(url: String, active: Boolean) {
+    if (!url.startsWith("https://")) return
+    val context = LocalContext.current
+    val video = remember(url) { VideoView(context).apply {
+        setVideoURI(Uri.parse(url))
+        setMediaController(MediaController(context).also { it.setAnchorView(this) })
+        setOnPreparedListener { it.isLooping = true; if (active) start() }
+    } }
+    DisposableEffect(video) { onDispose { video.stopPlayback() } }
+    AndroidView(factory = { video }, modifier = Modifier.fillMaxSize(), update = { if (active) { if (!it.isPlaying) it.start() } else it.pause() })
+}
+
 private fun friendlyError(code: String?): String = when (code) {
-    "authentication_required", "invalid_session", "invalid_credentials" -> "تعذّر تسجيل الدخول. تحقق من بياناتك أو سجّل الدخول مجددًا."
-    "adult_policy_required" -> "يجب أن يكون عمرك 18 عامًا أو أكثر وأن توافق على ضوابط المحتوى."
-    "verified_creator_required" -> "هذه الخدمة متاحة للمذيعات بعد توثيق الهوية واعتماد الإدارة."
+    "authentication_required", "invalid_session", "invalid_credentials" -> "تحقق من اسم المستخدم وكلمة المرور أو سجّل الدخول مجددًا."
+    "adult_policy_required" -> "يجب أن تكون قد أتممت 18 عامًا وتوافق على ضوابط المحتوى."
+    "verified_creator_required" -> "يلزم توثيق الهوية واعتماد حساب المذيعة من الإدارة."
     "identity_verification_required" -> "مشاهدة الريلز تتطلب توثيق الهوية لدى الإدارة."
-    "paid_chat_requires_verified_payment" -> "هذه المحادثة مدفوعة. لم يُفعّل التحقق من الدفع بعد، ولم تُرسل الرسالة."
+    "paid_chat_requires_verified_payment" -> "المحادثة مدفوعة. الدفع غير مفعّل بعد، ولم تُرسل الرسالة."
     "insufficient_funds" -> "رصيدك المتاح لا يكفي لطلب السحب."
     "too_many_attempts" -> "محاولات كثيرة. حاول بعد 15 دقيقة."
     "username_unavailable", "conflict" -> "اسم المستخدم أو الطلب مستخدم بالفعل."
-    "invalid_input", "invalid_password", "invalid_email", "invalid_username" -> "تحقق من الحقول. كلمة المرور الجديدة يجب ألا تقل عن 12 حرفًا وتكون غير شائعة."
-    else -> "تعذّر إتمام الطلب. تحقق من الاتصال والبيانات ثم حاول مجددًا."
+    "invalid_input", "invalid_password", "invalid_email", "invalid_username", "invalid_chat_price" -> "تحقق من البيانات. كلمة المرور الجديدة يجب ألا تقل عن 12 حرفًا وألا تكون شائعة."
+    "invalid_image_url" -> "أدخل رابط صورة صحيحًا يبدأ بـ https://."
+    "recipient_unavailable", "creator_unavailable" -> "الحساب غير متاح حاليًا."
+    else -> "تعذّر إتمام الطلب. تحقق من الاتصال ثم حاول مجددًا."
 }

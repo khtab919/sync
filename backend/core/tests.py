@@ -119,3 +119,62 @@ class WithdrawalConcurrencyTests(TransactionTestCase):
             results = list(pool.map(withdraw, range(2)))
         self.assertEqual(sorted(results), [201, 409])
         self.assertEqual(Wallet.objects.get(user=user).reserved_cents, 700)
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+class ReferenceInteractionTests(TestCase):
+    post = ApiTests.post
+    def setUp(self):
+        ApiTests.setUp(self)
+        self.service = Service.objects.create(owner=self.creator, title='Verified offer', description='Actual description', price_cents=200, approved=True)
+
+    def test_reactions_are_persistent_idempotent_and_private(self):
+        from .models import ServiceReaction
+        path = f'/api/services/{self.service.pk}/reaction'
+        for _ in range(2):
+            self.assertEqual(self.post(path, {'kind': 'save', 'enabled': True}).status_code, 200)
+        self.assertEqual(ServiceReaction.objects.count(), 1)
+        result = self.client.get('/api/saved', HTTP_AUTHORIZATION='Bearer ' + self.token)
+        self.assertEqual(result.json()['items'][0]['id'], self.service.pk)
+        other = self.client.get('/api/saved', HTTP_AUTHORIZATION='Bearer ' + self.creator_token)
+        self.assertEqual(other.json()['items'], [])
+        self.post(path, {'kind': 'save', 'enabled': False})
+        self.assertEqual(ServiceReaction.objects.count(), 0)
+
+    def test_profile_frame_and_name_are_saved_without_privilege_changes(self):
+        response = self.client.patch('/api/me', json.dumps({'display_name': 'New display name', 'selected_frame': 2, 'bio': 'New bio'}), content_type='application/json', HTTP_AUTHORIZATION='Bearer ' + self.token)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['selected_frame'], 2)
+        self.assertEqual(response.json()['display_name'], 'New display name')
+        self.assertFalse(response.json()['creator'])
+        invalid = self.client.patch('/api/me', json.dumps({'selected_frame': 3}), content_type='application/json', HTTP_AUTHORIZATION='Bearer ' + self.token)
+        self.assertEqual(invalid.status_code, 400)
+
+    def test_only_creator_can_change_chat_fee(self):
+        payload = json.dumps({'chat_price_cents': 200})
+        self.assertEqual(self.client.patch('/api/me', payload, content_type='application/json', HTTP_AUTHORIZATION='Bearer ' + self.token).status_code, 400)
+        self.assertEqual(self.client.patch('/api/me', payload, content_type='application/json', HTTP_AUTHORIZATION='Bearer ' + self.creator_token).status_code, 200)
+
+    def test_follow_is_idempotent_and_counts_are_real(self):
+        path = f'/api/creators/{self.creator.pk}/follow'
+        for _ in range(2):
+            response = self.post(path, {'enabled': True})
+            self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['followers_count'], 1)
+        self.assertTrue(response.json()['following'])
+        response = self.post(path, {'enabled': False})
+        self.assertEqual(response.json()['followers_count'], 0)
+
+    def test_support_messages_are_private_and_admin_reply_is_readable(self):
+        from .models import SupportTicket
+        self.assertEqual(self.post('/api/support', {'body': 'Please help with my account'}).status_code, 201)
+        SupportTicket.objects.update(reply='Your request was reviewed')
+        mine = self.client.get('/api/support', HTTP_AUTHORIZATION='Bearer ' + self.token)
+        self.assertEqual(mine.json()['items'][0]['reply'], 'Your request was reviewed')
+        other = self.client.get('/api/support', HTTP_AUTHORIZATION='Bearer ' + self.creator_token)
+        self.assertEqual(other.json()['items'], [])
+
+    def test_service_image_and_category_validation(self):
+        data = {'title': 'A service', 'description': 'A real description', 'price_cents': 200, 'category': 'منتج', 'image_url': 'http://example.com/image.jpg'}
+        self.assertEqual(self.post('/api/services', data, self.creator_token).status_code, 400)
+        data['image_url'] = 'https://example.com/image.jpg'
+        self.assertEqual(self.post('/api/services', data, self.creator_token).status_code, 201)

@@ -63,3 +63,17 @@ DJANGO_SECRET_KEY=test-only POSTGRES_PASSWORD=test LAYALI_TESTING=1 python manag
 ```
 
 SQLite tests cover API behavior and validation, not PostgreSQL lock behavior. CI additionally runs against PostgreSQL. APK build verification is separate. HTTPS deployment, external reachability, Firebase import, and payment provider verification cannot be inferred from passing unit tests.
+
+## Reference design update (7.0)
+
+The supplied Wisal native source is the visual reference: warm paper background, sage accents, Noto Sans Arabic local fonts (OFL license included), native five-tab navigation, feed cards, two-column offers, pinned support, profile header and three metallic frames. The reference's fictional people, product inventory, simulated orders and local payment unlocks are not copied. Real accounts, listings, likes, saves, follows, conversations, profile edits, frames and support tickets use the authenticated API. Dark mode is retained as a local appearance preference. Reels now play through native Android VideoView, subject to device codec support and identity approval. Media upload and paid entitlements are still outside this change.
+
+Before installing the 7.0 APK, update the server (additive migrations; do not remove volumes):
+
+```bash
+cd /opt/layali
+git pull --ff-only origin feat/layali-adult-non-explicit
+bash backend/deploy.sh
+```
+
+The redesigned login is the first screen. Registration requires date of birth and explicitly states acceptance of the non-explicit policy; age is validated by the backend. The server account role and identity flags remain administrator-controlled. The Noto font files come from the user-provided archive; see the included OFL license.

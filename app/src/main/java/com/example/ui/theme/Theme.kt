@@ -1,53 +1,45 @@
 package com.example.ui.theme
 
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Shapes
-import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 
-private val LuxuryNightlifeColorScheme = darkColorScheme(
-    primary = DeepTealPrimary,              // #0D9488 - الأزرار والتفاعل
-    onPrimary = SoftWhiteText,              // #F8FAFC - النص الأساسي
-    primaryContainer = RoyalNavyCard,       // #111D30 - البطاقات
-    onPrimaryContainer = SoftWhiteText,
-    secondary = MutedLuxuryGold,            // #D6AD62 - الذهبي للفخامة والعضويات فقط
-    onSecondary = RoyalNavyBackground,
-    secondaryContainer = ElevatedNavySurface,
-    onSecondaryContainer = SoftWhiteText,
-    tertiary = DeepTealBright,
-    onTertiary = RoyalNavyBackground,
-    background = RoyalNavyBackground,       // #09111E - الخلفية الرئيسية
-    onBackground = SoftWhiteText,           // #F8FAFC - النص الأساسي
-    surface = RoyalNavyCard,                // #111D30 - البطاقات
-    onSurface = SoftWhiteText,              // #F8FAFC - النص الأساسي
-    surfaceVariant = ElevatedNavySurface,   // #17263F - الأسطح الفرعية
-    onSurfaceVariant = SlateSecondaryText,  // #94A3B8 - النص الثانوي
-    outline = DarkBorderGray,               // #1E2E48 - حدود هادئة غير متكررة
-    error = ErrorCrimson
+val WisalInk = Color(0xFF202623)
+val WisalPaper = Color(0xFFF7F8F4)
+val WisalSage = Color(0xFFDCE5D9)
+val WisalMuted = Color(0xFF788078)
+private val ReferenceLight = lightColorScheme(
+    primary = WisalInk, onPrimary = Color.White,
+    primaryContainer = WisalSage, onPrimaryContainer = WisalInk,
+    secondary = WisalSage, onSecondary = WisalInk,
+    secondaryContainer = WisalSage, onSecondaryContainer = WisalInk,
+    background = WisalPaper, onBackground = WisalInk,
+    surface = Color.White, onSurface = WisalInk,
+    surfaceVariant = WisalSage.copy(alpha = .45f), onSurfaceVariant = WisalMuted,
+    outline = Color(0xFFDDE1D9), outlineVariant = Color(0xFFEAEEE7),
+    error = Color(0xFF9C5F56)
 )
-
-val LayaliShapes = Shapes(
-    small = RoundedCornerShape(14.dp),
-    medium = RoundedCornerShape(20.dp),
-    large = RoundedCornerShape(26.dp)
+private val ReferenceDark = darkColorScheme(
+    primary = WisalSage, onPrimary = WisalInk,
+    primaryContainer = Color(0xFF333D36), onPrimaryContainer = WisalSage,
+    secondary = Color(0xFFB9C6B6), onSecondary = WisalInk,
+    secondaryContainer = Color(0xFF333D36), onSecondaryContainer = WisalSage,
+    background = Color(0xFF161C18), onBackground = Color(0xFFF0F3EC),
+    surface = Color(0xFF222A24), onSurface = Color(0xFFF0F3EC),
+    surfaceVariant = Color(0xFF333D36), onSurfaceVariant = Color(0xFFB5BDB2),
+    outline = Color(0xFF485247), outlineVariant = Color(0xFF333D36),
+    error = Color(0xFFE2AAA2)
 )
+val LayaliShapes = Shapes(small = RoundedCornerShape(14.dp), medium = RoundedCornerShape(20.dp), large = RoundedCornerShape(26.dp))
 
 @Composable
-fun MyApplicationTheme(
-    isSoftRoseLightTheme: Boolean = false,
-    content: @Composable () -> Unit
-) {
+fun MyApplicationTheme(isSoftRoseLightTheme: Boolean = true, darkTheme: Boolean = false, content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-        MaterialTheme(
-            colorScheme = LuxuryNightlifeColorScheme,
-            typography = Typography,
-            shapes = LayaliShapes,
-            content = content
-        )
+        MaterialTheme(colorScheme = if (darkTheme) ReferenceDark else ReferenceLight, typography = Typography, shapes = LayaliShapes, content = content)
     }
 }

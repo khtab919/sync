@@ -12,12 +12,16 @@ class Profile(models.Model):
     identity_verified = models.BooleanField(default=False)
     chat_price_cents = models.PositiveIntegerField(default=0)
     bio = models.CharField(max_length=300, blank=True)
+    display_name = models.CharField(max_length=100, blank=True)
+    selected_frame = models.PositiveSmallIntegerField(default=0)
 
 class Service(models.Model):
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     title = models.CharField(max_length=150)
     description = models.TextField(max_length=600)
     price_cents = models.PositiveIntegerField()
+    image_url = models.URLField(max_length=500, blank=True)
+    category = models.CharField(max_length=30, default='خدمة')
     approved = models.BooleanField(default=False)
     active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -77,3 +81,23 @@ class AuthRateLimit(models.Model):
     key = models.CharField(max_length=64, primary_key=True)
     window_start = models.DateTimeField()
     attempts = models.PositiveIntegerField(default=0)
+
+
+class ServiceReaction(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    service = models.ForeignKey(Service, on_delete=models.CASCADE)
+    kind = models.CharField(max_length=10, choices=[('like', 'Like'), ('save', 'Save')])
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['user', 'service', 'kind'], name='unique_service_reaction')]
+
+class Follow(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='follows')
+    creator = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='followers')
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['user', 'creator'], name='unique_follow')]
+
+class SupportTicket(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    body = models.CharField(max_length=2000)
+    reply = models.CharField(max_length=2000, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)

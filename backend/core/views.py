@@ -12,7 +12,7 @@ from django.db.models import Q
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
-from .models import Profile, Service, Booking, Wallet, Withdrawal, Message, Reel, Report, SessionToken, AuthRateLimit
+from .models import Profile, Service, Booking, Wallet, Withdrawal, Message, Reel, Report, SessionToken, AuthRateLimit, ServiceReaction, Follow, SupportTicket
 
 User = get_user_model()
 
@@ -143,31 +143,143 @@ def logout(request):
     request.api_token.delete()
     return JsonResponse({'ok': True})
 
+def profile_json(user, viewer):
+    profile = Profile.objects.get(user=user)
+    return {
+        'id': user.pk, 'username': user.username,
+        'display_name': profile.display_name or user.username,
+        'bio': profile.bio, 'creator': profile.creator,
+        'identity_verified': profile.identity_verified,
+        'selected_frame': profile.selected_frame, 'chat_price_cents': profile.chat_price_cents,
+        'followers_count': Follow.objects.filter(creator=user, user__is_active=True).count(),
+        'following_count': Follow.objects.filter(user=user, creator__is_active=True).count(),
+        'service_count': Service.objects.filter(owner=user, approved=True, active=True).count(),
+        'reel_count': Reel.objects.filter(owner=user, approved=True).count(),
+        'following': Follow.objects.filter(user=viewer, creator=user).exists(),
+        'is_staff': user.is_staff if user == viewer else False,
+    }
+
 @endpoint(['GET', 'PATCH'])
 def me(request):
     profile = Profile.objects.get(user=request.actor)
     if request.method == 'PATCH':
-        if set(request.payload) - {'bio'}:
+        p = request.payload
+        if set(p) - {'bio', 'display_name', 'selected_frame', 'chat_price_cents'}:
             raise ApiError('unsupported_profile_field')
-        profile.bio = text(request.payload, 'bio', 0, 300)
-        profile.save(update_fields=['bio'])
-    return JsonResponse({'id': request.actor.pk, 'username': request.actor.username, 'bio': profile.bio, 'creator': profile.creator, 'identity_verified': profile.identity_verified})
+        if 'chat_price_cents' in p and (type(p['chat_price_cents']) is not int or not 0 <= p['chat_price_cents'] <= 500000 or not profile.creator):
+            raise ApiError('invalid_chat_price')
+        if 'selected_frame' in p and (type(p['selected_frame']) is not int or p['selected_frame'] not in (0, 1, 2)):
+            raise ApiError('invalid_frame')
+        # Validate the whole patch before persisting any changes.
+        bio = text(p, 'bio', 0, 300) if 'bio' in p else profile.bio
+        name = text(p, 'display_name', 1, 100) if 'display_name' in p else profile.display_name
+        profile.bio, profile.display_name = bio, name
+        profile.selected_frame = p.get('selected_frame', profile.selected_frame)
+        profile.chat_price_cents = p.get('chat_price_cents', profile.chat_price_cents)
+        profile.save()
+    return JsonResponse(profile_json(request.actor, request.actor))
+
+def service_json(service, viewer):
+    owner = Profile.objects.get(user=service.owner)
+    return {'id': service.pk, 'owner_id': service.owner_id,
+            'owner_name': owner.display_name or service.owner.username,
+            'owner_frame': owner.selected_frame, 'title': service.title,
+            'description': service.description, 'price_cents': service.price_cents,
+            'image_url': service.image_url, 'category': service.category,
+            'liked': ServiceReaction.objects.filter(service=service, user=viewer, kind='like').exists(),
+            'saved': ServiceReaction.objects.filter(service=service, user=viewer, kind='save').exists(),
+            'like_count': ServiceReaction.objects.filter(service=service, kind='like', user__is_active=True).count()}
 
 @endpoint(['GET', 'POST'])
 def services(request):
     if request.method == 'GET':
-        rows = Service.objects.filter(approved=True, active=True, owner__is_active=True).order_by('-id').values('id', 'owner_id', 'title', 'description', 'price_cents')[:100]
-        return JsonResponse({'items': list(rows)})
+        rows = Service.objects.filter(approved=True, active=True, owner__is_active=True).select_related('owner').order_by('-id')[:100]
+        return JsonResponse({'items': [service_json(row, request.actor) for row in rows]})
     if not Profile.objects.filter(user=request.actor, creator=True, identity_verified=True).exists():
         raise ApiError('verified_creator_required', 403)
     p = request.payload
-    service = Service.objects.create(owner=request.actor, title=text(p, 'title', 3, 150), description=text(p, 'description', 10, 600), price_cents=amount(p, 'price_cents'))
+    image_url = p.get('image_url', '')
+    if image_url:
+        from django.core.validators import URLValidator
+        URLValidator(schemes=['https'])(image_url)
+        if len(image_url) > 500:
+            raise ApiError('invalid_image_url')
+    category = p.get('category', 'خدمة')
+    if category not in ('خدمة', 'منتج', 'كورس'):
+        raise ApiError('invalid_category')
+    service = Service.objects.create(owner=request.actor, title=text(p, 'title', 3, 150), description=text(p, 'description', 10, 600), price_cents=amount(p, 'price_cents'), image_url=image_url, category=category)
     return JsonResponse({'id': service.pk, 'status': 'pending_review'}, status=201)
+
+@endpoint(['POST'])
+def reaction(request, service_id):
+    service = Service.objects.filter(pk=service_id, active=True, approved=True, owner__is_active=True).first()
+    if service is None:
+        raise ApiError('service_unavailable', 404)
+    kind = request.payload.get('kind')
+    enabled = request.payload.get('enabled')
+    if kind not in ('like', 'save') or type(enabled) is not bool:
+        raise ApiError('invalid_reaction')
+    if enabled:
+        ServiceReaction.objects.get_or_create(user=request.actor, service=service, kind=kind)
+    else:
+        ServiceReaction.objects.filter(user=request.actor, service=service, kind=kind).delete()
+    return JsonResponse(service_json(service, request.actor))
+
+@endpoint(['GET'])
+def saved(request):
+    ids = ServiceReaction.objects.filter(user=request.actor, kind='save').values_list('service_id', flat=True)
+    rows = Service.objects.filter(pk__in=ids, active=True, approved=True, owner__is_active=True).select_related('owner').order_by('-id')[:100]
+    return JsonResponse({'items': [service_json(row, request.actor) for row in rows]})
+
+@endpoint(['GET'])
+def creators(request):
+    users = User.objects.filter(is_active=True, profile__creator=True, profile__identity_verified=True).order_by('id')[:100]
+    return JsonResponse({'items': [profile_json(user, request.actor) for user in users]})
+
+@endpoint(['POST'])
+def follow(request, creator_id):
+    creator = User.objects.filter(pk=creator_id, is_active=True, profile__creator=True, profile__identity_verified=True).first()
+    if creator is None or creator == request.actor:
+        raise ApiError('creator_unavailable', 404)
+    enabled = request.payload.get('enabled')
+    if type(enabled) is not bool:
+        raise ApiError('invalid_follow')
+    if enabled:
+        Follow.objects.get_or_create(user=request.actor, creator=creator)
+    else:
+        Follow.objects.filter(user=request.actor, creator=creator).delete()
+    return JsonResponse(profile_json(creator, request.actor))
+
+@endpoint(['GET'])
+def conversations(request):
+    rows = Message.objects.filter(Q(sender=request.actor) | Q(recipient=request.actor)).select_related('sender', 'recipient').order_by('-id')
+    peers, result = set(), []
+    for message in rows.iterator():
+        peer = message.recipient if message.sender_id == request.actor.pk else message.sender
+        if peer.pk in peers or not peer.is_active:
+            continue
+        peers.add(peer.pk)
+        profile = Profile.objects.filter(user=peer).first()
+        if profile is None:
+            continue
+        result.append({'id': peer.pk, 'display_name': profile.display_name or peer.username,
+                       'selected_frame': profile.selected_frame, 'last_message': message.body,
+                       'created_at': message.created_at})
+        if len(result) == 100:
+            break
+    return JsonResponse({'items': result})
+
+@endpoint(['GET', 'POST'])
+def support(request):
+    if request.method == 'POST':
+        row = SupportTicket.objects.create(user=request.actor, body=text(request.payload, 'body', 3, 2000))
+        return JsonResponse({'id': row.pk}, status=201)
+    return JsonResponse({'items': list(SupportTicket.objects.filter(user=request.actor).order_by('-id').values('id', 'body', 'reply', 'created_at')[:100])})
 
 @endpoint(['GET', 'POST'])
 def bookings(request):
     if request.method == 'GET':
-        rows = Booking.objects.filter(buyer=request.actor).order_by('-created_at').values('id', 'service_id', 'price_cents', 'status', 'created_at')[:100]
+        rows = Booking.objects.filter(buyer=request.actor).order_by('-created_at').values('id', 'service_id', 'service__title', 'price_cents', 'status', 'created_at')[:100]
         return JsonResponse({'items': list(rows)})
     service = Service.objects.filter(pk=amount(request.payload, 'service_id'), approved=True, active=True, owner__is_active=True).first()
     if not service or service.owner_id == request.actor.pk:

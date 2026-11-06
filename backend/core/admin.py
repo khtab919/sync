@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Profile, Service, Booking, Wallet, Withdrawal, Reel, Report
+from .models import Profile, Service, Booking, Wallet, Withdrawal, Reel, Report, SupportTicket
 
 @admin.register(Profile)
 class ProfileAdmin(admin.ModelAdmin):
@@ -28,3 +28,11 @@ class FinancialReadOnlyAdmin(admin.ModelAdmin):
 admin.site.register(Booking, FinancialReadOnlyAdmin)
 admin.site.register(Wallet, FinancialReadOnlyAdmin)
 admin.site.register(Withdrawal, FinancialReadOnlyAdmin)
+
+
+@admin.register(SupportTicket)
+class SupportTicketAdmin(admin.ModelAdmin):
+    list_display = ('id', 'user', 'created_at')
+    readonly_fields = ('user', 'body', 'created_at')
+    def has_add_permission(self, request): return False
+    def has_delete_permission(self, request, obj=None): return False
