@@ -1,5 +1,8 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import com.example.R
 import android.content.Intent
 import android.net.Uri
 import android.widget.MediaController
@@ -216,7 +219,7 @@ fun ServerAppScreen(baseUrl: String) {
                 if (screen != "حسابي" && screen != "صفحة المذيعة") TopAppBar(
                     title = {
                         if (screen == "تصفح") Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                            Icon(Icons.Outlined.AllInclusive, null, Modifier.size(28.dp))
+                            Image(painterResource(R.drawable.relaxia_logo), "شعار Relaxia", Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)))
                             Text("Relaxia", fontSize = 28.sp, fontWeight = FontWeight.Bold)
                         } else Text(if (screen == "محادثة") peerName.ifBlank { "محادثة" } else screen, fontWeight = FontWeight.SemiBold)
                     },
@@ -544,7 +547,7 @@ internal fun ReferenceLogin(register: Boolean, busy: Boolean, notice: String, us
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         LazyColumn(modifier = Modifier.fillMaxSize().imePadding(), contentPadding = PaddingValues(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
             item { Column(Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(Color(0xFF513044), WisalInk)), RoundedCornerShape(bottomEnd = 72.dp)).statusBarsPadding().heightIn(min = 170.dp).padding(28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Outlined.AllInclusive, null, Modifier.size(34.dp), tint = WisalSage); Spacer(Modifier.weight(1f)); Text("18+", color = Color.White.copy(alpha = .7f), fontSize = 12.sp) }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { Image(painterResource(R.drawable.relaxia_logo), "شعار Relaxia", Modifier.size(76.dp).clip(RoundedCornerShape(18.dp))); Spacer(Modifier.weight(1f)); Text("18+", color = Color.White.copy(alpha = .7f), fontSize = 12.sp) }
                 Spacer(Modifier.height(6.dp))
                 Text("Relaxia", color = Color.White, fontSize = 36.sp, fontWeight = FontWeight.Bold)
                 Text("لحظات أقرب، بطريقتك.", color = Color.White.copy(alpha = .7f), fontSize = 15.sp)
