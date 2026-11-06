@@ -8,10 +8,16 @@
         max_size 32MB
     }
     handle_path /livekit/* {
-        forward_auth api:8000 {
+        forward_auth live-api:8000 {
             uri /api/live/authorize
         }
         reverse_proxy livekit:7880
+    }
+    @live_api path /api/live /api/live/* /api/admin/live
+    handle @live_api {
+        reverse_proxy live-api:8000 {
+            header_up X-Real-IP {remote_host}
+        }
     }
     handle_path /static/* {
         root * /srv/static
