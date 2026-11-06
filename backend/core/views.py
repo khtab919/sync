@@ -99,7 +99,7 @@ def issue_token(user):
 def health(request):
     with connection.cursor() as cursor:
         cursor.execute('SELECT 1')
-    return JsonResponse({'status': 'ok', 'registration_version': 4, 'identity_required': False, 'brand': 'Relaxia'})
+    return JsonResponse({'status': 'ok', 'registration_version': 4, 'identity_required': False, 'brand': 'Relaxia', 'mobile_admin_version': 1})
 
 @endpoint(['POST'], authenticated=False)
 def register(request):
@@ -150,7 +150,13 @@ def register(request):
 def login(request):
     p = request.payload
     user = authenticate(username=' '.join(text(p, 'username', 2, 50).split()).removeprefix('@').lower(), password=password_value(p))
-    if user is None or not Profile.objects.filter(user=user).exists():
+    if user is None:
+        raise ApiError('invalid_credentials', 401)
+    if user.is_staff and user.is_superuser:
+        with transaction.atomic():
+            Profile.objects.get_or_create(user=user)
+            Wallet.objects.get_or_create(user=user)
+    elif not Profile.objects.filter(user=user).exists():
         raise ApiError('invalid_credentials', 401)
     return JsonResponse({'token': issue_token(user), 'user_id': user.pk})
 
@@ -173,6 +179,7 @@ def profile_json(user, viewer):
         'reel_count': Reel.objects.filter(owner=user, approved=True).count(),
         'following': Follow.objects.filter(user=viewer, creator=user).exists(),
         'is_staff': user.is_staff if user == viewer else False,
+        'is_admin': user.is_staff and user.is_superuser if user == viewer else False,
     }
 
 @endpoint(['GET', 'PATCH'])

@@ -105,8 +105,11 @@ class SupportTicket(models.Model):
 
 
 class BalanceAdjustment(models.Model):
+    request_key = models.UUIDField(null=True, blank=True, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='balance_adjustments')
     administrator = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='issued_balance_adjustments')
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['administrator', 'request_key'], name='unique_admin_credit_request')]
     amount_cents = models.PositiveBigIntegerField()
     reason = models.CharField(max_length=300)
     created_at = models.DateTimeField(auto_now_add=True)

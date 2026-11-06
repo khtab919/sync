@@ -109,3 +109,9 @@ docker compose exec api python manage.py authorize_creator macitcomah@gmail.com
 This enables publishing and creator discovery; content still requires moderation.
 Create a separate administrator interactively with `docker compose exec api python manage.py createsuperuser`. Never place passwords in shell command arguments.
 At `/admin/`, Users supports ban/unban and account previews. Bans revoke API sessions and hide creator content from public listings. Wallets supports superuser-only positive credit adjustments in integer USD cents, requiring a reason and storing an immutable administrator audit entry. These adjustments are internal credits, not payment-provider deposits. Financial bookings, withdrawals and audit entries cannot be directly rewritten through admin.
+
+
+### Native administration — Relaxia 8.2
+The ordinary app login opens the native management dashboard automatically for active staff superusers. No management menu is shown to other accounts. Existing administrators created with `createsuperuser` have their app profile and wallet initialized on successful login; the same username/password works in the app. Usernames should be lowercase to match app normalization. New API routes under `/api/admin/` require active staff AND superuser privileges on every request.
+
+The dashboard supports account search/pagination, account previews, ban/unban with API-token revocation, creator publishing/discovery activation, audited USD credit additions with retry idempotency, and approving/hiding offers and reels. It does not grant administrator privileges or impersonate accounts. Payment and payout integration remain separate unfinished features. Deploy migration 0008 before using the new dashboard.

@@ -150,7 +150,7 @@ fun ServerAppScreen(baseUrl: String) {
     val screen = page.ifBlank { destinations[tab] }
     BackHandler(enabled = signedIn && page.isNotBlank()) { back() }
     LaunchedEffect(screen, signedIn, revision) {
-        if (!signedIn) return@LaunchedEffect
+        if (!signedIn || profile.optBoolean("is_admin")) return@LaunchedEffect
         loading = true; contentError = ""; rows = emptyList()
         try {
             when (screen) {
@@ -211,6 +211,12 @@ fun ServerAppScreen(baseUrl: String) {
                     password = ""; signedIn = true; tab = 0; page = ""
                     if (!api.sessionSaved) notice = "تم الدخول. تعذّر حفظ الجلسة على هذا الجهاز، وقد تحتاج للدخول مجددًا عند إغلاق التطبيق."
                 } })
+            return@MyApplicationTheme
+        }
+        if (profile.optBoolean("is_admin")) {
+            MobileAdminScreen(api, profile.optString("display_name", profile.optString("username"))) {
+                perform { api.request("/api/logout", "POST", JSONObject()); signedIn = false; remembered = false; profile = JSONObject(); page = "" }
+            }
             return@MyApplicationTheme
         }
         Scaffold(
@@ -399,7 +405,6 @@ fun ServerAppScreen(baseUrl: String) {
                             ReferenceRow(Icons.Outlined.PersonOutline, "تعديل الملف الشخصي") { editProfile() }
                             ReferenceRow(Icons.Outlined.Shield, "الخصوصية وضوابط المحتوى") { open("سياسة الخصوصية") }
                             ReferenceRow(Icons.Outlined.Flag, "إرسال بلاغ") { open("إرسال بلاغ") }
-                            if (profile.optBoolean("is_staff")) ReferenceRow(Icons.Outlined.AdminPanelSettings, "لوحة الإدارة") { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(baseUrl.trimEnd('/') + "/admin/"))) }
                             ReferenceRow(Icons.Outlined.Logout, "تسجيل الخروج") { perform { api.request("/api/logout", "POST", JSONObject()); signedIn = false; services = emptyList(); creators = emptyList(); rows = emptyList(); profile = JSONObject(); page = "" } }
                         } }
                         "من نحن", "سياسة الخصوصية" -> item { FormColumn {

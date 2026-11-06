@@ -328,3 +328,84 @@ class AdministrationTests(TestCase):
         self.assertFalse(SessionToken.objects.filter(user=self.user).exists())
         self.client.force_login(self.admin)
         self.assertContains(self.client.get(f'/admin/auth/user/{self.user.pk}/preview/'), 'macitcomah@gmail.com')
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+class MobileAdministrationTests(TestCase):
+    def setUp(self):
+        self.admin = get_user_model().objects.create_superuser('mobileadmin', 'root@example.com', 'unique-admin-pass')
+        self.user = get_user_model().objects.create_user('person', 'person@example.com', 'unique-member-pass')
+        for user in (self.admin, self.user):
+            Profile.objects.create(user=user)
+            Wallet.objects.create(user=user)
+        self.admin_token = issue_token(self.admin)
+        self.user_token = issue_token(self.user)
+
+    def call(self, path, data=None, token=None):
+        kwargs = {'HTTP_AUTHORIZATION': 'Bearer ' + (token or self.admin_token)}
+        if data is None:
+            return self.client.get(path, **kwargs)
+        return self.client.post(path, json.dumps(data), content_type='application/json', **kwargs)
+
+    def test_only_full_administrator_can_access(self):
+        for path in ('/api/admin/accounts', f'/api/admin/accounts/{self.user.pk}', '/api/admin/moderation'):
+            self.assertEqual(self.call(path, token=self.user_token).status_code, 403)
+            self.assertEqual(self.client.get(path).status_code, 401)
+        self.user.is_staff = True
+        self.user.save()
+        self.assertEqual(self.call('/api/admin/accounts', token=self.user_token).status_code, 403)
+        self.assertFalse(self.call('/api/me', token=self.user_token).json()['is_admin'])
+        self.assertTrue(self.call('/api/me').json()['is_admin'])
+        self.assertNotIn('password', self.call('/api/admin/accounts').content.decode())
+
+    def test_ban_creator_preview_and_protection(self):
+        url = f'/api/admin/accounts/{self.user.pk}'
+        self.assertEqual(self.call(url, {'action': 'creator_on'}).status_code, 200)
+        self.user.profile.refresh_from_db()
+        self.assertTrue(self.user.profile.creator)
+        self.assertEqual(self.call('/api/creators', token=self.user_token).json()['items'][0]['id'], self.user.pk)
+        self.assertEqual(self.call(url).json()['email'], self.user.email)
+        self.assertEqual(self.call(url, {'action': 'ban'}).status_code, 200)
+        self.assertEqual(self.call('/api/me', token=self.user_token).status_code, 401)
+        self.assertEqual(self.call(url, {'action': 'unban'}).status_code, 200)
+        self.assertEqual(self.call(f'/api/admin/accounts/{self.admin.pk}', {'action': 'ban'}).status_code, 403)
+        self.assertEqual(self.call(url, {'action': 'make_admin'}).status_code, 400)
+
+    def test_credit_is_validated_audited_and_idempotent(self):
+        from .models import BalanceAdjustment
+        from django.contrib.admin.models import LogEntry
+        url = f'/api/admin/accounts/{self.user.pk}'
+        data = {'action': 'credit', 'amount_cents': 2345, 'reason': 'Support credit', 'request_key': str(uuid.uuid4())}
+        self.assertEqual(self.call(url, data, token=self.user_token).status_code, 403)
+        self.assertEqual(self.call(url, dict(data, amount_cents=-1)).status_code, 400)
+        self.assertEqual(self.call(url, dict(data, request_key='invalid')).status_code, 400)
+        self.assertEqual(self.call(url, data).status_code, 200)
+        self.assertEqual(self.call(url, data).status_code, 200)
+        self.assertEqual(self.call(url, dict(data, amount_cents=2500)).status_code, 409)
+        wallet = Wallet.objects.get(user=self.user)
+        self.assertEqual(wallet.balance_cents, 2345)
+        self.assertEqual(BalanceAdjustment.objects.count(), 1)
+        self.assertEqual(LogEntry.objects.filter(user=self.admin).count(), 1)
+
+    def test_moderation_requires_admin_and_boolean_approval(self):
+        from .models import Reel
+        service = Service.objects.create(owner=self.user, title='Session', price_cents=100)
+        reel = Reel.objects.create(owner=self.user, video_url='https://example.com/reel.mp4')
+        for kind, obj in (('service', service), ('reel', reel)):
+            data = {'kind': kind, 'id': obj.pk, 'approved': True}
+            self.assertEqual(self.call('/api/admin/moderation', data, token=self.user_token).status_code, 403)
+            self.assertEqual(self.call('/api/admin/moderation', dict(data, approved='true')).status_code, 400)
+            self.assertEqual(self.call('/api/admin/moderation', data).status_code, 200)
+            obj.refresh_from_db()
+            self.assertTrue(obj.approved)
+            self.assertEqual(self.call('/api/admin/moderation', dict(data, approved=False)).status_code, 200)
+            obj.refresh_from_db()
+            self.assertFalse(obj.approved)
+
+    def test_console_created_admin_can_login_without_existing_profile(self):
+        Profile.objects.filter(user=self.admin).delete()
+        Wallet.objects.filter(user=self.admin).delete()
+        response = self.call('/api/login', {'username': 'mobileadmin', 'password': 'unique-admin-pass'})
+        self.assertEqual(response.status_code, 200)
+        token = response.json()['token']
+        self.assertTrue(self.call('/api/me', token=token).json()['is_admin'])
+        self.assertEqual(self.call('/api/admin/accounts', token=token).status_code, 200)
