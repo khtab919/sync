@@ -41,6 +41,14 @@ class ReferenceDesignTest {
         }
     }
 
+    @Test fun gatewayStatusRequiresServerCreditAndExposesReview() {
+        val pending = JSONObject().put("status", "finished").put("credited", false)
+        org.junit.Assert.assertFalse(gatewayStatusText(pending).contains("تم تأكيد الدفع"))
+        org.junit.Assert.assertTrue(gatewayStatusText(pending.put("credited", true)).contains("إضافة الكوينز"))
+        org.junit.Assert.assertTrue(gatewayStatusText(JSONObject().put("review_required", true)).contains("لا تكرر الدفع"))
+        org.junit.Assert.assertTrue(gatewayStatusText(JSONObject().put("status", "partially_paid")).contains("أقل من المطلوب"))
+    }
+
     @Test fun loginSwitchesToRealRegistrationFields() {
         compose.setContent {
             var register by remember { mutableStateOf(false) }

@@ -11,6 +11,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.input.KeyboardType
@@ -24,6 +26,7 @@ import org.json.JSONObject
 import java.math.BigDecimal
 
 internal fun commerceError(e: Exception): String = when(e.message) {
+    "server_unavailable" -> "الخادم غير متاح مؤقتًا. حاول مجددًا؛ لا تكرر الدفع قبل التحقق من حالته."
     "file_too_large" -> "الحد الأقصى للصورة أو الصوت 8MB، وللريلز 20MB."
     "invalid_image", "invalid_file", "invalid_media" -> "الملف غير مدعوم. اختر صورة JPG/PNG/WEBP أو فيديو MP4."
     "creator_account_required" -> "قدّم طلب تفعيل البائع وانتظر موافقة الإدارة."
@@ -203,13 +206,13 @@ internal fun SupportFloatingButton() {
 private fun RewardWheel(prizes: org.json.JSONArray?, rotation: Float) {
     val animated by androidx.compose.animation.core.animateFloatAsState(rotation, androidx.compose.animation.core.tween(2400, easing = androidx.compose.animation.core.FastOutSlowInEasing), label = "wheel")
     val palette = listOf(androidx.compose.ui.graphics.Color(0xFF792C50), androidx.compose.ui.graphics.Color(0xFFBC6589), androidx.compose.ui.graphics.Color(0xFFE9BDCE), androidx.compose.ui.graphics.Color(0xFF49263A))
-    Box(Modifier.fillMaxWidth(), contentAlignment = androidx.compose.ui.Alignment.TopCenter) {
-        androidx.compose.foundation.Canvas(Modifier.size(280.dp)) {
-            val ring = 9.dp.toPx()
+    Box(Modifier.fillMaxWidth().semantics { contentDescription = "عجلة الجوائز؛ الاحتمالات موضحة في القواعد" }, contentAlignment = androidx.compose.ui.Alignment.TopCenter) {
+        androidx.compose.foundation.Canvas(Modifier.widthIn(max = 220.dp).fillMaxWidth().aspectRatio(1f)) {
+            val ring = size.minDimension * .025f
             drawCircle(androidx.compose.ui.graphics.Color(0xFFD3A071))
             val count = prizes?.length()?.takeIf { it > 0 } ?: 6
             var start = -90f + animated
-            val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.WHITE; textSize = 14.dp.toPx(); textAlign = android.graphics.Paint.Align.CENTER; isFakeBoldText = true }
+            val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.WHITE; textSize = size.minDimension * .055f; textAlign = android.graphics.Paint.Align.CENTER; isFakeBoldText = true }
             for(i in 0 until count) {
                 val sweep = if(prizes != null && prizes.length() > 0) (prizes.getJSONObject(i).optString("chance_percent").toFloatOrNull() ?: 0f) * 3.6f else 360f / count
                 drawArc(palette[i % palette.size], start, sweep, true, topLeft = androidx.compose.ui.geometry.Offset(ring,ring), size = androidx.compose.ui.geometry.Size(size.width - ring*2, size.height - ring*2))

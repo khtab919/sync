@@ -23,6 +23,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import com.example.data.api.LayaliApi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -49,6 +52,8 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
     val context=LocalContext.current
     val scope=rememberCoroutineScope()
     val uriHandler=LocalUriHandler.current
+    val lifecycle=LocalLifecycleOwner.current.lifecycle
+    var paymentStatus by rememberSaveable{mutableStateOf("")}
     var invoiceUrl by rememberSaveable{mutableStateOf("")}
     var info by remember{mutableStateOf(JSONObject())}
     var balance by remember{mutableStateOf<Long?>(null)}
@@ -69,11 +74,33 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
     val picker=rememberLauncherForActivityResult(ActivityResultContracts.GetContent()){uri->if(uri!=null)perform{val r=api.upload(context,uri,"receipt");receipt=r.getString("id");preview=r.getString("url");note="تم رفع الإيصال."}}
     LaunchedEffect(Unit){busy=true;try{reload()}catch(e:CancellationException){throw e}catch(e:Exception){note=commerceError(e)}finally{busy=false}}
     LaunchedEffect(quoteText){while(quote!=null){remaining=((Instant.parse(quote.optString("expires_at")).toEpochMilli()-System.currentTimeMillis()-offset)/1000).coerceAtLeast(0);delay(1000)}}
+    // Read-only reconciliation resumes when returning from hosted checkout. Never retry a charge.
+    LaunchedEffect(quoteText,invoiceUrl,lifecycle){
+        val activeQuote=quote ?: return@LaunchedEffect
+        if(activeQuote.optString("method")!="nowpayments"||invoiceUrl.isBlank())return@LaunchedEffect
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED){
+            while(true){
+                if(!busy){
+                    try{
+                        val result=api.request("/api/nowpayments/status/${activeQuote.getString("id")}")
+                        paymentStatus=gatewayStatusText(result)
+                        if(result.optBoolean("credited")){
+                            balance=api.request("/api/wallet").optLong("available_cents")
+                            quoteText="";note="تم تأكيد الدفع وإضافة الكوينز.";break
+                        }
+                        if(result.optBoolean("review_required")||result.optString("status") in listOf("failed","expired","refunded"))break
+                    }catch(e:CancellationException){throw e}catch(e:Exception){paymentStatus="تعذّر تحديث الحالة. يمكنك التحقق مجددًا دون تكرار الدفع."}
+                }
+                delay(15000)
+            }
+        }
+    }
     Surface(Modifier.fillMaxSize(),color=MaterialTheme.colorScheme.background){Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding().verticalScroll(rememberScrollState()).padding(22.dp),verticalArrangement=Arrangement.spacedBy(18.dp)){
         Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){TextButton(back,enabled=!busy){Text("رجوع")};Spacer(Modifier.weight(1f));Text(if(balance==null)"الرصيد —"else"${balance} كوينز",fontSize=13.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)}
         Text("متجر الكوينز",style=MaterialTheme.typography.headlineLarge,fontWeight=FontWeight.Bold)
         Text("اختر باقتك ووسيلة الدفع. كل 100 كوينز = 1 دولار رصيد داخلي.",color=MaterialTheme.colorScheme.onSurfaceVariant)
         if(note.isNotBlank())Text(note,color=MaterialTheme.colorScheme.primary)
+        if(info.length()==0&&!busy)OutlinedButton(onClick={perform{reload()}}){Text("إعادة تحميل وسائل الدفع")}
         if(busy)LinearProgressIndicator(Modifier.fillMaxWidth())
         if(quote==null){
             listOf(100,300,1000,2500,5000,10000).chunked(2).forEach{pair->Row(horizontalArrangement=Arrangement.spacedBy(12.dp)){pair.forEach{amount->val bonus=amount*(if(amount>=10000)8 else if(amount>=5000)6 else if(amount>=2500)4 else 0)/100;Box(Modifier.weight(1f)){CoinPackage(amount,bonus,BigDecimal.valueOf(amount.toLong(),2).toPlainString(),selected==amount){selected=amount}}}}}
@@ -81,32 +108,36 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
             Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(10.dp)){
                 FilterChip(method=="usdt",{method="usdt"},label={Text("USDT · BEP20")})
                 FilterChip(method=="shamcash",{method="shamcash"},label={Text("شام كاش")},enabled=info.optBoolean("shamcash_enabled"))
-                FilterChip(method=="nowpayments",{method="nowpayments"},label={Text("NOWPayments")},enabled=info.optBoolean("nowpayments_enabled"))
+                FilterChip(method=="nowpayments",{method="nowpayments"},label={Text("عملات رقمية · NOWPayments")},enabled=info.optBoolean("nowpayments_enabled"))
             }
+            Text("الدفع المتاح هنا بالعملات الرقمية. فيزا وماستركارد غير مفعّلتين حاليًا.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
             if(!info.optBoolean("nowpayments_enabled"))Text("NOWPayments يحتاج إعداد مفاتيح حساب التاجر على الخادم.",fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
             if(!info.optBoolean("shamcash_enabled"))Text("شام كاش ينتظر إعداد بيانات الاستلام من الإدارة.",fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
-            Button(onClick={perform{val result=api.request("/api/topup-quotes","POST",JSONObject().put("method",method).put("amount_cents",selected));offset=result.optLong("server_now_ms",System.currentTimeMillis())-System.currentTimeMillis();quoteText=result.toString();invoiceUrl="";receipt="";reference="";preview=""}},enabled=!busy&&info.has("address"),modifier=Modifier.fillMaxWidth().height(54.dp),shape=RoundedCornerShape(17.dp)){Text("متابعة الدفع",fontSize=17.sp)}
+            Button(onClick={perform{val result=api.request("/api/topup-quotes","POST",JSONObject().put("method",method).put("amount_cents",selected));offset=result.optLong("server_now_ms",System.currentTimeMillis())-System.currentTimeMillis();quoteText=result.toString();paymentStatus="";invoiceUrl="";receipt="";reference="";preview=""}},enabled=!busy&&info.has("address"),modifier=Modifier.fillMaxWidth().height(54.dp),shape=RoundedCornerShape(17.dp)){Text("متابعة الدفع",fontSize=17.sp)}
         }else{
             Text("${quote.optInt("coins")} كوينز",fontSize=30.sp,fontWeight=FontWeight.Bold)
             Text("المطلوب: ${quote.optString("payment_amount")} ${quote.optString("payment_currency")}",style=MaterialTheme.typography.titleLarge)
             Surface(shape=RoundedCornerShape(18.dp),color=MaterialTheme.colorScheme.primaryContainer){Column(Modifier.fillMaxWidth().padding(18.dp),horizontalAlignment=Alignment.CenterHorizontally){
                 Text("مدة صلاحية طلب الشراء",fontSize=12.sp)
                 Text(String.format("%02d:%02d",remaining/60,remaining%60),fontSize=34.sp,fontWeight=FontWeight.Bold)
-                Text(if(remaining>0)"العدّاد مرتبط بهذا الطلب ولا يُعاد عند فتح الصفحة."else"انتهت المهلة. إن كنت دفعت، ارفع إثبات الدفع للمراجعة.",fontSize=12.sp)
+                Text(if(remaining>0)"العدّاد مرتبط بهذا الطلب ولا يُعاد عند فتح الصفحة."else if(quote.optString("method")=="nowpayments")"انتهت مهلة الطلب. إن كنت دفعت، تحقق من حالة الفاتورة قبل إنشاء طلب جديد."else"انتهت المهلة. إن كنت دفعت، ارفع إثبات الدفع للمراجعة.",fontSize=12.sp)
             }}
             val rail=quote.optString("method")
             if(rail=="nowpayments") {
                 Text("دفع آمن عبر NOWPayments",style=MaterialTheme.typography.titleLarge)
                 Text("تختار العملة في صفحة البوابة. الرصيد يضاف بعد اكتمال الدفع وتأكيد الخادم؛ العودة من صفحة الدفع وحدها لا تعتمد العملية.",style=MaterialTheme.typography.bodySmall)
+                if(paymentStatus.isNotBlank())Text(paymentStatus,style=MaterialTheme.typography.bodyMedium)
                 Button(onClick={perform{
+                    if(invoiceUrl.isNotBlank()){uriHandler.openUri(invoiceUrl);return@perform}
                     val invoice=api.request("/api/nowpayments/invoices","POST",JSONObject().put("quote_id",quote.getString("id")))
                     val link=invoice.getString("invoice_url");val parsed=Uri.parse(link)
-                    require(parsed.scheme=="https"&&parsed.host in listOf("nowpayments.io","www.nowpayments.io")&&parsed.userInfo==null)
+                    require(parsed.scheme=="https"&&parsed.host in listOf("nowpayments.io","www.nowpayments.io")&&parsed.userInfo==null&&(parsed.port==-1||parsed.port==443))
                     invoiceUrl=link;uriHandler.openUri(link)
-                }},enabled=!busy&&remaining>0,modifier=Modifier.fillMaxWidth().height(52.dp)){Text(if(invoiceUrl.isBlank())"فتح بوابة الدفع"else"فتح فاتورة الدفع مجددًا")}
+                }},enabled=!busy&&(remaining>0||invoiceUrl.isNotBlank()),modifier=Modifier.fillMaxWidth().height(52.dp)){Text(if(invoiceUrl.isBlank())"فتح بوابة الدفع"else"فتح فاتورة الدفع مجددًا")}
                 OutlinedButton(onClick={perform{
                     val result=api.request("/api/nowpayments/status/${quote.getString("id")}")
-                    if(result.optBoolean("credited")){quoteText="";reload();note="تم تأكيد الدفع وإضافة الكوينز."}else note="الدفع بانتظار اكتمال تأكيد البوابة. لم يضف الرصيد بعد."
+                    paymentStatus=gatewayStatusText(result)
+                    if(result.optBoolean("credited")){quoteText="";reload();note="تم تأكيد الدفع وإضافة الكوينز."}
                 }},enabled=!busy&&invoiceUrl.isNotBlank(),modifier=Modifier.fillMaxWidth()){Text("تحقق من الدفع وتحديث الرصيد")}
             } else {
             Text(if(rail=="usdt")"USDT على BEP20 فقط"else"استلام عبر شام كاش",fontWeight=FontWeight.Bold)
@@ -124,4 +155,18 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
         }
         if(rows.isNotEmpty()){Text("طلبات الشراء",style=MaterialTheme.typography.titleLarge);rows.forEach{r->ListItem(headlineContent={Text("${r.optLong("amount_cents")+r.optLong("bonus_cents")} كوينز")},supportingContent={Text(when(r.optString("status")){"pending"->"قيد المراجعة";"approved"->"تمت الإضافة";else->"مرفوض · ${r.optString("review_note")}"})})}}
     }}
+}
+
+internal fun gatewayStatusText(result:JSONObject):String = when {
+    result.optBoolean("credited") -> "تم تأكيد الدفع وإضافة الكوينز."
+    result.optBoolean("review_required") -> "العملية تحتاج مراجعة الدعم. لا تكرر الدفع."
+    else -> when(result.optString("status")){
+        "waiting" -> "الفاتورة بانتظار الدفع."
+        "confirming","confirmed","sending","finished" -> "تم رصد الدفع؛ جارٍ استكمال التأكيد وإضافة الرصيد."
+        "partially_paid" -> "المبلغ المستلم أقل من المطلوب. راجع الفاتورة أو الدعم قبل أي تحويل إضافي."
+        "expired" -> "انتهت صلاحية الفاتورة. إن كنت دفعت، تواصل مع الدعم."
+        "failed" -> "تعذرت عملية الدفع. راجع حالة الفاتورة قبل المحاولة مجددًا."
+        "refunded" -> "تم تسجيل استرداد العملية. راجع تفاصيلها لدى البوابة."
+        else -> "بانتظار تحديث حالة الدفع من البوابة."
+    }
 }

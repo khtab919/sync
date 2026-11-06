@@ -34,6 +34,7 @@ internal fun trustedCallOrigin(origin: String, baseUrl: String): Boolean = runCa
 internal fun InternalCallScreen(api: LayaliApi, baseUrl: String, callId: String, finish: () -> Unit) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
+    var retryAttempt by remember(callId) { mutableIntStateOf(0) }
     var call by remember(callId) { mutableStateOf(JSONObject()) }
     var bootstrap by remember(callId) { mutableStateOf<JSONObject?>(null) }
     var permissionGranted by remember(callId) { mutableStateOf(false) }
@@ -47,18 +48,18 @@ internal fun InternalCallScreen(api: LayaliApi, baseUrl: String, callId: String,
         if(!permissionGranted) error = "يلزم السماح بالميكروفون، وبالكاميرا لمكالمة الفيديو."
     }
     BackHandler { finish() }
-    LaunchedEffect(callId) {
+    LaunchedEffect(callId,retryAttempt) {
         try { call = api.request("/api/calls/$callId"); speaker = call.optString("mode") == "video" }
         catch(e: CancellationException) { throw e }
         catch(e: Exception) { error = "تعذّر فتح المكالمة. تحقق من تحديث الخادم والاتصال." }
     }
-    LaunchedEffect(call.optString("mode")) {
+    LaunchedEffect(call.optString("mode"),retryAttempt) {
         if(!call.has("mode") || permissionRequested) return@LaunchedEffect
         permissionRequested = true
         val needed = if(call.optString("mode") == "video") arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA) else arrayOf(Manifest.permission.RECORD_AUDIO)
         if(needed.all { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }) permissionGranted = true else permissions.launch(needed)
     }
-    LaunchedEffect(permissionGranted, callId) {
+    LaunchedEffect(permissionGranted, callId,retryAttempt) {
         if(!permissionGranted) return@LaunchedEffect
         try { bootstrap = api.request("/api/calls/$callId/ticket", "POST", JSONObject()) }
         catch(e: CancellationException) { throw e }
@@ -94,7 +95,14 @@ internal fun InternalCallScreen(api: LayaliApi, baseUrl: String, callId: String,
             TextButton(onClick = { speaker = !speaker }) { Text(if(speaker) "السماعة الخارجية" else "سماعة الهاتف") }
             Button(onClick = finish, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("إنهاء") }
         }
-        if(error.isNotBlank()) Text(error, Modifier.padding(20.dp), color = MaterialTheme.colorScheme.error)
+        if(error.isNotBlank()) {
+            Text(error, Modifier.padding(20.dp), color = MaterialTheme.colorScheme.error)
+            if(webView == null) OutlinedButton(onClick = {
+                webView?.stopLoading(); webView?.destroy(); webView = null
+                bootstrap = null; error = ""; permissionRequested = false
+                retryAttempt++
+            }, modifier = Modifier.padding(horizontal = 20.dp)) { Text("إعادة محاولة الاتصال") }
+        }
         val room = bootstrap
         if(permissionGranted && room != null && error.isBlank()) {
             AndroidView(modifier = Modifier.weight(1f).fillMaxWidth(), factory = { viewContext ->
