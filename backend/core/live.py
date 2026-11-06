@@ -207,6 +207,7 @@ def admission(request,broadcast_id):
     return JsonResponse({'url':request.build_absolute_uri(f'/api/live/{row.pk}/room'),'ticket':raw,'owner':request.actor.pk==row.owner_id})
 
 def join_token(a,session):
+    if a.session_id!=session.pk:raise ApiError('live_authorization_required',403)
     row=a.broadcast;authorized(row,a.user)
     if a.operation_id and a.operation.status=='refunded':raise ApiError('admission_refunded',403)
     owner=a.user_id==row.owner_id
@@ -242,7 +243,7 @@ def authorize(request):
         data=jwt.decode(token,os.environ['LIVEKIT_API_SECRET'],algorithms=['HS256'],issuer=os.environ['LIVEKIT_API_KEY'],options={'require':['exp','iss','sub']})
         metadata=json.loads(data.get('metadata','{}'))
         session=SessionToken.objects.select_related('user').get(pk=metadata['session'],expires_at__gt=timezone.now(),user__is_active=True)
-        a=LiveAdmission.objects.select_related('broadcast__owner','user','operation').get(pk=metadata['admission'],user=session.user)
+        a=LiveAdmission.objects.select_related('broadcast__owner','user','operation').get(pk=metadata['admission'],user=session.user,session=session)
         authorized(a.broadcast,a.user)
         if data.get('video',{}).get('room')!=room_name(a.broadcast) or data['sub']!=('host-'+str(a.user_id) if a.user_id==a.broadcast.owner_id else str(a.pk)):raise ValueError()
         if a.operation_id and a.operation.status=='refunded':raise ValueError()
@@ -296,13 +297,21 @@ def control(request,broadcast_id):
     try:
         data=signing.loads(request.headers.get('X-Live-Control',''),salt='live-control',max_age=7200)
         session=SessionToken.objects.select_related('user').get(pk=data['session'],expires_at__gt=timezone.now(),user__is_active=True)
-        a=LiveAdmission.objects.select_related('broadcast__owner','user','operation').get(pk=data['admission'],user=session.user,broadcast_id=broadcast_id)
+        a=LiveAdmission.objects.select_related('broadcast__owner','user','operation').get(pk=data['admission'],user=session.user,session=session,broadcast_id=broadcast_id)
         request.actor=session.user;request.api_token=session;request.payload={}
         if request.method=='POST':
             if request.content_type!='application/json' or len(request.body)>4096:raise ApiError('invalid_input')
             request.payload=json.loads(request.body)
             if not isinstance(request.payload,dict):raise ApiError('invalid_input')
-            if request.payload.get('action')=='token':return JsonResponse({'token':join_token(a,session)})
+            if request.payload.get('action')=='token':
+                with transaction.atomic():
+                    row=LiveBroadcast.objects.select_for_update().get(pk=a.broadcast_id)
+                    authorized(row,a.user)
+                    if a.user_id!=row.owner_id and not moderator(a.user):
+                        reserved=LiveAdmission.objects.filter(broadcast=row,user__is_active=True,banned=False).exclude(user_id__in=[row.owner_id,a.user_id]).filter(Q(connected=True)|Q(token_until__gt=timezone.now())).count()
+                        if reserved>=row.max_viewers:raise ApiError('live_capacity',409)
+                    a.token_until=timezone.now()+timedelta(seconds=30);a.save(update_fields=['token_until'])
+                    return JsonResponse({'token':join_token(a,session)})
             if request.payload.get('action')=='end':return detail.__wrapped__(request,broadcast_id)
         elif request.method!='GET':return HttpResponse(status=405)
         return events.__wrapped__(request,broadcast_id)
