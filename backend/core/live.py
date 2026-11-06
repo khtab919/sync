@@ -338,4 +338,6 @@ def administration(request):
         try:synchronize(row)
         except ApiError:pass
         item=describe(row,request.actor);item['reports']=[{'id':r.pk,'reason':r.reason} for r in LiveReport.objects.filter(broadcast=row,resolved=False)];items.append(item)
-    return JsonResponse({'items':items,'recording':False})
+    pending=LiveReport.objects.filter(resolved=False).exclude(broadcast__status__in=LIVE).select_related('broadcast__owner__profile','user__profile').order_by('-id')[:100]
+    reports=[{'id':r.pk,'broadcast_id':str(r.broadcast_id),'title':r.broadcast.title,'owner_name':r.broadcast.owner.profile.display_name or r.broadcast.owner.username,'reporter_name':r.user.profile.display_name or r.user.username,'reason':r.reason,'created_at':r.created_at.isoformat()} for r in pending]
+    return JsonResponse({'items':items,'pending_reports':reports,'recording':False})

@@ -64,6 +64,7 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
     var reviewNote by remember { mutableStateOf("") }
     var verified by remember { mutableStateOf(false) }
     var requests by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var endedLiveReports by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var liveRoom by remember{mutableStateOf<JSONObject?>(null)}
     var payout by remember{mutableStateOf<JSONObject?>(null)}
     var payoutReference by remember{mutableStateOf("")}
@@ -118,7 +119,11 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
             } else if (section == "الدفع") {
                 val data=api.request("/api/admin/payment-settings")
                 gatewayConfigured=data.optBoolean("nowpayments_configured");paymentAccount=data.optString("account");paymentCurrency=data.optString("currency","USD");paymentRate=data.optString("rate","1");paymentInstructions=data.optString("instructions");paymentEnabled=data.optBoolean("enabled")
-            } else if(section=="البث المباشر")content=api.request("/api/admin/live").adminItems()
+            } else if(section=="البث المباشر") {
+                val data=api.request("/api/admin/live");content=data.adminItems()
+                val reports=data.optJSONArray("pending_reports")
+                endedLiveReports=if(reports==null)emptyList()else (0 until reports.length()).map{reports.getJSONObject(it)}
+            }
             else if(section=="الحجوزات")content=api.request("/api/admin/bookings").adminItems()
             else if(section=="السحب")content=api.request("/api/admin/payouts").adminItems()
             else if (section == "الطلبات") requests = api.request("/api/admin/requests").adminItems()
@@ -156,6 +161,14 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
                     }
                     if(row.optBoolean("private")&&!liveOnly)TextButton({livePriceTarget=row;livePriceInput=row.optLong("price_cents").toString()}){Text("تعديل السعر قبل البيع")}
                     Text("لا توجد تسجيلات أو إعادة مشاهدة للتحقيق لاحقًا.",style=MaterialTheme.typography.bodySmall)
+                }}}
+            }
+            if(section=="البث المباشر"&&endedLiveReports.isNotEmpty()){
+                item{Text("بلاغات بانتظار المراجعة",style=MaterialTheme.typography.titleMedium);Text("بيانات البلاغ فقط؛ لا توجد تسجيلات للبث.",style=MaterialTheme.typography.bodySmall)}
+                items(endedLiveReports,key={"report-"+it.optLong("id")}){report->Card(Modifier.fillMaxWidth()){Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
+                    Text(report.optString("title"));Text(report.optString("owner_name"));Text(report.optString("reason"))
+                    Text(report.optString("reporter_name")+" · "+report.optString("created_at"),style=MaterialTheme.typography.bodySmall)
+                    TextButton({perform{api.request("/api/admin/live","POST",JSONObject().put("action","resolve").put("id",report.getString("broadcast_id")));revision++}},enabled=!busy){Text("تمت مراجعة بلاغات الجلسة")}
                 }}}
             }
             if(section=="الحجوزات"){
