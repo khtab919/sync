@@ -129,7 +129,9 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
             }
         } } }
     ) { padding ->
-        LazyColumn(Modifier.fillMaxSize().padding(padding), state = listState, contentPadding = PaddingValues(horizontal = 16.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Box(Modifier.fillMaxSize().padding(padding)) {
+        if(rows.isEmpty() && error.isBlank()) Column(Modifier.align(Alignment.Center).padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) { Text("مساحة لحديثكما", style = MaterialTheme.typography.titleLarge); Text("اكتب رسالة أو أرسل صورة أو تسجيلًا صوتيًا.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(horizontal = 16.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(rows, key = { it.optInt("id") }) { message ->
                 val mine = message.optInt("sender_id") == myId
                 ChatBubble(message, mine, { media ->
@@ -137,6 +139,7 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
                     runCatching { MediaPlayer().also { p -> player = p; p.setDataSource(media); p.setOnPreparedListener { it.start() }; p.setOnCompletionListener { it.release(); if(player == it) player = null }; p.setOnErrorListener { mp, _, _ -> mp.release(); if(player == mp) player = null; error = "تعذّر تشغيل التسجيل."; true }; p.prepareAsync() } }.onFailure { error = "تعذّر تشغيل التسجيل." }
                 }, { confirmJoin = it })
             }
+        }
         }
     }
     if(confirmCall) AlertDialog(onDismissRequest = { confirmCall = false }, title = { Text("اتصال عبر Jitsi") }, text = { Text("سيُرسل رابط غرفة خاصة للطرف الآخر. الاتصال يفتح عبر خدمة Jitsi الخارجية وقد تتطلب من المضيف تسجيل الدخول. الكاميرا والميكروفون بإذنك، ولا توجد رنّة أو مكالمة خلفية داخل التطبيق.") }, confirmButton = { TextButton(onClick = { confirmCall = false; perform { val call = api.request("/api/messages/$peerId", "POST", JSONObject().put("start_call", true)); confirmJoin = call.getString("call_url") } }) { Text("إرسال دعوة اتصال") } }, dismissButton = { TextButton({ confirmCall = false }) { Text("إلغاء") } })

@@ -112,7 +112,7 @@ fun ServerAppScreen(baseUrl: String) {
 
     fun open(route: String) { page = route; notice = ""; contentError = ""; query = "" }
     fun buyCredits() { purchaseReturn = page; open("شحن الرصيد") }
-    fun back() { page = ""; query = ""; notice = "" }
+    fun back() { if (page == "شحن الرصيد" && purchaseReturn.isNotBlank()) { page = purchaseReturn; purchaseReturn = "" } else { page = "" }; query = ""; notice = "" }
     fun perform(action: suspend () -> Unit) {
         if (submitting) return
         submitting = true
@@ -179,6 +179,7 @@ fun ServerAppScreen(baseUrl: String) {
                 "حسابي" -> { profile = api.request("/api/me"); services = api.request("/api/services").rows() }
                 "ريلز" -> rows = api.request("/api/reels").rows()
                 "دردشة" -> rows = api.request("/api/conversations").rows()
+                "محادثة جديدة" -> creators = api.request("/api/creators").rows()
                 "محادثة" -> rows = api.request("/api/messages/$peerId").rows()
                 "المحفوظات" -> rows = api.request("/api/saved").rows()
                 "الحجوزات" -> rows = api.request("/api/bookings").rows()
@@ -353,29 +354,34 @@ fun ServerAppScreen(baseUrl: String) {
                             } }
                         }
                         "دردشة" -> {
-                            item { Box(Modifier.padding(horizontal = 16.dp)) { Surface(onClick = { message = ""; open("الدعم وخدمة العملاء") }, color = MaterialTheme.colorScheme.primaryContainer, shape = RoundedCornerShape(20.dp), shadowElevation = 2.dp) {
-                                Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                                    Icon(Icons.Outlined.SupportAgent, null, Modifier.size(30.dp))
-                                    Column(Modifier.weight(1f)) { Text("الدعم وخدمة العملاء", fontWeight = FontWeight.SemiBold); Text("مثبت دائمًا · تواصل مع الإدارة", style = MaterialTheme.typography.bodyMedium) }
-                                    Icon(Icons.Outlined.PushPin, null, Modifier.size(18.dp))
-                                }
-                            } } }
-                            item { Text("المحادثات", Modifier.padding(horizontal = 24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                            if (rows.isEmpty() && !loading && contentError.isBlank()) item { ReferenceEmpty(Icons.Outlined.ChatBubbleOutline, "ابدأ حديثًا جديدًا", "اختر مذيعة من ملفها الشخصي أو أدخل رقم حساب المستلم.") }
-                            items(rows) { person -> Box(Modifier.padding(horizontal = 16.dp)) {
-                                Surface(onClick = { startChat(person.optInt("id"), person.optString("display_name")) }, color = Color.Transparent, shape = RoundedCornerShape(16.dp)) {
-                                    Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                                        ReferenceAvatar(person.optString("display_name"), person.optInt("selected_frame"), 55, person.optString("avatar_url"))
-                                        Column(Modifier.weight(1f)) { Text(person.optString("display_name"), fontWeight = FontWeight.SemiBold); Text(person.optString("last_message"), maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium) }
-                                        Icon(Icons.Outlined.ChevronLeft, null)
+                            item { Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text("رسائلك", Modifier.weight(1f), fontSize = 27.sp, fontWeight = FontWeight.Bold)
+                                Text("${rows.size} محادثة", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+                            } }
+                            item { Row(Modifier.padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Button(onClick = { open("محادثة جديدة") }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(16.dp)) { Icon(Icons.Outlined.AddComment, null, Modifier.size(19.dp)); Spacer(Modifier.width(6.dp)); Text("محادثة جديدة") }
+                                OutlinedButton(onClick = { message = ""; open("الدعم وخدمة العملاء") }, shape = RoundedCornerShape(16.dp)) { Text("الدعم") }
+                            } }
+                            if (rows.isEmpty() && !loading && contentError.isBlank()) item { ReferenceEmpty(Icons.Outlined.ChatBubbleOutline, "ابدأ حديثًا جديدًا", "اختر حسابًا وابدأ برسالة أو صورة أو تسجيل صوتي.") }
+                            items(rows, key = { it.optInt("id") }) { person -> Box(Modifier.padding(horizontal = 20.dp)) { ConversationTile(person) { startChat(person.optInt("id"), person.optString("display_name")) } } }
+                        }
+                        "محادثة جديدة" -> {
+                            item { SearchField(query, { query = it }, "ابحث عن اسم المذيعة") }
+                            items(creators.filter { it.optString("display_name").contains(query, true) }, key = { it.optInt("id") }) { person -> Box(Modifier.padding(horizontal = 20.dp)) {
+                                Surface(onClick = { startChat(person.optInt("id"), person.optString("display_name")) }, shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface) {
+                                    Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                        ReferenceAvatar(person.optString("display_name"), person.optInt("selected_frame"), 48, person.optString("avatar_url"))
+                                        Text(person.optString("display_name"), Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+                                        Icon(Icons.Outlined.ChatBubbleOutline, "فتح المحادثة")
                                     }
                                 }
                             } }
+                            item { FormColumn {
+                                Text("أو افتح محادثة برقم الحساب", style = MaterialTheme.typography.titleMedium)
+                                Field(peerId, { peerId = it.filter(Char::isDigit) }, "رقم حساب المستلم", numeric = true)
+                                ReferencePrimary("فتح المحادثة", peerId.toIntOrNull() != null) { startChat(peerId.toInt(), "حساب #$peerId") }
+                            } }
                         }
-                        "محادثة جديدة" -> item { FormColumn {
-                            Field(peerId, { peerId = it.filter(Char::isDigit) }, "رقم حساب المستلم", numeric = true)
-                            ReferencePrimary("فتح المحادثة", peerId.toIntOrNull() != null) { startChat(peerId.toInt(), "حساب #$peerId") }
-                        } }
                         "محادثة", "الدعم وخدمة العملاء" -> {
                             if (rows.isEmpty() && !loading && contentError.isBlank()) item { ReferenceEmpty(if (screen == "محادثة") Icons.Outlined.ChatBubbleOutline else Icons.Outlined.SupportAgent, "هنا تبدأ المحادثة", "الرسائل تُرسل إلى الخادم. لا توجد ردود تلقائية أو حسابات تجريبية.") }
                             items(rows.asReversed()) { row -> Column(Modifier.padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

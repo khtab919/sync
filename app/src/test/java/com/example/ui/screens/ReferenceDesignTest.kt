@@ -154,4 +154,14 @@ class ReferenceDesignTest {
         compose.onNodeWithText("شراء رصيد").assertExists()
         screenshot("09-chat-layout")
     }
+
+    @Test fun conversationRowsKeepNamePreviewAndOpenActionClear() {
+        var opened = false
+        val person = JSONObject().put("id", 10).put("display_name", "حساب الاختبار").put("last_message", "شكرًا، وصلني الموعد والتفاصيل.").put("created_at", "2026-11-06T12:00:00Z")
+        compose.setContent { MyApplicationTheme { Column(Modifier.fillMaxSize().padding(20.dp)) { ConversationTile(person) { opened = true } } } }
+        compose.onNodeWithText("حساب الاختبار").assertExists()
+        compose.onNodeWithText("شكرًا، وصلني الموعد والتفاصيل.").performClick()
+        org.junit.Assert.assertTrue(opened)
+        screenshot("10-conversation-row")
+    }
 }
