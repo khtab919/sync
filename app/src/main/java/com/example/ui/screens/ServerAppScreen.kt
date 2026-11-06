@@ -131,6 +131,7 @@ fun ServerAppScreen(baseUrl: String) {
         try {
             if (api.token != null || api.restoreSession()) {
                 profile = api.request("/api/me")
+                page = ""
                 signedIn = true
                 remembered = true
                 notice = ""
