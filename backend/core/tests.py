@@ -814,3 +814,82 @@ class RecoverySignalingTests(InternalCallingTests):
         self.assertEqual(send(caller,'offer',{'type':'offer','sdp':'too-many','revision':9}).status_code,400)
         self.assertEqual(send(callee,'hangup',{}).status_code,200)
         self.assertEqual(self.call(f'/api/calls/{call}').json()['status'],'ended')
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+class PaidChatTests(CommerceTests):
+    def test_paid_message_is_explicit_atomic_and_idempotent(self):
+        from .models import ChatCharge
+        Profile.objects.filter(user=self.peer).update(creator=True,chat_price_cents=100)
+        wallet=Wallet.objects.get(user=self.user);wallet.balance_cents=150;wallet.save()
+        body={'body':'Paid message','client_key':str(uuid.uuid4())}
+        path=f'/api/messages/{self.peer.pk}'
+        self.assertEqual(self.call(path,body).status_code,409)
+        self.assertEqual(self.call(path,dict(body,price_consent=99)).status_code,409)
+        body['price_consent']=100
+        self.assertEqual(self.call(path,body).status_code,201)
+        self.assertEqual(self.call(path,body).status_code,200)
+        self.assertEqual(ChatCharge.objects.count(),1)
+        self.assertEqual(Wallet.objects.get(user=self.user).balance_cents,50)
+        self.assertEqual(Wallet.objects.get(user=self.peer).balance_cents,80)
+        self.assertEqual(ChatCharge.objects.get().platform_cents,20)
+        body['client_key']=str(uuid.uuid4())
+        self.assertEqual(self.call(path,body).status_code,409)
+        self.assertEqual(Message.objects.count(),1)
+
+    def test_private_paid_media_is_hidden_until_recipient_buys_once(self):
+        from .models import ChatCharge
+        Profile.objects.filter(user=self.user).update(creator=True)
+        media=self.upload('chat_image')
+        sent=self.call(f'/api/messages/{self.peer.pk}',{'attachment_id':media['id'],'client_key':str(uuid.uuid4()),'media_price_cents':100})
+        self.assertEqual(sent.status_code,201)
+        self.assertFalse(sent.json()['media_locked'])
+        received=self.call(f'/api/messages/{self.user.pk}',token=self.peer_token).json()['items'][0]
+        self.assertTrue(received['media_locked']);self.assertEqual(received['attachment_url'],'')
+        # Even obtaining the creator's URL does not permit a recipient grant before buying.
+        from .commerce import grant_url
+        from django.test import RequestFactory
+        from .models import UploadedMedia
+        req=RequestFactory().get('/');req.actor=self.peer
+        with override_settings(ALLOWED_HOSTS=['testserver']):url=grant_url(req,UploadedMedia.objects.get(pk=media['id']))
+        self.assertEqual(self.client.get(url).status_code,403)
+        endpoint=f'/api/messages/{sent.json()["id"]}/unlock'
+        self.assertEqual(self.call(endpoint,{'price_cents':100}).status_code,404)
+        self.assertEqual(self.call(endpoint,{'price_cents':99},self.peer_token).status_code,409)
+        self.assertEqual(self.call(endpoint,{'price_cents':100},self.peer_token).status_code,409)
+        wallet=Wallet.objects.get(user=self.peer);wallet.balance_cents=100;wallet.save()
+        result=self.call(endpoint,{'price_cents':100},self.peer_token)
+        self.assertEqual(result.status_code,200);self.assertFalse(result.json()['media_locked'])
+        self.assertEqual(self.client.get(result.json()['attachment_url']).status_code,200)
+        self.assertEqual(self.call(endpoint,{'price_cents':100},self.peer_token).status_code,200)
+        self.assertEqual(ChatCharge.objects.filter(kind='unlock').count(),1)
+        self.assertEqual(Wallet.objects.get(user=self.peer).balance_cents,0)
+        self.assertEqual(Wallet.objects.get(user=self.user).balance_cents,80)
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+class ChatChargeConcurrencyTests(TransactionTestCase):
+    def test_parallel_paid_sends_and_unlocks_do_not_duplicate_or_overdraw(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from django.db import connection,close_old_connections,connections
+        from django.test import Client
+        from .models import ChatCharge,UploadedMedia
+        if connection.vendor!='postgresql':self.skipTest('Row locking requires PostgreSQL')
+        buyer=get_user_model().objects.create_user('chat_concurrent_buyer',password='test-only')
+        creator=get_user_model().objects.create_user('chat_concurrent_creator',password='test-only')
+        Profile.objects.create(user=buyer);Profile.objects.create(user=creator,creator=True,chat_price_cents=100)
+        Wallet.objects.create(user=buyer,balance_cents=100);Wallet.objects.create(user=creator)
+        token=issue_token(buyer)
+        def parallel(path,payloads):
+            def post(payload):
+                close_old_connections()
+                try:return Client().post(path,json.dumps(payload),content_type='application/json',HTTP_AUTHORIZATION='Bearer '+token).status_code
+                finally:connections.close_all()
+            with ThreadPoolExecutor(max_workers=2) as pool:return list(pool.map(post,payloads))
+        results=parallel(f'/api/messages/{creator.pk}',[{'body':'paid','client_key':str(uuid.uuid4()),'price_consent':100} for _ in range(2)])
+        self.assertEqual(sorted(results),[201,409]);self.assertEqual(ChatCharge.objects.count(),1)
+        media=UploadedMedia.objects.create(owner=creator,purpose='chat_image',file='test-only-image.jpg',mime='image/jpeg',size=10)
+        message=Message.objects.create(sender=creator,recipient=buyer,attachment=media,media_price_cents=100)
+        Wallet.objects.filter(user=buyer).update(balance_cents=100)
+        results=parallel(f'/api/messages/{message.pk}/unlock',[{'price_cents':100}]*2)
+        self.assertEqual(results,[200,200]);self.assertEqual(ChatCharge.objects.filter(kind='unlock').count(),1)
+        self.assertEqual(Wallet.objects.get(user=buyer).balance_cents,0)
+        self.assertEqual(Wallet.objects.get(user=creator).balance_cents,160)

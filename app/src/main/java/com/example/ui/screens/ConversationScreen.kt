@@ -37,7 +37,7 @@ import org.json.JSONObject
 import java.io.File
 
 @Composable
-internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, myId: Int, body: String, changeBody: (String) -> Unit, buy: () -> Unit, openCall: (String) -> Unit, back: () -> Unit) {
+internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, myId: Int, body: String, changeBody: (String) -> Unit, buy: () -> Unit, openCall: (String) -> Unit, isSeller: Boolean = false, back: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val uri = LocalUriHandler.current
@@ -59,6 +59,14 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
     var amplitudeHistory by remember { mutableStateOf<List<Float>>(emptyList()) }
     var chooseAttachment by remember { mutableStateOf(false) }
     var messagingVersion by remember { mutableIntStateOf(0) }
+    var staged by remember { mutableStateOf(false) }
+    var stagedUri by remember { mutableStateOf<Uri?>(null) }
+    var stagedKind by remember { mutableStateOf("text") }
+    var stagedText by remember { mutableStateOf("") }
+    var stagedCost by remember { mutableLongStateOf(0L) }
+    var mediaPriceInput by remember { mutableStateOf("0") }
+    var unlockTarget by remember { mutableStateOf<JSONObject?>(null) }
+    var retryKey by remember { mutableStateOf("") }
     var amplitude by remember { mutableFloatStateOf(0f) }
     var rows by remember { mutableStateOf<List<JSONObject>>(cached) }
     var error by remember { mutableStateOf("") }
@@ -81,9 +89,15 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
         val delivered=org.json.JSONArray(loaded.filter{it.optInt("sender_id")!=myId&&it.isNull("delivered_at")}.map{it.optInt("id")})
         if(delivered.length()>0)api.request("/api/messages/$peerId/delivered","POST",JSONObject().put("ids",delivered))
     }
-    fun enqueue(uri:Uri?,kind:String) {
-        if(uri==null){try{outbox.text(body.trim());pending=outbox.read();changeBody("");error=""}catch(e:Exception){error="تعذّر حفظ الرسالة للإرسال."};return}
-        scope.launch { try { withContext(Dispatchers.IO){outbox.file(uri,kind)};pending=withContext(Dispatchers.IO){outbox.read()};error="" }catch(e:Exception){error="تعذّر حفظ الملف. الحد الأقصى 8MB."} }
+    fun clearTemporary(source:Uri?) { if(source?.scheme=="file")source.path?.let{File(it)}?.takeIf{it.parentFile==context.cacheDir && it.name.startsWith("relaxia-voice-")}?.delete() }
+    fun queueActual(source:Uri?,kind:String,text:String,cost:Long,mediaPrice:Long) {
+        if(source==null){try{outbox.text(text,cost);pending=outbox.read();if(body.trim()==text)changeBody("");error=""}catch(e:Exception){error="تعذّر حفظ الرسالة للإرسال."};return}
+        scope.launch { try{withContext(Dispatchers.IO){outbox.file(source,kind,cost,mediaPrice)};pending=withContext(Dispatchers.IO){outbox.read()};error=""}catch(e:Exception){error="تعذّر حفظ الملف. الحد الأقصى 8MB."}finally{clearTemporary(source)} }
+    }
+    fun enqueue(source:Uri?,kind:String) {
+        if(peerPrice>0 || (isSeller && kind in listOf("chat_image","chat_video"))) {
+            stagedUri=source;stagedKind=kind;stagedText=body.trim();stagedCost=peerPrice;mediaPriceInput="0";staged=true
+        } else queueActual(source,kind,body.trim(),0,0)
     }
     fun perform(block: suspend () -> Unit) {
         if(busy) return
@@ -95,9 +109,7 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
         val file = recordingFile; recordingFile = null
         val valid = runCatching { current?.stop(); true }.getOrDefault(false)
         current?.release()
-        if(send&&valid&&file!=null) {
-            scope.launch { try { withContext(Dispatchers.IO){outbox.file(Uri.fromFile(file),"chat_audio")};pending=withContext(Dispatchers.IO){outbox.read()} } catch(e:Exception){error="تعذّر حفظ التسجيل للإرسال."} finally{file.delete()} }
-        } else file?.delete()
+        if(send&&valid&&file!=null) enqueue(Uri.fromFile(file),"chat_audio") else file?.delete()
     }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if(granted && !busy && !recording) {
@@ -126,20 +138,22 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
         if(!resumed)return@LaunchedEffect
         var reliable=false
         var versionKnown=false
+        var paidChatReady=false
         var checkedAt=0L
         while(true) {
-            if(!reliable&&System.currentTimeMillis()-checkedAt>10000){checkedAt=System.currentTimeMillis();try{messagingVersion=api.request("/health/").optInt("messaging_version");reliable=messagingVersion>=2;versionKnown=true}catch(e:CancellationException){throw e}catch(e:Exception){versionKnown=false}}
+            if(System.currentTimeMillis()-checkedAt>10000){checkedAt=System.currentTimeMillis();try{val capabilities=api.request("/health/");messagingVersion=capabilities.optInt("messaging_version");paidChatReady=capabilities.optInt("paid_chat_version")>=1;reliable=messagingVersion>=2;versionKnown=true}catch(e:CancellationException){throw e}catch(e:Exception){versionKnown=false}}
             try {
                 val first=withContext(Dispatchers.IO){outbox.read().firstOrNull{!it.optBoolean("failed")}}
                 if(first!=null&&reliable) {
+                    if((first.optLong("price_consent")>0 || first.optLong("media_price_cents")>0)&&!paidChatReady){error="حدّث الخادم لتفعيل الرسائل والمرفقات المدفوعة. لم يُخصم رصيد.";delay(1500);continue}
                     if(first.optString("kind")!="text"&&!first.has("attachment_id")) {
                         val media=api.upload(context,Uri.fromFile(outbox.fileFor(first)),first.getString("kind"))
                         first.put("attachment_id",media.getString("id"));withContext(Dispatchers.IO){outbox.update(first)}
                     }
-                    val payload=JSONObject().put("client_key",first.getString("client_key")).put("body",first.optString("body"))
+                    val payload=JSONObject().put("client_key",first.getString("client_key")).put("body",first.optString("body")).put("price_consent",first.optLong("price_consent")).put("media_price_cents",first.optLong("media_price_cents"))
                     if(first.has("attachment_id"))payload.put("attachment_id",first.getString("attachment_id"))
                     try{val sent=api.request("/api/messages/$peerId","POST",payload);rows=rows.filterNot{it.optString("client_key")==first.optString("client_key")}+sent;withContext(Dispatchers.IO){outbox.remove(first.getString("client_key"))};error=""}
-                    catch(e:Exception){if(e.message in listOf("paid_chat_requires_verified_payment","recipient_unavailable","invalid_body","invalid_attachment","message_request_conflict")){first.put("failed",true);withContext(Dispatchers.IO){outbox.update(first)}}else throw e}
+                    catch(e:Exception){if(e.message in listOf("paid_chat_requires_verified_payment","recipient_unavailable","invalid_body","invalid_attachment","message_request_conflict","paid_price_changed","insufficient_balance","creator_account_required","invalid_media_price")){first.put("failed",true).put("failure_reason",if(e.message=="insufficient_balance")"الرصيد غير كافٍ"else if(e.message=="paid_price_changed")"تغيّر سعر الرسالة. أعد تأكيد السعر."else"تعذّر الإرسال");withContext(Dispatchers.IO){outbox.update(first)}}else throw e}
                     pending=withContext(Dispatchers.IO){outbox.read()}
                 } else if(first!=null&&!reliable) error=if(versionKnown)"حدّث الخادم لتفعيل الإرسال الموثوق وحالات تسليم الرسائل."else"بانتظار الاتصال لإرسال الرسائل…"
             }catch(e:CancellationException){throw e}catch(e:Exception){error="بانتظار الاتصال لإرسال الرسائل…"}
@@ -172,7 +186,7 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
             if(visible.isNotEmpty())try{api.request("/api/messages/$peerId/read","POST",JSONObject().put("ids",org.json.JSONArray(visible)))}catch(e:CancellationException){throw e}catch(_:Exception){}
         }
     }
-    DisposableEffect(Unit) { onDispose { runCatching { recorder?.stop() }; recorder?.release(); recordingFile?.delete(); voice.close() } }
+    DisposableEffect(Unit) { onDispose { clearTemporary(stagedUri);runCatching { recorder?.stop() }; recorder?.release(); recordingFile?.delete(); voice.close() } }
     Scaffold(
         containerColor = conversationColors().background,
         topBar = { ChatHeader(actualPeer.ifBlank { "المحادثة" }, { if(recording) finishRecording(false); back() }, { confirmCall = true }, buy, !busy && !recording, peerHandle, peerAvatar, video = { perform { val call = api.request("/api/calls", "POST", JSONObject().put("peer_id", peerId).put("mode", "video")); openCall(call.getString("id")) } }, verified = peerVerified, priceCoins = peerPrice, online = peerOnline, presenceKnown = presenceKnown) },
@@ -205,12 +219,28 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
                     when(date) { java.time.LocalDate.now() -> "اليوم"; java.time.LocalDate.now().minusDays(1) -> "أمس"; else -> date.format(java.time.format.DateTimeFormatter.ofPattern("d MMM", java.util.Locale.forLanguageTag("ar"))) }
                 }.getOrDefault(day))
                 CompositionLocalProvider(LocalVoicePlayback provides voice) {
-                    ChatBubble(message,mine,{}, {openCall(it)}, {key->scope.launch{val row=outbox.read().firstOrNull{it.optString("client_key")==key};if(row!=null){row.remove("failed");withContext(Dispatchers.IO){outbox.update(row)};pending=outbox.read()}}}, {key->scope.launch{withContext(Dispatchers.IO){outbox.remove(key)};pending=outbox.read()}}, peerName = actualPeer, peerAvatar = peerAvatar)
+                    ChatBubble(message,mine,{}, {openCall(it)}, {key->scope.launch{val row=outbox.read().firstOrNull{it.optString("client_key")==key};if(row!=null){if(row.optString("failure_reason").contains("سعر")){retryKey=key;stagedCost=peerPrice;stagedText=row.optString("body");stagedUri=null;stagedKind="retry";mediaPriceInput="0";staged=true}else{row.remove("failed");withContext(Dispatchers.IO){outbox.update(row)};pending=outbox.read()}}}}, {key->scope.launch{withContext(Dispatchers.IO){outbox.remove(key)};pending=outbox.read()}}, peerName = actualPeer, peerAvatar = peerAvatar, unlock = { unlockTarget=message })
                 }
             }
         }
         }
     }
+    if(staged) AlertDialog(onDismissRequest={staged=false;clearTemporary(stagedUri);stagedUri=null},title={Text("تأكيد الإرسال")},text={Column(verticalArrangement=Arrangement.spacedBy(10.dp)){
+        Text(if(stagedCost>0)"سيُخصم $stagedCost كوينز من رصيدك لإرسال هذه الرسالة. يصل لصاحب الحساب 80٪ من المبلغ."else"إرسال مرفق خاص إلى $actualPeer")
+        if(isSeller && stagedKind in listOf("chat_image","chat_video")) {
+            Text("سعر فتح المرفق للمستلم · 0 للإرسال مجانًا")
+            OutlinedTextField(mediaPriceInput,{mediaPriceInput=it.filter{c->c.isDigit()}.take(7)},label={Text("كوينز")},singleLine=true)
+            Text("تحصل على 80٪ عند الشراء. لا يُخصم من المستلم دون تأكيده.",style=MaterialTheme.typography.bodySmall)
+        }
+    }},confirmButton={TextButton(onClick={
+        val price=mediaPriceInput.toLongOrNull()
+        if(price==null || price !in 0..1000000){error="أدخل سعرًا صحيحًا حتى 1000000 كوينز.";return@TextButton}
+        staged=false
+        if(stagedKind=="retry")scope.launch{val row=outbox.read().firstOrNull{it.optString("client_key")==retryKey};if(row!=null){row.remove("failed");row.put("price_consent",stagedCost);withContext(Dispatchers.IO){outbox.update(row)};pending=outbox.read()}}
+        else queueActual(stagedUri,stagedKind,stagedText,stagedCost,price)
+        stagedUri=null
+    }){Text(if(stagedCost>0)"تأكيد وخصم $stagedCost"else"إرسال")}},dismissButton={TextButton({staged=false;clearTemporary(stagedUri);stagedUri=null}){Text("إلغاء")}})
+    unlockTarget?.let { target -> AlertDialog(onDismissRequest={unlockTarget=null},title={Text("فتح المرفق الخاص")},text={Text("سيُخصم ${target.optLong("media_price_cents")} كوينز مرة واحدة من رصيدك. تحصل الجهة الناشرة على 80٪. يبقى المرفق متاحًا لك بعد الشراء.")},confirmButton={TextButton({unlockTarget=null;perform{api.request("/api/messages/${target.optInt("id")}/unlock","POST",JSONObject().put("price_cents",target.optLong("media_price_cents")))}}){Text("تأكيد الشراء")}},dismissButton={TextButton({unlockTarget=null}){Text("إلغاء")}}) }
     if(chooseAttachment) AlertDialog(onDismissRequest={chooseAttachment=false},title={Text("إرسال مرفق")},text={Text("اختر صورة أو فيديو MP4. الحد الأقصى 8MB.")},confirmButton={TextButton({chooseAttachment=false;photo.launch("image/*")}){Text("صورة")}},dismissButton={TextButton({chooseAttachment=false;videoPicker.launch("video/mp4")}){Text("فيديو")}})
     if(confirmCall) AlertDialog(onDismissRequest = { confirmCall = false }, title = { Text("اتصال داخل Relaxia") }, text = { Text("اختر نوع المكالمة. سيفتح الميكروفون أو الكاميرا بعد إذنك. الطرف الآخر يحتاج أن يكون التطبيق مفتوحًا لاستقبال الرنين.") }, confirmButton = {
         TextButton(onClick = { confirmCall = false; perform { val call = api.request("/api/calls", "POST", JSONObject().put("peer_id", peerId).put("mode", "audio")); openCall(call.getString("id")) } }) { Text("اتصال صوتي") }

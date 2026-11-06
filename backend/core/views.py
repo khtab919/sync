@@ -99,7 +99,7 @@ def issue_token(user):
 def health(request):
     with connection.cursor() as cursor:
         cursor.execute('SELECT 1')
-    return JsonResponse({'status': 'ok', 'registration_version': 4, 'identity_required': False, 'brand': 'Relaxia', 'mobile_admin_version': 1, 'commerce_version': 1, 'calls_version': 2, 'messaging_version': 3, 'shop_version': 2})
+    return JsonResponse({'status': 'ok', 'registration_version': 4, 'identity_required': False, 'brand': 'Relaxia', 'mobile_admin_version': 1, 'commerce_version': 1, 'calls_version': 2, 'messaging_version': 3, 'paid_chat_version':1, 'shop_version': 2})
 
 @endpoint(['POST'], authenticated=False)
 def register(request):
@@ -354,16 +354,20 @@ def messages(request, peer_id):
     if not isinstance(submitted_body,str) or len(submitted_body)>2000:raise ApiError('invalid_body')
     client_key = uuid.UUID(text(request.payload,'client_key',36,36)) if request.payload.get('client_key') else None
     with transaction.atomic():
-        User.objects.select_for_update().get(pk=request.actor.pk)
+        people={u.pk:u for u in User.objects.select_for_update().filter(pk__in=sorted([request.actor.pk,peer.pk])).order_by('pk')}
+        peer=people.get(peer.pk)
+        if not peer or not peer.is_active or not people[request.actor.pk].is_active:raise ApiError('recipient_unavailable',404)
         if client_key:
             previous = Message.objects.filter(sender=request.actor, client_key=client_key).first()
             if previous:
-                if previous.recipient_id != peer.pk or previous.body != request.payload.get('body','').strip() or (str(previous.attachment_id) if previous.attachment_id else None) != request.payload.get('attachment_id'):
+                if previous.recipient_id != peer.pk or previous.body != request.payload.get('body','').strip() or previous.media_price_cents != request.payload.get('media_price_cents',0) or (str(previous.attachment_id) if previous.attachment_id else None) != request.payload.get('attachment_id'):
                     raise ApiError('message_request_conflict', 409)
                 return JsonResponse(message_json(request, previous))
-        profile = Profile.objects.filter(user=peer).first()
-        if not profile or profile.chat_price_cents:
-            raise ApiError('paid_chat_requires_verified_payment', 409)
+        profile=Profile.objects.select_for_update().filter(user=peer).first()
+        if not profile:raise ApiError('recipient_unavailable',404)
+        price=profile.chat_price_cents if profile.creator else 0
+        if price and (not client_key or type(request.payload.get('price_consent')) is not int or request.payload['price_consent']!=price):
+            raise ApiError('paid_price_changed',409)
         p = request.payload
         attachment = None
         if p.get('attachment_id'):
@@ -383,7 +387,13 @@ def messages(request, peer_id):
                 if existing.sender_id == request.actor.pk and existing.recipient_id == peer.pk:
                     return JsonResponse(message_json(request, existing))
                 raise ApiError('attachment_already_used', 409)
-        message = Message.objects.create(sender=request.actor, recipient=peer, body=body.strip(), attachment=attachment, client_key=client_key)
+        media_price=p.get('media_price_cents',0)
+        if type(media_price) is not int or not 0<=media_price<=1000000:raise ApiError('invalid_media_price')
+        if media_price and (not attachment or attachment.purpose not in ('chat_image','chat_video') or not Profile.objects.filter(user=request.actor,creator=True).exists()):raise ApiError('creator_account_required',403)
+        message=Message.objects.create(sender=request.actor,recipient=peer,body=body.strip(),attachment=attachment,client_key=client_key,media_price_cents=media_price)
+        if price:
+            from .commerce import charge_chat
+            charge_chat(message,'message',request.actor,peer,price)
     return JsonResponse(message_json(request, message), status=201)
 
 @endpoint(['POST'])

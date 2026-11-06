@@ -60,6 +60,7 @@ class Message(models.Model):
     client_key = models.UUIDField(null=True, blank=True)
     delivered_at = models.DateTimeField(null=True, blank=True)
     read_at = models.DateTimeField(null=True, blank=True)
+    media_price_cents = models.PositiveIntegerField(default=0)
     class Meta:
         constraints = [models.UniqueConstraint(fields=['sender','client_key'], name='unique_message_client_key')]
 
@@ -235,3 +236,16 @@ class GatewayInvoice(models.Model):
     credited_at = models.DateTimeField(null=True,blank=True)
     review_required = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class ChatCharge(models.Model):
+    message = models.ForeignKey(Message,on_delete=models.PROTECT)
+    kind = models.CharField(max_length=12,choices=[('message','Message'),('unlock','Unlock')])
+    buyer = models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT,related_name='chat_purchases')
+    creator = models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT,related_name='chat_earnings')
+    amount_cents = models.PositiveIntegerField()
+    creator_cents = models.PositiveIntegerField()
+    platform_cents = models.PositiveIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        constraints=[models.UniqueConstraint(fields=['message','kind','buyer'],name='unique_chat_charge'),models.CheckConstraint(condition=Q(amount_cents=models.F('creator_cents')+models.F('platform_cents')),name='chat_charge_conserved')]

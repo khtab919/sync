@@ -316,7 +316,7 @@ fun ServerAppScreen(baseUrl: String) {
         }
         if (screen == "محادثة" && peerId.toIntOrNull() != null) {
             chatState.SaveableStateProvider("conversation-$peerId") {
-                ConversationScreen(api, peerId.toInt(), peerName, profile.optInt("id"), message, { message = it }, { buyCredits() }, { openInternalCall(it) }) { back(); revision++ }
+                ConversationScreen(api, peerId.toInt(), peerName, profile.optInt("id"), message, { message = it }, { buyCredits() }, { openInternalCall(it) }, isSeller=profile.optBoolean("creator")) { back(); revision++ }
             }
             return@MyApplicationTheme
         }

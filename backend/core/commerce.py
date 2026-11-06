@@ -33,7 +33,10 @@ def may_read(media, user):
     if user.pk == media.owner_id:
         return True
     if media.purpose.startswith('chat_'):
-        return Message.objects.filter(attachment=media, recipient=user).exists()
+        row=Message.objects.filter(attachment=media,recipient=user).first()
+        if not row:return False
+        from .models import ChatCharge
+        return not row.media_price_cents or ChatCharge.objects.filter(message=row,buyer=user,kind='unlock').exists()
     return False
 
 
@@ -277,7 +280,9 @@ def review_requests(request):
 
 
 def message_json(request, row):
-    return {'id': row.pk, 'sender_id': row.sender_id, 'recipient_id': row.recipient_id, 'body': row.body, 'created_at': row.created_at, 'attachment_url': grant_url(request, row.attachment) if row.attachment_id else '', 'attachment_mime': row.attachment.mime if row.attachment_id else '', 'client_key': str(row.client_key) if row.client_key else '', 'delivered_at': row.delivered_at, 'read_at': row.read_at, 'recipient_name': getattr(getattr(row.recipient,'profile',None),'display_name','') or row.recipient.username, 'sender_name': getattr(getattr(row.sender,'profile',None),'display_name','') or row.sender.username, 'call_url': '', 'call_id': str(row.call_id) if row.call_id else '', 'call_mode': row.call.mode if row.call_id else '', 'call_status': row.call.status if row.call_id else ''}
+    from .models import ChatCharge
+    unlocked=not row.media_price_cents or request.actor.pk==row.sender_id or ChatCharge.objects.filter(message=row,buyer=request.actor,kind='unlock').exists()
+    return {'id': row.pk, 'sender_id': row.sender_id, 'recipient_id': row.recipient_id, 'body': row.body, 'created_at': row.created_at, 'attachment_url': grant_url(request, row.attachment) if row.attachment_id and unlocked else '', 'media_price_cents':row.media_price_cents, 'media_locked':not unlocked, 'attachment_mime': row.attachment.mime if row.attachment_id else '', 'client_key': str(row.client_key) if row.client_key else '', 'delivered_at': row.delivered_at, 'read_at': row.read_at, 'recipient_name': getattr(getattr(row.recipient,'profile',None),'display_name','') or row.recipient.username, 'sender_name': getattr(getattr(row.sender,'profile',None),'display_name','') or row.sender.username, 'call_url': '', 'call_id': str(row.call_id) if row.call_id else '', 'call_mode': row.call.mode if row.call_id else '', 'call_status': row.call.status if row.call_id else ''}
 
 
 def wheel_settings(config):
@@ -363,3 +368,32 @@ def wheel_configuration(request):
             import json
             audit(request.actor, config, json.dumps({'before': previous_settings, 'after': {'enabled': config.enabled, 'cost_cents': config.cost_cents, 'prizes': config.prizes, 'bankroll_cents': config.bankroll_cents}}))
     return JsonResponse({'enabled': config.enabled, 'cost_cents': config.cost_cents, 'prizes': config.prizes, 'bankroll_cents': config.bankroll_cents,'price_step_cents':config.price_step_cents,'maximum_cost_cents':config.maximum_cost_cents,'first_reward_cents':config.first_reward_cents,'grand_unlock_spend_cents':config.grand_unlock_spend_cents})
+
+
+# Caller holds both account locks and the message lock inside transaction.atomic().
+def charge_chat(message,kind,buyer,creator,cents):
+    from .models import ChatCharge
+    if ChatCharge.objects.filter(message=message,kind=kind,buyer=buyer).exists():return
+    for person in sorted([buyer,creator],key=lambda user:user.pk):Wallet.objects.get_or_create(user=person)
+    wallets={wallet.user_id:wallet for wallet in Wallet.objects.select_for_update().filter(user_id__in=[buyer.pk,creator.pk]).order_by('user_id')}
+    source,target=wallets[buyer.pk],wallets[creator.pk]
+    if source.balance_cents-source.reserved_cents<cents:raise ApiError('insufficient_balance',409)
+    share=cents*80//100
+    source.balance_cents-=cents;target.balance_cents+=share
+    source.save(update_fields=['balance_cents']);target.save(update_fields=['balance_cents'])
+    ChatCharge.objects.create(message=message,kind=kind,buyer=buyer,creator=creator,amount_cents=cents,creator_cents=share,platform_cents=cents-share)
+
+
+@endpoint(['POST'])
+def unlock_message(request,message_id):
+    row=Message.objects.filter(pk=message_id,recipient=request.actor,sender__is_active=True).first()
+    if row is None:raise ApiError('message_unavailable',404)
+    with transaction.atomic():
+        # All transfers lock users in the same order as sending to avoid deadlocks.
+        list(User.objects.select_for_update().filter(pk__in=sorted([row.sender_id,row.recipient_id])).order_by('pk'))
+        row=Message.objects.select_for_update().select_related('sender__profile','recipient__profile','attachment','call').get(pk=row.pk)
+        if not row.sender.is_active or not row.recipient.is_active:raise ApiError('message_unavailable',404)
+        if not row.attachment_id or row.media_price_cents<=0:raise ApiError('not_paid_media')
+        if type(request.payload.get('price_cents')) is not int or request.payload['price_cents']!=row.media_price_cents:raise ApiError('paid_price_changed',409)
+        charge_chat(row,'unlock',request.actor,row.sender,row.media_price_cents)
+    return JsonResponse(message_json(request,row))

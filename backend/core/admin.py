@@ -155,3 +155,13 @@ class PaidWheelConfigurationAdmin(admin.ModelAdmin):
 from .models import GatewayInvoice, PaymentSettings, TopUpQuote
 admin.site.register(GatewayInvoice,FinancialReadOnlyAdmin)
 admin.site.register(TopUpQuote,FinancialReadOnlyAdmin)
+
+
+from .models import ChatCharge
+@admin.register(ChatCharge)
+class ChatChargeAdmin(admin.ModelAdmin):
+    list_display=('id','kind','buyer','creator','amount_cents','creator_cents','platform_cents','created_at')
+    readonly_fields=('message','kind','buyer','creator','amount_cents','creator_cents','platform_cents','created_at')
+    def has_add_permission(self,request):return False
+    def has_change_permission(self,request,obj=None):return False
+    def has_delete_permission(self,request,obj=None):return False

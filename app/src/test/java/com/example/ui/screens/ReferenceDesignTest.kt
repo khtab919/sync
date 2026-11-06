@@ -233,4 +233,12 @@ class ReferenceDesignTest {
         compose.onNodeWithText("0:12").assertExists()
     }
 
+    @Test fun lockedMediaOffersExplicitPurchaseWithoutExposingAttachment() {
+        var requested=false
+        compose.setContent { MyApplicationTheme { Surface { ChatBubble(JSONObject().put("id",1).put("body","").put("media_locked",true).put("media_price_cents",100).put("attachment_mime","image/jpeg"),false,{}, {},unlock={requested=true}) } } }
+        compose.onNodeWithText("فتح مقابل 100 كوينز").performClick()
+        org.junit.Assert.assertTrue(requested)
+        compose.onNodeWithContentDescription("صورة في المحادثة").assertDoesNotExist()
+    }
+
 }
