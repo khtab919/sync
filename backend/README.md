@@ -29,9 +29,9 @@ Build the server-backed native UI with:
 gradle assembleDebug -PLAYALI_API_URL=https://api.your-domain.com
 ```
 
-With this build property, the application selects `ServerAppScreen` instead of the legacy Firebase navigation. It uses server-issued, seven-day opaque bearer tokens stored only in memory, not local administrator credentials. Register with a new username and a password of at least 12 characters. The birth date and policy acceptance are also validated server-side. Google login is not part of this server mode.
+With this build property, the application selects `ServerAppScreen` as the sole application navigation. It uses server-issued, seven-day opaque bearer tokens stored only in memory, not local administrator credentials. Register with a new username and a password of at least 12 characters. The birth date and policy acceptance are also validated server-side. Google login is not part of this server mode.
 
-The server mode includes accounts, approved services, unpaid booking requests, free text chats, identity-gated reels (opened in the external video handler), reports, balance reads and withdrawal reservations. This is an initial functional interface; full parity with the previous visual design, profile settings, paid posts, realtime chats, media uploads and playback remain work. The legacy Firebase code remains in the repository for migration reference and is still selected when no API URL is supplied. This branch does not claim to remove Firebase dependencies from the APK yet.
+The server mode includes accounts, approved services, unpaid booking requests, free text chats, identity-gated reels (opened in the external video handler), reports, balance reads and withdrawal reservations. This is an initial functional interface; full parity with the previous visual design, profile settings, paid posts, realtime chats, media uploads and playback remain work. Legacy Firebase screens and dependencies remain in the repository for migration reference, but the launcher no longer routes to them and automatic Firebase initialization is removed. A build without an API URL shows a configuration notice and cannot sign in or access data. This branch does not claim to remove the unused Firebase dependencies from the APK yet.
 
 ## Money and privacy
 

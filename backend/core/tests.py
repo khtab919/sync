@@ -100,7 +100,7 @@ class ApiTests(TestCase):
 class WithdrawalConcurrencyTests(TransactionTestCase):
     def test_parallel_requests_cannot_overdraw(self):
         from concurrent.futures import ThreadPoolExecutor
-        from django.db import connection, close_old_connections
+        from django.db import connection, close_old_connections, connections
         from django.test import Client
         if connection.vendor != 'postgresql':
             self.skipTest('Row locking requires PostgreSQL')
@@ -114,7 +114,7 @@ class WithdrawalConcurrencyTests(TransactionTestCase):
                 response = Client().post('/api/withdrawals', json.dumps({'request_key': str(uuid.uuid4()), 'amount_cents': 700, 'destination': 'test-destination'}), content_type='application/json', HTTP_AUTHORIZATION='Bearer ' + token)
                 return response.status_code
             finally:
-                close_old_connections()
+                connections.close_all()
         with ThreadPoolExecutor(max_workers=2) as pool:
             results = list(pool.map(withdraw, range(2)))
         self.assertEqual(sorted(results), [201, 409])

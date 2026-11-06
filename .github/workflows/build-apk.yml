@@ -132,7 +132,7 @@ jobs:
 
       - name: Publish Direct APK to GitHub Releases
         # Only main-branch builds may publish an installable release.
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && env.LAYALI_API_URL != ''
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v6.0.${{ github.run_number }}
