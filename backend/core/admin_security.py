@@ -34,6 +34,7 @@ def require(request,scope,fresh=False):
     from .views import ApiError
     if scope not in scopes(request.actor):
         event(request.actor,'access_denied',request.path,scope,'denied');raise ApiError('administrator_required',403)
+    request.actor._admin_reason=str(request.payload.get('reason') or request.payload.get('review_note') or '')[:500]
     verified=request.api_token.admin_verified_at
     if not verified or timezone.now()-verified>timedelta(minutes=10 if fresh else 60):raise ApiError('admin_mfa_required',403)
     if request.method!='GET' and request.path.startswith('/api/admin/control'):

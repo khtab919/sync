@@ -183,12 +183,14 @@ def logout(request):
 
 def profile_json(user, viewer):
     profile = Profile.objects.get(user=user)
+    from .models import BenefitGrant
+    frame=BenefitGrant.objects.filter(user=user,kind='frame',expires_at__gt=timezone.now()).order_by('-id').first()
     return {
         'id': user.pk, 'username': user.username,
         'display_name': profile.display_name or user.username,
         'bio': profile.bio, 'email': user.email if user == viewer else '', 'creator': profile.creator,
         'identity_verified': profile.identity_verified,
-        'selected_frame': profile.selected_frame, 'avatar_url': profile.avatar_url, 'chat_price_cents': profile.chat_price_cents,
+        'selected_frame': frame.value if frame else profile.selected_frame, 'avatar_url': profile.avatar_url, 'chat_price_cents': profile.chat_price_cents,
         'followers_count': Follow.objects.filter(creator=user, user__is_active=True).count(),
         'following_count': Follow.objects.filter(user=user, creator__is_active=True).count(),
         'service_count': Service.objects.filter(owner=user, approved=True, active=True).count(),
@@ -337,7 +339,7 @@ def conversations(request):
         if profile is None:
             continue
         result.append({'id': peer.pk, 'display_name': profile.display_name or peer.username,
-                       'selected_frame': profile.selected_frame, 'avatar_url': profile.avatar_url, 'last_message': message.body,
+                       'selected_frame': frame.value if frame else profile.selected_frame, 'avatar_url': profile.avatar_url, 'last_message': message.body,
                        'created_at': message.created_at})
         if len(result) == 100:
             break
@@ -461,7 +463,8 @@ def reels(request):
 @endpoint(['GET'])
 def wallet(request):
     row = Wallet.objects.get(user=request.actor)
-    return JsonResponse({'currency': 'USD', 'balance_cents': row.balance_cents, 'reserved_cents': row.reserved_cents, 'available_cents': row.balance_cents - row.reserved_cents})
+    from .promotions import balance
+    return JsonResponse({'promotional_points':balance(request.actor),'promotional_withdrawable':False,'currency': 'USD', 'balance_cents': row.balance_cents, 'reserved_cents': row.reserved_cents, 'available_cents': row.balance_cents - row.reserved_cents})
 
 @endpoint(['GET', 'POST'])
 def withdrawals(request):

@@ -14,7 +14,7 @@ def require_admin(request):
 
 def audit(actor, obj, message):
     from .admin_security import event
-    event(actor,'administrative_action',getattr(obj,'pk',''),message)
+    event(actor,'administrative_action',getattr(obj,'pk',''),(getattr(actor,'_admin_reason','')+' · '+message).strip(' ·'))
     LogEntry.objects.log_actions(user_id=actor.pk, queryset=[obj], action_flag=CHANGE, change_message=message)
 
 
@@ -49,7 +49,7 @@ def account(request, user_id):
         raise ApiError('account_unavailable', 404)
     if request.method == 'POST':
         action = request.payload.get('action')
-        if action not in ('ban', 'unban', 'creator_on', 'creator_off', 'broadcast_on','broadcast_off','moderator_on','moderator_off','credit'):
+        if action not in ('ban', 'unban', 'creator_on', 'creator_off', 'broadcast_on','broadcast_off','moderator_on','moderator_off','verification_on','verification_off','credit'):
             raise ApiError('invalid_action')
         with transaction.atomic():
             locked = {u.pk: u for u in User.objects.select_for_update().filter(pk__in=sorted({user_id, request.actor.pk})).order_by("pk")}
@@ -68,6 +68,8 @@ def account(request, user_id):
                 permission=Permission.objects.get(content_type__app_label='core',codename='moderate_livebroadcast')
                 if action=='moderator_on':user.is_staff=True;user.save(update_fields=['is_staff']);user.user_permissions.add(permission)
                 else:user.user_permissions.remove(permission)
+            elif action in ('verification_on','verification_off'):
+                why=text(request.payload,'reason',3,300);profile,_=Profile.objects.get_or_create(user=user);profile.identity_verified=action=='verification_on';profile.save(update_fields=['identity_verified']);audit(request.actor,user,'Verification decision: '+why)
             elif action in ('broadcast_on','broadcast_off'):
                 profile,_=Profile.objects.get_or_create(user=user);profile.broadcast_allowed=action=='broadcast_on';profile.save(update_fields=['broadcast_allowed'])
             elif action in ('creator_on', 'creator_off'):

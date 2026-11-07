@@ -176,6 +176,8 @@ class TopUp(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
 class PaidWheelConfiguration(models.Model):
+    daily_limit=models.PositiveIntegerField(default=20)
+    daily_budget_cents=models.PositiveIntegerField(default=50000)
     enabled = models.BooleanField(default=False)
     cost_cents = models.PositiveIntegerField(default=350)
     price_step_cents = models.PositiveIntegerField(default=50)
@@ -426,4 +428,12 @@ class BenefitGrant(models.Model):
     value=models.PositiveIntegerField()
     reason=models.CharField(max_length=500)
     expires_at=models.DateTimeField()
+    created_at=models.DateTimeField(auto_now_add=True)
+
+class PromotionalGrant(models.Model):
+    user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT)
+    actor=models.ForeignKey(settings.AUTH_USER_MODEL,null=True,on_delete=models.PROTECT,related_name='promotions_issued')
+    reference=models.CharField(max_length=160,unique=True)
+    points=models.PositiveIntegerField()
+    reason=models.CharField(max_length=500)
     created_at=models.DateTimeField(auto_now_add=True)

@@ -451,7 +451,7 @@ class CommerceTests(TestCase):
         decision=reviewed_payload(self.admin,'/api/admin/requests',decision,self.user.pk)
         self.assertEqual(self.call('/api/admin/requests', decision, self.admin_token).status_code, 200)
         self.assertEqual(self.call('/api/admin/requests', decision, self.admin_token).status_code, 200)
-        self.assertEqual(Wallet.objects.get(user=self.user).balance_cents, 2600)
+        self.assertEqual(Wallet.objects.get(user=self.user).balance_cents, 2500)
         self.assertEqual(self.call('/api/admin/requests', dict(decision, decision='reject'), self.admin_token).status_code, 409)
 
     def test_seller_needs_approval_and_private_chat_files_restrict_recipients(self):
@@ -732,7 +732,9 @@ class NOWPaymentsTests(TestCase):
         self.assertEqual(Wallet.objects.get(user=self.user).balance_cents,0)
         self.assertEqual(self.notify(data).status_code,200)
         self.assertEqual(self.notify(data).status_code,200)
-        self.assertEqual(Wallet.objects.get(user=self.user).balance_cents,2600)
+        self.assertEqual(Wallet.objects.get(user=self.user).balance_cents,2500)
+        from .promotions import balance
+        self.assertEqual(balance(self.user),100)
         status=self.client.get('/api/nowpayments/status/'+quote['id'],HTTP_AUTHORIZATION='Bearer '+self.token).json()
         self.assertTrue(status['credited'])
         another=self.post('/api/topup-quotes',{'method':'nowpayments','amount_cents':2500}).json()

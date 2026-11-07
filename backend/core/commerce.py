@@ -140,7 +140,7 @@ def payment_qr(request):
 
 
 def quote_json(row,request):
-    return {'qr_url': request.build_absolute_uri('/api/payment-qr?quote='+str(row.pk)+'&grant='+signing.dumps({'quote':str(row.pk),'user':row.user_id},salt='payment-qr')), 'id':str(row.pk),'method':row.method,'amount_cents':row.amount_cents,'bonus_cents':row.bonus_cents,'coins':row.amount_cents+row.bonus_cents,'payment_amount':str(row.payment_amount),'payment_currency':row.payment_currency,'destination':row.destination,'expires_at':row.expires_at,'duration_seconds':1800,'server_now_ms':int(timezone.now().timestamp()*1000)}
+    return {'qr_url': request.build_absolute_uri('/api/payment-qr?quote='+str(row.pk)+'&grant='+signing.dumps({'quote':str(row.pk),'user':row.user_id},salt='payment-qr')), 'id':str(row.pk),'method':row.method,'amount_cents':row.amount_cents,'bonus_cents':row.bonus_cents,'coins':row.amount_cents,'payment_amount':str(row.payment_amount),'payment_currency':row.payment_currency,'destination':row.destination,'expires_at':row.expires_at,'duration_seconds':1800,'server_now_ms':int(timezone.now().timestamp()*1000)}
 
 
 @endpoint(['POST'])
@@ -263,7 +263,9 @@ def review_requests(request):
                             raise ApiError('payment_verification_required')
                         Wallet.objects.get_or_create(user=row.user)
                         wallet = Wallet.objects.select_for_update().get(user=row.user)
-                        wallet.balance_cents += row.amount_cents + row.bonus_cents
+                        wallet.balance_cents += row.amount_cents
+                        from .promotions import grant
+                        grant(row.user,row.bonus_cents,'topup:'+str(row.pk),'Verified funding promotional points')
                         wallet.save(update_fields=['balance_cents'])
                     else:
                         profile, _ = Profile.objects.get_or_create(user=row.user)
@@ -291,7 +293,7 @@ def wheel_settings(config):
     valid=isinstance(prizes,list) and 1<=len(prizes)<=20 and all(isinstance(p,dict) and type(p.get('amount_cents')) is int and 0<=p['amount_cents']<=1000000 and type(p.get('weight')) is int and 1<=p['weight']<=1000000 for p in prizes)
     valid=valid and 1<=config.cost_cents<=config.maximum_cost_cents<=10000 and 0<=config.price_step_cents<=10000 and 0<=config.first_reward_cents<=1000000
     total=sum(p['weight'] for p in prizes) if valid else 0
-    version=hashlib.sha256(json.dumps([config.cost_cents,prizes,config.price_step_cents,config.maximum_cost_cents,config.first_reward_cents,config.grand_unlock_spend_cents],sort_keys=True).encode()).hexdigest()
+    version=hashlib.sha256(json.dumps([config.cost_cents,prizes,config.daily_limit,config.daily_budget_cents,config.price_step_cents,config.maximum_cost_cents,config.first_reward_cents,config.grand_unlock_spend_cents],sort_keys=True).encode()).hexdigest()
     return valid,total,version
 
 
@@ -326,6 +328,11 @@ def paid_wheel(request):
             return JsonResponse({'prize_cents':previous.prize_cents,'balance_cents':wallet.balance_cents,'replayed':True})
         offer=wheel_offer(config,request.actor)
         if not offer['enabled']:raise ApiError('wheel_unavailable',409)
+        start=timezone.now().replace(hour=0,minute=0,second=0,microsecond=0)
+        today=PaidSpin.objects.filter(created_at__gte=start)
+        if today.filter(user=request.actor).count()>=config.daily_limit:raise ApiError('wheel_daily_limit',409)
+        paid=today.aggregate(v=Sum('prize_cents'))['v'] or 0
+        if paid+max(p['amount_cents'] for p in offer['prizes'])>config.daily_budget_cents:raise ApiError('wheel_budget_limit',409)
         if request.payload.get('config_version')!=offer['config_version']:raise ApiError('wheel_configuration_changed',409)
         wallet=Wallet.objects.select_for_update().get(user=request.actor)
         cost=offer['cost_cents'];prizes=offer['prizes']
@@ -337,7 +344,7 @@ def paid_wheel(request):
             pick-=p['weight']
         wallet.balance_cents+=prize-cost;wallet.save(update_fields=['balance_cents'])
         config.bankroll_cents+=cost-prize;config.save(update_fields=['bankroll_cents'])
-        PaidSpin.objects.create(user=request.actor,request_key=key,cost_cents=cost,prize_cents=prize,prizes_snapshot={'prizes':prizes,'first_guarantee':offer['first_spin_guaranteed'],'spent_before':offer['spent_cents']})
+        PaidSpin.objects.create(user=request.actor,request_key=key,cost_cents=cost,prize_cents=prize,prizes_snapshot={'prizes':prizes,'config_version':offer['config_version'],'daily_limit':config.daily_limit,'daily_budget_cents':config.daily_budget_cents,'first_guarantee':offer['first_spin_guaranteed'],'spent_before':offer['spent_cents']})
     return JsonResponse({'prize_cents':prize,'balance_cents':wallet.balance_cents,'cost_cents':cost},status=201)
 
 

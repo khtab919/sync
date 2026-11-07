@@ -87,3 +87,28 @@ class NativeAdminSecurityTests(TestCase):
         self.verify(self.owner)
         self.assertEqual(self.call('/api/admin/control/notices',{'user_id':self.user.pk,'title':'Review result','body':'Your request was reviewed','reason':'Customer support response'}).status_code,200)
         self.assertEqual(len(self.call('/api/notices',user=self.user).json()['items']),1);self.assertEqual(self.call('/api/notices',user=self.staff).json()['items'],[])
+    def test_promotional_points_are_separate_and_cannot_be_withdrawn(self):
+        self.verify(self.owner)
+        import uuid
+        p={'user_id':self.user.pk,'kind':'promotion','value':500,'days':30,'request_key':str(uuid.uuid4()),'reason':'Bounded promotional gift'}
+        self.assertEqual(self.call('/api/admin/control/benefits',p).status_code,200)
+        self.assertEqual(self.call('/api/admin/control/benefits',p).status_code,200)
+        w=self.call('/api/wallet',user=self.user).json();self.assertEqual(w['balance_cents'],0);self.assertEqual(w['promotional_points'],500);self.assertFalse(w['promotional_withdrawable'])
+        self.assertEqual(PromotionalGrant.objects.count(),1)
+        p['request_key']=str(uuid.uuid4());p['value']=10000
+        self.assertEqual(self.call('/api/admin/control/benefits',p).status_code,409)
+    def test_frame_grant_expires_without_mutating_customer_settings(self):
+        self.verify(self.owner)
+        p={'user_id':self.user.pk,'kind':'frame','value':5,'days':1,'reason':'Temporary frame benefit'}
+        self.assertEqual(self.call('/api/admin/control/benefits',p).status_code,200)
+        self.assertEqual(self.call('/api/me',user=self.user).json()['selected_frame'],5)
+        BenefitGrant.objects.update(expires_at=timezone.now()-timedelta(seconds=1))
+        self.assertEqual(self.call('/api/me',user=self.user).json()['selected_frame'],0)
+    def test_wheel_usage_limit_does_not_modify_existing_results(self):
+        self.verify(self.owner)
+        r=self.call('/api/admin/control/wheel-limits',{'daily_limit':0,'daily_budget_cents':1000,'reason':'Pause spins for review'})
+        self.assertEqual(r.status_code,200);self.assertEqual(r.json()['daily_limit'],0)
+    def test_communications_status_never_exposes_message_body(self):
+        self.verify(self.staff);Message.objects.create(sender=self.user,recipient=self.owner,body='REDACT_ME')
+        r=self.call('/api/admin/control/communications',user=self.staff)
+        self.assertEqual(r.status_code,200);self.assertNotIn('REDACT_ME',r.content.decode());self.assertFalse(r.json()['content_access'])

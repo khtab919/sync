@@ -60,10 +60,12 @@ def dashboard(request):
     require(request,'dashboard.view')
     period=request.GET.get('period','day');days={'day':1,'week':7,'month':30}.get(period)
     if days is None:raise ApiError('invalid_period')
+    from .calling import expire_calls
+    expire_calls()
     start=timezone.now()-timedelta(days=days);now=timezone.now()
     d={'users':User.objects.count(),'creators':Profile.objects.filter(creator=True).count(),'active_users':Profile.objects.filter(last_active_at__gte=start).count(),'online':Profile.objects.filter(last_active_at__gte=now-timedelta(seconds=25)).count(),'live':LiveBroadcast.objects.filter(status__in=['starting','active','reconnecting']).count(),'calls':InternalCall.objects.filter(status__in=['ringing','accepted']).count(),'bookings':Booking.objects.filter(created_at__gte=start).count(),'pending_reports':Report.objects.filter(resolved=False).count()+LiveReport.objects.filter(resolved=False).count(),'banned':User.objects.filter(is_active=False).count(),'restricted':AccountSanction.objects.filter(revoked_at__isnull=True).filter(Q(expires_at__isnull=True)|Q(expires_at__gt=now)).values('user').distinct().count(),'pending_cases':AdminCase.objects.filter(status='pending').count(),'security_alerts':AdminEvent.objects.filter(result='denied',created_at__gte=start).count(),'failed_live':LiveBroadcast.objects.filter(status='failed',created_at__gte=start).count()}
     if 'finance.view' in scopes(request.actor):
-        ops=FinancialOperation.objects.filter(status='settled',created_at__gte=start);chat=ChatCharge.objects.filter(created_at__gte=start)
+        ops=FinancialOperation.objects.filter(status='settled',settled_at__gte=start);chat=ChatCharge.objects.filter(created_at__gte=start)
         d.update(revenue_cents=(ops.aggregate(v=Sum('amount_cents'))['v'] or 0)+(chat.aggregate(v=Sum('amount_cents'))['v'] or 0),commission_cents=(ops.aggregate(v=Sum('platform_cents'))['v'] or 0)+(chat.aggregate(v=Sum('platform_cents'))['v'] or 0),pending_withdrawals=Withdrawal.objects.filter(status='pending').count())
     return JsonResponse({'stats':d,'period':period,'updated_at':now,'permissions':scopes(request.actor)})
 
@@ -172,3 +174,45 @@ def notices(request):
 
 @endpoint(['GET'])
 def inbox(request):return JsonResponse({'items':rows(AdminNotice.objects.filter(Q(recipient=request.actor)|Q(recipient__isnull=True)).order_by('-id'),['id','title','body','created_at']),'sanctions':rows(AccountSanction.objects.filter(user=request.actor).order_by('-id'),['id','kind','reason','expires_at','revoked_at'])})
+
+@endpoint(['GET','POST'])
+def benefits(request):
+    require(request,'benefits.edit' if request.method=='POST' else 'benefits.view',request.method=='POST')
+    if request.method=='POST':
+        u=User.objects.get(pk=request.payload.get('user_id'));kind=request.payload.get('kind');value=request.payload.get('value');days=request.payload.get('days',30);why=reason(request)
+        if kind not in ['frame','promotion'] or type(value) is not int or type(days) is not int or not 1<=days<=365:raise ApiError('invalid_benefit')
+        with transaction.atomic():
+            User.objects.select_for_update().get(pk=request.actor.pk)
+            if kind=='frame':
+                if not 0<=value<=10:raise ApiError('invalid_frame')
+                BenefitGrant.objects.create(user=u,actor=request.actor,kind='frame',value=value,reason=why,expires_at=timezone.now()+timedelta(days=days))
+            else:
+                from .promotions import grant
+                today=timezone.now()-timedelta(days=1)
+                total=PromotionalGrant.objects.filter(actor=request.actor,created_at__gte=today).aggregate(v=Sum('points'))['v'] or 0
+                import uuid
+                key=str(uuid.UUID(text(request.payload,'request_key',36,36)))
+                existing=PromotionalGrant.objects.filter(reference='admin:'+str(request.actor.pk)+':'+key).exists()
+                if not 1<=value<=10000 or (not existing and total+value>10000):raise ApiError('promotion_limit',409)
+                grant(u,value,'admin:'+str(request.actor.pk)+':'+key,why,request.actor)
+            event(request.actor,'benefit_granted',u.pk,why)
+    return JsonResponse({'items':rows(BenefitGrant.objects.order_by('-id'),['id','user_id','actor_id','kind','value','reason','expires_at']),'promotions':rows(PromotionalGrant.objects.order_by('-id'),['id','user_id','actor_id','points','reason','created_at'])})
+
+@endpoint(['GET','POST'])
+def wheel_limits(request):
+    require(request,'wheel.edit' if request.method=='POST' else 'wheel.view',request.method=='POST')
+    c,_=PaidWheelConfiguration.objects.get_or_create(pk=1)
+    if request.method=='POST':
+        maximum=request.payload.get('daily_limit');budget=request.payload.get('daily_budget_cents')
+        if type(maximum) is not int or not 0<=maximum<=100 or type(budget) is not int or not 0<=budget<=1000000:raise ApiError('invalid_wheel_limit')
+        with transaction.atomic():
+            c=PaidWheelConfiguration.objects.select_for_update().get(pk=1);before={'daily_limit':c.daily_limit,'daily_budget_cents':c.daily_budget_cents};c.daily_limit=maximum;c.daily_budget_cents=budget;c.save(update_fields=['daily_limit','daily_budget_cents']);event(request.actor,'wheel_limits',c.pk,reason(request)+' '+json.dumps({'before':before,'after':{'daily_limit':maximum,'daily_budget_cents':budget}}))
+    start=timezone.now().replace(hour=0,minute=0,second=0,microsecond=0);q=PaidSpin.objects.filter(created_at__gte=start)
+    return JsonResponse({'daily_limit':c.daily_limit,'daily_budget_cents':c.daily_budget_cents,'spins':q.count(),'cost_cents':q.aggregate(v=Sum('cost_cents'))['v'] or 0,'prizes_cents':q.aggregate(v=Sum('prize_cents'))['v'] or 0,'items':rows(PaidSpin.objects.order_by('-id'),['id','user_id','cost_cents','prize_cents','prizes_snapshot','created_at'])})
+
+@endpoint(['GET'])
+def communications(request):
+    require(request,'support.view')
+    from .calling import expire_calls
+    expire_calls()
+    return JsonResponse({'items':rows(InternalCall.objects.order_by('-created_at'),['id','caller_id','callee_id','mode','status','created_at','accepted_at','ended_at','caller_seen_at','callee_seen_at']),'message_states':{'pending_delivery':Message.objects.filter(delivered_at__isnull=True,deleted_at__isnull=True).count(),'delivered':Message.objects.filter(delivered_at__isnull=False).count(),'read':Message.objects.filter(read_at__isnull=False).count()},'content_access':False})

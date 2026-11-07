@@ -69,9 +69,9 @@ def financial_history(request):
     for row in ChatCharge.objects.filter(Q(buyer=request.actor)|Q(creator=request.actor)).order_by('-created_at')[:100]:
         incoming=row.creator_id==request.actor.pk
         items.append({'id':'chat:'+str(row.pk),'kind':'chat_'+row.kind,'status':'settled','amount_cents':row.creator_cents if incoming else row.amount_cents,'incoming':incoming,'reference':str(row.message_id),'created_at':row.created_at,'creator_share':80})
-    for row in TopUp.objects.filter(user=request.actor).order_by('-created_at')[:50]:items.append({'id':'topup:'+str(row.pk),'kind':'topup','status':row.status,'amount_cents':row.amount_cents+row.bonus_cents,'incoming':True,'reference':row.transaction_hash,'created_at':row.created_at})
+    for row in TopUp.objects.filter(user=request.actor).order_by('-created_at')[:50]:items.append({'id':'topup:'+str(row.pk),'kind':'topup','status':row.status,'amount_cents':row.amount_cents,'incoming':True,'reference':row.transaction_hash,'created_at':row.created_at})
     from .models import GatewayInvoice
-    for row in GatewayInvoice.objects.filter(quote__user=request.actor,credited_at__isnull=False).select_related('quote').order_by('-created_at')[:50]:items.append({'id':'gateway:'+str(row.quote_id),'kind':'topup','status':'approved','amount_cents':row.quote.amount_cents+row.quote.bonus_cents,'incoming':True,'reference':row.payment_id or row.invoice_id,'created_at':row.credited_at})
+    for row in GatewayInvoice.objects.filter(quote__user=request.actor,credited_at__isnull=False).select_related('quote').order_by('-created_at')[:50]:items.append({'id':'gateway:'+str(row.quote_id),'kind':'topup','status':'approved','amount_cents':row.quote.amount_cents,'incoming':True,'reference':row.payment_id or row.invoice_id,'created_at':row.credited_at})
     for row in Withdrawal.objects.filter(user=request.actor).order_by('-created_at')[:100]:items.append({'id':'withdrawal:'+str(row.pk),'kind':'withdrawal','status':row.status,'amount_cents':row.amount_cents,'incoming':False,'reference':row.payout_reference or str(row.pk),'created_at':row.created_at})
     items.sort(key=lambda item:item['created_at'],reverse=True)
     return JsonResponse({'items':items[:150],'currency':'USD','units_per_usd':100})

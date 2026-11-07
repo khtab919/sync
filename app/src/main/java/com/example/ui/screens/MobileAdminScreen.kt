@@ -75,12 +75,18 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
     var livePriceInput by remember{mutableStateOf("")}
     var liveStop by remember{mutableStateOf<JSONObject?>(null)}
     var confirmation by remember { mutableStateOf<JSONObject?>(null) }
+    var administrativeReason by remember { mutableStateOf("") }
+    suspend fun securePost(path:String,payload:JSONObject):JSONObject {
+        if(administrativeReason.trim().length<3)throw IllegalArgumentException("reason_required")
+        return api.request(path,"POST",payload.put("reason",administrativeReason.trim()))
+    }
     fun message(e: Exception): String = when(e.message) {
         "administrator_required", "invalid_session", "authentication_required" -> "لا تملك الجلسة صلاحية الإدارة. سجّل الدخول بحساب المسؤول."
         "protected_account" -> "هذا الحساب الإداري محمي من هذا الإجراء."
         "credit_request_conflict" -> "هذا الطلب استُخدم سابقًا ببيانات مختلفة. أعد فتح الحساب لبدء طلب جديد."
         "independent_approval_required" -> "سُجل طلب موافقة مستقلة. عد إلى مركز الإدارة وافتح الموافقات المالية."
         "admin_mfa_required" -> "عد لمركز الإدارة وأعد التحقق بالمصادقة الثنائية."
+        "reason_required" -> "اكتب سبب الإجراء في أعلى الصفحة أولًا."
         "account_unavailable" -> "الحساب غير موجود."
         else -> "تعذّر تنفيذ الطلب. تحقق من الاتصال وتحديث الخادم ثم أعد المحاولة."
     }
@@ -147,6 +153,7 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
                         FilterChip(selected = section == name, onClick = { selected = null; section = name; offset = 0 }, label = { Text(name) }, enabled = !busy)
                     }
                 }
+                OutlinedTextField(administrativeReason,{administrativeReason=it.take(300)},label={Text("سبب الإجراء الإداري")},modifier=Modifier.fillMaxWidth())
                 if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
                 if (success.isNotBlank()) Text(success, color = MaterialTheme.colorScheme.primary)
                 if (loading || busy) LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -158,9 +165,9 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
                     Text(row.optString("title"),style=MaterialTheme.typography.titleMedium);Text(row.optString("owner_name"));Text("${row.optInt("viewers")} مشاهد · "+if(row.optBoolean("private"))"خاص: ${row.optLong("price_cents")}"else"عام مجاني")
                     val reports=row.optJSONArray("reports");if(reports!=null)for(i in 0 until reports.length())Text("بلاغ: "+reports.getJSONObject(i).optString("reason"),color=MaterialTheme.colorScheme.error)
                     Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
-                        TextButton({perform{liveRoom=api.request("/api/live/${row.getString("id")}/admission","POST",JSONObject())}},enabled=!busy){Text("مشاهدة للإشراف")}
+                        TextButton({perform{liveRoom=securePost("/api/live/${row.getString("id")}/admission",JSONObject())}},enabled=!busy){Text("مشاهدة للإشراف")}
                         TextButton({liveStop=row},enabled=!busy){Text("إيقاف البث")}
-                        if(reports!=null&&reports.length()>0)TextButton({perform{api.request("/api/admin/live","POST",JSONObject().put("action","resolve").put("id",row.getString("id")));revision++}},enabled=!busy){Text("تمت المراجعة")}
+                        if(reports!=null&&reports.length()>0)TextButton({perform{securePost("/api/admin/live",JSONObject().put("action","resolve").put("id",row.getString("id")));revision++}},enabled=!busy){Text("تمت المراجعة")}
                     }
                     if(row.optBoolean("private")&&!liveOnly)TextButton({livePriceTarget=row;livePriceInput=row.optLong("price_cents").toString()}){Text("تعديل السعر قبل البيع")}
                     Text("لا توجد تسجيلات أو إعادة مشاهدة للتحقيق لاحقًا.",style=MaterialTheme.typography.bodySmall)
@@ -171,7 +178,7 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
                 items(endedLiveReports,key={"report-"+it.optLong("id")}){report->Card(Modifier.fillMaxWidth()){Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
                     Text(report.optString("title"));Text(report.optString("owner_name"));Text(report.optString("reason"))
                     Text(report.optString("reporter_name")+" · "+report.optString("created_at"),style=MaterialTheme.typography.bodySmall)
-                    TextButton({perform{api.request("/api/admin/live","POST",JSONObject().put("action","resolve").put("id",report.getString("broadcast_id")));revision++}},enabled=!busy){Text("تمت مراجعة بلاغات الجلسة")}
+                    TextButton({perform{securePost("/api/admin/live",JSONObject().put("action","resolve").put("id",report.getString("broadcast_id")));revision++}},enabled=!busy){Text("تمت مراجعة بلاغات الجلسة")}
                 }}}
             }
             if(section=="الحجوزات"){
@@ -196,11 +203,11 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
                         Text(account.optString("display_name"), style = MaterialTheme.typography.titleLarge)
                         Text("#${account.optInt("id")} · ${account.optString("username")}")
                         Text(account.optString("email"))
-                        if(!account.optBoolean("protected"))TextButton({perform{selected=api.request("/api/admin/accounts/${account.optInt("id")}","POST",JSONObject().put("action",if(account.optBoolean("live_moderator"))"moderator_off"else"moderator_on"))}},enabled=!busy){Text(if(account.optBoolean("live_moderator"))"إلغاء إشراف البث"else"منح إشراف البث فقط")}
+                        if(!account.optBoolean("protected"))TextButton({perform{selected=securePost("/api/admin/accounts/${account.optInt("id")}",JSONObject().put("action",if(account.optBoolean("live_moderator"))"moderator_off"else"moderator_on"))}},enabled=!busy){Text(if(account.optBoolean("live_moderator"))"إلغاء إشراف البث"else"منح إشراف البث فقط")}
                         Text(account.optString("bio"))
                         Text(if (account.optBoolean("active")) "الحساب نشط" else "الحساب محظور")
                         Text(if (account.optBoolean("creator")) "النشر والظهور في الاستكشاف مفعّلان" else "صلاحية النشر غير مفعّلة")
-                        if(!account.optBoolean("protected"))TextButton({perform{selected=api.request("/api/admin/accounts/${account.optInt("id")}","POST",JSONObject().put("action",if(account.optBoolean("broadcast_allowed"))"broadcast_off"else"broadcast_on"))}},enabled=!busy){Text(if(account.optBoolean("broadcast_allowed"))"تعطيل صلاحية البث"else"السماح بالبث للحساب المؤهل")}
+                        if(!account.optBoolean("protected"))TextButton({perform{selected=securePost("/api/admin/accounts/${account.optInt("id")}",JSONObject().put("action",if(account.optBoolean("broadcast_allowed"))"broadcast_off"else"broadcast_on"))}},enabled=!busy){Text(if(account.optBoolean("broadcast_allowed"))"تعطيل صلاحية البث"else"السماح بالبث للحساب المؤهل")}
                         Text("الرصيد: ${cents(account.optLong("balance_cents"))}")
                         Text("المحجوز: ${cents(account.optLong("reserved_cents"))}")
                         if (!account.optBoolean("protected")) {
@@ -264,7 +271,7 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
                     Button(onClick = { perform {
                         val list = org.json.JSONArray()
                         wheelPrizes.lines().filter { it.isNotBlank() }.forEach { line -> val parts = line.split(":"); require(parts.size == 2); list.put(JSONObject().put("amount_cents", BigDecimal(parts[0].trim()).movePointRight(2).intValueExact()).put("weight", parts[1].trim().toInt())) }
-                        api.request("/api/admin/wheel", "POST", JSONObject().put("enabled", wheelEnabled).put("cost_cents", BigDecimal(wheelCost).movePointRight(2).intValueExact()).put("bankroll_cents", BigDecimal(wheelBank).movePointRight(2).longValueExact()).put("expected_bankroll_cents", wheelConfig.optLong("bankroll_cents")).put("prizes", list).put("price_step_cents",BigDecimal(wheelStep).movePointRight(2).intValueExact()).put("maximum_cost_cents",BigDecimal(wheelMaximum).movePointRight(2).intValueExact()).put("first_reward_cents",BigDecimal(firstReward).movePointRight(2).intValueExact()).put("grand_unlock_spend_cents",BigDecimal(grandUnlock).movePointRight(2).intValueExact()))
+                        securePost("/api/admin/wheel",JSONObject().put("enabled", wheelEnabled).put("cost_cents", BigDecimal(wheelCost).movePointRight(2).intValueExact()).put("bankroll_cents", BigDecimal(wheelBank).movePointRight(2).longValueExact()).put("expected_bankroll_cents", wheelConfig.optLong("bankroll_cents")).put("prizes", list).put("price_step_cents",BigDecimal(wheelStep).movePointRight(2).intValueExact()).put("maximum_cost_cents",BigDecimal(wheelMaximum).movePointRight(2).intValueExact()).put("first_reward_cents",BigDecimal(firstReward).movePointRight(2).intValueExact()).put("grand_unlock_spend_cents",BigDecimal(grandUnlock).movePointRight(2).intValueExact()))
                         revision++; success = "تم حفظ إعدادات العجلة."
                     } }, enabled = !busy && !loading) { Text("حفظ الإعدادات") }
                 }
@@ -278,7 +285,7 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
                     Row { listOf("USD","SYP").forEach{c->FilterChip(paymentCurrency==c,{paymentCurrency=c;if(c=="USD")paymentRate="1"},label={Text(c)})} }
                     if(paymentCurrency=="SYP")OutlinedTextField(paymentRate,{paymentRate=it},label={Text("ليرة سورية لكل دولار من الرصيد")},modifier=Modifier.fillMaxWidth())
                     OutlinedTextField(paymentInstructions,{paymentInstructions=it.take(500)},label={Text("تعليمات الدفع")},modifier=Modifier.fillMaxWidth())
-                    Button(onClick={perform { api.request("/api/admin/payment-settings","POST",JSONObject().put("enabled",paymentEnabled).put("account",paymentAccount).put("currency",paymentCurrency).put("rate",paymentRate).put("instructions",paymentInstructions));success="تم حفظ بيانات الاستلام." }},enabled=!busy){Text("حفظ")}
+                    Button(onClick={perform { securePost("/api/admin/payment-settings",JSONObject().put("enabled",paymentEnabled).put("account",paymentAccount).put("currency",paymentCurrency).put("rate",paymentRate).put("instructions",paymentInstructions));success="تم حفظ بيانات الاستلام." }},enabled=!busy){Text("حفظ")}
                 }
             } else if (section == "الطلبات") {
                 if(requests.isEmpty() && !loading) item { Text("لا توجد طلبات دفع أو بائعين.") }
@@ -333,10 +340,10 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
                 perform {
                     if(data.has("request_kind")) {
                         val body = JSONObject().put("kind", data.optString("request_kind")).put("id", if(data.optString("request_kind") == "seller") data.optString("id").toInt() else data.optString("id")).put("decision", data.optString("decision")).put("review_note", reviewNote).put("payment_verified", verified)
-                        api.request("/api/admin/requests", "POST", body); revision++
-                    } else if(data.has("kind")) { api.request("/api/admin/moderation", "POST", data); revision++ }
+                        securePost("/api/admin/requests",body); revision++
+                    } else if(data.has("kind")) { securePost("/api/admin/moderation",data); revision++ }
                     else {
-                        selected = api.request("/api/admin/accounts/${selected!!.optInt("id")}", "POST", data)
+                        selected = securePost("/api/admin/accounts/${selected!!.optInt("id")}",data)
                         if(data.optString("action") == "credit") { amount = ""; reason = ""; creditKey = UUID.randomUUID().toString() }
                     }
                     success = "تم تنفيذ الإجراء بنجاح."
@@ -344,10 +351,10 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
             }, enabled = !busy && (!data.has("request_kind") || (reviewNote.trim().length >= 3 && (data.optString("request_kind") != "topup" || data.optString("decision") != "approve" || verified)))) { Text("تأكيد") }
         }, dismissButton = { TextButton(onClick = { confirmation = null }, enabled = !busy) { Text("إلغاء") } }) }
     }
-    liveStop?.let{row->AlertDialog(onDismissRequest={liveStop=null},title={Text("إيقاف البث للجميع")},text={Text("سيُغلق البث وتُعاد الحجوزات المالية التي لم تستوفِ مدة الخدمة. لا يُحفظ فيديو.")},confirmButton={TextButton({liveStop=null;perform{api.request("/api/admin/live","POST",JSONObject().put("action","end").put("id",row.getString("id")));revision++}}){Text("إيقاف")}},dismissButton={TextButton({liveStop=null}){Text("إلغاء")}})}
-    payout?.let{row->AlertDialog(onDismissRequest={payout=null},title={Text("التحقق من السحب")},text={Column(verticalArrangement=Arrangement.spacedBy(8.dp)){Text(row.optString("name"));Text(cents(row.optLong("amount_cents")));Text(row.optString("destination"));Text("نفّذ التحويل الخارجي أولًا ثم سجّل مرجعه. هذا الزر لا يرسل الأموال تلقائيًا.");OutlinedTextField(payoutReference,{payoutReference=it.take(300)},label={Text("مرجع التحويل المنفذ")});Row{Checkbox(payoutVerified,{payoutVerified=it});Text("تحققت من تنفيذ التحويل")}}},confirmButton={TextButton({payout=null;perform{api.request("/api/admin/payouts","POST",JSONObject().put("id",row.getString("id")).put("action","paid").put("paid_verified",true).put("payout_reference",payoutReference));revision++}},enabled=payoutVerified&&payoutReference.length>=6&&!busy){Text("اعتماد السحب")}},dismissButton={TextButton({payout=null;perform{api.request("/api/admin/payouts","POST",JSONObject().put("id",row.getString("id")).put("action","reject"));revision++}},enabled=!busy){Text("رفض وإعادة الحجز")}})}
+    liveStop?.let{row->AlertDialog(onDismissRequest={liveStop=null},title={Text("إيقاف البث للجميع")},text={Text("سيُغلق البث وتُعاد الحجوزات المالية التي لم تستوفِ مدة الخدمة. لا يُحفظ فيديو.")},confirmButton={TextButton({liveStop=null;perform{securePost("/api/admin/live",JSONObject().put("action","end").put("id",row.getString("id")));revision++}}){Text("إيقاف")}},dismissButton={TextButton({liveStop=null}){Text("إلغاء")}})}
+    payout?.let{row->AlertDialog(onDismissRequest={payout=null},title={Text("التحقق من السحب")},text={Column(verticalArrangement=Arrangement.spacedBy(8.dp)){Text(row.optString("name"));Text(cents(row.optLong("amount_cents")));Text(row.optString("destination"));Text("نفّذ التحويل الخارجي أولًا ثم سجّل مرجعه. هذا الزر لا يرسل الأموال تلقائيًا.");OutlinedTextField(payoutReference,{payoutReference=it.take(300)},label={Text("مرجع التحويل المنفذ")});Row{Checkbox(payoutVerified,{payoutVerified=it});Text("تحققت من تنفيذ التحويل")}}},confirmButton={TextButton({payout=null;perform{securePost("/api/admin/payouts",JSONObject().put("id",row.getString("id")).put("action","paid").put("paid_verified",true).put("payout_reference",payoutReference));revision++}},enabled=payoutVerified&&payoutReference.length>=6&&!busy){Text("اعتماد السحب")}},dismissButton={TextButton({payout=null;perform{securePost("/api/admin/payouts",JSONObject().put("id",row.getString("id")).put("action","reject"));revision++}},enabled=!busy){Text("رفض وإعادة الحجز")}})}
 
-    refundBooking?.let{row->AlertDialog(onDismissRequest={refundBooking=null},title={Text("استرداد الحجز")},text={Column{Text(row.optString("title"));Text(cents(row.optLong("price_cents")));OutlinedTextField(refundReason,{refundReason=it.take(300)},label={Text("سبب القرار بعد المراجعة")})}},confirmButton={TextButton({refundBooking=null;perform{api.request("/api/admin/bookings","POST",JSONObject().put("id",row.getString("id")).put("action","refund").put("reason",refundReason));revision++}},enabled=refundReason.trim().length>=3&&!busy){Text("إعادة المبلغ")}},dismissButton={TextButton({refundBooking=null}){Text("إلغاء")}})}
-    livePriceTarget?.let{row->AlertDialog(onDismissRequest={livePriceTarget=null},title={Text("سعر دخول البث")},text={Column{Text("يمكن التعديل قبل بيع أي تذكرة فقط، حفاظًا على السعر المتفق عليه.");OutlinedTextField(livePriceInput,{livePriceInput=it.filter{c->c.isDigit()}.take(7)},label={Text("السعر من الرصيد")})}},confirmButton={TextButton({livePriceTarget=null;perform{api.request("/api/admin/live","POST",JSONObject().put("id",row.getString("id")).put("action","price").put("price_cents",livePriceInput.toLong()));revision++}},enabled=(livePriceInput.toLongOrNull()?:0L) in 1L..1000000L&&!busy){Text("حفظ")}},dismissButton={TextButton({livePriceTarget=null}){Text("إلغاء")}})}
+    refundBooking?.let{row->AlertDialog(onDismissRequest={refundBooking=null},title={Text("استرداد الحجز")},text={Column{Text(row.optString("title"));Text(cents(row.optLong("price_cents")));OutlinedTextField(refundReason,{refundReason=it.take(300)},label={Text("سبب القرار بعد المراجعة")})}},confirmButton={TextButton({refundBooking=null;perform{securePost("/api/admin/bookings",JSONObject().put("id",row.getString("id")).put("action","refund").put("reason",refundReason));revision++}},enabled=refundReason.trim().length>=3&&!busy){Text("إعادة المبلغ")}},dismissButton={TextButton({refundBooking=null}){Text("إلغاء")}})}
+    livePriceTarget?.let{row->AlertDialog(onDismissRequest={livePriceTarget=null},title={Text("سعر دخول البث")},text={Column{Text("يمكن التعديل قبل بيع أي تذكرة فقط، حفاظًا على السعر المتفق عليه.");OutlinedTextField(livePriceInput,{livePriceInput=it.filter{c->c.isDigit()}.take(7)},label={Text("السعر من الرصيد")})}},confirmButton={TextButton({livePriceTarget=null;perform{securePost("/api/admin/live",JSONObject().put("id",row.getString("id")).put("action","price").put("price_cents",livePriceInput.toLong()));revision++}},enabled=(livePriceInput.toLongOrNull()?:0L) in 1L..1000000L&&!busy){Text("حفظ")}},dismissButton={TextButton({livePriceTarget=null}){Text("إلغاء")}})}
 
 }

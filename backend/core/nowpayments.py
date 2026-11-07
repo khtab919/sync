@@ -50,7 +50,7 @@ def create_invoice(request):
         if quote.expires_at<timezone.now():raise ApiError('quote_expired',409)
         invoice=GatewayInvoice.objects.create(quote=quote)
     try:
-        result=provider_request('invoice',{'price_amount':str(Decimal(quote.amount_cents)/100),'price_currency':'usd','order_id':str(quote.pk),'order_description':f'Relaxia coin balance: {quote.amount_cents+quote.bonus_cents} coins','ipn_callback_url':request.build_absolute_uri('/api/nowpayments/ipn'),'success_url':request.build_absolute_uri('/api/nowpayments/return'),'cancel_url':request.build_absolute_uri('/api/nowpayments/return?cancel=1')})
+        result=provider_request('invoice',{'price_amount':str(Decimal(quote.amount_cents)/100),'price_currency':'usd','order_id':str(quote.pk),'order_description':f'Relaxia balance: {quote.amount_cents} units; {quote.bonus_cents} non-withdrawable promotional points','ipn_callback_url':request.build_absolute_uri('/api/nowpayments/ipn'),'success_url':request.build_absolute_uri('/api/nowpayments/return'),'cancel_url':request.build_absolute_uri('/api/nowpayments/return?cancel=1')})
         url=str(result.get('invoice_url',''));parsed=urlparse(url);identifier=str(result.get('id',''))
         if parsed.scheme!='https' or parsed.hostname not in ('nowpayments.io','www.nowpayments.io') or parsed.username or parsed.port not in (None,443) or not identifier.isdigit() or len(identifier)>64 or len(url)>500:raise ValueError('invalid provider invoice')
         with transaction.atomic():
@@ -91,7 +91,9 @@ def apply_payment(data):
             if not expected.is_finite() or not paid.is_finite() or expected<=0 or paid<expected:raise ValueError('insufficient provider payment')
             Wallet.objects.get_or_create(user_id=invoice.quote.user_id)
             wallet=Wallet.objects.select_for_update().get(user_id=invoice.quote.user_id)
-            wallet.balance_cents+=invoice.quote.amount_cents+invoice.quote.bonus_cents
+            wallet.balance_cents+=invoice.quote.amount_cents
+            from .promotions import grant
+            grant(invoice.quote.user,invoice.quote.bonus_cents,'gateway:'+str(invoice.pk),'Verified gateway promotional points')
             wallet.save(update_fields=['balance_cents']);invoice.credited_at=timezone.now()
         invoice.save(update_fields=['payment_id','status','credited_at'])
     return invoice
