@@ -41,6 +41,11 @@ class IdentityTests(TestCase):
         self.assertEqual(self.patch({'username':'SECOND_HANDLE'}).status_code,409)
         self.assertEqual(self.patch({'username':'bad name'}).status_code,400)
         self.assertEqual(self.patch({'public_id':'12345'}).status_code,400)
+    def test_legacy_name_fallback_is_frozen_before_handle_change(self):
+        Profile.objects.filter(user=self.user).update(display_name='')
+        r=self.patch({'username':'new_distinct_handle'})
+        self.assertEqual(r.status_code,200);self.assertEqual(r.json()['display_name'],'existing_handle')
+
     def test_display_name_updates_never_replace_handle(self):
         r=self.patch({'display_name':'اسم آخر'});self.assertEqual(r.status_code,200);self.assertEqual(r.json()['username'],'existing_handle')
     def test_legacy_handle_can_be_retained_while_editing_profile(self):
@@ -89,6 +94,6 @@ class PublicIdentityMigrationTests(TransactionTestCase):
             P.objects.create(user_id=one.pk,display_name='قديم');P.objects.create(user_id=two.pk);W.objects.create(user_id=one.pk,balance_cents=5432,reserved_cents=100);m=M.objects.create(sender_id=one.pk,recipient_id=two.pk,body='Existing private message')
             ids=(one.pk,two.pk,m.pk)
             executor=MigrationExecutor(connection);executor.migrate([('core','0023_profile_profile_public_id_five_digits')])
-            self.assertEqual(get_user_model().objects.get(pk=ids[0]).password,'retained-hash');self.assertEqual(get_user_model().objects.get(pk=ids[1]).email,'legacy@example.com');self.assertEqual(Wallet.objects.get(user_id=ids[0]).balance_cents,5432);self.assertEqual(Message.objects.get(pk=ids[2]).sender_id,ids[0]);public=list(Profile.objects.filter(user_id__in=ids[:2]).values_list('public_id',flat=True));self.assertEqual(len(set(public)),2)
+            self.assertEqual(Profile.objects.get(user_id=ids[1]).display_name,'legacy-two');self.assertEqual(Profile.objects.get(user_id=ids[0]).display_name,'قديم');self.assertEqual(get_user_model().objects.get(pk=ids[0]).password,'retained-hash');self.assertEqual(get_user_model().objects.get(pk=ids[1]).email,'legacy@example.com');self.assertEqual(Wallet.objects.get(user_id=ids[0]).balance_cents,5432);self.assertEqual(Message.objects.get(pk=ids[2]).sender_id,ids[0]);public=list(Profile.objects.filter(user_id__in=ids[:2]).values_list('public_id',flat=True));self.assertEqual(len(set(public)),2)
             for v in public:self.assertRegex(v,r'^[1-9][0-9]{4}$')
         finally:MigrationExecutor(connection).migrate([('core','0023_profile_profile_public_id_five_digits')])

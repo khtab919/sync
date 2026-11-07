@@ -248,6 +248,7 @@ def me(request):
         # Validate the whole patch before persisting any changes.
         bio = text(p, 'bio', 0, 300) if 'bio' in p else profile.bio
         name = text(p, 'display_name', 1, 100) if 'display_name' in p else profile.display_name
+        if handle!=request.actor.username and not name:name=request.actor.username
         profile.bio, profile.display_name = bio, name
         profile.avatar_url = avatar_url
         profile.selected_frame = p.get('selected_frame', profile.selected_frame)

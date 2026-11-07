@@ -9,6 +9,8 @@ def backfill(apps,schema_editor):
     targets=list(Profile.objects.filter(public_id__isnull=True).values_list('pk',flat=True))
     available=[str(n) for n in range(10000,100000) if str(n) not in used]
     if len(targets)>len(available):raise RuntimeError('Five-digit account capacity exceeded; no account data was changed.')
+    for profile in Profile.objects.filter(display_name='').select_related('user').iterator():
+        Profile.objects.filter(pk=profile.pk).update(display_name=profile.user.username)
     assigned=secrets.SystemRandom().sample(available,len(targets))
     for pk,value in zip(targets,assigned):Profile.objects.filter(pk=pk).update(public_id=value)
 
