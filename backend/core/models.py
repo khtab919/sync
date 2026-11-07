@@ -315,6 +315,10 @@ class LiveBroadcast(models.Model):
     gifts_enabled=models.BooleanField(default=False)
     end_reason=models.CharField(max_length=200,blank=True)
     cleanup_pending=models.BooleanField(default=False)
+    mode=models.CharField(max_length=5,default="video",choices=[("audio","صوت"),("video","فيديو")])
+    max_speakers=models.PositiveSmallIntegerField(default=1)
+    gift_goal_cents=models.PositiveIntegerField(default=0)
+    pinned_comment=models.ForeignKey("LiveComment",on_delete=models.SET_NULL,null=True,blank=True,related_name="pinned_in")
 
 class LiveAdmission(models.Model):
     session=models.ForeignKey(SessionToken,on_delete=models.SET_NULL,null=True,blank=True)
@@ -446,4 +450,42 @@ class PromotionalGrant(models.Model):
     reference=models.CharField(max_length=160,unique=True)
     points=models.PositiveIntegerField()
     reason=models.CharField(max_length=500)
+    created_at=models.DateTimeField(auto_now_add=True)
+
+class LiveSeat(models.Model):
+    admission=models.OneToOneField(LiveAdmission,on_delete=models.CASCADE)
+    mode=models.CharField(max_length=5,choices=[('audio','صوت'),('video','فيديو')])
+    status=models.CharField(max_length=10,default='pending')
+    updated_at=models.DateTimeField(auto_now=True)
+
+class LiveRoomModerator(models.Model):
+    broadcast=models.ForeignKey(LiveBroadcast,on_delete=models.CASCADE)
+    user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.CASCADE)
+    class Meta:
+        constraints=[models.UniqueConstraint(fields=['broadcast','user'],name='unique_live_room_moderator')]
+
+class LiveGiftDefinition(models.Model):
+    code=models.SlugField(primary_key=True,max_length=32)
+    name=models.CharField(max_length=60)
+    symbol=models.CharField(max_length=8)
+    price_cents=models.PositiveIntegerField()
+    effect=models.CharField(max_length=10,default='simple',choices=[('simple','عادية'),('animated','متحركة'),('depth','عمق ثلاثي الأبعاد')])
+    enabled=models.BooleanField(default=True)
+
+class LivePK(models.Model):
+    broadcast=models.ForeignKey(LiveBroadcast,on_delete=models.PROTECT)
+    teams=models.JSONField(default=list)
+    created_at=models.DateTimeField(auto_now_add=True)
+    ends_at=models.DateTimeField()
+    cancelled_at=models.DateTimeField(null=True)
+
+class LiveGiftEvent(models.Model):
+    broadcast=models.ForeignKey(LiveBroadcast,on_delete=models.PROTECT)
+    operation=models.OneToOneField(FinancialOperation,on_delete=models.PROTECT)
+    gift_code=models.CharField(max_length=32)
+    gift_name=models.CharField(max_length=60)
+    symbol=models.CharField(max_length=8)
+    effect=models.CharField(max_length=10)
+    pk_round=models.ForeignKey(LivePK,on_delete=models.PROTECT,null=True)
+    team=models.PositiveSmallIntegerField(null=True)
     created_at=models.DateTimeField(auto_now_add=True)

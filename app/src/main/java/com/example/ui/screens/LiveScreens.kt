@@ -9,6 +9,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -37,6 +38,7 @@ import java.net.URLEncoder
 
 private fun liveError(e:Exception)=when(e.message){
     "live_not_configured","live_server_unavailable"->"خادم البث غير متاح. حدّث الخادم وتحقق من إعداداته."
+    "invalid_stage_mode","invalid_live_limits"->"تحقق من عدد المتحدثين والمشاهدين ومدة الخدمة."
     "already_broadcasting"->"لديك بث جارٍ بالفعل. أنهِ الجلسة السابقة أولًا."
     "live_capacity"->"اكتمل العدد المسموح لهذه الجلسة."
     "host_not_transmitting"->"صاحب البث يعيد الاتصال. حاول بعد قليل."
@@ -54,6 +56,7 @@ private fun liveError(e:Exception)=when(e.message){
     var allowed by remember{mutableStateOf(false)};var available by remember{mutableStateOf(false)};var maximumLimit by remember{mutableIntStateOf(25)};var busy by remember{mutableStateOf(false)};var create by remember{mutableStateOf(false)}
     var title by remember{mutableStateOf("")};var privateLive by remember{mutableStateOf(false)};var inviteOnly by remember{mutableStateOf(false)};var invites by remember{mutableStateOf("")}
     var price by remember{mutableStateOf("100")};var limit by remember{mutableStateOf("25")};var minimum by remember{mutableStateOf("30")};var gifts by remember{mutableStateOf(false)}
+    var audioOnly by remember{mutableStateOf(false)};var speakers by remember{mutableStateOf("1")};var giftGoal by remember{mutableStateOf("0")}
     var selected by remember{mutableStateOf<JSONObject?>(null)};var active by remember{mutableStateOf<JSONObject?>(null)};var activeId by remember{mutableStateOf("")}
     fun act(block:suspend()->Unit){if(busy)return;busy=true;error="";scope.launch{try{block()}catch(e:CancellationException){throw e}catch(e:Exception){error=liveError(e)}finally{busy=false}}}
     fun enter(row:JSONObject){act{active=api.request("/api/live/${row.getString("id")}/admission","POST",JSONObject().put("confirmed",true).put("price_cents",row.optLong("price_cents")));activeId=row.getString("id");selected=null}}
@@ -70,9 +73,13 @@ private fun liveError(e:Exception)=when(e.message){
             item{Text("لا يُسجَّل البث ولا تتوفر إعادة مشاهدة داخل المنصة. لا يمكن ضمان منع التسجيل بأدوات خارجية.",style=MaterialTheme.typography.bodySmall)}
         }
     }
-    selected?.let{row->AlertDialog(onDismissRequest={selected=null},title={Text(row.optString("title"))},text={Column(verticalArrangement=Arrangement.spacedBy(10.dp)){Text(row.optString("owner_name"));Text(if(row.optBoolean("private"))"سعر الدخول: ${row.optLong("price_cents")} من الرصيد"else"بث عام مجاني");Text(row.optString("refund_policy"),style=MaterialTheme.typography.bodySmall);TextButton({selected=null;openProfile(row.optInt("owner_id"))}){Text("عرض الملف الشخصي")}}},confirmButton={TextButton({enter(row)},enabled=!busy){Text(if(row.optBoolean("private"))"تأكيد الدخول وحجز المبلغ"else"مشاهدة")}},dismissButton={TextButton({selected=null}){Text("إلغاء")}})}
+    selected?.let{row->AlertDialog(onDismissRequest={selected=null},title={Text(row.optString("title"))},text={Column(verticalArrangement=Arrangement.spacedBy(10.dp)){Text(row.optString("owner_name"));Text(if(row.optBoolean("private"))"سعر الدخول: ${row.optLong("price_cents")} من الرصيد"else if(row.optBoolean("invite_only"))"بث بالدعوة · مجاني"else"بث عام مجاني");Text(row.optString("refund_policy"),style=MaterialTheme.typography.bodySmall);TextButton({selected=null;openProfile(row.optInt("owner_id"))}){Text("عرض الملف الشخصي")}}},confirmButton={TextButton({enter(row)},enabled=!busy){Text(if(row.optBoolean("private"))"تأكيد الدخول وحجز المبلغ"else"مشاهدة")}},dismissButton={TextButton({selected=null}){Text("إلغاء")}})}
     if(create)AlertDialog(onDismissRequest={create=false},title={Text("إنشاء بث مباشر")},text={Column(Modifier.heightIn(max=420.dp).verticalScroll(androidx.compose.foundation.rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)){
         OutlinedTextField(title,{title=it.take(120)},label={Text("عنوان البث")})
+        Row(verticalAlignment=Alignment.CenterVertically){Switch(audioOnly,{audioOnly=it});Text("بث صوتي فقط")}
+        Text("عدد المتحدثين يشمل صاحب البث. طلبات الضيوف تحتاج موافقتك.",style=MaterialTheme.typography.bodySmall)
+        Row(Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(5.dp)){listOf("1","2","4","6","12").forEach{n->FilterChip(speakers==n,{speakers=n},label={Text(n)})}}
+        if(error.isNotBlank())Text(error,color=MaterialTheme.colorScheme.error)
         Row(verticalAlignment=Alignment.CenterVertically){Switch(privateLive,{privateLive=it});Text("دخول مدفوع")}
         if(privateLive)OutlinedTextField(price,{price=it.filter{c->c.isDigit()}.take(7)},label={Text("سعر الدخول من الرصيد")})
         Row(verticalAlignment=Alignment.CenterVertically){Switch(inviteOnly,{inviteOnly=it});Text("للمدعوين فقط")}
@@ -80,16 +87,23 @@ private fun liveError(e:Exception)=when(e.message){
         OutlinedTextField(limit,{limit=it.filter{c->c.isDigit()}.take(3)},label={Text("أقصى عدد مشاهدين · حتى $maximumLimit")})
         OutlinedTextField(minimum,{minimum=it.filter{c->c.isDigit()}.take(4)},label={Text("مدة استحقاق الخدمة بالثواني · 30 على الأقل")})
         Row(verticalAlignment=Alignment.CenterVertically){Switch(gifts,{gifts=it});Text("إتاحة الهدايا المدفوعة")}
+        if(gifts)OutlinedTextField(giftGoal,{giftGoal=it.filter{c->c.isDigit()}.take(8)},label={Text("هدف الهدايا · 0 دون هدف")})
         Text("تحصل على 80٪ من الإيراد المستحق. يعاد الحجز إذا انتهى البث قبل مدة الخدمة. البث لا يحفظ.",style=MaterialTheme.typography.bodySmall)
-    }},confirmButton={TextButton({act{val p=price.toIntOrNull()?:0;val n=limit.toIntOrNull()?:0;val m=minimum.toIntOrNull()?:0;if(title.trim().length<2||n !in 1..maximumLimit||m !in 30..3600||(privateLive&&p !in 1..1000000))throw IllegalArgumentException("invalid_input");val row=api.request("/api/live","POST",JSONObject().put("title",title.trim()).put("private",privateLive).put("invite_only",inviteOnly).put("price_cents",p).put("max_viewers",n).put("minimum_seconds",m).put("gifts_enabled",gifts).put("invite_names",JSONArray(invites.split(',', '،').map{it.trim().removePrefix("@")}.filter{it.isNotBlank()})));create=false;active=api.request("/api/live/${row.getString("id")}/admission","POST",JSONObject());activeId=row.getString("id")}},enabled=!busy){Text("بدء البث")}},dismissButton={TextButton({create=false}){Text("إلغاء")}})
+    }},confirmButton={TextButton({act{val p=price.toIntOrNull()?:0;val n=limit.toIntOrNull()?:0;val m=minimum.toIntOrNull()?:0;if(title.trim().length<2||n !in 1..maximumLimit||m !in 30..3600||(privateLive&&p !in 1..1000000))throw IllegalArgumentException("invalid_input");val row=api.request("/api/live","POST",JSONObject().put("title",title.trim()).put("private",privateLive).put("invite_only",inviteOnly).put("price_cents",p).put("max_viewers",n).put("minimum_seconds",m).put("gifts_enabled",gifts).put("mode",if(audioOnly)"audio"else"video").put("max_speakers",speakers.toInt()).put("gift_goal_cents",giftGoal.toIntOrNull()?:0).put("invite_names",JSONArray(invites.split(',', '،').map{it.trim().removePrefix("@")}.filter{it.isNotBlank()})));create=false;active=api.request("/api/live/${row.getString("id")}/admission","POST",JSONObject());activeId=row.getString("id")}},enabled=!busy){Text("بدء البث")}},dismissButton={TextButton({create=false}){Text("إلغاء")}})
 }
 
 @Composable internal fun LiveRoomView(baseUrl:String,bootstrap:JSONObject,profile:((Int)->Unit)?=null,finish:()->Unit){
     val transportTheme=if(MaterialTheme.colorScheme.background.luminance()<.25f)"dark"else"light"
-    val context=LocalContext.current;val lifecycle=LocalLifecycleOwner.current.lifecycle;val owner=bootstrap.optBoolean("owner")
+    val context=LocalContext.current;val lifecycle=LocalLifecycleOwner.current.lifecycle;val owner=bootstrap.optBoolean("owner");val audioOnly=bootstrap.optString("mode")=="audio"
     var granted by remember{mutableStateOf(!owner)};var error by remember{mutableStateOf("")};var view by remember{mutableStateOf<WebView?>(null)}
-    val permission=rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()){result->granted=result[Manifest.permission.RECORD_AUDIO]==true&&result[Manifest.permission.CAMERA]==true;if(!granted)error="اسمح بالميكروفون والكاميرا لبدء البث."}
-    LaunchedEffect(Unit){if(owner){val list=arrayOf(Manifest.permission.RECORD_AUDIO,Manifest.permission.CAMERA);if(list.all{ContextCompat.checkSelfPermission(context,it)==PackageManager.PERMISSION_GRANTED})granted=true else permission.launch(list)}}
+    var requestingGuest by remember{mutableStateOf(false)}
+    var requestedMode by remember{mutableStateOf(if(audioOnly)"audio"else"video")}
+    val permission=rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()){result->
+        val accepted=result[Manifest.permission.RECORD_AUDIO]==true&&(requestedMode=="audio"||result[Manifest.permission.CAMERA]==true)
+        if(requestingGuest){view?.evaluateJavascript("window.dispatchEvent(new CustomEvent('publishpermissions',{detail:"+accepted+"}));",null);requestingGuest=false}
+        else{granted=accepted;if(!accepted)error=if(audioOnly)"اسمح بالميكروفون لبدء البث الصوتي."else"اسمح بالميكروفون والكاميرا لبدء البث."}
+    }
+    LaunchedEffect(Unit){if(owner){val list=if(audioOnly)arrayOf(Manifest.permission.RECORD_AUDIO)else arrayOf(Manifest.permission.RECORD_AUDIO,Manifest.permission.CAMERA);if(list.all{ContextCompat.checkSelfPermission(context,it)==PackageManager.PERMISSION_GRANTED})granted=true else permission.launch(list)}}
     BackHandler{finish()}
     DisposableEffect(Unit){val window=(context as? android.app.Activity)?.window;val already=window?.attributes?.flags?.and(WindowManager.LayoutParams.FLAG_SECURE)!=0;window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE);onDispose{view?.loadUrl("about:blank");view?.destroy();if(!already)window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)}}
     DisposableEffect(lifecycle){val observer=LifecycleEventObserver{_,event->if(event==Lifecycle.Event.ON_STOP&&(context as? android.app.Activity)?.isChangingConfigurations!=true)finish()};lifecycle.addObserver(observer);onDispose{lifecycle.removeObserver(observer)}}
@@ -100,9 +114,17 @@ private fun liveError(e:Exception)=when(e.message){
             val allowedPath=Uri.parse(bootstrap.getString("url")).path
             addJavascriptInterface(object{@JavascriptInterface fun canOpenProfile():Boolean=profile!=null
             @JavascriptInterface fun openProfile(id:Int){android.os.Handler(android.os.Looper.getMainLooper()).post{if(trustedCallOrigin(url.orEmpty(),baseUrl)&&Uri.parse(url).path==allowedPath)profile?.invoke(id)}}
+            @JavascriptInterface fun requestPublishPermissions(mode:String){android.os.Handler(android.os.Looper.getMainLooper()).post{
+                if(trustedCallOrigin(url.orEmpty(),baseUrl)&&Uri.parse(url).path==allowedPath&&mode in listOf("audio","video")){
+                    requestedMode=mode;val list=if(mode=="audio")arrayOf(Manifest.permission.RECORD_AUDIO)else arrayOf(Manifest.permission.RECORD_AUDIO,Manifest.permission.CAMERA)
+                    if(list.all{ContextCompat.checkSelfPermission(context,it)==PackageManager.PERMISSION_GRANTED})evaluateJavascript("window.dispatchEvent(new CustomEvent('publishpermissions',{detail:true}));",null)
+                    else{requestingGuest=true;permission.launch(list)}
+                }
+            }}
+            @JavascriptInterface fun shareLive(text:String){android.os.Handler(android.os.Looper.getMainLooper()).post{if(trustedCallOrigin(url.orEmpty(),baseUrl)&&Uri.parse(url).path==allowedPath&&text.length<=1000){(context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("دعوة Relaxia",text))}}}
             @JavascriptInterface fun closeRoom(){android.os.Handler(android.os.Looper.getMainLooper()).post{if(trustedCallOrigin(url.orEmpty(),baseUrl)&&Uri.parse(url).path==allowedPath)finish()}}},"LayaliLive")
             webViewClient=object:WebViewClient(){override fun shouldOverrideUrlLoading(v:WebView?,r:WebResourceRequest?)=r?.url?.let{!trustedCallOrigin(it.toString(),baseUrl)||it.path!=allowedPath}?:true;override fun onReceivedSslError(v:WebView?,h:SslErrorHandler?,e:android.net.http.SslError?){h?.cancel();error="شهادة أمان الخادم غير صالحة."}}
-            webChromeClient=object:WebChromeClient(){override fun onPermissionRequest(r:PermissionRequest?){if(r==null)return;if(!owner||!trustedCallOrigin(r.origin.toString(),baseUrl)){r.deny();return};val accepted=r.resources.filter{(it==PermissionRequest.RESOURCE_AUDIO_CAPTURE&&ContextCompat.checkSelfPermission(context,Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED)||(it==PermissionRequest.RESOURCE_VIDEO_CAPTURE&&ContextCompat.checkSelfPermission(context,Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED)};if(accepted.size==r.resources.size&&accepted.isNotEmpty())r.grant(accepted.toTypedArray())else r.deny()}}
+            webChromeClient=object:WebChromeClient(){override fun onPermissionRequest(r:PermissionRequest?){if(r==null)return;if(!trustedCallOrigin(r.origin.toString(),baseUrl)){r.deny();return};val accepted=r.resources.filter{(it==PermissionRequest.RESOURCE_AUDIO_CAPTURE&&ContextCompat.checkSelfPermission(context,Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED)||(it==PermissionRequest.RESOURCE_VIDEO_CAPTURE&&ContextCompat.checkSelfPermission(context,Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED)};if(accepted.size==r.resources.size&&accepted.isNotEmpty())r.grant(accepted.toTypedArray())else r.deny()}}
             val target=bootstrap.getString("url");if(trustedCallOrigin(target,baseUrl)&&allowedPath?.startsWith("/api/live/")==true&&allowedPath.endsWith("/room"))postUrl(target,("theme="+transportTheme+"&ticket="+URLEncoder.encode(bootstrap.getString("ticket"),"UTF-8")).toByteArray())else error="عنوان بث غير صالح."
         }})else if(error.isBlank())Text("جارٍ تجهيز البث…",Modifier.padding(24.dp))
     }}
@@ -111,7 +133,7 @@ private fun liveError(e:Exception)=when(e.message){
 @Composable internal fun LiveBroadcastCard(row:JSONObject,open:()->Unit){ElevatedCard(onClick=open,modifier=Modifier.fillMaxWidth()){
                 Row(Modifier.padding(16.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)){
                     ChatAvatar(row.optString("owner_name"),48,row.optString("avatar_url"))
-                    Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(5.dp)){Text(row.optString("title"),style=MaterialTheme.typography.titleMedium);Text(row.optString("owner_name"));Text("${row.optInt("viewers")} مشاهد · "+if(row.optBoolean("private"))"دخول مدفوع: ${row.optLong("price_cents")}"else"عام · مجانًا",style=MaterialTheme.typography.bodySmall)}
+                    Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(5.dp)){Text(row.optString("title"),style=MaterialTheme.typography.titleMedium);Text(row.optString("owner_name"));Text("${row.optInt("viewers")} مشاهد · "+(if(row.optBoolean("private"))"مدفوع: ${row.optLong("price_cents")}"else if(row.optBoolean("invite_only"))"بالدعوة"else"مجاني"),style=MaterialTheme.typography.bodySmall);Text((if(row.optString("mode")=="audio")"بث صوتي"else"بث فيديو")+" · ${row.optInt("max_speakers",1)} متحدثين كحد أقصى",style=MaterialTheme.typography.bodySmall)}
                     Icon(Icons.Outlined.PlayCircleOutline,null)
                 }
             }

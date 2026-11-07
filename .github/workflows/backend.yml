@@ -66,6 +66,7 @@ jobs:
       - name: Test actual ephemeral SFU broadcast with twelve viewers
         env:
           LIVE_SMOKE_CONFIG: ${{ runner.temp }}/live-smoke.json
+          LIVE_PREVIEW_DIR: ${{ runner.temp }}/live-previews
         run: |
           python backend/fetch_live_sdk.py
           cat > "$RUNNER_TEMP/livekit-smoke.yaml" <<'YAML'
@@ -113,3 +114,11 @@ jobs:
             echo 'Unexpected persistent media file in SFU filesystem'
             exit 1
           fi
+
+      - name: Upload synthetic live UI previews
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Relaxia-live-stage-previews
+          path: ${{ runner.temp }}/live-previews
+          if-no-files-found: ignore

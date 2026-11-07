@@ -114,7 +114,7 @@ def issue_token(user):
 def health(request):
     with connection.cursor() as cursor:
         cursor.execute('SELECT 1')
-    return JsonResponse({'status': 'ok', 'registration_version': 6, 'identity_required': False, 'brand': 'Relaxia', 'mobile_admin_version': 2, 'commerce_version': 1, 'calls_version': 2, 'messaging_version': 3, 'paid_chat_version':1, 'shop_version': 2, 'live_version':1, 'booking_payment_version':1})
+    return JsonResponse({'status': 'ok', 'registration_version': 6, 'identity_required': False, 'brand': 'Relaxia', 'mobile_admin_version': 2, 'commerce_version': 1, 'calls_version': 2, 'messaging_version': 3, 'paid_chat_version':1, 'shop_version': 2, 'live_version':2, 'booking_payment_version':1})
 
 @endpoint(['POST'], authenticated=False)
 def register(request):

@@ -166,7 +166,8 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
                     val reports=row.optJSONArray("reports");if(reports!=null)for(i in 0 until reports.length())Text("بلاغ: "+reports.getJSONObject(i).optString("reason"),color=MaterialTheme.colorScheme.error)
                     Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
                         TextButton({perform{liveRoom=securePost("/api/live/${row.getString("id")}/admission",JSONObject())}},enabled=!busy){Text("مشاهدة للإشراف")}
-                        TextButton({liveStop=row},enabled=!busy){Text("إيقاف البث")}
+                        Text((if(row.optString("mode")=="audio")"بث صوتي"else"بث فيديو")+" · ${row.optInt("max_speakers",1)} مقاعد · هدايا: ${row.optLong("gift_total_cents")}")
+                    TextButton({liveStop=row},enabled=!busy){Text("إيقاف البث")}
                         if(reports!=null&&reports.length()>0)TextButton({perform{securePost("/api/admin/live",JSONObject().put("action","resolve").put("id",row.getString("id")));revision++}},enabled=!busy){Text("تمت المراجعة")}
                     }
                     if(row.optBoolean("private")&&!liveOnly)TextButton({livePriceTarget=row;livePriceInput=row.optLong("price_cents").toString()}){Text("تعديل السعر قبل البيع")}
