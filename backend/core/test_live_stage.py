@@ -28,6 +28,18 @@ class StageTests(TestCase):
         self.assertEqual(self.event(row,{**payload,'stage':'arbitrary-command'},self.viewer).status_code,400)
         self.assertEqual(self.client.post(f'/api/live/{row.pk}/control',data=json.dumps(payload),content_type='application/json').status_code,403)
 
+    def test_audio_room_has_visible_host_before_javascript_or_connection(self):
+        row=self.create();row.mode='audio';row.save()
+        admitted=self.join(row,self.owner).json()
+        page=self.client.post(f'/api/live/{row.pk}/room',{'ticket':admitted['ticket']})
+        self.assertEqual(page.status_code,200)
+        self.assertContains(page,'<body class="audio-mode">')
+        self.assertContains(page,'<div id="audioStage">')
+        self.assertContains(page,'aria-label="البث المباشر" hidden')
+        self.assertContains(page,'جارٍ تجهيز الصوت…')
+        self.assertContains(page,'window.relaxiaStageLoaded')
+        self.assertContains(page,'v=media-2')
+
     def test_audio_host_sources_and_guest_consent_permissions(self):
         row=self.stage();row.mode='audio';row.save()
         a=LiveAdmission.objects.select_related('broadcast','user').get(broadcast=row,user=self.viewer)
