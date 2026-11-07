@@ -495,16 +495,17 @@ fun ServerAppScreen(baseUrl: String) {
                             item { Box(Modifier.padding(horizontal = 20.dp)) { ReferenceCard {
                                 ReferenceRow(Icons.Outlined.ChatBubbleOutline, if (own) "سعر التحدث معي" else "سعر المحادثة", if (person.optInt("chat_price_cents") == 0) "محادثة مجانية" else "${usd(person.optLong("chat_price_cents"))} · تتطلب التحقق من الدفع") { if (own) editProfile() else startChat(person.optInt("id"), person.optString("display_name")) }
                             } } }
-                            item { Row(Modifier.padding(horizontal = 22.dp), verticalAlignment = Alignment.CenterVertically) { Text(if (own) "عروضي" else "العروض", Modifier.weight(1f), style = MaterialTheme.typography.headlineMedium); if (own) TextButton(onClick = { open("إضافة عرض") }) { Icon(Icons.Outlined.Add, null, Modifier.size(18.dp)); Text("إضافة") } } }
-                            val offers = services.filter { it.optInt("owner_id") == person.optInt("id") }
-                            if (offers.isEmpty() && !loading) item { ReferenceEmpty(Icons.Outlined.Storefront, "اعرض خدمة، جلسة، أو منتجًا", "تظهر العروض هنا بعد مراجعة الإدارة واعتمادها.") }
-                            items(offers) { offer -> Box(Modifier.padding(horizontal = 20.dp)) { OfferCard(offer) { showService(offer) } } }
                             if (own) item { FormColumn {
                                 if(profile.optBoolean("is_admin"))ReferenceRow(Icons.Outlined.Settings,"لوحة الإدارة"){open("لوحة الإدارة")}
                                 ReferenceRow(Icons.Outlined.ShoppingBag,"نشاطي","الحجوزات والبث وسجل العمليات"){open("نشاطي")}
                                 ReferenceRow(Icons.Outlined.Notifications,"الإشعارات والاعتراضات"){open("التنبيهات")}
                                 ReferenceRow(Icons.Outlined.Settings,"الإعدادات والمساعدة"){open("الإعدادات")}
                             } }
+                            item { Row(Modifier.padding(horizontal = 22.dp), verticalAlignment = Alignment.CenterVertically) { Text(if (own) "عروضي" else "العروض", Modifier.weight(1f), style = MaterialTheme.typography.headlineMedium); if (own) TextButton(onClick = { open("إضافة عرض") }) { Icon(Icons.Outlined.Add, null, Modifier.size(18.dp)); Text("إضافة") } } }
+                            val offers = services.filter { it.optInt("owner_id") == person.optInt("id") }
+                            if (offers.isEmpty() && !loading) item { ReferenceEmpty(Icons.Outlined.Storefront, "اعرض خدمة، جلسة، أو منتجًا", "تظهر العروض هنا بعد مراجعة الإدارة واعتمادها.") }
+                            items(offers) { offer -> Box(Modifier.padding(horizontal = 20.dp)) { OfferCard(offer) { showService(offer) } } }
+
 
                         }
                         "تعديل الملف" -> item { FormColumn {
@@ -617,7 +618,7 @@ private fun cents(value: String): Int {
 
 @Composable
 private fun FormColumn(content: @Composable ColumnScope.() -> Unit) {
-    Column(Modifier.padding(horizontal = 22.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(18.dp), content = content)
+    Column(Modifier.padding(horizontal = 22.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
 }
 @Composable
 private fun Field(value: String, change: (String) -> Unit, label: String, lines: Int = 1, numeric: Boolean = false) {
@@ -673,11 +674,15 @@ internal fun ProfileHero(person: JSONObject, own: Boolean, settings: () -> Unit,
             Text(if (own) "حسابي" else "الملف الشخصي", Modifier.weight(1f), color = Color.White, fontSize = 19.sp)
             IconButton(onClick = settings) { Icon(if (own) Icons.Outlined.Settings else Icons.Outlined.ArrowForward, if (own) "الإعدادات" else "رجوع", tint = Color.White.copy(alpha = .75f)) }
         }
+        Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(14.dp)) {
         ReferenceAvatar(person.optString("display_name", person.optString("username")), person.optInt("selected_frame"), 88, person.optString("avatar_url"))
+            Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(5.dp)) {
         Text(person.optString("display_name", person.optString("username")), color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         Text("حساب #${person.optString("public_id","—")} · 18+", color = Color.White.copy(alpha = .75f), fontSize = 13.sp)
         Text("الجنس: "+genderLabel(person.optString("gender")),color=Color.White.copy(alpha=.75f),fontSize=13.sp)
         Text("@"+person.optString("username"),style=LocalTextStyle.current.copy(textDirection=androidx.compose.ui.text.style.TextDirection.Ltr),color=Color.White.copy(alpha=.8f),fontSize=15.sp)
+            }
+        }
         if (person.optBoolean("creator")) Surface(color = Color.White.copy(alpha = .09f), shape = RoundedCornerShape(30.dp)) { Row(Modifier.padding(horizontal = 14.dp, vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Outlined.WorkspacePremium, null, Modifier.size(15.dp), tint = Color(0xFFD7AD72)); Text("حساب معتمد", color = Color(0xFFD7AD72), fontSize = 11.sp) } }
         if (person.optString("bio").isNotBlank()) Text(person.optString("bio"), color = Color.White.copy(alpha = .7f), fontSize = 13.sp)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
