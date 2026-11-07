@@ -34,7 +34,7 @@ const base='http://127.0.0.1:8880';
  const stage=await api(0,'/api/live/'+broadcast.id+'/events');if(stage.value.speakers.length!==12)throw Error('Twelve speaker stage failed');
  const teams=[fixture.ids.slice(0,6),fixture.ids.slice(6,12)];const pk=await api(0,'/api/live/'+broadcast.id+'/events',{action:'pk_start',teams,duration:60});if(pk.status!==200)throw Error('PK '+JSON.stringify(pk));
  const gift={action:'gift',gift_code:'rose',price_cents:100,recipient_id:fixture.ids[1],confirmed:true,request_key:require('crypto').randomUUID()};
- await host.evaluate(()=>refresh());await preview(host,'02-group-pk');await pages[12].evaluate(()=>{giftSheet()});await preview(pages[12],'03-gift-catalog');await pages[12].evaluate(()=>$('sheet').close());
+ await host.evaluate(()=>refresh());if(!await host.evaluate(()=>[...document.querySelectorAll('.tile small')].some(el=>el.textContent==='sfu_test_1')))throw Error('Guest tile shows incorrect name');await preview(host,'02-group-pk');await pages[12].evaluate(()=>{giftSheet()});await preview(pages[12],'03-gift-catalog');await pages[12].evaluate(()=>$('sheet').close());
  const balanceBefore=(await api(12,'/api/wallet')).value.available_cents;for(let i=0;i<2;i++){const r=await api(12,'/api/live/'+broadcast.id+'/events',gift);if(r.status!==200)throw Error('Gift '+JSON.stringify(r))}
  if((await api(12,'/api/wallet')).value.available_cents!==balanceBefore-100)throw Error('Gift duplicate debit');
  if((await api(0,'/api/live/'+broadcast.id+'/events')).value.pk.scores[0]!==100)throw Error('PK score mismatch');
@@ -55,7 +55,7 @@ const base='http://127.0.0.1:8880';
  await api(1,'/api/live/'+audioRoom.id+'/events',{action:'seat_request',mode:'audio'});await api(0,'/api/live/'+audioRoom.id+'/events',{action:'seat_decision',user_id:fixture.ids[1],approve:true});await audioGuest.evaluate(async()=>{await refresh();await activateSeat()});
  await audioHost.waitForFunction(()=>room.remoteParticipants.size>0&&[...room.remoteParticipants.values()].some(p=>p.audioTrackPublications.size>0),null,{timeout:20000});
  for(const p of [audioHost,audioGuest])if(await p.evaluate(()=>room.localParticipant.videoTrackPublications.size!==0))throw Error('Audio stage captured camera');
- await audioHost.evaluate(()=>refresh());await preview(audioHost,'04-audio-stage');await audioHost.evaluate(()=>document.documentElement.dataset.theme='light');await preview(audioHost,'05-audio-light');
+ await audioHost.evaluate(()=>refresh());await preview(audioHost,'04-audio-stage');await audioHost.evaluate(()=>document.documentElement.dataset.theme='light');await preview(audioHost,'05-audio-light');if(await audioHost.evaluate(()=>getComputedStyle(document.getElementById('stage')).backgroundColor)!=='rgb(244, 248, 250)')throw Error('Audio day theme background incorrect');
  await api(0,'/api/live/'+audioRoom.id,{action:'end'});
  console.log(JSON.stringify({audioOnlyNoCamera:true,actualSpeakers:12,actualGuestAudioTracksAtHost:11,guestVideoPublished:true,pkFromSettledGift:true,giftDebitOnce:true,offlineRecovery:true,guestRevocation:true,actualSfuViewers:12,hostPublishing:true,allReceivedRtp:stats.every(x=>x.bytesReceived>0),viewerStats:stats,unpaidRejected:true,forgedLinkRejected:true,freshTokenReconnect:true,reentryNoDuplicateCharge:true,comments:true,endedDisconnectsAll:true,recordingServices:0,devices:'synthetic browser media; not a production capacity benchmark'}));
  }finally{await browser.close()}
