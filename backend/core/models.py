@@ -365,6 +365,7 @@ class AdminAccess(models.Model):
     locked_until=models.DateTimeField(null=True)
 
 class AdminEvent(models.Model):
+    details=models.JSONField(default=dict)
     actor=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT)
     action=models.CharField(max_length=80)
     target=models.CharField(max_length=120,blank=True)

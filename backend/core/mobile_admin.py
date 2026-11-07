@@ -14,7 +14,7 @@ def require_admin(request):
 
 def audit(actor, obj, message):
     from .admin_security import event
-    event(actor,'administrative_action',getattr(obj,'pk',''),(getattr(actor,'_admin_reason','')+' · '+message).strip(' ·'))
+    event(actor,'administrative_action',getattr(obj,'pk',''),(getattr(actor,'_admin_reason','')+' · '+message).strip(' ·'),details={'change':message})
     LogEntry.objects.log_actions(user_id=actor.pk, queryset=[obj], action_flag=CHANGE, change_message=message)
 
 

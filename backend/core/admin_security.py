@@ -25,8 +25,8 @@ def scopes(user):
     if a:return list(dict.fromkeys(([p for p in a.permissions if p in SCOPES] if a.customized else ROLES.get(a.role,[]))))
     return ROLES['live'] if user.has_perm('core.moderate_livebroadcast') else []
 
-def event(actor,action,target='',reason='',result='success'):
-    return AdminEvent.objects.create(actor=actor,action=action,target=str(target)[:120],reason=reason[:500],result=result)
+def event(actor,action,target='',reason='',result='success',details=None):
+    return AdminEvent.objects.create(actor=actor,action=action,target=str(target)[:120],reason=reason[:500],result=result,details=details or {})
 
 def cipher():return Fernet(base64.urlsafe_b64encode(hashlib.sha256((settings.SECRET_KEY+':admin-totp').encode()).digest()))
 

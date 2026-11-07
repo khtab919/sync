@@ -310,7 +310,11 @@ def wheel_offer(config,user):
     prizes=([{'amount_cents':config.first_reward_cents,'weight':1}] if first else [p for p in config.prizes if p['amount_cents']<10000 or grand]) if valid else []
     total=sum(p['weight'] for p in prizes)
     quote_version=hashlib.sha256(json.dumps([version,count,spent,cost,prizes],sort_keys=True).encode()).hexdigest()
-    return {'enabled':bool(config.enabled and valid and total), 'cost_cents':cost,'config_version':quote_version,'first_spin_guaranteed':first,'first_reward_cents':config.first_reward_cents,'spin_count':count,'spent_cents':spent,'grand_unlocked':grand,'grand_unlock_spend_cents':config.grand_unlock_spend_cents,'price_step_cents':config.price_step_cents,'maximum_cost_cents':config.maximum_cost_cents,'prizes':[dict(p,chance_percent=format(p['weight']*100/total,'.8f')) for p in prizes] if total else []}
+    start=timezone.now().replace(hour=0,minute=0,second=0,microsecond=0)
+    today=PaidSpin.objects.filter(created_at__gte=start)
+    remaining=max(0,config.daily_limit-today.filter(user=user).count())
+    affordable=bool(total and (today.aggregate(v=Sum('prize_cents'))['v'] or 0)+max(p['amount_cents'] for p in prizes)<=config.daily_budget_cents)
+    return {'daily_limit':config.daily_limit,'remaining_daily':remaining,'enabled':bool(config.enabled and valid and total and remaining and affordable), 'cost_cents':cost,'config_version':quote_version,'first_spin_guaranteed':first,'first_reward_cents':config.first_reward_cents,'spin_count':count,'spent_cents':spent,'grand_unlocked':grand,'grand_unlock_spend_cents':config.grand_unlock_spend_cents,'price_step_cents':config.price_step_cents,'maximum_cost_cents':config.maximum_cost_cents,'prizes':[dict(p,chance_percent=format(p['weight']*100/total,'.8f')) for p in prizes] if total else []}
 
 
 @endpoint(['GET','POST'])

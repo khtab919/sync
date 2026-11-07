@@ -80,7 +80,7 @@ def roles(request):
         if role not in ROLES or role=='owner' or not isinstance(permissions,list) or any(p not in SCOPES for p in permissions):raise ApiError('invalid_role')
         with transaction.atomic():
             User.objects.select_for_update().get(pk=user.pk)
-            AdminAccess.objects.update_or_create(user=user,defaults={'role':role,'permissions':permissions,'customized':True});user.is_staff=True;user.save(update_fields=['is_staff']);SessionToken.objects.filter(user=user).delete();event(request.actor,'role_changed',user.pk,reason(request))
+            AdminAccess.objects.update_or_create(user=user,defaults={'role':role,'permissions':permissions,'customized':True});user.is_staff=True;user.save(update_fields=['is_staff']);SessionToken.objects.filter(user=user).delete();event(request.actor,'role_changed',user.pk,reason(request),details={'role':role,'permissions':permissions})
     return JsonResponse({'roles':ROLES,'permissions':SCOPES,'items':[{'id':u.pk,'username':u.username,'role':'owner' if u.is_superuser else getattr(getattr(u,'adminaccess',None),'role','live'),'permissions':scopes(u)} for u in User.objects.filter(is_staff=True)[:100]]})
 
 @endpoint(['POST'])
@@ -133,7 +133,7 @@ def my_cases(request):
 def audit_log(request):
     require(request,'audit.view');q=AdminEvent.objects.select_related('actor').order_by('-id');term=request.GET.get('q','')[:100]
     if term:q=q.filter(Q(action__icontains=term)|Q(reason__icontains=term)|Q(actor__username__icontains=term)|Q(target__icontains=term))
-    return JsonResponse({'items':[{'id':e.pk,'actor':e.actor.username,'action':e.action,'target':e.target,'reason':e.reason,'result':e.result,'created_at':e.created_at} for e in q[:100]]})
+    return JsonResponse({'items':[{'id':e.pk,'actor':e.actor.username,'action':e.action,'target':e.target,'reason':e.reason,'result':e.result,'details':e.details,'created_at':e.created_at} for e in q[:100]]})
 
 @endpoint(['GET','POST'])
 def approvals(request):
