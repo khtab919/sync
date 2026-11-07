@@ -51,6 +51,23 @@ class LiveBroadcastTests(TestCase):
         op=FinancialOperation.objects.get();self.assertEqual(op.status,'settled');self.assertEqual(op.creator_cents,80);self.assertEqual(op.platform_cents,20)
         self.assertEqual(Wallet.objects.get(user=self.owner).balance_cents,80);self.assertEqual(Wallet.objects.get(user=self.viewer).balance_cents,900)
         self.assertEqual(self.join(row).status_code,200);self.assertEqual(FinancialOperation.objects.count(),1)
+    def test_video_requires_video_and_missing_media_does_not_accumulate_billable_time(self):
+        row=self.create(True);self.join(row)
+        admission=LiveAdmission.objects.get(broadcast=row,user=self.viewer)
+        self.parts=[{'identity':'host-'+str(self.owner.pk),'tracks':[{'type':'AUDIO','muted':False}]},{'identity':str(admission.pk),'tracks':[]}]
+        LiveBroadcast.objects.filter(pk=row.pk).update(last_checked_at=timezone.now()-timedelta(seconds=10))
+        row.refresh_from_db();live.synchronize(row,True)
+        admission.refresh_from_db();row.refresh_from_db()
+        self.assertEqual(row.status,'reconnecting');self.assertEqual(admission.watched_seconds,0)
+        self.parts[0]['tracks']=[{'type':'VIDEO','muted':False}]
+        LiveBroadcast.objects.filter(pk=row.pk).update(last_checked_at=timezone.now()-timedelta(seconds=10))
+        row.refresh_from_db();live.synchronize(row,True);admission.refresh_from_db()
+        self.assertEqual(admission.watched_seconds,0)
+        self.assertEqual(FinancialOperation.objects.get().status,'held')
+        row.mode='audio';row.save(update_fields=['mode'])
+        self.parts[0]['tracks']=[{'type':'AUDIO','muted':False}]
+        live.synchronize(row,True);row.refresh_from_db();self.assertEqual(row.status,'active')
+
     def test_early_end_refunds_and_revokes_existing_token_at_gateway(self):
         row=self.create(True);r=self.join(row);a=LiveAdmission.objects.select_related('broadcast__owner','user','operation').get(broadcast=row,user=self.viewer)
         session=__import__('core.models',fromlist=['SessionToken']).SessionToken.objects.get(user=self.viewer)

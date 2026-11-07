@@ -20,6 +20,12 @@ They do not enter a blind camera/reconnect loop. Retry is explicit, and native p
 denial also offers a retry. Camera switching updates preview mirroring. Room assets use
 `media-1` cache revision. Existing no-store WebView behavior and trusted-origin grants remain.
 
+Video rooms previously became active from an audio-only host track. Server reconciliation
+now requires an unmuted video track for video rooms and audio for audio rooms. Missing-media
+and first-reconnected intervals do not accumulate paid viewing time. This verifies SFU track
+metadata, not decoded frames at each viewer. Partial publication failure disconnects and
+releases captured media rather than leaving a half-published session.
+
 ## Server diagnostics
 Authenticated room control accepts `media_diagnostic` with allowlisted stage/outcome/reason
 and fixed client build only. It emits `client_media room=... user=... stage=...` to the
@@ -40,8 +46,8 @@ signaling cannot be repaired by changing TURN alone. Publishing-ready does not p
 playback; verify audio/video with another account and actual inbound RTP.
 
 ## Validation and remaining work
-Seven focused Node tests cover stage ordering, microphone denial, busy camera, rejected
-playback, audio-only capture, exit during capture and missing decoded frames. Django tests
+Eight focused Node tests cover stage ordering, microphone denial, busy camera, rejected
+playback, audio-only capture, exit during capture missing decoded frames and late camera acquisition after timeout. Django tests
 verify authenticated diagnostic intake and rejection of arbitrary/raw values. The SFU smoke
 checks actual decoded host preview and explicit denied-camera UI in addition to existing
 12-participant media, paid admission, revocation, reconnection and gift accounting coverage.

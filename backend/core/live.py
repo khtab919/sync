@@ -107,7 +107,8 @@ def synchronize(row,force=False):
     host_admission=LiveAdmission.objects.filter(broadcast=row,user_id=row.owner_id).select_related('session').first()
     if host and (not host_admission or not host_admission.session_id or host_admission.session.expires_at<=now):
         provider('RemoveParticipant',{'room':room_name(row),'identity':'host-'+str(row.owner_id)},room_name(row));host=None
-    transmitting=bool(host and any(str(t.get('type','AUDIO')).upper() in ('VIDEO','1','AUDIO','0') and not t.get('muted',False) for t in host.get('tracks',[])))
+    required_types=('AUDIO','0') if row.mode=='audio' else ('VIDEO','1')
+    transmitting=bool(host and any(str(t.get('type','AUDIO')).upper() in required_types and not t.get('muted',False) for t in host.get('tracks',[])))
     ids={str(p.get('identity')) for p in participants}
     invalid=[]
     with transaction.atomic():
@@ -115,6 +116,7 @@ def synchronize(row,force=False):
         locked=LiveBroadcast.objects.select_for_update().get(pk=row.pk)
         if locked.status not in LIVE:return
         previous=locked.last_checked_at
+        previously_active=locked.status=='active'
         locked.last_checked_at=now
         if transmitting:
             locked.status='active';locked.started_at=locked.started_at or now;locked.host_missing_at=None
@@ -136,7 +138,7 @@ def synchronize(row,force=False):
                 invalid.append(str(a.pk));present=False
             if present and (a.banned or not a.user.is_active or not a.session_id or not SessionToken.objects.filter(pk=a.session_id,expires_at__gt=now).exists() or (not moderator(a.user) and UserBlock.objects.filter(Q(user=locked.owner,blocked=a.user)|Q(user=a.user,blocked=locked.owner)).exists())):invalid.append(str(a.pk));present=False
             if present:viewers+=1
-            if present and a.connected and transmitting and previous and locked.status=='active':
+            if present and a.connected and transmitting and previous and previously_active:
                 a.watched_seconds+=min(10,max(0,int((now-previous).total_seconds())))
             a.connected=present
             if present:a.last_seen_at=now

@@ -13,9 +13,14 @@
    Promise.resolve(video.play()).then(()=>{playing=true;check()},done);
   });
  }
- async function prepare({sdk,video,render,report=()=>{},facing='user',isClosed=()=>false}){
+ async function prepare({sdk,video,render,report=()=>{},facing='user',isClosed=()=>false,captureTimeout=15000}){
   const tracks=[];
-  async function capture(stage,fn){try{const track=await fn();tracks.push(track);if(isClosed())throw Error('closed');report(stage,'ready');return track}catch(e){throw new MediaFailure(stage,e)}}
+  async function capture(stage,fn){
+   let timer,abandoned=false;
+   const pending=Promise.resolve().then(fn).then(track=>{if(abandoned||isClosed()){track.stop();throw Error('closed')}tracks.push(track);return track});
+   try{const track=await Promise.race([pending,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('capture_timeout')),captureTimeout)})]);report(stage,'ready');return track}
+   catch(e){abandoned=true;throw new MediaFailure(stage,e)}finally{clearTimeout(timer)}
+  }
   try{
    if(video){
     const camera=await capture('camera_capture',()=>sdk.createLocalVideoTrack({facingMode:facing,resolution:{width:1280,height:720,frameRate:30}}));

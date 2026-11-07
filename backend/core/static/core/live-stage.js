@@ -44,7 +44,7 @@ async function enableTracks(){
  try{
   for(const track of preparedTracks){await room.localParticipant.publishTrack(track,{source:track.kind===Track.Kind.Video?Track.Source.Camera:Track.Source.Microphone});if(track.kind===Track.Kind.Video){track.detach().forEach(el=>el.closest('.tile')?.remove());renderTrack(track,room.localParticipant,true)}if(track.kind===Track.Kind.Audio&&muted)await track.mute()}
   mediaReady=true;speaking=true;diagnostic('media_publish','ready');await configurePublishing();
- }catch(e){throw new RelaxiaMedia.MediaFailure('media_publish',e)}
+ }catch(e){room.removeAllListeners();await room.disconnect();releasePrepared();throw new RelaxiaMedia.MediaFailure('media_publish',e)}
 }
 async function connect(token=config.token){
  if(config.owner||speaking){await prepareTracks();const fresh=await api({action:'token'});state.can_publish=fresh.can_publish;state.publish_sources=fresh.publish_sources;if(!fresh.can_publish){releasePrepared();throw Error('stage_unavailable')}token=fresh.token;}
