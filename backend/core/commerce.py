@@ -52,7 +52,7 @@ def media_file(request, media_id):
     media = UploadedMedia.objects.select_related('owner').filter(pk=media_id).first()
     if media is None:
         return HttpResponse(status=404)
-    public = media.owner.is_active and (Service.objects.filter(image=media, active=True, approved=True).exists() or Reel.objects.filter(media=media, approved=True).exists())
+    public = media.owner.is_active and ((media.purpose=='avatar' and Profile.objects.filter(user=media.owner,avatar_url__endswith=f'/api/media/{media.pk}').exists()) or Service.objects.filter(image=media, active=True, approved=True).exists() or Reel.objects.filter(media=media, approved=True).exists())
     if not public:
         try:
             data = signing.loads(request.GET.get('grant', ''), salt='media-access', max_age=600)
@@ -75,7 +75,7 @@ def media_file(request, media_id):
 @endpoint(['POST'])
 def upload(request):
     purpose = request.payload.get('purpose')
-    if purpose not in ('offer', 'receipt', 'chat_image', 'chat_audio', 'chat_video', 'reel'):
+    if purpose not in ('offer', 'receipt', 'chat_image', 'chat_audio', 'chat_video', 'reel', 'avatar'):
         raise ApiError('invalid_purpose')
     if purpose in ('offer', 'reel') and not Profile.objects.filter(user=request.actor, publishing_allowed=True).exists():
         raise ApiError('creator_account_required', 403)
@@ -87,7 +87,7 @@ def upload(request):
     maximum = 20 * 1024 * 1024 if purpose == 'reel' else 8 * 1024 * 1024
     if not 16 <= len(raw) <= maximum:
         raise ApiError('file_too_large')
-    if purpose in ('offer', 'receipt', 'chat_image'):
+    if purpose in ('offer', 'receipt', 'chat_image', 'avatar'):
         from PIL import Image, UnidentifiedImageError
         try:
             with Image.open(io.BytesIO(raw)) as image:

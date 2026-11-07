@@ -114,7 +114,7 @@ def issue_token(user):
 def health(request):
     with connection.cursor() as cursor:
         cursor.execute('SELECT 1')
-    return JsonResponse({'status': 'ok', 'registration_version': 6, 'identity_required': False, 'brand': 'Relaxia', 'mobile_admin_version': 2, 'commerce_version': 1, 'calls_version': 2, 'messaging_version': 3, 'paid_chat_version':1, 'shop_version': 2, 'live_version':2, 'booking_payment_version':1})
+    return JsonResponse({'status': 'ok', 'registration_version': 6, 'avatar_upload_version':1, 'identity_required': False, 'brand': 'Relaxia', 'mobile_admin_version': 2, 'commerce_version': 1, 'calls_version': 2, 'messaging_version': 3, 'paid_chat_version':1, 'shop_version': 2, 'live_version':2, 'booking_payment_version':1})
 
 @endpoint(['POST'], authenticated=False)
 def register(request):
@@ -219,7 +219,7 @@ def me(request):
     profile = Profile.objects.get(user=request.actor)
     if request.method == 'PATCH':
         p = request.payload
-        if set(p) - {'bio', 'display_name', 'selected_frame', 'chat_price_cents', 'avatar_url', 'email','username','gender'}:
+        if set(p) - {'bio', 'display_name', 'selected_frame', 'chat_price_cents', 'avatar_url', 'email','username','gender','avatar_id'}:
             raise ApiError('unsupported_profile_field')
         if 'gender' in p and p['gender'] not in ('male','female'):raise ApiError('invalid_gender')
         if 'chat_price_cents' in p and (type(p['chat_price_cents']) is not int or not 0 <= p['chat_price_cents'] <= 500000 or not profile.publishing_allowed):
@@ -229,6 +229,11 @@ def me(request):
         avatar_url = p.get('avatar_url', profile.avatar_url)
         if not isinstance(avatar_url, str) or len(avatar_url) > 500:
             raise ApiError('invalid_image_url')
+        if 'avatar_id' in p:
+            from .models import UploadedMedia
+            media=UploadedMedia.objects.filter(pk=uuid.UUID(text(p,'avatar_id',36,36)),owner=request.actor,purpose='avatar').first()
+            if not media:raise ApiError('invalid_avatar',403)
+            avatar_url=request.build_absolute_uri(f'/api/media/{media.pk}')
         if avatar_url:
             from django.core.validators import URLValidator
             try:

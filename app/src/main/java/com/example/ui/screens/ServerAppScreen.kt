@@ -156,6 +156,14 @@ fun ServerAppScreen(baseUrl: String) {
         else notice = "هذه المكالمة انتهت بالفعل. يمكنك بدء مكالمة جديدة."
     } }
     fun startChat(id: Int, name: String) { peerId = id.toString(); peerName = name; message = ""; open("محادثة") }
+    val avatarPicker=androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.GetContent()){uri->
+        if(uri!=null)perform{
+            if(api.request("/health/").optInt("avatar_upload_version")<1)throw IllegalStateException("avatar_update_required")
+            val uploaded=api.upload(context,uri,"avatar")
+            profile=api.request("/api/me","PATCH",JSONObject().put("avatar_id",uploaded.getString("id")))
+            avatarUrl=profile.optString("avatar_url");notice="تم رفع صورة الملف وحفظها."
+        }
+    }
     fun editProfile() {
         profileGender=profile.optString("gender").takeIf { it in listOf("male","female") } ?: ""
         displayName = profile.optString("display_name", profile.optString("username"))
@@ -515,7 +523,11 @@ fun ServerAppScreen(baseUrl: String) {
                             Field(profileEmail, { profileEmail = it }, "البريد الإلكتروني")
                             GenderChoice(profileGender,{profileGender=it})
                             Field(bio, { bio = it }, "نبذة عنك", lines = 4)
-                            Field(avatarUrl, { avatarUrl = it }, "رابط صورة ملفك HTTPS · اختياري")
+                            ChatAvatar(displayName,72,avatarUrl)
+                            Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                                OutlinedButton({avatarPicker.launch("image/*")},enabled=!submitting){Text("رفع صورة من المعرض")}
+                                if(avatarUrl.isNotBlank())TextButton({perform{profile=api.request("/api/me","PATCH",JSONObject().put("avatar_url",""));avatarUrl="";notice="حُذفت صورة الملف."}},enabled=!submitting){Text("حذف الصورة")}
+                            }
                             if (profile.optBoolean("publishing_allowed")) Field(chatPrice, { chatPrice = it }, "رسوم المحادثة بالدولار · 0 للمجانية", numeric = true)
                             ReferencePrimary("حفظ التغييرات", !submitting) { perform {
                                 val body = JSONObject().put("display_name", displayName).put("username",profileUsername).put("bio", bio).put("avatar_url", avatarUrl).put("email", profileEmail.trim())
@@ -762,6 +774,8 @@ private fun friendlyError(code: String?): String = when (code) {
     "conflict" -> "الطلب موجود بالفعل. حدّث الصفحة قبل إعادة المحاولة."
     "invalid_chat_price" -> "أدخل سعر محادثة صحيحًا، أو صفرًا للمحادثة المجانية."
     "invalid_image_url" -> "أدخل رابط صورة صحيحًا يبدأ بـ https://."
+    "avatar_update_required" -> "الخادم لا يدعم رفع صورة الملف بعد. يلزم تحديث الخادم المطابق للتطبيق."
+    "invalid_avatar" -> "تعذر إرفاق الصورة بهذا الحساب. أعد رفعها من المعرض."
     "invalid_gender" -> "اختر الجنس: ذكر أو أنثى."
     "recipient_unavailable", "creator_unavailable" -> "الحساب غير متاح حاليًا."
     else -> "تعذّر الاتصال بالخادم. تحقق من الإنترنت ثم أعد المحاولة."
