@@ -13,6 +13,9 @@ def backfill(apps,schema_editor):
         Profile.objects.filter(pk=profile.pk).update(display_name=profile.user.username)
     assigned=secrets.SystemRandom().sample(available,len(targets))
     for pk,value in zip(targets,assigned):Profile.objects.filter(pk=pk).update(public_id=value)
+    # Flush deferred FK trigger events before changing the populated column in this transaction.
+    if schema_editor.connection.vendor=='postgresql':
+        with schema_editor.connection.cursor() as cursor:cursor.execute('SET CONSTRAINTS ALL IMMEDIATE')
 
 class Migration(migrations.Migration):
     dependencies=[('core','0021_adminevent_details')]
