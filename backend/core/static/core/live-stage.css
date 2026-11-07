@@ -5,3 +5,5 @@ html[data-theme=light] .audio-mode #video{background:#f4f8fa}html[data-theme=lig
 #pkTeams>span{min-width:0;max-width:49%;overflow-wrap:anywhere}#stage{max-width:100vw;overflow:hidden}#publisherControls{flex-wrap:wrap}
 
 html[data-theme=light] .audio-mode #stage{background:#f4f8fa}
+
+#connection.media-fault{left:14px;right:14px;top:84px;display:flex;flex-wrap:wrap;background:var(--panel);color:var(--ink);border:1px solid var(--border);border-radius:14px;padding:12px;text-shadow:none;font-size:13px;overflow-wrap:anywhere}#connection.media-fault #status{flex:1;min-width:0}#connection.media-fault #badge{display:none}#connection.media-fault #retryMedia{flex-basis:100%;background:var(--brand);color:white;font-size:13px}

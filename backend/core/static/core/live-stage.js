@@ -12,7 +12,7 @@ $('profile').onclick=()=>{if(!config.owner&&window.LayaliLive?.canOpenProfile())
 async function api(action){const abort=new AbortController(),timer=setTimeout(()=>abort.abort(),8000);try{const r=await fetch(path,{method:action?'POST':'GET',headers:{'Content-Type':'application/json','X-Live-Control':config.control},body:action?JSON.stringify(action):undefined,signal:abort.signal,cache:'no-store'});const value=await r.json();if(!r.ok)throw Error(value.error||'network');return value}finally{clearTimeout(timer)}}
 function diagnostic(stage,outcome,reason=''){api({action:'media_diagnostic',stage,outcome,reason,build:'media-1'}).catch(()=>{})}
 function mediaMessage(e){
- mediaFault=true;mediaReady=false;const labels={camera_capture:'تعذر تشغيل الكاميرا',camera_preview:'الكاميرا لا تعرض صورة',microphone_capture:'تعذر تشغيل الميكروفون',media_publish:'تعذر نشر الصوت أو الصورة'};
+ mediaFault=true;mediaReady=false;$('connection').classList.add('media-fault');const labels={camera_capture:'تعذر تشغيل الكاميرا',camera_preview:'الكاميرا لا تعرض صورة',microphone_capture:'تعذر تشغيل الميكروفون',media_publish:'تعذر نشر الصوت أو الصورة'};
  const reasons={NotAllowedError:'تحقق من أذونات التطبيق والكاميرا في Android.',NotReadableError:'قد تكون الكاميرا أو الميكروفون مستخدمة في تطبيق آخر.',NotFoundError:'لم يعثر الجهاز على الكاميرا أو الميكروفون.'};
  $('status').textContent=(labels[e.stage]||'تعذر تجهيز البث')+' · '+(reasons[e.reason]||'أعد المحاولة أو ارجع وافتح البث مجددًا.');$('retryMedia').hidden=false;diagnostic(e.stage,'failed',e.reason);
 }
@@ -36,7 +36,7 @@ async function configurePublishing(){
  if(!allowed&&speaking){await room.localParticipant.setMicrophoneEnabled(false);await room.localParticipant.setCameraEnabled(false);speaking=false;$('publisherControls').hidden=true}
 }
 async function prepareTracks(){
- releasePrepared();mediaFault=false;mediaReady=false;$('retryMedia').hidden=true;$('status').textContent='جارٍ تجهيز الكاميرا والميكروفون…';
+ releasePrepared();mediaFault=false;mediaReady=false;$('connection').classList.remove('media-fault');$('retryMedia').hidden=true;$('status').textContent='جارٍ تجهيز الكاميرا والميكروفون…';
  const sources=state.publish_sources||(config.mode==='audio'?['microphone']:['microphone','camera']);
  preparedTracks=await RelaxiaMedia.prepare({sdk:LivekitClient,video:sources.includes('camera')&&!cameraOff,facing,isClosed:()=>closed||leaving,render:track=>renderTrack(track,{identity:'local-preview'},true),report:(stage,outcome)=>diagnostic(stage,outcome)});
 }
