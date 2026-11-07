@@ -22,8 +22,8 @@ android {
       "LAYALI_API_URL must be an HTTPS origin"
     }
     buildConfigField("String", "LAYALI_API_URL", "\"$backendUrl\"")
-    versionCode = 25
-    versionName = "10.9"
+    versionCode = 26
+    versionName = "10.10"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

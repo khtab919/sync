@@ -16,6 +16,18 @@ class StageTests(TestCase):
     def event(self,row,p,user=None):return self.request(f'/api/live/{row.pk}/events',p,user)
     def stage(self,limit=2):
         row=self.create();row.max_speakers=limit;row.gifts_enabled=True;row.save();self.join(row,self.viewer);self.join(row,self.other);return row
+    def test_media_diagnostics_are_authorized_bounded_and_do_not_accept_raw_errors(self):
+        row=self.stage()
+        payload={'action':'media_diagnostic','stage':'camera_capture','outcome':'failed','reason':'NotAllowedError','build':'media-1'}
+        with self.assertLogs('relaxia.live.media',level='WARNING') as logs:
+            response=self.event(row,payload,self.viewer)
+        self.assertEqual(response.status_code,200)
+        self.assertEqual(response.json(),{'accepted':True})
+        self.assertIn('camera_capture',logs.output[0])
+        self.assertEqual(self.event(row,{**payload,'reason':'secret-token-or-device-data'},self.viewer).status_code,400)
+        self.assertEqual(self.event(row,{**payload,'stage':'arbitrary-command'},self.viewer).status_code,400)
+        self.assertEqual(self.client.post(f'/api/live/{row.pk}/control',data=json.dumps(payload),content_type='application/json').status_code,403)
+
     def test_audio_host_sources_and_guest_consent_permissions(self):
         row=self.stage();row.mode='audio';row.save()
         a=LiveAdmission.objects.select_related('broadcast','user').get(broadcast=row,user=self.viewer)

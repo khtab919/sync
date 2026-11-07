@@ -1,5 +1,5 @@
 """Ephemeral SFU broadcasting. No egress/recording/storage APIs are used."""
-import hashlib,json,os,secrets,uuid,time,urllib.request,urllib.error
+import hashlib,json,os,secrets,uuid,time,urllib.request,urllib.error,logging
 from datetime import timedelta
 from urllib.parse import urlsplit,parse_qs
 import jwt
@@ -296,7 +296,19 @@ def room_events(request,broadcast_id):
     if not a or (row.private and request.actor.pk!=row.owner_id and not moderator(request.actor) and not a.operation_id):raise ApiError('admission_required',403)
     if request.method=='POST':
         action=request.payload.get('action')
-        if action=='comment':
+        if action=='media_diagnostic':
+            # Client-reported diagnostics, never permission or financial authority.
+            from django.core.cache import cache
+            stages={'camera_capture','camera_preview','microphone_capture','media_publish'}
+            stage=request.payload.get('stage');outcome=request.payload.get('outcome');reason=request.payload.get('reason','')
+            if stage not in stages or outcome not in ('ready','failed') or reason not in ('','Failed','NotAllowedError','NotFoundError','NotReadableError','OverconstrainedError','SecurityError','AbortError') or request.payload.get('build')!='media-1':raise ApiError('invalid_input')
+            key=f'live-media-diagnostic:{row.pk}:{request.actor.pk}'
+            count=cache.get(key,0)
+            if count>=30:raise ApiError('slow_down',429)
+            cache.set(key,count+1,60)
+            logging.getLogger('relaxia.live.media').warning('client_media room=%s user=%s stage=%s outcome=%s reason=%s build=media-1',row.pk,request.actor.pk,stage,outcome,reason)
+            return JsonResponse({'accepted':True})
+        elif action=='comment':
             if LiveComment.objects.filter(user=request.actor,created_at__gt=timezone.now()-timedelta(seconds=10)).count()>=5:raise ApiError('slow_down',429)
             LiveComment.objects.create(broadcast=row,user=request.actor,text=text(request.payload,'text',1,300))
         elif action=='like':LiveLike.objects.get_or_create(broadcast=row,user=request.actor)
