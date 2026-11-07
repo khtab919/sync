@@ -94,6 +94,8 @@ class StageConcurrencyTests(TransactionTestCase):
         def approve(i):return Client().post(f'/api/live/{row.pk}/events',json.dumps({'action':'seat_decision','user_id':[self.viewer.pk,self.other.pk][i],'approve':True}),content_type='application/json',HTTP_AUTHORIZATION='Bearer '+self.tokens[self.owner.pk]).status_code
         self.assertEqual(sorted(self.race(approve)),[200,409]);self.assertEqual(LiveSeat.objects.filter(status='approved').count(),1)
     def test_retried_gift_is_one_debit_and_one_pk_event(self):
+        # TransactionTestCase flush removes migration-seeded catalog rows.
+        LiveGiftDefinition.objects.get_or_create(code='rose',defaults={'name':'وردة','symbol':'🌹','price_cents':100,'effect':'simple'})
         row=self.stage();data={'action':'gift','gift_code':'rose','price_cents':100,'confirmed':True,'request_key':str(uuid.uuid4())}
         from django.test import Client
         def send(_):return Client().post(f'/api/live/{row.pk}/events',json.dumps(data),content_type='application/json',HTTP_AUTHORIZATION='Bearer '+self.tokens[self.viewer.pk]).status_code
