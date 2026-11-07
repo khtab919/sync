@@ -568,7 +568,7 @@ def search_accounts(request):
     from .models import UserBlock,AccountSanction
     q=request.GET.get('q','').strip().removeprefix('@')[:100]
     if len(q)<2:return JsonResponse({'items':[]})
-    users=User.objects.filter(is_active=True,profile__isnull=False).exclude(pk=request.actor.pk)
+    users=User.objects.filter(is_active=True,profile__isnull=False)
     if len(q)==5 and q.isascii() and q.isdigit():users=users.filter(profile__public_id=q)
     else:users=users.filter(Q(username__icontains=q)|Q(profile__display_name__icontains=q))
     blocked_ids=list(UserBlock.objects.filter(user=request.actor).values_list('blocked_id',flat=True))+list(UserBlock.objects.filter(blocked=request.actor).values_list('user_id',flat=True))

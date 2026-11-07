@@ -59,6 +59,10 @@ class IdentityTests(TestCase):
         used=int(self.user.profile.public_id)-10000
         free=next(n for n in range(10000,100000) if not Profile.objects.filter(public_id=str(n)).exists())
         with patch('core.identity.secrets.randbelow',side_effect=[used,free-10000]):self.assertEqual(allocate_public_id(),str(free))
+    def test_own_public_number_is_searchable(self):
+        r=self.client.get('/api/accounts/search',{'q':self.user.profile.public_id},HTTP_AUTHORIZATION='Bearer '+self.token)
+        self.assertEqual(r.status_code,200);self.assertEqual(r.json()['items'][0]['id'],self.user.pk)
+
     def test_public_search_and_blocks_preserve_private_information(self):
         public=self.other.profile.public_id
         r=self.client.get('/api/accounts/search',{'q':public},HTTP_AUTHORIZATION='Bearer '+self.token)
