@@ -44,6 +44,6 @@ private val ReferenceDark = darkColorScheme(
 )
 val LayaliShapes=Shapes(small=RoundedCornerShape(12.dp),medium=RoundedCornerShape(18.dp),large=RoundedCornerShape(24.dp))
 @Composable
-fun MyApplicationTheme(isSoftRoseLightTheme:Boolean=true,darkTheme:Boolean=false,content:@Composable()->Unit){
+fun MyApplicationTheme(isSoftRoseLightTheme:Boolean=true,darkTheme:Boolean=false,content: @Composable () -> Unit){
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl){MaterialTheme(colorScheme=if(darkTheme)ReferenceDark else ReferenceLight,typography=Typography,shapes=LayaliShapes,content=content)}
 }

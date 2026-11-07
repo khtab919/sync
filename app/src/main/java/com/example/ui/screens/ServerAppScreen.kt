@@ -170,8 +170,8 @@ fun ServerAppScreen(baseUrl: String) {
         if (creator.has("display_name")) open("صفحة المذيعة")
         else { notice = "هذا الملف غير متاح حاليًا." }
     }
-    LaunchedEffect(query,screen,signedIn){
-        if(!signedIn||screen !in listOf("تصفح","المذيعات")||query.trim().length<2){accountMatches=emptyList();return@LaunchedEffect}
+    LaunchedEffect(query,page,tab,signedIn){
+        if(!signedIn||(if(page.isBlank())destinations[tab]else page) !in listOf("تصفح","المذيعات")||query.trim().length<2){accountMatches=emptyList();return@LaunchedEffect}
         delay(250)
         try{accountMatches=api.request("/api/accounts/search?q="+java.net.URLEncoder.encode(query.trim(),"UTF-8")).rows()}catch(e:CancellationException){throw e}catch(e:Exception){accountMatches=emptyList()}
     }
@@ -451,7 +451,7 @@ fun ServerAppScreen(baseUrl: String) {
                         }
                         "محادثة جديدة" -> {
                             item { SearchField(query, { query = it }, "ابحث عن اسم المذيعة") }
-                            items(creators.filter { (it.optString("display_name")+it.optString("username")+it.optString("public_id")).contains(query.removeprefix("@"), true) }, key = { it.optInt("id") }) { person -> Box(Modifier.padding(horizontal = 20.dp)) {
+                            items(creators.filter { (it.optString("display_name")+it.optString("username")+it.optString("public_id")).contains(query.removePrefix("@"), true) }, key = { it.optInt("id") }) { person -> Box(Modifier.padding(horizontal = 20.dp)) {
                                 Surface(onClick = { startChat(person.optInt("id"), person.optString("display_name")) }, shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface) {
                                     Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                         ReferenceAvatar(person.optString("display_name"), person.optInt("selected_frame"), 48, person.optString("avatar_url"))
@@ -486,7 +486,7 @@ fun ServerAppScreen(baseUrl: String) {
                             val person = if (own) profile else creator
                             if (own) item { Box(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) { WalletSummary(if(walletAccountId == profile.optInt("id") && wallet.has("available_cents")) wallet.optLong("available_cents") else null, walletLoading, walletError, { buyCredits() }, { open("المحفظة") }, { revision++ }) } }
                             item { ProfileHero(person, own, { if (own) open("الإعدادات") else back() }, { if (own) editProfile() else startChat(person.optInt("id"), person.optString("display_name")) }, {
-                                if (own) open("إطاراتي") else perform {
+                                if (own) open("إطاراتي") else if(!person.optBoolean("creator")){(context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("Relaxia ID",person.optString("public_id")));notice="تم نسخ معرف الحساب"} else perform {
                                     creator = api.request("/api/creators/${person.optInt("id")}/follow", "POST", JSONObject().put("enabled", !person.optBoolean("following")))
                                     creators = creators.map { if (it.optInt("id") == creator.optInt("id")) creator else it }
                                 }
@@ -639,7 +639,7 @@ private fun FeedCard(service: JSONObject, owner: () -> Unit, details: () -> Unit
         }
         ReferenceImage(service.optString("image_url"), Modifier.fillMaxWidth().aspectRatio(1.14f).clip(RoundedCornerShape(15.dp)).clickable(onClick = details))
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { react("like") }) { Icon(if (service.optBoolean("liked")) Icons.Outlined.Favorite else Icons.Outlined.FavoriteBorder, "إعجاب", tint = if (service.optBoolean("liked")) Color(0xFF9C5F56) else MaterialTheme.colorScheme.onSurface) }
+            IconButton(onClick = { react("like") }) { Icon(if (service.optBoolean("liked")) Icons.Outlined.Favorite else Icons.Outlined.FavoriteBorder, "إعجاب", tint = if (service.optBoolean("liked")) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface) }
             Text(service.optInt("like_count").toString(), fontSize = 12.sp)
             IconButton(onClick = chat) { Icon(Icons.Outlined.ChatBubbleOutline, "التحدث مع المذيعة") }
             Spacer(Modifier.weight(1f))
@@ -670,16 +670,16 @@ internal fun ProfileHero(person: JSONObject, own: Boolean, settings: () -> Unit,
         }
         ReferenceAvatar(person.optString("display_name", person.optString("username")), person.optInt("selected_frame"), 124, person.optString("avatar_url"))
         Text(person.optString("display_name", person.optString("username")), color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold)
-        Text("حساب #${person.optString("public_id","—")} · 18+", color = Color.White.copy(alpha = .55f), fontSize = 11.sp)
+        Text("حساب #${person.optString("public_id","—")} · 18+", color = Color.White.copy(alpha = .75f), fontSize = 13.sp)
         Text("@"+person.optString("username"),color=Color.White.copy(alpha=.8f),fontSize=15.sp)
-        if (person.optBoolean("creator")) Surface(color = Color.White.copy(alpha = .09f), shape = RoundedCornerShape(30.dp)) { Row(Modifier.padding(horizontal = 14.dp, vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Outlined.WorkspacePremium, null, Modifier.size(15.dp), tint = Color(0xFFD8C18F)); Text("مذيعة معتمدة", color = Color(0xFFD8C18F), fontSize = 11.sp) } }
+        if (person.optBoolean("creator")) Surface(color = Color.White.copy(alpha = .09f), shape = RoundedCornerShape(30.dp)) { Row(Modifier.padding(horizontal = 14.dp, vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Outlined.WorkspacePremium, null, Modifier.size(15.dp), tint = Color(0xFFD7AD72)); Text("مذيعة معتمدة", color = Color(0xFFD7AD72), fontSize = 11.sp) } }
         if (person.optString("bio").isNotBlank()) Text(person.optString("bio"), color = Color.White.copy(alpha = .7f), fontSize = 13.sp)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
             listOf("المتابعون" to person.optInt("followers_count"), "أتابع" to person.optInt("following_count"), "العروض" to person.optInt("service_count"), "الريلز" to person.optInt("reel_count")).forEach { (label, count) -> Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(count.toString(), color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold); Text(label, color = Color.White.copy(alpha = .55f), fontSize = 11.sp) } }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedButton(editOrChat, Modifier.weight(1f).heightIn(min = 48.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)) { Text(if (own) "تعديل الملف" else "محادثة", fontSize = 13.sp) }
-            Button(frameOrFollow, Modifier.weight(1f).heightIn(min = 48.dp), colors = ButtonDefaults.buttonColors(containerColor = WisalSage, contentColor = WisalInk)) { Text(if (own) "إطاراتي" else if (person.optBoolean("following")) "إلغاء المتابعة" else "متابعة", fontSize = 13.sp) }
+            Button(frameOrFollow, Modifier.weight(1f).heightIn(min = 48.dp), colors = ButtonDefaults.buttonColors(containerColor = WisalSage, contentColor = WisalInk)) { Text(if (own) "إطاراتي" else if(!person.optBoolean("creator"))"نسخ ID"else if (person.optBoolean("following")) "إلغاء المتابعة" else "متابعة", fontSize = 13.sp) }
         }
     }
 }
