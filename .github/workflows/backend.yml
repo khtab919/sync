@@ -1,0 +1,124 @@
+name: Self-hosted backend tests
+on:
+  push:
+    paths: ['backend/**', '.github/workflows/backend.yml']
+  pull_request:
+    paths: ['backend/**', '.github/workflows/backend.yml']
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: test-password
+          POSTGRES_USER: layali
+          POSTGRES_DB: layali
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U layali"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DJANGO_SECRET_KEY: test-only-ci-key
+      POSTGRES_PASSWORD: test-password
+      POSTGRES_USER: layali
+      POSTGRES_DB: layali
+      DB_HOST: localhost
+      ALLOWED_HOSTS: localhost,testserver
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r backend/requirements.txt
+      - run: python backend/manage.py makemigrations --check --dry-run
+      - run: python backend/manage.py test core --verbosity 2
+      - name: Validate deployment containers
+        run: |
+          cp backend/.env.example backend/.env
+          docker compose -f backend/compose.yaml config --quiet
+          docker build -t layali-backend-ci backend
+          docker run --rm -e LAYALI_DOMAIN=api.example.com -v "$PWD/backend/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2 caddy validate --config /etc/caddy/Caddyfile
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test actual WebRTC audio and video through TURN
+        env:
+          CALL_SMOKE_CONFIG: ${{ runner.temp }}/relaxia-call-smoke.json
+        run: |
+          npm install --prefix "$RUNNER_TEMP/rtc-node" playwright@1.56.1
+          "$RUNNER_TEMP/rtc-node/node_modules/.bin/playwright" install --with-deps chromium
+          docker run -d --name relaxia-rtc-test-turn --network host --entrypoint turnserver coturn/coturn:4.18.0 --log-file=stdout --no-tls --listening-ip=127.0.0.1 --relay-ip=127.0.0.1 --listening-port=3478 --min-port=49160 --max-port=49200 --use-auth-secret --static-auth-secret=local-rtc-test-secret --realm=localhost --allow-loopback-peers --no-multicast-peers
+          python backend/qa/webrtc_smoke_server.py &
+          rtc_server_pid=$!
+          trap 'kill "$rtc_server_pid" 2>/dev/null || true; docker logs relaxia-rtc-test-turn | tail -30; docker rm -f relaxia-rtc-test-turn >/dev/null 2>&1 || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8765/health/ >/dev/null; then break; fi
+            sleep 1
+          done
+          NODE_PATH="$RUNNER_TEMP/rtc-node/node_modules" node backend/qa/webrtc_smoke.cjs
+
+      - name: Test actual ephemeral SFU broadcast with twelve viewers
+        env:
+          LIVE_SMOKE_CONFIG: ${{ runner.temp }}/live-smoke.json
+          LIVE_PREVIEW_DIR: ${{ runner.temp }}/live-previews
+        run: |
+          python backend/fetch_live_sdk.py
+          cat > "$RUNNER_TEMP/livekit-smoke.yaml" <<'YAML'
+          port: 7880
+          rtc:
+            tcp_port: 7881
+            port_range_start: 50000
+            port_range_end: 50100
+            use_external_ip: false
+            node_ip: 127.0.0.1
+          room:
+            auto_create: false
+            empty_timeout: 60
+            departure_timeout: 10
+          keys:
+            smoke-key: smoke-secret-at-least-thirty-two-characters
+          logging:
+            level: warn
+          YAML
+          cat > "$RUNNER_TEMP/live-caddy" <<'CADDY'
+          :8880 {
+            handle_path /livekit/* {
+              forward_auth 127.0.0.1:8766 {
+                uri /api/live/authorize
+              }
+              reverse_proxy 127.0.0.1:7880
+            }
+            handle {
+              reverse_proxy 127.0.0.1:8766
+            }
+          }
+          CADDY
+          docker run -d --name relaxia-live-sfu --read-only --tmpfs /tmp:size=32m --network host -v "$RUNNER_TEMP/livekit-smoke.yaml:/etc/livekit.yaml:ro" livekit/livekit-server:v1.13.11 --config /etc/livekit.yaml
+          docker run -d --name relaxia-live-gateway --network host -v "$RUNNER_TEMP/live-caddy:/etc/caddy/Caddyfile:ro" caddy:2
+          python backend/qa/live_smoke_server.py &
+          live_server_pid=$!
+          trap 'kill "$live_server_pid" 2>/dev/null || true; docker logs relaxia-live-sfu | tail -30; docker logs relaxia-live-gateway | tail -20; docker rm -f relaxia-live-sfu relaxia-live-gateway >/dev/null 2>&1 || true' EXIT
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:8880/health/ >/dev/null; then break; fi
+            sleep 1
+          done
+          NODE_PATH="$RUNNER_TEMP/rtc-node/node_modules" node backend/qa/live_smoke.cjs
+          test "$(docker inspect -f '{{.HostConfig.ReadonlyRootfs}}' relaxia-live-sfu)" = true
+          if docker export relaxia-live-sfu | tar -tf - | grep -E '\.(mp4|mkv|webm|flv|m3u8|wav|m4a)$'; then
+            echo 'Unexpected persistent media file in SFU filesystem'
+            exit 1
+          fi
+
+      - name: Upload synthetic live UI previews
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Relaxia-live-stage-previews
+          path: ${{ runner.temp }}/live-previews
+          if-no-files-found: ignore

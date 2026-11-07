@@ -1,0 +1,11 @@
+<!doctype html><html lang="ar" dir="rtl" data-theme="{{ theme|default:'dark' }}"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Relaxia · مباشر</title>
+<link rel="stylesheet" href="/static/core/live-stage.css">
+<main id="stage"><div id="video" aria-label="البث المباشر"></div><div id="audioStage" hidden></div><div class="shade"></div>
+<header><button id="profile" class="identity" aria-label="ملف صاحب البث"><img id="ownerAvatar" hidden alt=""><span><strong id="name"></strong><small id="title"></small></span></button><button id="follow" class="accent">متابعة</button><span id="viewers" class="pill">—</span><button id="exit" class="round" aria-label="خروج">×</button></header>
+<div id="connection"><span class="dot"></span><span id="status" role="status">جارٍ الاتصال…</span><span id="badge"></span></div>
+<section id="pk" hidden><div id="pkTeams"></div><progress id="pkProgress" max="100" value="50"></progress><small id="pkTimer"></small></section>
+<div id="goal" hidden></div><div id="giftEffect" aria-live="polite" hidden></div><div id="pinned" hidden></div><section id="messages" aria-label="التعليقات"></section>
+<footer><div id="publisherControls" hidden><button id="mute">كتم الميكروفون</button><button id="camera">إيقاف الفيديو</button><button id="switch">تبديل الكاميرا</button></div><div class="bottom"><form id="composer"><input id="text" maxlength="300" placeholder="قل شيئًا…" aria-label="اكتب تعليقًا" autocomplete="off"><button aria-label="إرسال التعليق">↑</button></form><button id="gift" class="tool" hidden>هدية</button><button id="guests" class="tool">الضيوف</button><button id="share" class="tool">مشاركة</button><button id="more" class="tool" aria-label="المزيد">•••</button></div></footer>
+<div id="ended" hidden><div><h2 id="endedTitle"></h2><p>لا يتوفر تسجيل أو إعادة مشاهدة.</p><button id="closeEnded">العودة للتطبيق</button></div></div>
+<dialog id="sheet"><div class="sheet-head"><h2 id="sheetTitle"></h2><button id="closeSheet" class="round" aria-label="إغلاق القائمة">×</button></div><div id="sheetBody"></div></dialog>
+</main>{{ config|json_script:"config" }}<script src="/static/core/livekit-client.umd.min.js"></script><script src="/static/core/live-stage.js"></script></html>

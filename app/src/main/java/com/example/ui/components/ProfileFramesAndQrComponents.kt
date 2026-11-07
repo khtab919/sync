@@ -1368,7 +1368,7 @@ fun LuxuryGradientButton(
     } else {
         // Royal Amethyst & Imperial Rose for exclusive VIP membership actions (No Yellow)
         Brush.horizontalGradient(
-            colors = listOf(Color(0xFFA855F7), Color(0xFFEC4899))
+            colors = listOf(Color(0xFFDCECF2), Color(0xFFDCECF2))
         )
     }
 

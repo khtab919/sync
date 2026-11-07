@@ -17,8 +17,13 @@ android {
     applicationId = "com.aistudio.layalilounge.x9m4kp"
     minSdk = 24
     targetSdk = 36
-    versionCode = 5
-    versionName = "5.0"
+    val backendUrl = providers.gradleProperty("LAYALI_API_URL").orElse("").get()
+    require(backendUrl.isBlank() || backendUrl.matches(Regex("https://[a-zA-Z0-9.-]+(?::[0-9]+)?"))) {
+      "LAYALI_API_URL must be an HTTPS origin"
+    }
+    buildConfigField("String", "LAYALI_API_URL", "\"$backendUrl\"")
+    versionCode = 25
+    versionName = "10.9"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -106,7 +111,7 @@ dependencies {
   // implementation(libs.androidx.navigation.compose)
   implementation(libs.androidx.room.ktx)
   implementation(libs.androidx.room.runtime)
-  // implementation(libs.coil.compose)
+  implementation(libs.coil.compose)
   // implementation(libs.converter.moshi)
   // implementation(libs.firebase.ai)
   // Uncomment to use Firestore:

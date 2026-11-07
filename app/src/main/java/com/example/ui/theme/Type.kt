@@ -2,11 +2,18 @@ package com.example.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
+import com.example.R
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-val CleanSansFontFamily = FontFamily.SansSerif
+val CleanSansFontFamily = FontFamily(
+    Font(R.font.noto_arabic_regular, FontWeight.Normal),
+    Font(R.font.noto_arabic_medium, FontWeight.Medium),
+    Font(R.font.noto_arabic_semibold, FontWeight.SemiBold),
+    Font(R.font.noto_arabic_bold, FontWeight.Bold)
+)
 
 val Typography = Typography(
     displayLarge = TextStyle(

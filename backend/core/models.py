@@ -1,0 +1,491 @@
+import uuid
+from django.conf import settings
+from django.db import models
+from django.db.models import Q
+from django.utils import timezone
+
+class IdentityRegistry(models.Model):
+    id=models.PositiveSmallIntegerField(primary_key=True,default=1)
+
+class Profile(models.Model):
+    from .identity import allocate_public_id
+    public_id=models.CharField(max_length=5,unique=True,default=allocate_public_id)
+    class Meta:
+        constraints=[models.CheckConstraint(condition=Q(gender__isnull=True)|Q(gender__in=['male','female']),name='profile_valid_gender'),models.CheckConstraint(condition=Q(public_id__regex=r'^[1-9][0-9]{4}$'),name='profile_public_id_five_digits')]
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    date_of_birth = models.DateField(null=True, blank=True)
+    policy_version = models.CharField(max_length=32, default='2026-11-06')
+    policy_accepted_at = models.DateTimeField(auto_now_add=True)
+    gender = models.CharField(max_length=6, choices=[("male", "ذكر"), ("female", "أنثى")], null=True, blank=True)
+    publishing_allowed = models.BooleanField(default=True)
+    creator = models.BooleanField(default=False)
+    identity_verified = models.BooleanField(default=False)
+    chat_price_cents = models.PositiveIntegerField(default=0)
+    bio = models.CharField(max_length=300, blank=True)
+    display_name = models.CharField(max_length=100, blank=True)
+    selected_frame = models.PositiveSmallIntegerField(default=0)
+    avatar_url = models.URLField(max_length=500, blank=True)
+    last_active_at = models.DateTimeField(null=True, blank=True)
+    broadcast_allowed=models.BooleanField(default=True)
+
+class Service(models.Model):
+    duration_minutes=models.PositiveIntegerField(default=30)
+    terms=models.CharField(max_length=600,blank=True)
+    image = models.ForeignKey("UploadedMedia", null=True, blank=True, on_delete=models.PROTECT)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    title = models.CharField(max_length=150)
+    description = models.TextField(max_length=600)
+    price_cents = models.PositiveIntegerField()
+    image_url = models.URLField(max_length=500, blank=True)
+    category = models.CharField(max_length=30, default='خدمة', choices=[('خدمة', 'خدمة'), ('جلسة', 'جلسة'), ('منتج', 'منتج')])
+    approved = models.BooleanField(default=False)
+    active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+class Booking(models.Model):
+    class Meta:
+        constraints=[models.UniqueConstraint(fields=["buyer","request_key"],name="unique_booking_request")]
+    operation=models.OneToOneField("FinancialOperation",null=True,blank=True,on_delete=models.PROTECT)
+    request_key=models.UUIDField(null=True,blank=True)
+    terms_snapshot=models.CharField(max_length=600,blank=True)
+    duration_minutes=models.PositiveIntegerField(default=30)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    buyer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    service = models.ForeignKey(Service, on_delete=models.PROTECT)
+    price_cents = models.PositiveIntegerField()
+    status = models.CharField(max_length=32, default='awaiting_payment', editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+class Wallet(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    balance_cents = models.BigIntegerField(default=0, editable=False)
+    reserved_cents = models.BigIntegerField(default=0, editable=False)
+    class Meta:
+        constraints = [models.CheckConstraint(condition=Q(balance_cents__gte=0) & Q(reserved_cents__gte=0) & Q(balance_cents__gte=models.F('reserved_cents')), name='wallet_valid_balance')]
+
+class Withdrawal(models.Model):
+    payout_reference=models.CharField(max_length=300,blank=True)
+    processed_at=models.DateTimeField(null=True,blank=True)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    amount_cents = models.PositiveIntegerField()
+    destination = models.CharField(max_length=300)
+    request_key = models.UUIDField()
+    status = models.CharField(max_length=32, default='pending', editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['user', 'request_key'], name='unique_withdrawal_request')]
+
+class Message(models.Model):
+    reply_to=models.ForeignKey("self",null=True,blank=True,on_delete=models.PROTECT)
+    deleted_at=models.DateTimeField(null=True,blank=True)
+    client_key = models.UUIDField(null=True, blank=True)
+    delivered_at = models.DateTimeField(null=True, blank=True)
+    read_at = models.DateTimeField(null=True, blank=True)
+    media_price_cents = models.PositiveIntegerField(default=0)
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['sender','client_key'], name='unique_message_client_key')]
+
+    call = models.OneToOneField("InternalCall", null=True, blank=True, on_delete=models.PROTECT)
+    attachment = models.OneToOneField("UploadedMedia", null=True, blank=True, on_delete=models.PROTECT)
+    call_url = models.URLField(blank=True)
+    sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='sent_messages')
+    recipient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='received_messages')
+    body = models.CharField(max_length=2000)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+class Reel(models.Model):
+    media = models.OneToOneField("UploadedMedia", null=True, blank=True, on_delete=models.PROTECT)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    video_url = models.URLField(max_length=500)
+    approved = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+class Report(models.Model):
+    reporter = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    target_type = models.CharField(max_length=32)
+    target_id = models.PositiveBigIntegerField()
+    reason = models.CharField(max_length=500)
+    resolved = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+class SessionToken(models.Model):
+    admin_verified_at=models.DateTimeField(null=True,blank=True)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    digest = models.CharField(max_length=64, unique=True)
+    expires_at = models.DateTimeField()
+
+class AuthRateLimit(models.Model):
+    key = models.CharField(max_length=64, primary_key=True)
+    window_start = models.DateTimeField()
+    attempts = models.PositiveIntegerField(default=0)
+
+
+class ServiceReaction(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    service = models.ForeignKey(Service, on_delete=models.CASCADE)
+    kind = models.CharField(max_length=10, choices=[('like', 'Like'), ('save', 'Save')])
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['user', 'service', 'kind'], name='unique_service_reaction')]
+
+class Follow(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='follows')
+    creator = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='followers')
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['user', 'creator'], name='unique_follow')]
+
+class SupportTicket(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    body = models.CharField(max_length=2000)
+    reply = models.CharField(max_length=2000, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class BalanceAdjustment(models.Model):
+    request_key = models.UUIDField(null=True, blank=True, editable=False)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='balance_adjustments')
+    administrator = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='issued_balance_adjustments')
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['administrator', 'request_key'], name='unique_admin_credit_request')]
+    amount_cents = models.PositiveBigIntegerField()
+    reason = models.CharField(max_length=300)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+class UploadedMedia(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    purpose = models.CharField(max_length=20)
+    file = models.FileField(upload_to='uploads/%Y/%m/')
+    mime = models.CharField(max_length=40)
+    size = models.PositiveIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+class SellerApplication(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    description = models.CharField(max_length=1000)
+    status = models.CharField(max_length=16, default='pending')
+    review_note = models.CharField(max_length=300, blank=True)
+    reviewer = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.PROTECT, related_name='seller_reviews')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+class TopUp(models.Model):
+    quote = models.OneToOneField("TopUpQuote", null=True, blank=True, on_delete=models.PROTECT)
+    method = models.CharField(max_length=12, default='usdt')
+    late_submission = models.BooleanField(default=False)
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    amount_cents = models.PositiveIntegerField()
+    bonus_cents = models.PositiveIntegerField(default=0)
+    transaction_hash = models.CharField(max_length=120, unique=True)
+    receipt = models.OneToOneField(UploadedMedia, on_delete=models.PROTECT)
+    status = models.CharField(max_length=16, default='pending')
+    review_note = models.CharField(max_length=300, blank=True)
+    reviewer = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.PROTECT, related_name='topup_reviews')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+class PaidWheelConfiguration(models.Model):
+    daily_limit=models.PositiveIntegerField(default=20)
+    daily_budget_cents=models.PositiveIntegerField(default=50000)
+    enabled = models.BooleanField(default=False)
+    cost_cents = models.PositiveIntegerField(default=350)
+    price_step_cents = models.PositiveIntegerField(default=50)
+    maximum_cost_cents = models.PositiveIntegerField(default=1000)
+    first_reward_cents = models.PositiveIntegerField(default=500)
+    grand_unlock_spend_cents = models.PositiveIntegerField(default=20000)
+    prizes = models.JSONField(default=list)
+    bankroll_cents = models.PositiveBigIntegerField(default=0)
+
+class PaidSpin(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    request_key = models.UUIDField()
+    cost_cents = models.PositiveIntegerField()
+    prize_cents = models.PositiveIntegerField()
+    prizes_snapshot = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['user', 'request_key'], name='unique_paid_spin_request')]
+
+class InternalCall(models.Model):
+    booking=models.ForeignKey("Booking",null=True,blank=True,on_delete=models.PROTECT)
+    ringing_at = models.DateTimeField(null=True, blank=True)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    caller = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='outgoing_calls')
+    callee = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='incoming_calls')
+    mode = models.CharField(max_length=8, default='audio')
+    status = models.CharField(max_length=12, default='ringing')
+    created_at = models.DateTimeField(auto_now_add=True)
+    accepted_at = models.DateTimeField(null=True)
+    ended_at = models.DateTimeField(null=True)
+    caller_seen_at = models.DateTimeField(default=timezone.now)
+    callee_seen_at = models.DateTimeField(null=True)
+
+class CallSignal(models.Model):
+    call = models.ForeignKey(InternalCall, on_delete=models.CASCADE)
+    sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    kind = models.CharField(max_length=12)
+    data = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+class CallTicket(models.Model):
+    digest = models.CharField(max_length=64, unique=True)
+    call = models.ForeignKey(InternalCall, on_delete=models.CASCADE)
+    session = models.ForeignKey(SessionToken, on_delete=models.CASCADE)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True)
+
+class PaymentSettings(models.Model):
+    shamcash_enabled = models.BooleanField(default=False)
+    shamcash_account = models.CharField(max_length=160, blank=True)
+    shamcash_currency = models.CharField(max_length=3, default='USD', choices=[('USD','USD'),('SYP','SYP')])
+    shamcash_rate = models.DecimalField(max_digits=16, decimal_places=6, default=1)
+    shamcash_instructions = models.CharField(max_length=500, blank=True)
+
+class TopUpQuote(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    method = models.CharField(max_length=12)
+    amount_cents = models.PositiveIntegerField()
+    bonus_cents = models.PositiveIntegerField()
+    payment_amount = models.DecimalField(max_digits=18, decimal_places=2)
+    payment_currency = models.CharField(max_length=4)
+    destination = models.CharField(max_length=160)
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+class GatewayInvoice(models.Model):
+    quote = models.OneToOneField(TopUpQuote,on_delete=models.PROTECT)
+    invoice_id = models.CharField(max_length=64,null=True,blank=True,unique=True)
+    payment_id = models.CharField(max_length=64,null=True,blank=True,unique=True)
+    invoice_url = models.URLField(max_length=500,blank=True)
+    status = models.CharField(max_length=32,default='creating')
+    credited_at = models.DateTimeField(null=True,blank=True)
+    review_required = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class ChatCharge(models.Model):
+    message = models.ForeignKey(Message,on_delete=models.PROTECT)
+    kind = models.CharField(max_length=12,choices=[('message','Message'),('unlock','Unlock')])
+    buyer = models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT,related_name='chat_purchases')
+    creator = models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT,related_name='chat_earnings')
+    amount_cents = models.PositiveIntegerField()
+    creator_cents = models.PositiveIntegerField()
+    platform_cents = models.PositiveIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        constraints=[models.UniqueConstraint(fields=['message','kind','buyer'],name='unique_chat_charge'),models.CheckConstraint(condition=Q(amount_cents=models.F('creator_cents')+models.F('platform_cents')),name='chat_charge_conserved')]
+
+class FinancialOperation(models.Model):
+    id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False)
+    buyer=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT,related_name='financial_purchases')
+    creator=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT,related_name='financial_sales')
+    kind=models.CharField(max_length=20)
+    request_key=models.UUIDField()
+    reference=models.CharField(max_length=64)
+    amount_cents=models.PositiveIntegerField()
+    creator_cents=models.PositiveIntegerField(default=0)
+    platform_cents=models.PositiveIntegerField(default=0)
+    status=models.CharField(max_length=16,default='held')
+    reason=models.CharField(max_length=300,blank=True)
+    created_at=models.DateTimeField(auto_now_add=True)
+    settled_at=models.DateTimeField(null=True,blank=True)
+    class Meta:
+        constraints=[models.UniqueConstraint(fields=['buyer','kind','request_key'],name='unique_financial_operation')]
+
+class LiveBroadcast(models.Model):
+    class Meta:
+        permissions=[("moderate_livebroadcast","Moderate live broadcasts without financial administration")]
+    id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False)
+    owner=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT)
+    title=models.CharField(max_length=120)
+    private=models.BooleanField(default=False)
+    invite_only=models.BooleanField(default=False)
+    invited=models.ManyToManyField(settings.AUTH_USER_MODEL,related_name='live_invitations')
+    price_cents=models.PositiveIntegerField(default=0)
+    max_viewers=models.PositiveIntegerField(default=25)
+    minimum_seconds=models.PositiveIntegerField(default=30)
+    status=models.CharField(max_length=20,default='starting')
+    started_at=models.DateTimeField(null=True,blank=True)
+    ended_at=models.DateTimeField(null=True,blank=True)
+    created_at=models.DateTimeField(auto_now_add=True)
+    last_checked_at=models.DateTimeField(null=True,blank=True)
+    host_missing_at=models.DateTimeField(null=True,blank=True)
+    viewers=models.PositiveIntegerField(default=0)
+    gifts_enabled=models.BooleanField(default=False)
+    end_reason=models.CharField(max_length=200,blank=True)
+    cleanup_pending=models.BooleanField(default=False)
+    mode=models.CharField(max_length=5,default="video",choices=[("audio","صوت"),("video","فيديو")])
+    max_speakers=models.PositiveSmallIntegerField(default=1)
+    gift_goal_cents=models.PositiveIntegerField(default=0)
+    pinned_comment=models.ForeignKey("LiveComment",on_delete=models.SET_NULL,null=True,blank=True,related_name="pinned_in")
+
+class LiveAdmission(models.Model):
+    session=models.ForeignKey(SessionToken,on_delete=models.SET_NULL,null=True,blank=True)
+    broadcast=models.ForeignKey(LiveBroadcast,on_delete=models.PROTECT)
+    user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT)
+    operation=models.OneToOneField(FinancialOperation,on_delete=models.PROTECT,null=True,blank=True)
+    watched_seconds=models.PositiveIntegerField(default=0)
+    connected=models.BooleanField(default=False)
+    token_until=models.DateTimeField(null=True,blank=True)
+    last_seen_at=models.DateTimeField(null=True,blank=True)
+    banned=models.BooleanField(default=False)
+    created_at=models.DateTimeField(auto_now_add=True)
+    class Meta:
+        constraints=[models.UniqueConstraint(fields=['broadcast','user'],name='unique_live_admission')]
+
+class LiveComment(models.Model):
+    broadcast=models.ForeignKey(LiveBroadcast,on_delete=models.CASCADE)
+    user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.CASCADE)
+    text=models.CharField(max_length=300)
+    created_at=models.DateTimeField(auto_now_add=True)
+
+class LiveLike(models.Model):
+    broadcast=models.ForeignKey(LiveBroadcast,on_delete=models.CASCADE)
+    user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.CASCADE)
+    class Meta:
+        constraints=[models.UniqueConstraint(fields=['broadcast','user'],name='unique_live_like')]
+
+class LiveReport(models.Model):
+    broadcast=models.ForeignKey(LiveBroadcast,on_delete=models.PROTECT)
+    user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT)
+    reason=models.CharField(max_length=500)
+    resolved=models.BooleanField(default=False)
+    created_at=models.DateTimeField(auto_now_add=True)
+
+class LiveRoomTicket(models.Model):
+    digest=models.CharField(max_length=64,primary_key=True)
+    admission=models.ForeignKey(LiveAdmission,on_delete=models.CASCADE)
+    session=models.ForeignKey(SessionToken,on_delete=models.CASCADE)
+    expires_at=models.DateTimeField()
+    used_at=models.DateTimeField(null=True,blank=True)
+
+class UserBlock(models.Model):
+    user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.CASCADE,related_name='blocks_made')
+    blocked=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.CASCADE,related_name='blocks_received')
+    class Meta:
+        constraints=[models.UniqueConstraint(fields=['user','blocked'],name='unique_user_block')]
+
+class AdminAccess(models.Model):
+    customized=models.BooleanField(default=False)
+    user=models.OneToOneField(settings.AUTH_USER_MODEL,on_delete=models.PROTECT)
+    role=models.CharField(max_length=32,default='support')
+    permissions=models.JSONField(default=list)
+    totp_secret=models.TextField(blank=True)
+    totp_enabled=models.BooleanField(default=False)
+    last_counter=models.BigIntegerField(default=-1)
+    failed_attempts=models.PositiveIntegerField(default=0)
+    locked_until=models.DateTimeField(null=True)
+
+class AdminEvent(models.Model):
+    details=models.JSONField(default=dict)
+    actor=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT)
+    action=models.CharField(max_length=80)
+    target=models.CharField(max_length=120,blank=True)
+    reason=models.CharField(max_length=500)
+    result=models.CharField(max_length=32,default='success')
+    created_at=models.DateTimeField(auto_now_add=True)
+    def save(self,*args,**kwargs):
+        if self.pk:raise ValueError('Audit entries are immutable')
+        return super().save(*args,**kwargs)
+    def delete(self,*args,**kwargs):raise ValueError('Audit entries are immutable')
+
+class AccountSanction(models.Model):
+    user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT)
+    actor=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT,related_name='sanctions_issued')
+    kind=models.CharField(max_length=32)
+    reason=models.CharField(max_length=500)
+    created_at=models.DateTimeField(auto_now_add=True)
+    expires_at=models.DateTimeField(null=True)
+    revoked_at=models.DateTimeField(null=True)
+    revoked_by=models.ForeignKey(settings.AUTH_USER_MODEL,null=True,on_delete=models.PROTECT,related_name='sanctions_revoked')
+
+class AdminCase(models.Model):
+    user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT)
+    kind=models.CharField(max_length=32,default='appeal')
+    body=models.CharField(max_length=2000)
+    status=models.CharField(max_length=32,default='pending')
+    response=models.CharField(max_length=1000,blank=True)
+    created_at=models.DateTimeField(auto_now_add=True)
+
+class AdminApproval(models.Model):
+    payload=models.JSONField(default=dict)
+    id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False)
+    requester=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT,related_name='approval_requests')
+    reviewer=models.ForeignKey(settings.AUTH_USER_MODEL,null=True,on_delete=models.PROTECT,related_name='approval_reviews')
+    path=models.CharField(max_length=200)
+    payload_digest=models.CharField(max_length=64)
+    target_user=models.ForeignKey(settings.AUTH_USER_MODEL,null=True,on_delete=models.PROTECT)
+    reason=models.CharField(max_length=500)
+    status=models.CharField(max_length=20,default='pending')
+    expires_at=models.DateTimeField()
+    used_at=models.DateTimeField(null=True)
+    created_at=models.DateTimeField(auto_now_add=True)
+
+class AdminFeature(models.Model):
+    key=models.CharField(max_length=40,primary_key=True)
+    enabled=models.BooleanField(default=True)
+    reason=models.CharField(max_length=500,blank=True)
+    updated_at=models.DateTimeField(auto_now=True)
+
+class AdminNotice(models.Model):
+    actor=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT)
+    recipient=models.ForeignKey(settings.AUTH_USER_MODEL,null=True,on_delete=models.PROTECT,related_name='admin_notices')
+    title=models.CharField(max_length=120)
+    body=models.CharField(max_length=1000)
+    created_at=models.DateTimeField(auto_now_add=True)
+
+class BenefitGrant(models.Model):
+    user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT)
+    actor=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT,related_name='benefits_issued')
+    kind=models.CharField(max_length=20)
+    value=models.PositiveIntegerField()
+    reason=models.CharField(max_length=500)
+    expires_at=models.DateTimeField()
+    created_at=models.DateTimeField(auto_now_add=True)
+
+class PromotionalGrant(models.Model):
+    user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT)
+    actor=models.ForeignKey(settings.AUTH_USER_MODEL,null=True,on_delete=models.PROTECT,related_name='promotions_issued')
+    reference=models.CharField(max_length=160,unique=True)
+    points=models.PositiveIntegerField()
+    reason=models.CharField(max_length=500)
+    created_at=models.DateTimeField(auto_now_add=True)
+
+class LiveSeat(models.Model):
+    admission=models.OneToOneField(LiveAdmission,on_delete=models.CASCADE)
+    mode=models.CharField(max_length=5,choices=[('audio','صوت'),('video','فيديو')])
+    status=models.CharField(max_length=10,default='pending')
+    updated_at=models.DateTimeField(auto_now=True)
+
+class LiveRoomModerator(models.Model):
+    broadcast=models.ForeignKey(LiveBroadcast,on_delete=models.CASCADE)
+    user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.CASCADE)
+    class Meta:
+        constraints=[models.UniqueConstraint(fields=['broadcast','user'],name='unique_live_room_moderator')]
+
+class LiveGiftDefinition(models.Model):
+    code=models.SlugField(primary_key=True,max_length=32)
+    name=models.CharField(max_length=60)
+    symbol=models.CharField(max_length=8)
+    price_cents=models.PositiveIntegerField()
+    effect=models.CharField(max_length=10,default='simple',choices=[('simple','عادية'),('animated','متحركة'),('depth','عمق ثلاثي الأبعاد')])
+    enabled=models.BooleanField(default=True)
+
+class LivePK(models.Model):
+    broadcast=models.ForeignKey(LiveBroadcast,on_delete=models.PROTECT)
+    teams=models.JSONField(default=list)
+    created_at=models.DateTimeField(auto_now_add=True)
+    ends_at=models.DateTimeField()
+    cancelled_at=models.DateTimeField(null=True)
+
+class LiveGiftEvent(models.Model):
+    broadcast=models.ForeignKey(LiveBroadcast,on_delete=models.PROTECT)
+    operation=models.OneToOneField(FinancialOperation,on_delete=models.PROTECT)
+    gift_code=models.CharField(max_length=32)
+    gift_name=models.CharField(max_length=60)
+    symbol=models.CharField(max_length=8)
+    effect=models.CharField(max_length=10)
+    pk_round=models.ForeignKey(LivePK,on_delete=models.PROTECT,null=True)
+    team=models.PositiveSmallIntegerField(null=True)
+    created_at=models.DateTimeField(auto_now_add=True)
