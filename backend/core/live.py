@@ -195,6 +195,9 @@ def broadcasts(request):
 
 @endpoint(['GET','POST'])
 def detail(request,broadcast_id):
+    return room_detail(request,broadcast_id)
+
+def room_detail(request,broadcast_id):
     row=find(request.actor,broadcast_id)
     if request.method=='POST':
         if request.payload.get('action')=='end':
@@ -285,6 +288,9 @@ def authorize(request):
 
 @endpoint(['GET','POST'])
 def events(request,broadcast_id):
+    return room_events(request,broadcast_id)
+
+def room_events(request,broadcast_id):
     row=find(request.actor,broadcast_id);authorized(row,request.actor)
     a=LiveAdmission.objects.filter(broadcast=row,user=request.actor,banned=False).first()
     if not a or (row.private and request.actor.pk!=row.owner_id and not moderator(request.actor) and not a.operation_id):raise ApiError('admission_required',403)
@@ -343,9 +349,9 @@ def control(request,broadcast_id):
                     from .live_stage import publishing
                     can_publish,sources=publishing(a)
                     return JsonResponse({'token':join_token(a,session),'can_publish':can_publish,'publish_sources':sources})
-            if request.payload.get('action')=='end':return detail.__wrapped__(request,broadcast_id)
+            if request.payload.get('action')=='end':return room_detail(request,broadcast_id)
         elif request.method!='GET':return HttpResponse(status=405)
-        return events.__wrapped__(request,broadcast_id)
+        return room_events(request,broadcast_id)
     except ApiError as e:return JsonResponse({'error':e.message},status=e.status)
     except Exception:return JsonResponse({'error':'live_authorization_required'},status=403)
 

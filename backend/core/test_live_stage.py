@@ -64,6 +64,19 @@ class StageTests(TestCase):
         self.assertEqual(self.event(row,{'action':'pk_start','teams':[[self.owner.pk],[self.viewer.pk]],'duration':60},self.viewer).status_code,403)
         self.assertEqual(self.request('/api/admin/live/gifts',{'code':'rose'},self.viewer).status_code,403)
         live.close(row);self.assertFalse(LiveSeat.objects.filter(admission__broadcast=row).exists());self.assertFalse(LiveComment.objects.filter(broadcast=row).exists());self.assertFalse(LiveRoomModerator.objects.filter(broadcast=row).exists())
+    def test_signed_room_controls_work_without_exposing_bearer_tokens(self):
+        import re
+        row=self.stage();admitted=self.join(row,self.viewer).json()
+        page=self.client.post(f'/api/live/{row.pk}/room',{'ticket':admitted['ticket']})
+        config=json.loads(re.search(r'<script id="config" type="application/json">(.*?)</script>',page.content.decode(),re.S).group(1))
+        path=f'/api/live/{row.pk}/control'
+        headers={'HTTP_X_LIVE_CONTROL':config['control']}
+        self.assertEqual(self.client.get(path,**headers).status_code,200)
+        r=self.client.post(path,json.dumps({'action':'seat_request','mode':'audio'}),content_type='application/json',**headers)
+        self.assertEqual(r.status_code,200);self.assertEqual(r.json()['seat_status'],'pending')
+        self.assertEqual(self.client.get(path,HTTP_X_LIVE_CONTROL='forged').status_code,403)
+        self.assertEqual(self.client.post(path,json.dumps({'action':'end'}),content_type='application/json',**headers).status_code,403)
+
     def test_creation_rejects_more_than_twelve_speakers_and_invalid_modes(self):
         for payload in [{'mode':'video','max_speakers':13},{'mode':'fake'},{'mode':'audio','max_speakers':True}]:
             r=self.request('/api/live',dict(title='اختبار البث',**payload));self.assertEqual(r.status_code,400)

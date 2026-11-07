@@ -249,7 +249,7 @@ class ReferenceDesignTest {
         var opened=false
         compose.setContent { MyApplicationTheme { Surface(Modifier.width(320.dp)) { Column(Modifier.padding(16.dp)) { LiveBroadcastCard(JSONObject().put("owner_name","حساب الاختبار").put("title","جلسة مباشرة").put("viewers",12).put("private",true).put("price_cents",100)){opened=true} } } } }
         compose.onNodeWithText("جلسة مباشرة").performClick();org.junit.Assert.assertTrue(opened)
-        compose.onNodeWithText("12 مشاهد · دخول مدفوع: 100").assertExists()
+        compose.onNodeWithText("12 مشاهد · مدفوع: 100").assertExists()
         screenshot("15-live-card-small-screen")
     }
 
