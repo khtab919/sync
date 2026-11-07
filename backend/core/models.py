@@ -101,6 +101,7 @@ class Report(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
 class SessionToken(models.Model):
+    admin_verified_at=models.DateTimeField(null=True,blank=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     digest = models.CharField(max_length=64, unique=True)
     expires_at = models.DateTimeField()
@@ -349,3 +350,80 @@ class UserBlock(models.Model):
     blocked=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.CASCADE,related_name='blocks_received')
     class Meta:
         constraints=[models.UniqueConstraint(fields=['user','blocked'],name='unique_user_block')]
+
+class AdminAccess(models.Model):
+    customized=models.BooleanField(default=False)
+    user=models.OneToOneField(settings.AUTH_USER_MODEL,on_delete=models.PROTECT)
+    role=models.CharField(max_length=32,default='support')
+    permissions=models.JSONField(default=list)
+    totp_secret=models.TextField(blank=True)
+    totp_enabled=models.BooleanField(default=False)
+    last_counter=models.BigIntegerField(default=-1)
+    failed_attempts=models.PositiveIntegerField(default=0)
+    locked_until=models.DateTimeField(null=True)
+
+class AdminEvent(models.Model):
+    actor=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT)
+    action=models.CharField(max_length=80)
+    target=models.CharField(max_length=120,blank=True)
+    reason=models.CharField(max_length=500)
+    result=models.CharField(max_length=32,default='success')
+    created_at=models.DateTimeField(auto_now_add=True)
+    def save(self,*args,**kwargs):
+        if self.pk:raise ValueError('Audit entries are immutable')
+        return super().save(*args,**kwargs)
+    def delete(self,*args,**kwargs):raise ValueError('Audit entries are immutable')
+
+class AccountSanction(models.Model):
+    user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT)
+    actor=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT,related_name='sanctions_issued')
+    kind=models.CharField(max_length=32)
+    reason=models.CharField(max_length=500)
+    created_at=models.DateTimeField(auto_now_add=True)
+    expires_at=models.DateTimeField(null=True)
+    revoked_at=models.DateTimeField(null=True)
+    revoked_by=models.ForeignKey(settings.AUTH_USER_MODEL,null=True,on_delete=models.PROTECT,related_name='sanctions_revoked')
+
+class AdminCase(models.Model):
+    user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT)
+    kind=models.CharField(max_length=32,default='appeal')
+    body=models.CharField(max_length=2000)
+    status=models.CharField(max_length=32,default='pending')
+    response=models.CharField(max_length=1000,blank=True)
+    created_at=models.DateTimeField(auto_now_add=True)
+
+class AdminApproval(models.Model):
+    payload=models.JSONField(default=dict)
+    id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False)
+    requester=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT,related_name='approval_requests')
+    reviewer=models.ForeignKey(settings.AUTH_USER_MODEL,null=True,on_delete=models.PROTECT,related_name='approval_reviews')
+    path=models.CharField(max_length=200)
+    payload_digest=models.CharField(max_length=64)
+    target_user=models.ForeignKey(settings.AUTH_USER_MODEL,null=True,on_delete=models.PROTECT)
+    reason=models.CharField(max_length=500)
+    status=models.CharField(max_length=20,default='pending')
+    expires_at=models.DateTimeField()
+    used_at=models.DateTimeField(null=True)
+    created_at=models.DateTimeField(auto_now_add=True)
+
+class AdminFeature(models.Model):
+    key=models.CharField(max_length=40,primary_key=True)
+    enabled=models.BooleanField(default=True)
+    reason=models.CharField(max_length=500,blank=True)
+    updated_at=models.DateTimeField(auto_now=True)
+
+class AdminNotice(models.Model):
+    actor=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT)
+    recipient=models.ForeignKey(settings.AUTH_USER_MODEL,null=True,on_delete=models.PROTECT,related_name='admin_notices')
+    title=models.CharField(max_length=120)
+    body=models.CharField(max_length=1000)
+    created_at=models.DateTimeField(auto_now_add=True)
+
+class BenefitGrant(models.Model):
+    user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT)
+    actor=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT,related_name='benefits_issued')
+    kind=models.CharField(max_length=20)
+    value=models.PositiveIntegerField()
+    reason=models.CharField(max_length=500)
+    expires_at=models.DateTimeField()
+    created_at=models.DateTimeField(auto_now_add=True)

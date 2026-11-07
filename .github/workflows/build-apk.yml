@@ -130,23 +130,23 @@ jobs:
         run: gradle assembleDebug "-PLAYALI_API_URL=${LAYALI_API_URL}" --no-daemon --stacktrace
 
       - name: Copy APK with Friendly Name
-        run: cp app/build/outputs/apk/debug/app-debug.apk Relaxia-v10.3.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk Relaxia-v10.4.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Relaxia-v10.3-APK
-          path: Relaxia-v10.3.apk
+          name: Relaxia-v10.4-APK
+          path: Relaxia-v10.4.apk
 
       - name: Publish Direct APK to GitHub Releases
         # Only main-branch builds may publish an installable release.
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && env.LAYALI_API_URL != ''
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v10.3.${{ github.run_number }}
-          name: "تطبيق Relaxia - إصدار 10.3 (APK جاهز للتثبيت)"
-          body: "اضغط على ملف **Relaxia-v10.3.apk** بالأسفل لتحميل وتثبيت التطبيق مباشرة على هاتفك."
-          files: Relaxia-v10.3.apk
+          tag_name: v10.4.${{ github.run_number }}
+          name: "تطبيق Relaxia - إصدار 10.4 (APK جاهز للتثبيت)"
+          body: "اضغط على ملف **Relaxia-v10.4.apk** بالأسفل لتحميل وتثبيت التطبيق مباشرة على هاتفك."
+          files: Relaxia-v10.4.apk
           draft: false
           prerelease: false
         env:

@@ -5,7 +5,7 @@ from django.test import TestCase,override_settings,TransactionTestCase,Client
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from .models import Profile,Wallet,LiveBroadcast,LiveAdmission,FinancialOperation,Booking,Service,Withdrawal,Message
-from .views import issue_token
+from .admin_test_support import issue_token,reviewed_payload
 from . import live
 
 @override_settings(SECURE_SSL_REDIRECT=False)
@@ -88,13 +88,15 @@ class LiveBroadcastTests(TestCase):
         wallet=Wallet.objects.get(user=self.viewer);wallet.reserved_cents=100;wallet.save()
         w=Withdrawal.objects.create(user=self.viewer,amount_cents=100,destination='test destination',request_key=uuid.uuid4())
         p={'id':str(w.pk),'action':'paid','payout_reference':'external-test-ref'}
-        self.assertEqual(self.request('/api/admin/payouts',p,self.admin).status_code,409);p['paid_verified']=True
+        self.assertEqual(self.request('/api/admin/payouts',p,self.admin).status_code,409);p['paid_verified']=True;p=reviewed_payload(self.admin,'/api/admin/payouts',p,self.viewer.pk)
         self.assertEqual(self.request('/api/admin/payouts',p,self.admin).status_code,200);self.assertEqual(self.request('/api/admin/payouts',p,self.admin).status_code,200)
         self.assertEqual(Wallet.objects.get(user=self.viewer).balance_cents,900)
 
     def test_live_moderator_cannot_access_account_money(self):
         from django.contrib.auth.models import Permission
         self.other.is_staff=True;self.other.save();self.other.user_permissions.add(Permission.objects.get(codename='moderate_livebroadcast',content_type__app_label='core'))
+        from .models import SessionToken
+        SessionToken.objects.filter(user=self.other).update(admin_verified_at=timezone.now())
         self.assertEqual(self.request('/api/admin/live',user=self.other).status_code,200)
         self.assertEqual(self.request('/api/admin/accounts',user=self.other).status_code,403)
         self.assertEqual(self.request('/api/admin/payouts',user=self.other).status_code,403)

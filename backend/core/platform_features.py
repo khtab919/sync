@@ -35,7 +35,7 @@ def message_action(request,message_id):
 @endpoint(['POST'])
 def booking_action(request,booking_id):
     preview=Booking.objects.select_related('service__owner','buyer').filter(pk=booking_id).first()
-    if not preview or (request.actor.pk not in (preview.buyer_id,preview.service.owner_id) and not request.actor.is_superuser):raise ApiError('booking_unavailable',404)
+    if not preview or (request.actor.pk not in (preview.buyer_id,preview.service.owner_id) and not (request.path.startswith('/api/admin/') and 'store.edit' in __import__('core.admin_security',fromlist=['scopes']).scopes(request.actor))):raise ApiError('booking_unavailable',404)
     action=request.payload.get('action')
     with transaction.atomic():
         list(User.objects.select_for_update().filter(pk__in=sorted([preview.buyer_id,preview.service.owner_id])).order_by('pk'))

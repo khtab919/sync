@@ -16,7 +16,9 @@ from . import finance
 from .mobile_admin import require_admin,audit
 LIVE=['starting','active','reconnecting']
 
-def moderator(user):return user.is_staff and (user.is_superuser or user.has_perm('core.moderate_livebroadcast'))
+def moderator(user):
+    from .admin_security import scopes
+    return 'live.moderate' in scopes(user)
 def require_moderator(request):
     if not moderator(request.actor):raise ApiError('administrator_required',403)
 
@@ -48,6 +50,8 @@ def eligible(user,host=False):
     if p.date_of_birth:
         today=timezone.now().date();age=today.year-p.date_of_birth.year-((today.month,today.day)<(p.date_of_birth.month,p.date_of_birth.day))
         if age<18:raise ApiError('adult_confirmation_required',403)
+    from .admin_security import blocked
+    if blocked(user,'live' if host else 'ban'):raise ApiError('feature_restricted',403)
     if not user.is_active or (host and (not p.creator or not p.broadcast_allowed)):raise ApiError('broadcast_permission_required',403)
     return p
 

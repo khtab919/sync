@@ -28,10 +28,10 @@ private fun JSONObject.adminItems(): List<JSONObject> {
 private fun cents(value: Long) = BigDecimal.valueOf(value, 2).toPlainString() + " USD"
 
 @Composable
-internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boolean=false, logout: () -> Unit) {
+internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boolean=false, allowed:List<String>?=null, exit:(()->Unit)?=null, logout: () -> Unit) {
     val scope = rememberCoroutineScope()
     val uriHandler = LocalUriHandler.current
-    var section by remember { mutableStateOf(if(liveOnly)"البث المباشر"else"الحسابات") }
+    var section by remember { mutableStateOf(allowed?.firstOrNull()?:if(liveOnly)"البث المباشر"else"الحسابات") }
     var query by remember { mutableStateOf("") }
     var offset by remember { mutableIntStateOf(0) }
     var total by remember { mutableIntStateOf(0) }
@@ -79,6 +79,8 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
         "administrator_required", "invalid_session", "authentication_required" -> "لا تملك الجلسة صلاحية الإدارة. سجّل الدخول بحساب المسؤول."
         "protected_account" -> "هذا الحساب الإداري محمي من هذا الإجراء."
         "credit_request_conflict" -> "هذا الطلب استُخدم سابقًا ببيانات مختلفة. أعد فتح الحساب لبدء طلب جديد."
+        "independent_approval_required" -> "سُجل طلب موافقة مستقلة. عد إلى مركز الإدارة وافتح الموافقات المالية."
+        "admin_mfa_required" -> "عد لمركز الإدارة وأعد التحقق بالمصادقة الثنائية."
         "account_unavailable" -> "الحساب غير موجود."
         else -> "تعذّر تنفيذ الطلب. تحقق من الاتصال وتحديث الخادم ثم أعد المحاولة."
     }
@@ -138,9 +140,10 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
             item {
                 Text("إدارة Relaxia", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
                 Text("مرحبًا، $adminName", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if(exit!=null)TextButton(onClick=exit){Text("العودة لمركز الإدارة")}
                 TextButton(onClick = logout, enabled = !busy) { Text("تسجيل الخروج") }
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    (if(liveOnly)listOf("البث المباشر")else listOf("الحسابات", "البث المباشر", "الحجوزات", "السحب", "المحتوى", "الطلبات", "العجلة", "الدفع")).forEach { name ->
+                    (allowed?:if(liveOnly)listOf("البث المباشر")else listOf("الحسابات", "البث المباشر", "الحجوزات", "السحب", "المحتوى", "الطلبات", "العجلة", "الدفع")).forEach { name ->
                         FilterChip(selected = section == name, onClick = { selected = null; section = name; offset = 0 }, label = { Text(name) }, enabled = !busy)
                     }
                 }

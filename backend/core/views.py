@@ -6,7 +6,7 @@ from datetime import date, timedelta
 from functools import wraps
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.password_validation import validate_password
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ValidationError,ObjectDoesNotExist
 from django.db import IntegrityError, connection, transaction
 from django.db.models import Q
 from django.http import JsonResponse
@@ -62,11 +62,26 @@ def endpoint(methods, authenticated=True):
                     request.payload = json.loads(request.body)
                     if not isinstance(request.payload, dict):
                         raise ApiError('json_object_required')
+                if authenticated:
+                    from . import admin_security as security
+                    if request.path.startswith('/api/admin/') and not request.path.startswith('/api/admin/control/') and request.path!='/api/admin/auth':
+                        security.require(request,security.route_scope(request),request.method!='GET')
+                        if request.method!='GET':
+                            target=security.financial_target(request)
+                            if security.approval_required(request,target):
+                                pending=security.prepare_approval(request,target)
+                                if pending:return pending
+                                with transaction.atomic():
+                                    security.financial_approval(request,target)
+                                    return fn(request,*args,**kwargs)
+                    if request.path!='/api/my-cases':security.check_operation(request)
                 return fn(request, *args, **kwargs)
             except ApiError as exc:
                 return JsonResponse({'error': exc.message}, status=exc.status)
             except (ValueError, TypeError, KeyError, ValidationError):
                 return JsonResponse({'error': 'invalid_input'}, status=400)
+            except ObjectDoesNotExist:
+                return JsonResponse({'error':'resource_unavailable'},status=404)
             except IntegrityError:
                 return JsonResponse({'error': 'conflict'}, status=409)
         return wrapped
@@ -92,14 +107,14 @@ def password_value(data, minimum=1):
 
 def issue_token(user):
     raw = secrets.token_urlsafe(48)
-    SessionToken.objects.create(user=user, digest=hashlib.sha256(raw.encode()).hexdigest(), expires_at=timezone.now() + timedelta(days=7))
+    SessionToken.objects.create(user=user, digest=hashlib.sha256(raw.encode()).hexdigest(), expires_at=timezone.now() + (timedelta(hours=1) if user.is_staff else timedelta(days=7)))
     return raw
 
 @endpoint(['GET'], authenticated=False)
 def health(request):
     with connection.cursor() as cursor:
         cursor.execute('SELECT 1')
-    return JsonResponse({'status': 'ok', 'registration_version': 4, 'identity_required': False, 'brand': 'Relaxia', 'mobile_admin_version': 1, 'commerce_version': 1, 'calls_version': 2, 'messaging_version': 3, 'paid_chat_version':1, 'shop_version': 2, 'live_version':1, 'booking_payment_version':1})
+    return JsonResponse({'status': 'ok', 'registration_version': 4, 'identity_required': False, 'brand': 'Relaxia', 'mobile_admin_version': 2, 'commerce_version': 1, 'calls_version': 2, 'messaging_version': 3, 'paid_chat_version':1, 'shop_version': 2, 'live_version':1, 'booking_payment_version':1})
 
 @endpoint(['POST'], authenticated=False)
 def register(request):
@@ -108,6 +123,7 @@ def register(request):
     import unicodedata
     if len(username) < 2 or not all(unicodedata.category(c)[0] in 'LMN' or c in '._- ' for c in username):
         raise ApiError('invalid_username')
+    if username.lower()=='super_admin':raise ApiError('username_unavailable',409)
     email = text(p, 'email', 3, 150)
     from django.core.validators import validate_email
     try:
@@ -179,7 +195,8 @@ def profile_json(user, viewer):
         'reel_count': Reel.objects.filter(owner=user, approved=True).count(),
         'following': Follow.objects.filter(user=viewer, creator=user).exists(),
         'is_staff': user.is_staff if user == viewer else False,
-        'is_admin': user.is_staff and (user.is_superuser or user.has_perm('core.moderate_livebroadcast')) if user == viewer else False,
+        'is_admin': bool(__import__('core.admin_security',fromlist=['scopes']).scopes(user)) if user==viewer else False,
+        'admin_permissions':__import__('core.admin_security',fromlist=['scopes']).scopes(user) if user==viewer else [],
         'admin_scope':('full' if user.is_superuser else 'live') if user==viewer and user.is_staff else '',
     }
 

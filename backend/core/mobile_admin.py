@@ -8,11 +8,13 @@ from .models import Profile, Wallet, SessionToken, Service, Reel, BalanceAdjustm
 
 
 def require_admin(request):
-    if not request.actor.is_staff or not request.actor.is_superuser:
-        raise ApiError('administrator_required', 403)
+    from .admin_security import require,route_scope
+    require(request,route_scope(request),request.method!='GET')
 
 
 def audit(actor, obj, message):
+    from .admin_security import event
+    event(actor,'administrative_action',getattr(obj,'pk',''),message)
     LogEntry.objects.log_actions(user_id=actor.pk, queryset=[obj], action_flag=CHANGE, change_message=message)
 
 
@@ -21,7 +23,7 @@ def account_json(user):
     wallet, _ = Wallet.objects.get_or_create(user=user)
     return {'id': user.pk, 'username': user.username, 'email': user.email, 'display_name': profile.display_name or user.username,
             'bio': profile.bio, 'avatar_url': profile.avatar_url, 'selected_frame': profile.selected_frame,
-            'active': user.is_active, 'creator': profile.creator, 'live_moderator':user.has_perm('core.moderate_livebroadcast'), 'broadcast_allowed':profile.broadcast_allowed, 'protected': user.is_superuser,
+            'created_at':user.date_joined,'identity_verified':profile.identity_verified,'active': user.is_active, 'creator': profile.creator, 'live_moderator':user.has_perm('core.moderate_livebroadcast'), 'broadcast_allowed':profile.broadcast_allowed, 'protected': user.is_superuser,
             'balance_cents': wallet.balance_cents, 'reserved_cents': wallet.reserved_cents}
 
 
@@ -35,8 +37,8 @@ def accounts(request):
         raise ApiError('invalid_offset')
     users = User.objects.order_by('-id')
     if query:
-        users = users.filter(Q(username__icontains=query) | Q(email__icontains=query))
-    return JsonResponse({'items': [account_json(u) for u in users[offset:offset + 50]], 'total': users.count(), 'offset': offset})
+        users = users.filter(Q(username__icontains=query) | Q(email__icontains=query) | Q(profile__display_name__icontains=query) | Q(pk=int(query) if query.isdigit() else -1))
+    return JsonResponse({'items': [redacted(account_json(u),request) for u in users[offset:offset + 50]], 'total': users.count(), 'offset': offset})
 
 
 @endpoint(['GET', 'POST'])
@@ -52,6 +54,7 @@ def account(request, user_id):
         with transaction.atomic():
             locked = {u.pk: u for u in User.objects.select_for_update().filter(pk__in=sorted({user_id, request.actor.pk})).order_by("pk")}
             user = locked[user_id]
+            if user.is_superuser and action!='credit':raise ApiError('protected_account',403)
             if action in ('ban', 'unban', 'creator_on', 'creator_off') and (user.is_superuser or user.pk == request.actor.pk):
                 raise ApiError('protected_account', 403)
             if action in ('ban', 'unban'):
@@ -60,6 +63,7 @@ def account(request, user_id):
                 if action == 'ban':
                     SessionToken.objects.filter(user=user).delete()
             elif action in ('moderator_on','moderator_off'):
+                if not request.actor.is_superuser or user.is_superuser or user==request.actor:raise ApiError('protected_account',403)
                 from django.contrib.auth.models import Permission
                 permission=Permission.objects.get(content_type__app_label='core',codename='moderate_livebroadcast')
                 if action=='moderator_on':user.is_staff=True;user.save(update_fields=['is_staff']);user.user_permissions.add(permission)
@@ -97,7 +101,7 @@ def account(request, user_id):
     data = account_json(user)
     data['services'] = list(Service.objects.filter(owner=user).values('id', 'title', 'approved', 'active')[:100])
     data['reels'] = list(Reel.objects.filter(owner=user).values('id', 'approved')[:100])
-    return JsonResponse(data)
+    return JsonResponse(redacted(data,request))
 
 
 @endpoint(['GET', 'POST'])
@@ -120,3 +124,10 @@ def moderation(request):
     reels = Reel.objects.select_related('owner').order_by('approved', '-id')[:100]
     from .commerce import grant_url
     return JsonResponse({'items': [dict(id=o.pk, kind='service', title=o.title, owner=o.owner.username, approved=o.approved, url=grant_url(request, o.image) if o.image_id else o.image_url) for o in services] + [dict(id=o.pk, kind='reel', title='ريلز #' + str(o.pk), owner=o.owner.username, approved=o.approved, url=grant_url(request, o.media) if o.media_id else o.video_url) for o in reels]})
+
+
+def redacted(data,request):
+    from .admin_security import scopes
+    if 'finance.view' not in scopes(request.actor):
+        data.pop('balance_cents',None);data.pop('reserved_cents',None)
+    return data

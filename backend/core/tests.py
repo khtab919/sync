@@ -4,7 +4,7 @@ from datetime import date
 from django.test import TestCase, TransactionTestCase, override_settings
 from django.contrib.auth import get_user_model
 from .models import Profile, Wallet, Service, Withdrawal, Message
-from .views import issue_token
+from .admin_test_support import issue_token,reviewed_payload
 
 @override_settings(SECURE_SSL_REDIRECT=False)
 class ApiTests(TestCase):
@@ -297,22 +297,11 @@ class AdministrationTests(TestCase):
         with self.assertRaises(CommandError):
             call_command('authorize_creator', 'macitcomah@gmail.com')
 
-    def test_credit_requires_superuser_and_records_audit(self):
-        from .models import BalanceAdjustment
-        url = f'/admin/core/wallet/{self.wallet.pk}/credit/'
-        self.client.force_login(self.user)
-        self.assertEqual(self.client.post(url, {'amount_cents': 500, 'reason': 'support credit'}).status_code, 302)
-        self.user.is_staff = True
-        self.user.save()
-        self.assertEqual(self.client.post(url, {'amount_cents': 500, 'reason': 'support credit'}).status_code, 403)
-        self.client.force_login(self.admin)
-        self.assertEqual(self.client.post(url, {'amount_cents': -1, 'reason': 'invalid'}).status_code, 200)
-        self.assertEqual(self.client.post(url, {'amount_cents': 500, 'reason': 'support credit'}).status_code, 302)
-        self.wallet.refresh_from_db()
-        self.assertEqual(self.wallet.balance_cents, 500)
-        entry = BalanceAdjustment.objects.get()
-        self.assertEqual(entry.administrator, self.admin)
-        self.assertEqual(entry.amount_cents, 500)
+    def test_external_admin_cannot_credit_accounts(self):
+        for user in (self.user,self.admin):
+            self.client.force_login(user)
+            self.assertEqual(self.client.post(f'/admin/core/wallet/{self.wallet.pk}/credit/',{'amount_cents':500,'reason':'legacy path'}).status_code,404)
+        self.wallet.refresh_from_db();self.assertEqual(self.wallet.balance_cents,0)
 
     def test_ban_invalidates_sessions_and_preview_is_available(self):
         from .models import SessionToken
@@ -327,7 +316,7 @@ class AdministrationTests(TestCase):
         self.assertFalse(self.user.is_active)
         self.assertFalse(SessionToken.objects.filter(user=self.user).exists())
         self.client.force_login(self.admin)
-        self.assertContains(self.client.get(f'/admin/auth/user/{self.user.pk}/preview/'), 'macitcomah@gmail.com')
+        self.assertEqual(self.client.get(f'/admin/auth/user/{self.user.pk}/preview/').status_code,404)
 
 @override_settings(SECURE_SSL_REDIRECT=False)
 class MobileAdministrationTests(TestCase):
@@ -378,6 +367,7 @@ class MobileAdministrationTests(TestCase):
         self.assertEqual(self.call(url, data, token=self.user_token).status_code, 403)
         self.assertEqual(self.call(url, dict(data, amount_cents=-1)).status_code, 400)
         self.assertEqual(self.call(url, dict(data, request_key='invalid')).status_code, 400)
+        data=reviewed_payload(self.admin,url,data,self.user.pk)
         self.assertEqual(self.call(url, data).status_code, 200)
         self.assertEqual(self.call(url, data).status_code, 200)
         self.assertEqual(self.call(url, dict(data, amount_cents=2500)).status_code, 409)
@@ -408,7 +398,7 @@ class MobileAdministrationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         token = response.json()['token']
         self.assertTrue(self.call('/api/me', token=token).json()['is_admin'])
-        self.assertEqual(self.call('/api/admin/accounts', token=token).status_code, 200)
+        self.assertEqual(self.call('/api/admin/accounts', token=token).json()['error'],'admin_mfa_required')
 
 @override_settings(SECURE_SSL_REDIRECT=False)
 class CommerceTests(TestCase):
@@ -458,6 +448,7 @@ class CommerceTests(TestCase):
         self.assertEqual(self.call('/api/admin/requests', decision).status_code, 403)
         self.assertEqual(self.call('/api/admin/requests', decision, self.admin_token).status_code, 400)
         decision['payment_verified'] = True
+        decision=reviewed_payload(self.admin,'/api/admin/requests',decision,self.user.pk)
         self.assertEqual(self.call('/api/admin/requests', decision, self.admin_token).status_code, 200)
         self.assertEqual(self.call('/api/admin/requests', decision, self.admin_token).status_code, 200)
         self.assertEqual(Wallet.objects.get(user=self.user).balance_cents, 2600)
@@ -536,7 +527,8 @@ class CommerceConcurrencyTests(TransactionTestCase):
         from .models import TopUp, UploadedMedia
         receipt = UploadedMedia.objects.create(owner=self.user, purpose='receipt', file='test-only.jpg', mime='image/jpeg', size=100)
         row = TopUp.objects.create(user=self.user, amount_cents=1000, transaction_hash='0x'+'b'*64, receipt=receipt)
-        codes = self.parallel_post('/api/admin/requests', {'kind':'topup','id':str(row.pk),'decision':'approve','review_note':'Verified on chain','payment_verified':True}, self.admin_token)
+        data=reviewed_payload(self.admin,'/api/admin/requests',{'kind':'topup','id':str(row.pk),'decision':'approve','review_note':'Verified on chain','payment_verified':True},self.user.pk)
+        codes = self.parallel_post('/api/admin/requests', data, self.admin_token)
         self.assertEqual(codes, [200, 200])
         self.assertEqual(Wallet.objects.get(user=self.user).balance_cents, 1000)
 

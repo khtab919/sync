@@ -184,7 +184,7 @@ fun ServerAppScreen(baseUrl: String) {
     val screen = page.ifBlank { destinations[tab] }
     BackHandler(enabled = signedIn && page.isNotBlank()) { back() }
     LaunchedEffect(signedIn, profile.optInt("id"), screen, revision) {
-        if (!signedIn || profile.optBoolean("is_admin")) return@LaunchedEffect
+        if (!signedIn) return@LaunchedEffect
         if (screen !in listOf("تصفح", "حسابي", "دردشة", "المحفظة")) return@LaunchedEffect
         walletLoading = true; walletError = ""
         val accountId = profile.optInt("id")
@@ -194,7 +194,7 @@ fun ServerAppScreen(baseUrl: String) {
         finally { walletLoading = false }
     }
     LaunchedEffect(screen, signedIn, revision) {
-        if (!signedIn || profile.optBoolean("is_admin")) return@LaunchedEffect
+        if (!signedIn) return@LaunchedEffect
         loading = true; contentError = ""; rows = emptyList()
         try {
             when (screen) {
@@ -219,7 +219,7 @@ fun ServerAppScreen(baseUrl: String) {
     }
 
     LaunchedEffect(signedIn, foreground, profile.optInt("id")) {
-        if(!signedIn || !foreground || profile.optBoolean("is_admin"))return@LaunchedEffect
+        if(!signedIn || !foreground)return@LaunchedEffect
         val inbox=MessageInbox(context,api.origin,profile.optInt("id"))
         while(true){
             try {
@@ -237,7 +237,7 @@ fun ServerAppScreen(baseUrl: String) {
         }
     }
     LaunchedEffect(signedIn, foreground, profile.optInt("id"), activeCall,screen) {
-        if (!signedIn || !foreground || profile.optBoolean("is_admin") || activeCall.isNotBlank() || screen=="البث المباشر") { incomingCall = null; return@LaunchedEffect }
+        if (!signedIn || !foreground || activeCall.isNotBlank() || screen=="البث المباشر") { incomingCall = null; return@LaunchedEffect }
         try { if (api.request("/health/").optInt("calls_version") < 1) return@LaunchedEffect } catch (e: Exception) { return@LaunchedEffect }
         while (true) {
             try { incomingCall = api.request("/api/calls").optJSONObject("incoming") }
@@ -300,16 +300,15 @@ fun ServerAppScreen(baseUrl: String) {
         }, dismissButton = {
             TextButton(onClick = { perform { api.request("/api/calls/${incoming.getString("id")}", "POST", JSONObject().put("action", "reject")); incomingCall = null } }, enabled = !submitting) { Text("رفض") }
         }) }
-        if (profile.optBoolean("is_admin")) {
-            MobileAdminScreen(api, profile.optString("display_name", profile.optString("username")),liveOnly=profile.optString("admin_scope")=="live") {
-                perform { api.request("/api/logout", "POST", JSONObject()); signedIn = false; remembered = false; profile = JSONObject(); page = "" }
-            }
+        if (screen=="لوحة الإدارة" && profile.optBoolean("is_admin")) {
+            AdminCentre(api,profile.optString("display_name"),profile.optInt("id")){back()}
             return@MyApplicationTheme
         }
         if (screen in listOf("شحن الرصيد", "تفعيل البائع", "العجلة")) {
             CommerceScreen(api, screen) { page = purchaseReturn; purchaseReturn = ""; notice = ""; revision++ }
             return@MyApplicationTheme
         }
+        if(screen=="التنبيهات"){AccountNotices(api){back()};return@MyApplicationTheme}
         if(screen=="الحسابات المحظورة"){BlockedAccounts(api){back()};return@MyApplicationTheme}
         if(screen=="سجل العمليات"){FinancialHistory(api){back()};return@MyApplicationTheme}
         if(screen=="الحجوزات"){BookingHistory(api){back();revision++};return@MyApplicationTheme}
@@ -486,6 +485,8 @@ fun ServerAppScreen(baseUrl: String) {
                             if (offers.isEmpty() && !loading) item { ReferenceEmpty(Icons.Outlined.Storefront, "اعرض خدمة، جلسة، أو منتجًا", "تظهر العروض هنا بعد مراجعة الإدارة واعتمادها.") }
                             items(offers) { offer -> Box(Modifier.padding(horizontal = 20.dp)) { OfferCard(offer) { showService(offer) } } }
                             if (own) item { FormColumn {
+                                if(profile.optBoolean("is_admin"))ReferenceRow(Icons.Outlined.Settings,"لوحة الإدارة"){open("لوحة الإدارة")}
+                                ReferenceRow(Icons.Outlined.Notifications,"الإشعارات والاعتراضات"){open("التنبيهات")}
                                 ReferenceRow(Icons.Outlined.AddCard, "متجر الرصيد") { buyCredits() }
                                 ReferenceRow(Icons.Outlined.Casino, "عجلة الحظ المدفوعة") { open("العجلة") }
                                 if (!profile.optBoolean("creator")) ReferenceRow(Icons.Outlined.Storefront, "طلب تفعيل البائع") { open("تفعيل البائع") }
