@@ -42,7 +42,7 @@ class GenderAccessTests(TestCase):
             self.user.refresh_from_db()
             r=self.call('/api/services',{'title':'خدمة حقيقية','description':'تفاصيل الخدمة وشروطها','price_cents':100})
             self.assertEqual(r.status_code,201,r.content)
-            self.assertFalse(Service.objects.get(pk=r.json()['id']).approved)
+            self.assertTrue(Service.objects.get(pk=r.json()['id']).approved)
             self.assertEqual(eligible(self.user,host=True).gender,gender)
             self.assertFalse(Profile.objects.get(user=self.user).creator)
         Profile.objects.filter(user=self.user).update(publishing_allowed=False,broadcast_allowed=False)

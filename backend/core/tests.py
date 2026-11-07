@@ -136,6 +136,46 @@ class ApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(self.post('/api/services', {'title': 'test', 'description': 'test description', 'price_cents': 200}).status_code, 201)
 
+    def test_regular_user_publishes_service_and_reel_immediately(self):
+        from .models import Reel, UploadedMedia
+        offer = self.post('/api/services', {
+            'title': 'Real service', 'description': 'A legitimate service listing',
+            'price_cents': 200, 'category': 'خدمة'
+        })
+        self.assertEqual(offer.status_code, 201, offer.content)
+        self.assertEqual(offer.json()['status'], 'published')
+        service = Service.objects.get(pk=offer.json()['id'])
+        self.assertTrue(service.approved)
+        visible_offers = self.client.get('/api/services', HTTP_AUTHORIZATION='Bearer ' + self.creator_token).json()['items']
+        self.assertIn(service.pk, [item['id'] for item in visible_offers])
+
+        media = UploadedMedia.objects.create(owner=self.user, purpose='reel',
+            file='uploads/tests/reel.mp4', mime='video/mp4', size=32)
+        reel_response = self.post('/api/reels', {'media_id': str(media.pk)})
+        self.assertEqual(reel_response.status_code, 201, reel_response.content)
+        self.assertEqual(reel_response.json()['status'], 'published')
+        reel = Reel.objects.get(pk=reel_response.json()['id'])
+        self.assertTrue(reel.approved)
+        visible_reels = self.client.get('/api/reels', HTTP_AUTHORIZATION='Bearer ' + self.creator_token).json()['items']
+        self.assertIn(reel.pk, [item['id'] for item in visible_reels])
+
+        # Post-publication moderation must still remove reported content.
+        Service.objects.filter(pk=service.pk).update(approved=False)
+        Reel.objects.filter(pk=reel.pk).update(approved=False)
+        offers = self.client.get('/api/services', HTTP_AUTHORIZATION='Bearer ' + self.creator_token).json()['items']
+        reels = self.client.get('/api/reels', HTTP_AUTHORIZATION='Bearer ' + self.creator_token).json()['items']
+        self.assertNotIn(service.pk, [item['id'] for item in offers])
+        self.assertNotIn(reel.pk, [item['id'] for item in reels])
+
+    def test_disabled_publishing_permission_still_restricts_services_and_reels(self):
+        Profile.objects.filter(user=self.user).update(publishing_allowed=False)
+        response = self.post('/api/services', {
+            'title': 'Blocked service', 'description': 'Service must not appear',
+            'price_cents': 200
+        })
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(self.post('/api/reels', {'media_id': str(uuid.uuid4())}).status_code, 403)
+
     def test_login_rate_limit(self):
         for _ in range(20):
             self.assertEqual(self.post('/api/login', {'email': 'buyer@example.com', 'password': 'wrong'}).status_code, 401)
@@ -245,7 +285,8 @@ class RelaxiaRequirementsTests(TestCase):
         self.assertFalse(Profile.objects.get(user=self.creator).identity_verified)
         result = self.post('/api/services', {'title': 'جلسة صوتية', 'description': 'جلسة تواصل بصوت واضح', 'price_cents': 200, 'category': 'جلسة'}, self.creator_token)
         self.assertEqual(result.status_code, 201)
-        self.assertEqual(result.json()['status'], 'pending_review')
+        self.assertEqual(result.json()['status'], 'published')
+        self.assertTrue(Service.objects.get(pk=result.json()['id']).approved)
         Wallet.objects.filter(user=self.creator).update(balance_cents=1000)
         result = self.post('/api/withdrawals', {'request_key': str(uuid.uuid4()), 'amount_cents': 500, 'destination': 'test destination'}, self.creator_token)
         self.assertEqual(result.status_code, 201)

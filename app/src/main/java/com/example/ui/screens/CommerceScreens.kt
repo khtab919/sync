@@ -112,7 +112,7 @@ internal fun CommerceScreen(api: LayaliApi, kind: String, back: () -> Unit) {
                     receipt = ""; receiptUrl = ""; tx = ""; refresh(); note = "أُرسل طلب الشحن إلى الإدارة. لم يُعتمد الرصيد بعد."
                 } }, enabled = !busy && receipt.isNotBlank() && tx.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("إرسال الدفع للتحقق") }
             } else if(kind == "تفعيل البائع") {
-                Text("صف ما ستقدمه: خدمات، صور، فيديوهات أو ريلز للبالغين بمحتوى غير صريح. النشر متاح بعد موافقة الإدارة، دون طلب وثيقة هوية.")
+                Text("النشر متاح لجميع الحسابات النشطة دون تفعيل بائع. هذه الاستمارة اختيارية لطلب مراجعة وضع الحساب لدى الإدارة.")
                 OutlinedTextField(description, { description = it.take(1000) }, label = { Text("نوع المحتوى والخدمات التي تريد تقديمها") }, minLines = 5, modifier = Modifier.fillMaxWidth())
                 Button(onClick = { perform { api.request("/api/seller-requests", "POST", JSONObject().put("description", description)); description = ""; refresh(); note = "تم تقديم طلبك للمراجعة." } }, enabled = !busy && description.trim().length >= 10) { Text("تقديم طلب تفعيل البائع") }
             } else {
@@ -176,7 +176,7 @@ internal fun SellerPublishScreen(api: LayaliApi, back: () -> Unit) {
     Surface(Modifier.fillMaxSize()) { Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding().verticalScroll(rememberScrollState()).padding(22.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         TextButton(back, enabled = !busy) { Text("رجوع") }
         Text("مساحة النشر", style = MaterialTheme.typography.headlineLarge)
-        Text("متاح للجميع · محتوى 18+ غير صريح · مراجعة الإدارة قبل الظهور")
+        Text("النشر متاح فوراً لجميع الحسابات النشطة · محتوى 18+ غير صريح")
         Row { FilterChip(!reel, { reel = false; media = JSONObject() }, label = { Text("خدمة أو منتج") }, enabled = !busy); Spacer(Modifier.width(8.dp)); FilterChip(reel, { reel = true; media = JSONObject() }, label = { Text("ريلز") }, enabled = !busy) }
         if(busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         if(note.isNotBlank()) Text(note)
@@ -190,10 +190,15 @@ internal fun SellerPublishScreen(api: LayaliApi, back: () -> Unit) {
         OutlinedButton(onClick = { picker.launch(if(reel) "video/mp4" else "image/*") }, enabled = !busy) { Text(if(reel) "اختيار فيديو MP4 من الهاتف · حتى 20MB" else "رفع صورة من الهاتف · حتى 8MB") }
         if(media.has("id") && !reel) ReferenceImage(media.optString("url"), Modifier.fillMaxWidth().height(200.dp))
         Button(onClick = { perform {
-            if(reel) api.request("/api/reels", "POST", JSONObject().put("media_id", media.getString("id")))
+            val result = if(reel) api.request("/api/reels", "POST", JSONObject().put("media_id", media.getString("id")))
             else api.request("/api/services", "POST", JSONObject().put("title", title).put("description", description).put("price_cents", BigDecimal(price).movePointRight(2).intValueExact()).put("category", category).put("image_id", media.getString("id")).put("duration_minutes",duration.toInt()).put("terms",terms))
-            media = JSONObject(); title = ""; description = ""; price = ""; note = "أُرسل المحتوى إلى الإدارة للمراجعة."
-        } }, enabled = !busy && media.has("id") && (reel || (title.length >= 3 && description.length >= 10 && price.isNotBlank()))) { Text("إرسال للمراجعة") }
+            if(result.optString("status") == "published") {
+                media = JSONObject(); title = ""; description = ""; price = ""
+                note = "تم نشر المحتوى بنجاح."
+            } else {
+                note = "تم حفظ الطلب، لكن ظهوره لم يتأكد بعد. تحقق من تحديث الخادم."
+            }
+        } }, enabled = !busy && media.has("id") && (reel || (title.length >= 3 && description.length >= 10 && price.isNotBlank()))) { Text("نشر الآن") }
     } }
 }
 

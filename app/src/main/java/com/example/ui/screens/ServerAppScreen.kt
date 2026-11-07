@@ -574,15 +574,20 @@ fun ServerAppScreen(baseUrl: String) {
                         }
                         "إضافة عرض" -> item { FormColumn {
                             Text("اعرض خدمة أو جلسة أو منتجًا", style = MaterialTheme.typography.headlineMedium)
-                            Text("النشر متاح لجميع المستخدمين. كل عرض يمر بمراجعة الإدارة.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("يمكن لجميع الحسابات النشطة نشر الخدمات مباشرة. يمكن للإدارة إخفاء المحتوى المخالف لاحقاً.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("خدمة", "منتج", "جلسة").forEach { kind -> FilterChip(offerKind == kind, { offerKind = kind }, label = { Text(kind) }) } }
                             Field(title, { title = it }, "عنوان العرض")
                             Field(description, { description = it }, "وصف العرض", lines = 4)
                             Field(price, { price = it }, "السعر بالدولار", numeric = true)
                             Field(image, { image = it }, "رابط صورة HTTPS · اختياري")
-                            ReferencePrimary("إرسال للمراجعة", !submitting) { perform {
-                                api.request("/api/services", "POST", JSONObject().put("title", title).put("description", description).put("price_cents", cents(price)).put("category", offerKind).put("image_url", image))
-                                title = ""; description = ""; price = ""; image = ""; page = ""; tab = 2; notice = "أُرسل عرضك إلى الإدارة للمراجعة."
+                            ReferencePrimary("نشر الآن", !submitting) { perform {
+                                val result = api.request("/api/services", "POST", JSONObject().put("title", title).put("description", description).put("price_cents", cents(price)).put("category", offerKind).put("image_url", image))
+                                if(result.optString("status") == "published") {
+                                    title = ""; description = ""; price = ""; image = ""; page = ""; tab = 2; revision++
+                                    notice = "تم نشر عرضك بنجاح."
+                                } else {
+                                    notice = "تم حفظ العرض، لكن النشر لم يتأكد. تحقق من تحديث الخادم."
+                                }
                             } }
                         } }
                         "المحفظة" -> {

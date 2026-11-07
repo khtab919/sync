@@ -70,6 +70,19 @@ class NativeAdminSecurityTests(TestCase):
         sanction=AccountSanction.objects.get(user=self.user);sanction.expires_at=timezone.now()-timedelta(seconds=1);sanction.save()
         from .admin_security import blocked
         self.assertFalse(blocked(self.user,'messages'))
+    def test_store_sanction_blocks_reel_and_offer_upload_but_not_avatar(self):
+        import uuid
+        self.verify(self.owner)
+        response = self.call('/api/admin/control/sanctions', {
+            'user_id': self.user.pk, 'kind': 'store', 'hours': 1,
+            'reason': 'Temporary restriction for repeated content violations'
+        })
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(self.call('/api/reels', {'media_id': str(uuid.uuid4())}, self.user).json()['error'], 'feature_restricted')
+        self.assertEqual(self.call('/api/upload', {'purpose': 'offer', 'data': 'not-base64'}, self.user).json()['error'], 'feature_restricted')
+        self.assertEqual(self.call('/api/upload', {'purpose': 'reel', 'data': 'not-base64'}, self.user).json()['error'], 'feature_restricted')
+        self.assertNotEqual(self.call('/api/upload', {'purpose': 'avatar', 'data': 'not-base64'}, self.user).status_code, 403)
+
     def test_financial_adjustment_requires_independent_exact_approval(self):
         self.verify(self.owner);AdminAccess.objects.filter(user=self.staff).update(role='finance');self.verify(self.staff)
         import uuid
