@@ -12,6 +12,11 @@ Baseline: `09e918c5a8f279b153a17aa7f7858624f5d5e5a3`, branch
   deployment is therefore not established as the cause at the time of this check.
 - The audio stage was hidden in initial HTML and only populated by polling after successful
   connection. Signaling/capture failure could leave the audio stage empty as well as video.
+- The stage/body used only `100dvh`. A WebView without dynamic viewport-unit support
+  discards that height. Since the stage children are absolutely positioned and stage
+  overflow is hidden, this can collapse the stage to zero height and hide both audio and
+  video UI. This is a concrete compatibility defect; the affected device WebView version
+  has not been collected. Add `100vh`/`76vh` fallbacks before dynamic viewport heights.
 - A failure to load/parse the SDK or stage script could prevent JavaScript error UI itself
   from initializing. Android checks symbols after page load, but this does not cover every
   partial initialization failure or a stalled script download.
@@ -42,7 +47,8 @@ No financial logic, migrations, production settings or Android signing keys chan
 
 - Baseline focused Node media tests: 8 passed.
 - Baseline focused Django live tests: 21 run, 3 PostgreSQL-specific tests skipped under SQLite.
-- Django system check and JavaScript syntax check passed after changes.
+- After changes, full Django suite: 140 run, 132 passed, 8 PostgreSQL-specific tests skipped
+  under SQLite. System check, migration drift check and JavaScript syntax check passed.
 - Local Chromium launch blocked by environment: socket() Operation not permitted. Both the
   existing actual-SDK capture test and new startup test must run in GitHub CI.
 - New startup tests cover initial audio UI without JS, missing SDK/media/stage assets and

@@ -32,6 +32,17 @@ print(render_to_string('core/live_room.html',{'config':config,'nonce':'test-only
   assert.equal(await noJS.locator('#audioStage').isVisible(),true);
   assert.equal(await noJS.locator('#video').isVisible(),false);
   assert.match(await noJS.locator('#audioStage').innerText(),/Test host/);
+  const legacy=await browser.newPage({javaScriptEnabled:false});
+  await legacy.route('**/live-stage.css*',async route=>{
+   const response=await route.fetch();
+   // Simulate a WebView CSS parser discarding unsupported dynamic viewport units.
+   const css=(await response.text()).replace(/(?:max-)?height:[0-9.]+dvh;?/g,'');
+   await route.fulfill({response,body:css});
+  });
+  await legacy.goto(origin+'/audio');
+  const bounds=await legacy.locator('#stage').boundingBox();
+  assert.ok(bounds&&bounds.height>=600,'stage must retain viewport height without dvh support');
+  assert.equal(await legacy.locator('#audioStage').isVisible(),true);
   for(const asset of ['livekit-client.umd.min.js','live-media.js','live-stage.js']){
    const p=await browser.newPage();await p.route('**/'+asset+'*',route=>route.abort());await p.goto(origin+'/audio');
    await p.waitForFunction(()=>document.getElementById('status').textContent.includes('تعذر تشغيل واجهة'));
