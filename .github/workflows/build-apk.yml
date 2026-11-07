@@ -143,8 +143,8 @@ jobs:
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && env.LAYALI_API_URL != ''
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v10.5.${{ github.run_number }}
-          name: "تطبيق Relaxia - إصدار 10.5 (APK جاهز للتثبيت)"
+          tag_name: v10.6.${{ github.run_number }}
+          name: "تطبيق Relaxia - إصدار 10.6 (APK جاهز للتثبيت)"
           body: "اضغط على ملف **Relaxia-v10.6.apk** بالأسفل لتحميل وتثبيت التطبيق مباشرة على هاتفك."
           files: Relaxia-v10.6.apk
           draft: false
