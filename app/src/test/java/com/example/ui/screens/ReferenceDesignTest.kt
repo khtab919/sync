@@ -76,6 +76,19 @@ class ReferenceDesignTest {
         screenshot("02-register")
     }
 
+    @Test fun homeOverflowKeepsSecondaryActionsReachable() {
+        var live=0;var wallet=0;var saved=0;var refresh=0
+        compose.setContent { MyApplicationTheme { Surface { Row { HomeToolbarActions({live++},{wallet++},{saved++},{refresh++}) } } } }
+        compose.onNodeWithText("المحفظة والرصيد").assertDoesNotExist()
+        compose.onNodeWithText("مباشر").performClick()
+        for(title in listOf("المحفظة والرصيد","المحفوظات","تحديث المحتوى")) {
+            compose.onNodeWithContentDescription("خيارات التصفح").performClick()
+            compose.onNodeWithText(title).performClick()
+        }
+        org.junit.Assert.assertEquals(listOf(1,1,1,1),listOf(live,wallet,saved,refresh))
+        compose.onNodeWithText("المحفظة والرصيد").assertDoesNotExist()
+    }
+
     @Test fun profileActionsRemainAvailableWithServerCounters() {
         var edits = 0
         var frames = 0
