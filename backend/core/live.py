@@ -191,7 +191,7 @@ def broadcasts(request):
         except ApiError:continue
         if request.GET.get('q','').strip().lower() not in (row.title+' '+row.owner.profile.display_name+' '+row.owner.username).lower():continue
         items.append(describe(row,request.actor))
-    return JsonResponse({'items':items,'available':healthy,'can_broadcast':profile.broadcast_allowed,'recording':False,'max_viewers':min(100,int(os.environ.get('LAYALI_MAX_LIVE_VIEWERS','25')))})
+    return JsonResponse({'items':items,'stage_version':2,'available':healthy,'can_broadcast':profile.broadcast_allowed,'recording':False,'max_viewers':min(100,int(os.environ.get('LAYALI_MAX_LIVE_VIEWERS','25')))})
 
 @endpoint(['GET','POST'])
 def detail(request,broadcast_id):
