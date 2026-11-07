@@ -1,0 +1,9 @@
+Django>=5.2,<5.3
+psycopg[binary]>=3.2,<4
+gunicorn>=23,<24
+Pillow>=11,<13
+qrcode>=8,<9
+PyJWT==2.10.1
+
+pyotp>=2.9,<3
+cryptography>=44,<47

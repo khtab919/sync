@@ -1,0 +1,29 @@
+{$LAYALI_DOMAIN} {
+    encode zstd gzip
+    header {
+        X-Content-Type-Options nosniff
+        Referrer-Policy same-origin
+    }
+    request_body {
+        max_size 32MB
+    }
+    handle_path /livekit/* {
+        forward_auth live-api:8000 {
+            uri /api/live/authorize
+        }
+        reverse_proxy livekit:7880
+    }
+    @live_api path /api/live /api/live/* /api/admin/live
+    handle @live_api {
+        reverse_proxy live-api:8000 {
+            header_up X-Real-IP {remote_host}
+        }
+    }
+    handle_path /static/* {
+        root * /srv/static
+        file_server
+    }
+    reverse_proxy api:8000 {
+        header_up X-Real-IP {remote_host}
+    }
+}

@@ -6,6 +6,15 @@ on:
   pull_request:
     branches: [ "**" ]
   workflow_dispatch:
+    inputs:
+      api_url:
+        description: 'HTTPS origin for the self-hosted API'
+        required: false
+        type: string
+
+
+env:
+  LAYALI_API_URL: ${{ inputs.api_url || vars.LAYALI_API_URL || 'https://165-227-128-113.sslip.io' }}
 
 permissions:
   contents: write
@@ -106,27 +115,38 @@ jobs:
             keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           fi
 
+      - name: Test adult access age boundaries
+        run: gradle testDebugUnitTest --tests com.example.ui.auth.AdultWelcomeScreenTest --tests com.example.ui.screens.ReferenceDesignTest --tests com.example.data.api.SecureSessionStoreTest --no-daemon
+
+      - name: Upload native design previews
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Relaxia-native-previews
+          path: app/build/reference-previews/*.png
+          if-no-files-found: ignore
+
       - name: Build Debug APK
-        run: gradle assembleDebug --no-daemon --stacktrace
+        run: gradle assembleDebug "-PLAYALI_API_URL=${LAYALI_API_URL}" --no-daemon --stacktrace
 
       - name: Copy APK with Friendly Name
-        run: cp app/build/outputs/apk/debug/app-debug.apk Layali-Lounge-v5.0.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk Relaxia-v10.9.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Layali-Lounge-v5.0-APK
-          path: Layali-Lounge-v5.0.apk
+          name: Relaxia-v10.9-APK
+          path: Relaxia-v10.9.apk
 
       - name: Publish Direct APK to GitHub Releases
         # Only main-branch builds may publish an installable release.
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && env.LAYALI_API_URL != ''
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v5.0.${{ github.run_number }}
-          name: "تطبيق ليالي - إصدار 5.0 (APK جاهز للتثبيت)"
-          body: "اضغط على ملف **Layali-Lounge-v5.0.apk** بالأسفل لتحميل وتثبيت التطبيق مباشرة على هاتفك."
-          files: Layali-Lounge-v5.0.apk
+          tag_name: v10.9.${{ github.run_number }}
+          name: "تطبيق Relaxia - إصدار 10.9 (APK جاهز للتثبيت)"
+          body: "اضغط على ملف **Relaxia-v10.9.apk** بالأسفل لتحميل وتثبيت التطبيق مباشرة على هاتفك."
+          files: Relaxia-v10.9.apk
           draft: false
           prerelease: false
         env:
