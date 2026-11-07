@@ -763,6 +763,13 @@ private fun friendlyError(code: String?): String = when (code) {
 
 internal fun genderLabel(value:String)=when(value){"male"->"ذكر";"female"->"أنثى";else->"غير محدد"}
 @Composable
-internal fun GenderChoice(value:String,onChange:(String)->Unit){
- Column(verticalArrangement=Arrangement.spacedBy(8.dp)){Text("الجنس");Row(horizontalArrangement=Arrangement.spacedBy(12.dp)){listOf("male","female").forEach{choice->FilterChip(selected=value==choice,onClick={onChange(choice)},label={Text(genderLabel(choice))})}}
+internal fun GenderChoice(value: String, onChange: (String) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("الجنس")
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            listOf("male", "female").forEach { choice ->
+                FilterChip(selected = value == choice, onClick = { onChange(choice) }, label = { Text(genderLabel(choice)) })
+            }
+        }
+    }
 }
