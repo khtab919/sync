@@ -69,7 +69,9 @@ def check_operation(request):
         if p.startswith('/api/messages/'):kind='messages';feature='messages'
         elif p.startswith('/api/calls'):kind='calls';feature='calls'
         elif p=='/api/live':kind='live';feature='live'
-        elif p.startswith('/api/bookings') or p=='/api/services':kind='store';feature='store'
+        elif (p.startswith('/api/bookings') or p in ('/api/services', '/api/reels') or
+              (p == '/api/upload' and request.payload.get('purpose') in ('offer', 'reel'))):
+            kind='store';feature='store'
         elif p=='/api/withdrawals':kind='withdrawals';feature='withdrawals'
         elif p.startswith(('/api/topup','/api/nowpayments/invoices','/api/promotion/wheel')):feature='payments'
         if kind and blocked(request.actor,kind):raise ApiError('feature_restricted',403)
