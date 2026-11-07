@@ -392,7 +392,7 @@ fun ServerAppScreen(baseUrl: String) {
                             item { Box(Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) { WalletSummary(if(walletAccountId == profile.optInt("id") && wallet.has("available_cents")) wallet.optLong("available_cents") else null, walletLoading, walletError, { buyCredits() }, { open("المحفظة") }, { revision++ }) } }
                             item { ReferenceRow(Icons.Outlined.Sensors,"البث المباشر","جلسات عامة وخاصة · دون تسجيل"){open("البث المباشر")} }
                             item { SearchField(query, { query = it }, "ابحث بالاسم أو @username أو ID") }
-                            items(accountMatches,key={"account-"+it.optInt("id")}){person->OutlinedCard(onClick={showCreator(person.optInt("id"))},modifier=Modifier.padding(horizontal=20.dp).fillMaxWidth()){Column(Modifier.padding(16.dp)){Text(person.optString("display_name"),style=MaterialTheme.typography.titleMedium);Text("@"+person.optString("username")+" · #"+person.optString("public_id"))}}}
+                            items(accountMatches,key={"account-"+it.optInt("id")}){person->OutlinedCard(onClick={showCreator(person.optInt("id"))},modifier=Modifier.padding(horizontal=20.dp).fillMaxWidth()){Column(Modifier.padding(16.dp)){Text(person.optString("display_name"),style=MaterialTheme.typography.titleMedium);Text("@"+person.optString("username")+" · #"+person.optString("public_id"),style=LocalTextStyle.current.copy(textDirection=androidx.compose.ui.text.style.TextDirection.Ltr))}}}
                             item {
                                 LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                                     item { Story("مساحتك", profile.optInt("selected_frame"), profile.optString("avatar_url")) { tab = 4 } }
@@ -671,7 +671,7 @@ internal fun ProfileHero(person: JSONObject, own: Boolean, settings: () -> Unit,
         ReferenceAvatar(person.optString("display_name", person.optString("username")), person.optInt("selected_frame"), 124, person.optString("avatar_url"))
         Text(person.optString("display_name", person.optString("username")), color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold)
         Text("حساب #${person.optString("public_id","—")} · 18+", color = Color.White.copy(alpha = .75f), fontSize = 13.sp)
-        Text("@"+person.optString("username"),color=Color.White.copy(alpha=.8f),fontSize=15.sp)
+        Text("@"+person.optString("username"),style=LocalTextStyle.current.copy(textDirection=androidx.compose.ui.text.style.TextDirection.Ltr),color=Color.White.copy(alpha=.8f),fontSize=15.sp)
         if (person.optBoolean("creator")) Surface(color = Color.White.copy(alpha = .09f), shape = RoundedCornerShape(30.dp)) { Row(Modifier.padding(horizontal = 14.dp, vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Outlined.WorkspacePremium, null, Modifier.size(15.dp), tint = Color(0xFFD7AD72)); Text("مذيعة معتمدة", color = Color(0xFFD7AD72), fontSize = 11.sp) } }
         if (person.optString("bio").isNotBlank()) Text(person.optString("bio"), color = Color.White.copy(alpha = .7f), fontSize = 13.sp)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
