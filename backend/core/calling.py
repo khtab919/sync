@@ -157,7 +157,7 @@ def room(request, call_id):
     peer = call.callee if user.pk == call.caller_id else call.caller
     peer_profile = Profile.objects.filter(user=peer).first()
     config = {'peerAvatar':peer_profile.avatar_url if peer_profile else '', 'peerName': (peer_profile.display_name if peer_profile else '') or peer.username, 'call': str(call.pk), 'caller': user.pk == call.caller_id, 'video': call.mode == 'video', 'token': token, 'iceServers': ice_servers(user, call.pk), 'relayOnly': os.environ.get('LAYALI_TESTING') == '1' and os.environ.get('LAYALI_CALL_TEST_RELAY_ONLY') == '1'}
-    response = render(request, 'core/call_room.html', {'config': config, 'nonce': nonce})
+    response = render(request, 'core/call_room.html', {'config': config, 'nonce': nonce,'theme':'light' if request.POST.get('theme')=='light' else 'dark'})
     response['Cache-Control'] = 'no-store'
     response['Referrer-Policy'] = 'no-referrer'
     response['Content-Security-Policy'] = f"default-src 'none'; script-src 'nonce-{nonce}'; style-src 'unsafe-inline'; media-src 'self' blob:; connect-src 'self'; img-src 'self' data: https:; frame-ancestors 'none'; base-uri 'none'"

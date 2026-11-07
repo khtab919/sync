@@ -114,22 +114,22 @@ def issue_token(user):
 def health(request):
     with connection.cursor() as cursor:
         cursor.execute('SELECT 1')
-    return JsonResponse({'status': 'ok', 'registration_version': 4, 'identity_required': False, 'brand': 'Relaxia', 'mobile_admin_version': 2, 'commerce_version': 1, 'calls_version': 2, 'messaging_version': 3, 'paid_chat_version':1, 'shop_version': 2, 'live_version':1, 'booking_payment_version':1})
+    return JsonResponse({'status': 'ok', 'registration_version': 5, 'identity_required': False, 'brand': 'Relaxia', 'mobile_admin_version': 2, 'commerce_version': 1, 'calls_version': 2, 'messaging_version': 3, 'paid_chat_version':1, 'shop_version': 2, 'live_version':1, 'booking_payment_version':1})
 
 @endpoint(['POST'], authenticated=False)
 def register(request):
     p = request.payload
-    username = ' '.join(text(p, 'username', 2, 50).split()).removeprefix('@')
-    import unicodedata
-    if len(username) < 2 or not all(unicodedata.category(c)[0] in 'LMN' or c in '._- ' for c in username):
-        raise ApiError('invalid_username')
-    if username.lower()=='super_admin':raise ApiError('username_unavailable',409)
-    email = text(p, 'email', 3, 150)
-    from django.core.validators import validate_email
-    try:
-        validate_email(email)
-    except ValidationError:
-        raise ApiError('invalid_email')
+    from .identity import normalize_email,email_matches,lock_registry
+    modern='display_name' in p
+    display_name=text(p,'display_name' if modern else 'username',2,100 if modern else 50)
+    if modern:
+        username='member_'+secrets.token_hex(8)
+    else:
+        username=' '.join(display_name.split()).removeprefix('@')
+        import unicodedata
+        if len(username)<2 or not all(unicodedata.category(c)[0] in 'LMN' or c in '._- ' for c in username):raise ApiError('invalid_username')
+        if username.lower()=='super_admin':raise ApiError('username_unavailable',409)
+    email=normalize_email(p.get('email'))
     password = password_value(p, 8)
     if p.get('accept_non_explicit_policy') is not True:
         raise ApiError('adult_policy_required')
@@ -151,25 +151,34 @@ def register(request):
         codes = {item.code for item in error.error_list}
         raise ApiError('password_too_common' if 'password_too_common' in codes else 'invalid_password')
     with transaction.atomic():
+        lock_registry()
+        if email_matches(email).exists():raise ApiError('email_unavailable',409)
         # Case-insensitive handles must be unique even during concurrent requests.
         if User.objects.filter(username__iexact=username).exists():
             raise ApiError('username_unavailable', 409)
         user.username = username.lower()
         user.set_password(password)
         user.save()
-        Profile.objects.create(user=user, date_of_birth=born)
+        Profile.objects.create(user=user, date_of_birth=born,display_name=display_name)
         Wallet.objects.create(user=user)
         token = issue_token(user)
-    return JsonResponse({'token': token, 'user_id': user.pk}, status=201)
+    return JsonResponse({'token':token,'user_id':user.pk,'public_id':user.profile.public_id},status=201)
 
 @endpoint(['POST'], authenticated=False)
 def login(request):
     p = request.payload
-    user = authenticate(username=' '.join(text(p, 'username', 2, 50).split()).removeprefix('@').lower(), password=password_value(p))
+    from .identity import normalize_email,email_matches,lock_registry
+    email=normalize_email(p.get('email'));password=password_value(p)
+    matches=list(email_matches(email)[:2])
+    if len(matches)!=1:
+        User().set_password(password)
+        raise ApiError('invalid_credentials',401)
+    user=authenticate(username=matches[0].username,password=password)
     if user is None:
         raise ApiError('invalid_credentials', 401)
     if user.is_staff and user.is_superuser:
         with transaction.atomic():
+            lock_registry()
             Profile.objects.get_or_create(user=user)
             Wallet.objects.get_or_create(user=user)
     elif not Profile.objects.filter(user=user).exists():
@@ -187,7 +196,7 @@ def profile_json(user, viewer):
     frame=BenefitGrant.objects.filter(user=user,kind='frame',expires_at__gt=timezone.now()).order_by('-id').first()
     return {
         'account_restricted':__import__('core.admin_security',fromlist=['blocked']).blocked(user,'ban') if user==viewer else False,
-        'id': user.pk, 'username': user.username,
+        'id': user.pk,'public_id':profile.public_id,'username': user.username,
         'display_name': profile.display_name or user.username,
         'bio': profile.bio, 'email': user.email if user == viewer else '', 'creator': profile.creator,
         'identity_verified': profile.identity_verified,
@@ -208,7 +217,7 @@ def me(request):
     profile = Profile.objects.get(user=request.actor)
     if request.method == 'PATCH':
         p = request.payload
-        if set(p) - {'bio', 'display_name', 'selected_frame', 'chat_price_cents', 'avatar_url', 'email'}:
+        if set(p) - {'bio', 'display_name', 'selected_frame', 'chat_price_cents', 'avatar_url', 'email','username'}:
             raise ApiError('unsupported_profile_field')
         if 'chat_price_cents' in p and (type(p['chat_price_cents']) is not int or not 0 <= p['chat_price_cents'] <= 500000 or not profile.creator):
             raise ApiError('invalid_chat_price')
@@ -231,6 +240,11 @@ def me(request):
                 validate_email(email)
             except ValidationError:
                 raise ApiError('invalid_email')
+        from .identity import normalize_email,normalize_handle,email_matches,lock_registry
+        email=normalize_email(email) if 'email' in p else email
+        handle=normalize_handle(p['username']) if 'username' in p and str(p['username']).strip().removeprefix('@')!=request.actor.username else request.actor.username
+        if request.actor.username=='super_admin' and handle!=request.actor.username:raise ApiError('protected_username',403)
+        if handle=='super_admin' and request.actor.username!='super_admin':raise ApiError('username_unavailable',409)
         # Validate the whole patch before persisting any changes.
         bio = text(p, 'bio', 0, 300) if 'bio' in p else profile.bio
         name = text(p, 'display_name', 1, 100) if 'display_name' in p else profile.display_name
@@ -239,6 +253,11 @@ def me(request):
         profile.selected_frame = p.get('selected_frame', profile.selected_frame)
         profile.chat_price_cents = p.get('chat_price_cents', profile.chat_price_cents)
         with transaction.atomic():
+            lock_registry()
+            if 'email' in p and email!=request.actor.email.strip().lower() and email_matches(email).exclude(pk=request.actor.pk).exists():raise ApiError('email_unavailable',409)
+            if 'username' in p and User.objects.filter(username__iexact=handle).exclude(pk=request.actor.pk).exists():raise ApiError('username_unavailable',409)
+            if 'username' in p:
+                request.actor.username=handle;request.actor.save(update_fields=['username'])
             profile.save()
             if 'email' in p:
                 request.actor.email = email
@@ -310,7 +329,10 @@ def saved(request):
 
 @endpoint(['GET'])
 def creators(request):
-    users = User.objects.filter(is_active=True, profile__creator=True).order_by('id')[:100]
+    users=User.objects.filter(is_active=True,profile__creator=True)
+    q=request.GET.get('q','').strip().removeprefix('@')[:100]
+    if q:users=users.filter(Q(username__icontains=q)|Q(profile__display_name__icontains=q)|Q(profile__public_id=q))
+    users=users.order_by('id')[:100]
     return JsonResponse({'items': [profile_json(user, request.actor) for user in users]})
 
 @endpoint(['POST'])
@@ -339,7 +361,7 @@ def conversations(request):
         profile = Profile.objects.filter(user=peer).first()
         if profile is None:
             continue
-        result.append({'id': peer.pk, 'display_name': profile.display_name or peer.username,
+        result.append({'id': peer.pk,'public_id':profile.public_id,'username':peer.username,'display_name': profile.display_name or peer.username,
                        'selected_frame': frame.value if frame else profile.selected_frame, 'avatar_url': profile.avatar_url, 'last_message': message.body,
                        'created_at': message.created_at})
         if len(result) == 100:
@@ -387,7 +409,7 @@ def messages(request, peer_id):
     if request.method == 'GET':
         rows = Message.objects.filter(Q(sender=request.actor, recipient=peer) | Q(sender=peer, recipient=request.actor)).select_related('attachment', 'call', 'sender__profile', 'recipient__profile','reply_to').order_by('-id')[:100]
         peer_profile = Profile.objects.filter(user=peer).first()
-        return JsonResponse({'peer': {'id':peer.pk,'username':peer.username,'display_name':(peer_profile.display_name if peer_profile else '') or peer.username,'avatar_url':peer_profile.avatar_url if peer_profile else '', 'creator':bool(peer_profile and peer_profile.creator), 'chat_price_cents':peer_profile.chat_price_cents if peer_profile else 0, 'online':bool(peer_profile and peer_profile.last_active_at and peer_profile.last_active_at > timezone.now()-timedelta(seconds=25)), 'last_active_at':peer_profile.last_active_at if peer_profile else None}, 'items': [message_json(request, row) for row in rows]})
+        return JsonResponse({'peer': {'id':peer.pk,'public_id':peer_profile.public_id if peer_profile else '', 'username':peer.username,'display_name':(peer_profile.display_name if peer_profile else '') or peer.username,'avatar_url':peer_profile.avatar_url if peer_profile else '', 'creator':bool(peer_profile and peer_profile.creator), 'chat_price_cents':peer_profile.chat_price_cents if peer_profile else 0, 'online':bool(peer_profile and peer_profile.last_active_at and peer_profile.last_active_at > timezone.now()-timedelta(seconds=25)), 'last_active_at':peer_profile.last_active_at if peer_profile else None}, 'items': [message_json(request, row) for row in rows]})
     from .platform_features import blocked
     if blocked(request.actor,peer):raise ApiError('recipient_unavailable',403)
     submitted_body=request.payload.get('body','')
@@ -538,3 +560,17 @@ def read_messages(request, peer_id):
         rows.filter(delivered_at__isnull=True).update(delivered_at=now)
         rows.filter(read_at__isnull=True).update(read_at=now)
     return JsonResponse({'ok':True})
+
+
+@endpoint(['GET'])
+def search_accounts(request):
+    from .models import UserBlock,AccountSanction
+    q=request.GET.get('q','').strip().removeprefix('@')[:100]
+    if len(q)<2:return JsonResponse({'items':[]})
+    users=User.objects.filter(is_active=True,profile__isnull=False).exclude(pk=request.actor.pk)
+    if len(q)==5 and q.isascii() and q.isdigit():users=users.filter(profile__public_id=q)
+    else:users=users.filter(Q(username__icontains=q)|Q(profile__display_name__icontains=q))
+    blocked_ids=list(UserBlock.objects.filter(user=request.actor).values_list('blocked_id',flat=True))+list(UserBlock.objects.filter(blocked=request.actor).values_list('user_id',flat=True))
+    bans=AccountSanction.objects.filter(kind='ban',revoked_at__isnull=True).filter(Q(expires_at__isnull=True)|Q(expires_at__gt=timezone.now())).values('user_id')
+    users=users.exclude(pk__in=blocked_ids).exclude(pk__in=bans).select_related('profile').order_by('id')[:50]
+    return JsonResponse({'items':[profile_json(u,request.actor) for u in users]})

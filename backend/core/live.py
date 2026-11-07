@@ -238,7 +238,7 @@ def room(request,broadcast_id):
         public=urlsplit(config['url'])
         if public.scheme not in ('wss','ws') or public.username or public.password or (public.scheme=='ws' and os.environ.get('LAYALI_TESTING')!='1'):raise ApiError('invalid_live_origin',503)
         ws_origin=public.scheme+'://'+public.netloc
-        response=render(request,'core/live_room.html',{'config':config,'nonce':nonce})
+        response=render(request,'core/live_room.html',{'config':config,'nonce':nonce,'theme':'light' if request.POST.get('theme')=='light' else 'dark'})
         response['Cache-Control']='no-store';response['Referrer-Policy']='no-referrer'
         response['Content-Security-Policy']=f"default-src 'none'; script-src 'self' 'nonce-{nonce}'; style-src 'unsafe-inline'; connect-src 'self' {ws_origin}; media-src 'self' blob:; img-src 'self' data: https:; frame-ancestors 'none'; base-uri 'none'"
         return response

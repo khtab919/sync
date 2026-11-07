@@ -35,7 +35,7 @@ import java.time.Instant
 internal fun CoinPackage(coins:Int,bonus:Int,dollars:String,selected:Boolean,choose:()->Unit) {
     Surface(onClick=choose,shape=RoundedCornerShape(22.dp),color=if(selected)MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,border=BorderStroke(if(selected)2.dp else 1.dp,if(selected)MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant)) {
         Column(Modifier.fillMaxWidth().padding(18.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(6.dp)) {
-            Text("◉",fontSize=28.sp,color=Color(0xFFC7955D))
+            Text("◉",fontSize=28.sp,color=Color(0xFFD7AD72))
             Text("$coins",fontSize=27.sp,fontWeight=FontWeight.Bold)
             Text("رصيد",fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
             if(bonus>0) Text("+$bonus نقطة ترويجية",color=MaterialTheme.colorScheme.primary,fontSize=12.sp)

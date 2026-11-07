@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
@@ -34,6 +35,7 @@ internal fun trustedCallOrigin(origin: String, baseUrl: String): Boolean = runCa
 
 @Composable
 internal fun InternalCallScreen(api: LayaliApi, baseUrl: String, callId: String, finish: () -> Unit) {
+    val transportTheme=if(MaterialTheme.colorScheme.background.luminance()<.25f)"dark"else"light"
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var call by remember(callId) { mutableStateOf(JSONObject()) }
@@ -90,10 +92,10 @@ internal fun InternalCallScreen(api: LayaliApi, baseUrl: String, callId: String,
         onDispose { lifecycle.removeObserver(observer) }
     }
     DisposableEffect(Unit) { onDispose { webView?.stopLoading(); webView?.loadUrl("about:blank"); webView?.destroy(); webView = null } }
-    Surface(Modifier.fillMaxSize(),color=Color(0xFF20191D),contentColor=Color(0xFFF5EFED)) { Column(Modifier.fillMaxSize().safeDrawingPadding()) {
+    Surface(Modifier.fillMaxSize(),color=MaterialTheme.colorScheme.background,contentColor=MaterialTheme.colorScheme.onBackground) { Column(Modifier.fillMaxSize().safeDrawingPadding()) {
         if(bootstrap==null || error.isNotBlank()) Row(Modifier.fillMaxWidth().padding(12.dp),verticalAlignment=Alignment.CenterVertically) {
-            Text("اتصال ليالي",Modifier.weight(1f),color=Color(0xFFF5EFED))
-            TextButton(finish){Text("إنهاء",color=Color(0xFFE1A4AA))}
+            Text("اتصال ليالي",Modifier.weight(1f),color=MaterialTheme.colorScheme.onBackground)
+            TextButton(finish){Text("إنهاء",color=Color(0xFFE7A2A8))}
         }
         if(error.isNotBlank()) Text(error, Modifier.padding(20.dp), color = MaterialTheme.colorScheme.error)
         val room = bootstrap
@@ -101,7 +103,7 @@ internal fun InternalCallScreen(api: LayaliApi, baseUrl: String, callId: String,
             AndroidView(modifier = Modifier.weight(1f).fillMaxWidth(), factory = { viewContext ->
                 WebView(viewContext).apply {
                     webView = this
-                    setBackgroundColor(android.graphics.Color.rgb(32,25,29))
+                    setBackgroundColor(android.graphics.Color.rgb(16,24,32))
                     addJavascriptInterface(object {
                         @JavascriptInterface fun toggleSpeaker() { android.os.Handler(android.os.Looper.getMainLooper()).post {
                             if(trustedCallOrigin(this@apply.url.orEmpty(),baseUrl) && Uri.parse(this@apply.url).path=="/api/calls/$callId/room") {
@@ -142,7 +144,7 @@ internal fun InternalCallScreen(api: LayaliApi, baseUrl: String, callId: String,
                         }
                     }
                     val roomUrl = room.getString("url")
-                    if(trustedCallOrigin(roomUrl, baseUrl) && Uri.parse(roomUrl).path == "/api/calls/$callId/room") postUrl(roomUrl, ("ticket="+URLEncoder.encode(room.getString("ticket"), "UTF-8")).toByteArray())
+                    if(trustedCallOrigin(roomUrl, baseUrl) && Uri.parse(roomUrl).path == "/api/calls/$callId/room") postUrl(roomUrl, ("theme="+transportTheme+"&ticket="+URLEncoder.encode(room.getString("ticket"), "UTF-8")).toByteArray())
                     else error = "رفض فتح عنوان اتصال غير تابع للخادم."
                 }
             })

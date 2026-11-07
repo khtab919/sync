@@ -29,7 +29,7 @@ import androidx.compose.ui.unit.dp
     }
     DisposableEffect(Unit){onDispose{view?.stopPlayback()}}
     Dialog(close,properties=DialogProperties(usePlatformDefaultWidth=false)) {
-        Box(Modifier.fillMaxSize().background(Color(0xFF171317)).safeDrawingPadding()) {
+        Box(Modifier.fillMaxSize().background(Color(0xFF101820)).safeDrawingPadding()) {
             if(video) AndroidView(modifier=Modifier.fillMaxWidth().fillMaxHeight(.85f).align(Alignment.Center),factory={context->VideoView(context).apply{
                 view=this;setMediaController(MediaController(context).also{it.setAnchorView(this)})
                 setOnPreparedListener{start()};setOnErrorListener{_,_,_->error=true;true};setVideoURI(Uri.parse(url))

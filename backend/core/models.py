@@ -4,7 +4,14 @@ from django.db import models
 from django.db.models import Q
 from django.utils import timezone
 
+class IdentityRegistry(models.Model):
+    id=models.PositiveSmallIntegerField(primary_key=True,default=1)
+
 class Profile(models.Model):
+    from .identity import allocate_public_id
+    public_id=models.CharField(max_length=5,unique=True,default=allocate_public_id)
+    class Meta:
+        constraints=[models.CheckConstraint(condition=Q(public_id__regex=r'^[1-9][0-9]{4}$'),name='profile_public_id_five_digits')]
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     date_of_birth = models.DateField(null=True, blank=True)
     policy_version = models.CharField(max_length=32, default='2026-11-06')

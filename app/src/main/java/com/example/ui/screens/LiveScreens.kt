@@ -19,6 +19,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -84,6 +85,7 @@ private fun liveError(e:Exception)=when(e.message){
 }
 
 @Composable internal fun LiveRoomView(baseUrl:String,bootstrap:JSONObject,profile:((Int)->Unit)?=null,finish:()->Unit){
+    val transportTheme=if(MaterialTheme.colorScheme.background.luminance()<.25f)"dark"else"light"
     val context=LocalContext.current;val lifecycle=LocalLifecycleOwner.current.lifecycle;val owner=bootstrap.optBoolean("owner")
     var granted by remember{mutableStateOf(!owner)};var error by remember{mutableStateOf("")};var view by remember{mutableStateOf<WebView?>(null)}
     val permission=rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()){result->granted=result[Manifest.permission.RECORD_AUDIO]==true&&result[Manifest.permission.CAMERA]==true;if(!granted)error="اسمح بالميكروفون والكاميرا لبدء البث."}
@@ -91,7 +93,7 @@ private fun liveError(e:Exception)=when(e.message){
     BackHandler{finish()}
     DisposableEffect(Unit){val window=(context as? android.app.Activity)?.window;val already=window?.attributes?.flags?.and(WindowManager.LayoutParams.FLAG_SECURE)!=0;window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE);onDispose{view?.loadUrl("about:blank");view?.destroy();if(!already)window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)}}
     DisposableEffect(lifecycle){val observer=LifecycleEventObserver{_,event->if(event==Lifecycle.Event.ON_STOP&&(context as? android.app.Activity)?.isChangingConfigurations!=true)finish()};lifecycle.addObserver(observer);onDispose{lifecycle.removeObserver(observer)}}
-    Surface(Modifier.fillMaxSize(),color=Color(0xFF171517),contentColor=Color.White){Column(Modifier.fillMaxSize().safeDrawingPadding()){
+    Surface(Modifier.fillMaxSize(),color=Color(0xFF101820),contentColor=Color.White){Column(Modifier.fillMaxSize().safeDrawingPadding()){
         if(error.isNotBlank()){Text(error,Modifier.padding(20.dp));TextButton(finish){Text("رجوع")}}
         if(granted&&error.isBlank())AndroidView(modifier=Modifier.fillMaxSize(),factory={ctx->WebView(ctx).apply{
             view=this;setBackgroundColor(android.graphics.Color.rgb(23,21,23));settings.javaScriptEnabled=true;settings.allowFileAccess=false;settings.allowContentAccess=false;settings.domStorageEnabled=false;settings.cacheMode=WebSettings.LOAD_NO_CACHE;settings.mixedContentMode=WebSettings.MIXED_CONTENT_NEVER_ALLOW;settings.mediaPlaybackRequiresUserGesture=false
@@ -101,7 +103,7 @@ private fun liveError(e:Exception)=when(e.message){
             @JavascriptInterface fun closeRoom(){android.os.Handler(android.os.Looper.getMainLooper()).post{if(trustedCallOrigin(url.orEmpty(),baseUrl)&&Uri.parse(url).path==allowedPath)finish()}}},"LayaliLive")
             webViewClient=object:WebViewClient(){override fun shouldOverrideUrlLoading(v:WebView?,r:WebResourceRequest?)=r?.url?.let{!trustedCallOrigin(it.toString(),baseUrl)||it.path!=allowedPath}?:true;override fun onReceivedSslError(v:WebView?,h:SslErrorHandler?,e:android.net.http.SslError?){h?.cancel();error="شهادة أمان الخادم غير صالحة."}}
             webChromeClient=object:WebChromeClient(){override fun onPermissionRequest(r:PermissionRequest?){if(r==null)return;if(!owner||!trustedCallOrigin(r.origin.toString(),baseUrl)){r.deny();return};val accepted=r.resources.filter{(it==PermissionRequest.RESOURCE_AUDIO_CAPTURE&&ContextCompat.checkSelfPermission(context,Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED)||(it==PermissionRequest.RESOURCE_VIDEO_CAPTURE&&ContextCompat.checkSelfPermission(context,Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED)};if(accepted.size==r.resources.size&&accepted.isNotEmpty())r.grant(accepted.toTypedArray())else r.deny()}}
-            val target=bootstrap.getString("url");if(trustedCallOrigin(target,baseUrl)&&allowedPath?.startsWith("/api/live/")==true&&allowedPath.endsWith("/room"))postUrl(target,("ticket="+URLEncoder.encode(bootstrap.getString("ticket"),"UTF-8")).toByteArray())else error="عنوان بث غير صالح."
+            val target=bootstrap.getString("url");if(trustedCallOrigin(target,baseUrl)&&allowedPath?.startsWith("/api/live/")==true&&allowedPath.endsWith("/room"))postUrl(target,("theme="+transportTheme+"&ticket="+URLEncoder.encode(bootstrap.getString("ticket"),"UTF-8")).toByteArray())else error="عنوان بث غير صالح."
         }})else if(error.isBlank())Text("جارٍ تجهيز البث…",Modifier.padding(24.dp))
     }}
 }

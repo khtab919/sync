@@ -12,7 +12,14 @@ from .models import *
 from .admin_security import require,scopes,ROLES,SCOPES,cipher,event,digest,blocked
 User=get_user_model()
 
-def rows(q,fields):return list(q.values(*fields)[:100])
+def rows(q,fields):
+    result=list(q.values(*fields)[:100])
+    user_fields=[f for f in fields if f in ['user_id','actor_id','recipient_id','requester_id','reviewer_id','target_user_id','caller_id','callee_id']]
+    ids={r[f] for r in result for f in user_fields if r.get(f)}
+    public=dict(Profile.objects.filter(user_id__in=ids).values_list('user_id','public_id'))
+    for r in result:
+        for f in user_fields:r['public_id' if f=='user_id' else f.removesuffix('_id')+'_public_id']=public.get(r.get(f),'')
+    return result
 def reason(request):return text(request.payload,'reason',3,500)
 
 def verify_code(request,access):
@@ -74,21 +81,21 @@ def roles(request):
     require(request,'roles.edit',request.method=='POST')
     if request.method=='POST':
         if not request.actor.is_superuser:raise ApiError('owner_required',403)
-        user=User.objects.get(pk=request.payload.get('user_id'))
+        user=__import__('core.identity',fromlist=['target_user']).target_user(request.payload)
         if user.is_superuser or user==request.actor:raise ApiError('protected_account',403)
         role=request.payload.get('role');permissions=request.payload.get('permissions',[])
         if role not in ROLES or role=='owner' or not isinstance(permissions,list) or any(p not in SCOPES for p in permissions):raise ApiError('invalid_role')
         with transaction.atomic():
             User.objects.select_for_update().get(pk=user.pk)
             AdminAccess.objects.update_or_create(user=user,defaults={'role':role,'permissions':permissions,'customized':True});user.is_staff=True;user.save(update_fields=['is_staff']);SessionToken.objects.filter(user=user).delete();event(request.actor,'role_changed',user.pk,reason(request),details={'role':role,'permissions':permissions})
-    return JsonResponse({'roles':ROLES,'permissions':SCOPES,'items':[{'id':u.pk,'username':u.username,'role':'owner' if u.is_superuser else getattr(getattr(u,'adminaccess',None),'role','live'),'permissions':scopes(u)} for u in User.objects.filter(is_staff=True)[:100]]})
+    return JsonResponse({'roles':ROLES,'permissions':SCOPES,'items':[{'id':u.pk,'username':u.username,'public_id':getattr(getattr(u,'profile',None),'public_id',''),'role':'owner' if u.is_superuser else getattr(getattr(u,'adminaccess',None),'role','live'),'permissions':scopes(u)} for u in User.objects.filter(is_staff=True)[:100]]})
 
 @endpoint(['POST'])
 def preview(request,user_id):
     require(request,'users.preview');why=reason(request);u=User.objects.filter(pk=user_id).first()
     if not u:raise ApiError('account_unavailable',404)
     p=Profile.objects.get(user=u);event(request.actor,'account_preview',u.pk,why)
-    d={'read_only':True,'banner':'وضع معاينة إدارية','profile':{'username':u.username,'display_name':p.display_name,'avatar_url':p.avatar_url,'bio':p.bio,'creator':p.creator,'identity_verified':p.identity_verified,'frame':p.selected_frame,'broadcast_allowed':p.broadcast_allowed,'created_at':u.date_joined},'services':rows(Service.objects.filter(owner=u),['id','title','active','approved','price_cents','duration_minutes']),'bookings':rows(Booking.objects.filter(Q(buyer=u)|Q(service__owner=u)).order_by('-created_at'),['id','status','price_cents','created_at']),'benefits':rows(BenefitGrant.objects.filter(user=u,expires_at__gt=timezone.now()),['kind','value','expires_at']),'communication':{'sent':Message.objects.filter(sender=u).count(),'received':Message.objects.filter(recipient=u).count(),'delivered':Message.objects.filter(sender=u,delivered_at__isnull=False).count(),'read':Message.objects.filter(sender=u,read_at__isnull=False).count(),'calls':rows(InternalCall.objects.filter(Q(caller=u)|Q(callee=u)).order_by('-created_at'),['id','mode','status','created_at'])}}
+    d={'read_only':True,'banner':'وضع معاينة إدارية','profile':{'public_id':p.public_id,'username':u.username,'display_name':p.display_name,'avatar_url':p.avatar_url,'bio':p.bio,'creator':p.creator,'identity_verified':p.identity_verified,'frame':p.selected_frame,'broadcast_allowed':p.broadcast_allowed,'created_at':u.date_joined},'services':rows(Service.objects.filter(owner=u),['id','title','active','approved','price_cents','duration_minutes']),'bookings':rows(Booking.objects.filter(Q(buyer=u)|Q(service__owner=u)).order_by('-created_at'),['id','status','price_cents','created_at']),'benefits':rows(BenefitGrant.objects.filter(user=u,expires_at__gt=timezone.now()),['kind','value','expires_at']),'communication':{'sent':Message.objects.filter(sender=u).count(),'received':Message.objects.filter(recipient=u).count(),'delivered':Message.objects.filter(sender=u,delivered_at__isnull=False).count(),'read':Message.objects.filter(sender=u,read_at__isnull=False).count(),'calls':rows(InternalCall.objects.filter(Q(caller=u)|Q(callee=u)).order_by('-created_at'),['id','mode','status','created_at'])}}
     if 'finance.view' in scopes(request.actor):
         w=Wallet.objects.filter(user=u).first();d['wallet']={'balance_cents':w.balance_cents if w else 0,'reserved_cents':w.reserved_cents if w else 0};d['operations']=rows(FinancialOperation.objects.filter(Q(buyer=u)|Q(creator=u)).order_by('-created_at'),['id','kind','amount_cents','status','created_at'])
     return JsonResponse(d)
@@ -101,7 +108,7 @@ def sanctions(request):
         if request.payload.get('action')=='revoke':
             s=AccountSanction.objects.get(pk=request.payload.get('id'));s.revoked_at=timezone.now();s.revoked_by=request.actor;s.save(update_fields=['revoked_at','revoked_by']);event(request.actor,'sanction_revoked',s.user_id,why)
         else:
-            u=User.objects.get(pk=request.payload.get('user_id'));kind=request.payload.get('kind');hours=request.payload.get('hours',0)
+            u=__import__('core.identity',fromlist=['target_user']).target_user(request.payload);kind=request.payload.get('kind');hours=request.payload.get('hours',0)
             if u.is_superuser or u==request.actor:raise ApiError('protected_account',403)
             if kind not in ['warning','ban','messages','calls','live','store','withdrawals'] or type(hours) is not int or not 0<=hours<=8760:raise ApiError('invalid_sanction')
             s=AccountSanction.objects.create(user=u,actor=request.actor,kind=kind,reason=why,expires_at=timezone.now()+timedelta(hours=hours) if hours else None);event(request.actor,'sanction_'+kind,u.pk,why)
@@ -113,7 +120,7 @@ def sanctions(request):
                 InternalCall.objects.filter(Q(caller=u)|Q(callee=u),status__in=['ringing','accepted']).update(status='ended',ended_at=timezone.now())
     q=AccountSanction.objects.select_related('user','actor').order_by('-id')
     if request.GET.get('q'):q=q.filter(Q(user__username__icontains=request.GET['q'])|Q(reason__icontains=request.GET['q']))
-    return JsonResponse({'items':[{'id':s.pk,'username':s.user.username,'user_id':s.user_id,'kind':s.kind,'reason':s.reason,'actor':s.actor.username,'created_at':s.created_at,'expires_at':s.expires_at,'revoked_at':s.revoked_at} for s in q[:100]]})
+    return JsonResponse({'items':[{'id':s.pk,'username':s.user.username,'public_id':s.user.profile.public_id,'user_id':s.user_id,'kind':s.kind,'reason':s.reason,'actor':s.actor.username,'created_at':s.created_at,'expires_at':s.expires_at,'revoked_at':s.revoked_at} for s in q[:100]]})
 
 @endpoint(['GET','POST'])
 def cases(request):
@@ -168,7 +175,7 @@ def settings_control(request):
 def notices(request):
     require(request,'notices.send',request.method=='POST')
     if request.method=='POST':
-        recipient=User.objects.filter(pk=request.payload.get('user_id')).first() if request.payload.get('user_id') else None
+        recipient=__import__('core.identity',fromlist=['target_user']).target_user(request.payload) if (request.payload.get('user_id') or request.payload.get('public_id')) else None
         if request.payload.get('user_id') and not recipient:raise ApiError('account_unavailable',404)
         n=AdminNotice.objects.create(actor=request.actor,recipient=recipient,title=text(request.payload,'title',2,120),body=text(request.payload,'body',3,1000));event(request.actor,'notice_sent',n.pk,reason(request))
     return JsonResponse({'items':rows(AdminNotice.objects.order_by('-id'),['id','recipient_id','title','body','created_at'])})
@@ -180,7 +187,7 @@ def inbox(request):return JsonResponse({'items':rows(AdminNotice.objects.filter(
 def benefits(request):
     require(request,'benefits.edit' if request.method=='POST' else 'benefits.view',request.method=='POST')
     if request.method=='POST':
-        u=User.objects.get(pk=request.payload.get('user_id'));kind=request.payload.get('kind');value=request.payload.get('value');days=request.payload.get('days',30);why=reason(request)
+        u=__import__('core.identity',fromlist=['target_user']).target_user(request.payload);kind=request.payload.get('kind');value=request.payload.get('value');days=request.payload.get('days',30);why=reason(request)
         if kind not in ['frame','promotion'] or type(value) is not int or type(days) is not int or not 1<=days<=365:raise ApiError('invalid_benefit')
         with transaction.atomic():
             User.objects.select_for_update().get(pk=request.actor.pk)

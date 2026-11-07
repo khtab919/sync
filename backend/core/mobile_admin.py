@@ -22,7 +22,7 @@ def account_json(user):
     profile, _ = Profile.objects.get_or_create(user=user)
     wallet, _ = Wallet.objects.get_or_create(user=user)
     from .admin_security import blocked
-    return {'id': user.pk, 'username': user.username, 'email': user.email, 'display_name': profile.display_name or user.username,
+    return {'id': user.pk,'public_id':profile.public_id, 'username': user.username, 'email': user.email, 'display_name': profile.display_name or user.username,
             'bio': profile.bio, 'avatar_url': profile.avatar_url, 'selected_frame': profile.selected_frame,
             'created_at':user.date_joined,'identity_verified':profile.identity_verified,'active': user.is_active and not blocked(user,'ban'), 'creator': profile.creator, 'live_moderator':user.has_perm('core.moderate_livebroadcast'), 'broadcast_allowed':profile.broadcast_allowed, 'protected': user.is_superuser,
             'balance_cents': wallet.balance_cents, 'reserved_cents': wallet.reserved_cents}
@@ -31,14 +31,14 @@ def account_json(user):
 @endpoint(['GET'])
 def accounts(request):
     require_admin(request)
-    query = request.GET.get('q', '').strip()[:100]
+    query = request.GET.get('q', '').strip().removeprefix('@')[:100]
     try:
         offset = max(0, min(int(request.GET.get('offset', 0)), 1000000))
     except ValueError:
         raise ApiError('invalid_offset')
     users = User.objects.order_by('-id')
     if query:
-        users = users.filter(Q(username__icontains=query) | Q(email__icontains=query) | Q(profile__display_name__icontains=query) | Q(pk=int(query) if query.isdigit() else -1))
+        users = users.filter(Q(username__icontains=query) | Q(email__icontains=query) | Q(profile__display_name__icontains=query) | Q(profile__public_id=query))
     return JsonResponse({'items': [redacted(account_json(u),request) for u in users[offset:offset + 50]], 'total': users.count(), 'offset': offset})
 
 

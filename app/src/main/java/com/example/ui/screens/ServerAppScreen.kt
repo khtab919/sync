@@ -100,6 +100,7 @@ fun ServerAppScreen(baseUrl: String) {
     var walletLoading by remember { mutableStateOf(false) }
     var walletError by remember { mutableStateOf("") }
     var wallet by remember { mutableStateOf(JSONObject()) }
+    var accountMatches by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var query by rememberSaveable { mutableStateOf("") }
     var category by rememberSaveable { mutableStateOf("الكل") }
     var followingOnly by rememberSaveable { mutableStateOf(false) }
@@ -118,6 +119,7 @@ fun ServerAppScreen(baseUrl: String) {
     var displayName by rememberSaveable { mutableStateOf("") }
     var bio by rememberSaveable { mutableStateOf("") }
     var avatarUrl by rememberSaveable { mutableStateOf("") }
+    var profileUsername by rememberSaveable { mutableStateOf("") }
     var profileEmail by rememberSaveable { mutableStateOf("") }
     var chatPrice by rememberSaveable { mutableStateOf("") }
     var destination by rememberSaveable { mutableStateOf("") }
@@ -156,6 +158,7 @@ fun ServerAppScreen(baseUrl: String) {
         displayName = profile.optString("display_name", profile.optString("username"))
         bio = profile.optString("bio")
         avatarUrl = profile.optString("avatar_url")
+        profileUsername = profile.optString("username")
         profileEmail = profile.optString("email")
         chatPrice = (profile.optInt("chat_price_cents") / 100.0).toString()
         open("تعديل الملف")
@@ -163,9 +166,14 @@ fun ServerAppScreen(baseUrl: String) {
     fun showService(item: JSONObject) { selected = item; open("تفاصيل العرض") }
     fun showCreator(id: Int) {
         if (id == profile.optInt("id")) { page = ""; tab = 4; return }
-        creator = creators.firstOrNull { it.optInt("id") == id } ?: JSONObject().put("id", id)
+        creator = (creators+accountMatches).firstOrNull { it.optInt("id") == id } ?: JSONObject().put("id", id)
         if (creator.has("display_name")) open("صفحة المذيعة")
         else { notice = "هذا الملف غير متاح حاليًا." }
+    }
+    LaunchedEffect(query,screen,signedIn){
+        if(!signedIn||screen !in listOf("تصفح","المذيعات")||query.trim().length<2){accountMatches=emptyList();return@LaunchedEffect}
+        delay(250)
+        try{accountMatches=api.request("/api/accounts/search?q="+java.net.URLEncoder.encode(query.trim(),"UTF-8")).rows()}catch(e:CancellationException){throw e}catch(e:Exception){accountMatches=emptyList()}
     }
     LaunchedEffect(api, resumeRevision) {
         restoring = true
@@ -201,7 +209,7 @@ fun ServerAppScreen(baseUrl: String) {
                 "تصفح", "العرض", "صفحة المذيعة" -> {
                     services = api.request("/api/services").rows()
                     creators = api.request("/api/creators").rows()
-                    if (screen == "صفحة المذيعة") creator = creators.firstOrNull { it.optInt("id") == creator.optInt("id") } ?: creator
+                    if (screen == "صفحة المذيعة") creator = (creators+accountMatches).firstOrNull { it.optInt("id") == creator.optInt("id") } ?: creator
                 }
                 "حسابي" -> { profile = api.request("/api/me"); services = api.request("/api/services").rows() }
                 "ريلز" -> rows = api.request("/api/reels").rows()
@@ -278,10 +286,11 @@ fun ServerAppScreen(baseUrl: String) {
             ReferenceLogin(register, submitting, notice, username, password, email, adultConfirmed,
                 { username = it }, { password = it }, { email = it }, { adultConfirmed = it },
                 { register = !register; notice = "" }, { perform {
-                    val body = JSONObject().put("username", username).put("password", password)
+                    api.requireSimpleRegistration()
+                    val body = JSONObject().put("email",email.trim()).put("password",password)
                     if (register) {
                         api.requireSimpleRegistration()
-                        body.put("adult_confirmed", adultConfirmed).put("accept_non_explicit_policy", true)
+                        body.put("display_name",username.trim()).put("adult_confirmed", adultConfirmed).put("accept_non_explicit_policy", true)
                         if (email.isNotBlank()) body.put("email", email.trim())
                     }
                     api.request(if (register) "/api/register" else "/api/login", "POST", body)
@@ -360,7 +369,7 @@ fun ServerAppScreen(baseUrl: String) {
                     destinations.forEachIndexed { index, name -> NavigationBarItem(selected = tab == index,
                         onClick = { tab = index; query = ""; category = "الكل"; notice = "" },
                         icon = { Icon(destinationIcons[index], null, Modifier.size(24.dp)) }, label = { Text(name, fontSize = 12.sp) },
-                        colors = NavigationBarItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.primaryContainer)) }
+                        colors = NavigationBarItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.primaryContainer,selectedIconColor=MaterialTheme.colorScheme.primary,selectedTextColor=MaterialTheme.colorScheme.primary)) }
                 }
             }
         ) { padding ->
@@ -382,7 +391,8 @@ fun ServerAppScreen(baseUrl: String) {
                         "تصفح" -> {
                             item { Box(Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) { WalletSummary(if(walletAccountId == profile.optInt("id") && wallet.has("available_cents")) wallet.optLong("available_cents") else null, walletLoading, walletError, { buyCredits() }, { open("المحفظة") }, { revision++ }) } }
                             item { ReferenceRow(Icons.Outlined.Sensors,"البث المباشر","جلسات عامة وخاصة · دون تسجيل"){open("البث المباشر")} }
-                            item { SearchField(query, { query = it }, "ابحث عن مذيعة أو خدمة") }
+                            item { SearchField(query, { query = it }, "ابحث بالاسم أو @username أو ID") }
+                            items(accountMatches,key={"account-"+it.optInt("id")}){person->OutlinedCard(onClick={showCreator(person.optInt("id"))},modifier=Modifier.padding(horizontal=20.dp).fillMaxWidth()){Column(Modifier.padding(16.dp)){Text(person.optString("display_name"),style=MaterialTheme.typography.titleMedium);Text("@"+person.optString("username")+" · #"+person.optString("public_id"))}}}
                             item {
                                 LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                                     item { Story("مساحتك", profile.optInt("selected_frame"), profile.optString("avatar_url")) { tab = 4 } }
@@ -441,7 +451,7 @@ fun ServerAppScreen(baseUrl: String) {
                         }
                         "محادثة جديدة" -> {
                             item { SearchField(query, { query = it }, "ابحث عن اسم المذيعة") }
-                            items(creators.filter { it.optString("display_name").contains(query, true) }, key = { it.optInt("id") }) { person -> Box(Modifier.padding(horizontal = 20.dp)) {
+                            items(creators.filter { (it.optString("display_name")+it.optString("username")+it.optString("public_id")).contains(query.removeprefix("@"), true) }, key = { it.optInt("id") }) { person -> Box(Modifier.padding(horizontal = 20.dp)) {
                                 Surface(onClick = { startChat(person.optInt("id"), person.optString("display_name")) }, shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface) {
                                     Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                         ReferenceAvatar(person.optString("display_name"), person.optInt("selected_frame"), 48, person.optString("avatar_url"))
@@ -505,13 +515,15 @@ fun ServerAppScreen(baseUrl: String) {
                             } }
                         }
                         "تعديل الملف" -> item { FormColumn {
-                            Field(displayName, { displayName = it }, "الاسم المعروض")
+                            Field(displayName, { displayName = it }, "الاسم الظاهر")
+                            Field(profileUsername, { profileUsername = it }, "اسم المستخدم @username")
+                            Text("اسم مستخدم مستقل وفريد؛ يبدأ بحرف إنجليزي ويحتوي 3–30 خانة.",style=MaterialTheme.typography.bodySmall)
                             Field(profileEmail, { profileEmail = it }, "البريد الإلكتروني")
                             Field(bio, { bio = it }, "نبذة عنك", lines = 4)
                             Field(avatarUrl, { avatarUrl = it }, "رابط صورة ملفك HTTPS · اختياري")
                             if (profile.optBoolean("creator")) Field(chatPrice, { chatPrice = it }, "رسوم المحادثة بالدولار · 0 للمجانية", numeric = true)
                             ReferencePrimary("حفظ التغييرات", !submitting) { perform {
-                                val body = JSONObject().put("display_name", displayName).put("bio", bio).put("avatar_url", avatarUrl).put("email", profileEmail.trim())
+                                val body = JSONObject().put("display_name", displayName).put("username",profileUsername).put("bio", bio).put("avatar_url", avatarUrl).put("email", profileEmail.trim())
                                 if (profile.optBoolean("creator")) body.put("chat_price_cents", cents(chatPrice))
                                 profile = api.request("/api/me", "PATCH", body)
                                 page = ""; tab = 4; notice = "تم حفظ التغييرات."
@@ -651,14 +663,15 @@ private fun OfferCard(service: JSONObject, click: () -> Unit) {
 
 @Composable
 internal fun ProfileHero(person: JSONObject, own: Boolean, settings: () -> Unit, editOrChat: () -> Unit, frameOrFollow: () -> Unit) {
-    Column(Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(Color(0xFF513044), WisalInk)), RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)).statusBarsPadding().padding(start = 22.dp, end = 22.dp, bottom = 26.dp, top = 12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(Color(0xFF153E53), WisalInk)), RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)).statusBarsPadding().padding(start = 22.dp, end = 22.dp, bottom = 26.dp, top = 12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(if (own) "حسابي" else "الملف الشخصي", Modifier.weight(1f), color = Color.White, fontSize = 19.sp)
             IconButton(onClick = settings) { Icon(if (own) Icons.Outlined.Settings else Icons.Outlined.ArrowForward, if (own) "الإعدادات" else "رجوع", tint = Color.White.copy(alpha = .75f)) }
         }
         ReferenceAvatar(person.optString("display_name", person.optString("username")), person.optInt("selected_frame"), 124, person.optString("avatar_url"))
         Text(person.optString("display_name", person.optString("username")), color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold)
-        Text("حساب #${person.optInt("id")} · 18+", color = Color.White.copy(alpha = .55f), fontSize = 11.sp)
+        Text("حساب #${person.optString("public_id","—")} · 18+", color = Color.White.copy(alpha = .55f), fontSize = 11.sp)
+        Text("@"+person.optString("username"),color=Color.White.copy(alpha=.8f),fontSize=15.sp)
         if (person.optBoolean("creator")) Surface(color = Color.White.copy(alpha = .09f), shape = RoundedCornerShape(30.dp)) { Row(Modifier.padding(horizontal = 14.dp, vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Outlined.WorkspacePremium, null, Modifier.size(15.dp), tint = Color(0xFFD8C18F)); Text("مذيعة معتمدة", color = Color(0xFFD8C18F), fontSize = 11.sp) } }
         if (person.optString("bio").isNotBlank()) Text(person.optString("bio"), color = Color.White.copy(alpha = .7f), fontSize = 13.sp)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
@@ -674,45 +687,29 @@ internal fun ProfileHero(person: JSONObject, own: Boolean, settings: () -> Unit,
 @Composable
 internal fun ReferenceLogin(register: Boolean, busy: Boolean, notice: String, username: String, password: String, email: String, adultConfirmed: Boolean, onUsername: (String) -> Unit, onPassword: (String) -> Unit, onEmail: (String) -> Unit, onAdultConfirmed: (Boolean) -> Unit, toggle: () -> Unit, submit: () -> Unit) {
     var showPassword by remember { mutableStateOf(false) }
-    val ready = !busy && username.trim().length >= 2 && password.isNotBlank() && (!register || (password.length >= 8 && adultConfirmed && email.trim().isNotEmpty()))
-    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        LazyColumn(modifier = Modifier.fillMaxSize().imePadding(), contentPadding = PaddingValues(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
-            item { Column(Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(Color(0xFF513044), WisalInk)), RoundedCornerShape(bottomEnd = 72.dp)).statusBarsPadding().heightIn(min = 170.dp).padding(28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { Image(painterResource(R.drawable.relaxia_logo), "شعار Relaxia", Modifier.size(76.dp).clip(RoundedCornerShape(18.dp))); Spacer(Modifier.weight(1f)); Text("18+", color = Color.White.copy(alpha = .7f), fontSize = 12.sp) }
-                Spacer(Modifier.height(6.dp))
-                Text("Relaxia", color = Color.White, fontSize = 36.sp, fontWeight = FontWeight.Bold)
-                Text("لحظات أقرب، بطريقتك.", color = Color.White.copy(alpha = .7f), fontSize = 15.sp)
-            } }
-            item { Column(Modifier.padding(horizontal = 26.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                Text(if (register) "مساحتك تبدأ هنا" else "أهلًا بعودتك", fontSize = 27.sp, fontWeight = FontWeight.Bold)
-                Text("اكتشف اللحظات، وتواصل بطريقتك.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (notice.isNotBlank()) Text(notice, color = MaterialTheme.colorScheme.error)
-                OutlinedTextField(username, onUsername, label = { Text("الاسم") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next), shape = RoundedCornerShape(18.dp),
-                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = MaterialTheme.colorScheme.onSurface, unfocusedTextColor = MaterialTheme.colorScheme.onSurface, unfocusedContainerColor = MaterialTheme.colorScheme.surface, focusedContainerColor = MaterialTheme.colorScheme.surface))
-                OutlinedTextField(password, onPassword, label = { Text("كلمة المرور") },
-                    visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
-                    trailingIcon = { IconButton(onClick = { showPassword = !showPassword }) { Icon(if (showPassword) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility, if (showPassword) "إخفاء كلمة المرور" else "إظهار كلمة المرور") } },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { if (ready) submit() }),
-                    modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(18.dp),
-                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = MaterialTheme.colorScheme.onSurface, unfocusedTextColor = MaterialTheme.colorScheme.onSurface, unfocusedContainerColor = MaterialTheme.colorScheme.surface, focusedContainerColor = MaterialTheme.colorScheme.surface))
-                if (register) {
-                    Text("8 خانات أو أكثر. لا يلزم رمز خاص أو أحرف كبيرة.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    OutlinedTextField(email, onEmail, label = { Text("البريد الإلكتروني") },
-                        modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(18.dp),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Done),
-                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = MaterialTheme.colorScheme.onSurface, unfocusedTextColor = MaterialTheme.colorScheme.onSurface, unfocusedContainerColor = MaterialTheme.colorScheme.surface, focusedContainerColor = MaterialTheme.colorScheme.surface))
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = adultConfirmed, onCheckedChange = onAdultConfirmed)
-                        Text("أؤكد أن عمري 18 عامًا أو أكثر وأوافق على ضوابط المحتوى غير الصريح.", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
+    val ready=!busy && email.trim().contains("@") && password.isNotBlank() && (!register||(username.trim().length>=2&&password.length>=8&&adultConfirmed))
+    Surface(Modifier.fillMaxSize(),color=MaterialTheme.colorScheme.background){
+        LazyColumn(Modifier.fillMaxSize().imePadding(),contentPadding=PaddingValues(bottom=28.dp),verticalArrangement=Arrangement.spacedBy(20.dp)){
+            item{Column(Modifier.fillMaxWidth().background(WisalInk,RoundedCornerShape(bottomEnd=40.dp)).statusBarsPadding().padding(24.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
+                Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){Image(painterResource(R.drawable.relaxia_logo),"شعار Relaxia",Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)));Spacer(Modifier.weight(1f));Text("18+",color=Color.White.copy(alpha=.8f))}
+                Text("Relaxia",color=Color.White,fontSize=30.sp,fontWeight=FontWeight.Bold)
+                Text("لحظات أقرب، بطريقتك.",color=Color.White.copy(alpha=.85f),fontSize=16.sp)
+            }}
+            item{Column(Modifier.padding(horizontal=24.dp),verticalArrangement=Arrangement.spacedBy(16.dp)){
+                Text(if(register)"مساحتك تبدأ هنا"else"أهلًا بعودتك",style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold)
+                Text(if(register)"أنشئ حسابك بخطوات بسيطة."else"ادخل ببريدك الإلكتروني وكلمة المرور.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+                if(notice.isNotBlank())Text(notice,color=MaterialTheme.colorScheme.error)
+                if(register)OutlinedTextField(username,onUsername,label={Text("الاسم الظاهر")},modifier=Modifier.fillMaxWidth(),singleLine=true,keyboardOptions=KeyboardOptions(imeAction=ImeAction.Next))
+                OutlinedTextField(email,onEmail,label={Text("البريد الإلكتروني")},modifier=Modifier.fillMaxWidth(),singleLine=true,keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Email,imeAction=ImeAction.Next))
+                OutlinedTextField(password,onPassword,label={Text("كلمة المرور")},visualTransformation=if(showPassword)VisualTransformation.None else PasswordVisualTransformation(),trailingIcon={IconButton({showPassword=!showPassword}){Icon(if(showPassword)Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,if(showPassword)"إخفاء كلمة المرور"else"إظهار كلمة المرور")}},modifier=Modifier.fillMaxWidth(),singleLine=true,keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Password,imeAction=ImeAction.Done),keyboardActions=KeyboardActions(onDone={if(ready)submit()}))
+                if(register){
+                    Text("8 خانات أو أكثر. يمكنك اختيار اسم المستخدم لاحقًا من ملفك.",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){Checkbox(adultConfirmed,onAdultConfirmed);Text("أؤكد أن عمري 18 عامًا أو أكثر وأوافق على ضوابط المحتوى غير الصريح.",Modifier.weight(1f),style=MaterialTheme.typography.bodyMedium)}
                 }
-                if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-                ReferencePrimary(if (register) "إنشاء حساب" else "دخول", ready) { submit() }
-                TextButton(onClick = toggle, enabled = !busy, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text(if (register) "لديك حساب؟ تسجيل الدخول" else "جديد هنا؟ أنشئ حسابًا") }
-                Text("بياناتك مرتبطة بخادم Relaxia · محتوى غير صريح", Modifier.align(Alignment.CenterHorizontally), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            } }
+                if(busy)LinearProgressIndicator(Modifier.fillMaxWidth())
+                ReferencePrimary(if(register)"إنشاء حساب"else"دخول",ready){submit()}
+                TextButton(toggle,enabled=!busy,modifier=Modifier.align(Alignment.CenterHorizontally)){Text(if(register)"لديك حساب؟ تسجيل الدخول"else"جديد هنا؟ أنشئ حسابًا")}
+            }}
         }
     }
 }
@@ -731,11 +728,14 @@ private fun NativeReel(url: String, active: Boolean) {
 }
 
 private fun friendlyError(code: String?): String = when (code) {
-    "authentication_required", "invalid_session" -> "انتهت جلسة الدخول. أدخل اسم المستخدم وكلمة المرور للمتابعة."
-    "invalid_credentials" -> "اسم المستخدم أو كلمة المرور غير صحيحين. إذا لم تُنشئ حسابًا بعد، اضغط «أنشئ حسابًا»."
-    "invalid_username" -> "اكتب اسمًا من حرفين أو أكثر بالعربي أو الإنجليزي. المسافات مسموحة."
+    "authentication_required", "invalid_session" -> "انتهت جلسة الدخول. أدخل بريدك الإلكتروني وكلمة المرور للمتابعة."
+    "invalid_credentials" -> "البريد الإلكتروني أو كلمة المرور غير صحيحين. إذا لم تُنشئ حسابًا بعد، اضغط «أنشئ حسابًا»."
+    "invalid_username" -> "اسم المستخدم يبدأ بحرف إنجليزي ويحتوي 3–30 خانة من الحروف والأرقام والنقطة أو الشرطة السفلية."
     "invalid_password" -> "اختر كلمة مرور من 8 خانات أو أكثر. لا يلزم رمز خاص أو أحرف كبيرة."
     "password_too_common" -> "كلمة المرور شائعة جدًا. اختر كلمة مختلفة يسهل عليك تذكّرها."
+    "invalid_display_name" -> "أدخل اسمًا ظاهرًا من حرفين على الأقل."
+    "email_unavailable" -> "هذا البريد مرتبط بحساب آخر. استخدم بريدًا مختلفًا أو سجّل الدخول."
+    "protected_username" -> "اسم مستخدم المالك محجوز ولا يمكن تغييره."
     "invalid_email" -> "البريد الإلكتروني إلزامي. أدخل عنوانًا صحيحًا مثل name@example.com."
     "invalid_input" -> "إحدى البيانات غير صحيحة. راجع الحقول ثم حاول مجددًا."
     "server_update_required" -> "يلزم تحديث خادم Relaxia لتفعيل الاسم والبريد الإلزاميين والميزات الجديدة."
@@ -746,7 +746,7 @@ private fun friendlyError(code: String?): String = when (code) {
     "paid_chat_requires_verified_payment" -> "المحادثة مدفوعة. الدفع غير مفعّل بعد، ولم تُرسل الرسالة."
     "insufficient_funds" -> "رصيدك المتاح لا يكفي لطلب السحب."
     "too_many_attempts" -> "محاولات كثيرة. حاول بعد 15 دقيقة."
-    "username_unavailable" -> "هذا الاسم مستخدم بالفعل. اختر اسمًا آخر أو ادخل بحسابك الموجود."
+    "username_unavailable" -> "اسم المستخدم مستخدم بالفعل أو محجوز. اختر اسمًا آخر."
     "conflict" -> "الطلب موجود بالفعل. حدّث الصفحة قبل إعادة المحاولة."
     "invalid_chat_price" -> "أدخل سعر محادثة صحيحًا، أو صفرًا للمحادثة المجانية."
     "invalid_image_url" -> "أدخل رابط صورة صحيحًا يبدأ بـ https://."

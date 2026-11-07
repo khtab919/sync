@@ -201,7 +201,7 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
                     Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         RelaxiaAvatar(account.optString("display_name"), account.optInt("selected_frame"), 82, account.optString("avatar_url"))
                         Text(account.optString("display_name"), style = MaterialTheme.typography.titleLarge)
-                        Text("#${account.optInt("id")} · ${account.optString("username")}")
+                        Text("#${account.optString("public_id","—")} · ${account.optString("username")}")
                         Text(account.optString("email"))
                         if(!account.optBoolean("protected"))TextButton({perform{selected=securePost("/api/admin/accounts/${account.optInt("id")}",JSONObject().put("action",if(account.optBoolean("live_moderator"))"moderator_off"else"moderator_on"))}},enabled=!busy){Text(if(account.optBoolean("live_moderator"))"إلغاء إشراف البث"else"منح إشراف البث فقط")}
                         Text(account.optString("bio"))
@@ -292,7 +292,7 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
                 items(requests, key = { it.optString("kind") + it.optString("id") }) { row ->
                     Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(when(row.optString("kind")){"topup"->"طلب شحن رصيد";"gateway"->"دفعة NOWPayments";else->"طلب تفعيل بائع"}, style = MaterialTheme.typography.titleLarge)
-                        Text("${row.optString("username")} · #${row.optInt("user_id")}")
+                        Text("${row.optString("username")} · #${row.optString("public_id","—")}")
                         Text(when(row.optString("status")) { "pending" -> "قيد المراجعة"; "approved" -> "معتمد"; else -> if(row.optString("kind")=="gateway") row.optString("status") else "مرفوض" })
                         if(row.optString("kind") == "topup") {
                             Text("المحوّل: ${cents(row.optLong("amount_cents"))} · نقاط ترويجية: ${row.optLong("bonus_cents")}")

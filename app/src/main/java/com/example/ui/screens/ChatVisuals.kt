@@ -37,8 +37,8 @@ import java.time.format.DateTimeFormatter
 internal data class ConversationColors(val background: Color, val incoming: Color, val accent: Color, val soft: Color)
 @Composable
 internal fun conversationColors(): ConversationColors = if (MaterialTheme.colorScheme.background.luminance() < .5f)
-    ConversationColors(Color(0xFF191517), Color(0xFF302B2D), Color(0xFF925562), Color(0xFF392D32))
-else ConversationColors(Color(0xFFF8F5F4), Color(0xFFECE7E5), Color(0xFF754451), Color(0xFFEEE3E5))
+    ConversationColors(Color(0xFF101820), Color(0xFF1C2933), Color(0xFF3187A8), Color(0xFF273B48))
+else ConversationColors(Color(0xFFF4F8FA), Color(0xFFE9F0F4), Color(0xFF277C9D), Color(0xFFDCECF2))
 
 @Composable
 internal fun ChatAvatar(name:String, size:Int, url:String="") {
@@ -109,7 +109,7 @@ internal fun ChatDayLabel(label: String) {
 @Composable
 internal fun ChatBubble(message: JSONObject, mine: Boolean, play: (String) -> Unit, join: (String) -> Unit, retry: (String) -> Unit = {}, remove: (String) -> Unit = {}, peerName: String = "", peerAvatar: String = "", unlock: () -> Unit = {}, reply: () -> Unit = {}, delete: () -> Unit = {}) {
     val colors = conversationColors()
-    val outgoing = Color(0xFF754451)
+    val outgoing = Color(0xFF277C9D)
     val bubbleColor by animateColorAsState(if(mine)outgoing else colors.incoming,animationSpec=androidx.compose.animation.core.tween(150),label="messageColor")
     val clipboard=LocalClipboardManager.current
     var showActions by remember{mutableStateOf(false)}

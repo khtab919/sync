@@ -14,5 +14,8 @@ class Command(BaseCommand):
         from django.core.validators import validate_email
         validate_email(email);validate_password(password,U(username='super_admin',email=email))
         with transaction.atomic():
+            from core.identity import lock_registry,email_matches,normalize_email
+            lock_registry();email=normalize_email(email)
+            if email_matches(email).exists():raise CommandError('Email belongs to an existing account; choose a unique owner email.')
             u=U.objects.create_superuser('super_admin',email,password);Profile.objects.create(user=u,display_name='المالك الرئيسي');Wallet.objects.create(user=u);AdminAccess.objects.create(user=u,role='owner')
         self.stdout.write('Owner created. Sign in through the app and enroll an authenticator before administration.')

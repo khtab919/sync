@@ -211,11 +211,11 @@ internal fun SupportFloatingButton() {
 @Composable
 private fun RewardWheel(prizes: org.json.JSONArray?, rotation: Float) {
     val animated by androidx.compose.animation.core.animateFloatAsState(rotation, androidx.compose.animation.core.tween(2400, easing = androidx.compose.animation.core.FastOutSlowInEasing), label = "wheel")
-    val palette = listOf(androidx.compose.ui.graphics.Color(0xFF792C50), androidx.compose.ui.graphics.Color(0xFFBC6589), androidx.compose.ui.graphics.Color(0xFFE9BDCE), androidx.compose.ui.graphics.Color(0xFF49263A))
+    val palette = listOf(androidx.compose.ui.graphics.Color(0xFF277C9D), androidx.compose.ui.graphics.Color(0xFF3187A8), androidx.compose.ui.graphics.Color(0xFFDCECF2), androidx.compose.ui.graphics.Color(0xFF153E53))
     Box(Modifier.fillMaxWidth(), contentAlignment = androidx.compose.ui.Alignment.TopCenter) {
         androidx.compose.foundation.Canvas(Modifier.size(280.dp)) {
             val ring = 9.dp.toPx()
-            drawCircle(androidx.compose.ui.graphics.Color(0xFFD3A071))
+            drawCircle(androidx.compose.ui.graphics.Color(0xFFD7AD72))
             val count = prizes?.length()?.takeIf { it > 0 } ?: 6
             var start = -90f + animated
             val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.WHITE; textSize = 14.dp.toPx(); textAlign = android.graphics.Paint.Align.CENTER; isFakeBoldText = true }
@@ -229,8 +229,8 @@ private fun RewardWheel(prizes: org.json.JSONArray?, rotation: Float) {
                 }
                 start += sweep
             }
-            drawCircle(androidx.compose.ui.graphics.Color(0xFFF7E3C8), radius = size.width * .10f)
+            drawCircle(androidx.compose.ui.graphics.Color(0xFFF5E9D8), radius = size.width * .10f)
         }
-        Text("▼", color = androidx.compose.ui.graphics.Color(0xFFB8844C), style = MaterialTheme.typography.headlineMedium)
+        Text("▼", color = androidx.compose.ui.graphics.Color(0xFFD7AD72), style = MaterialTheme.typography.headlineMedium)
     }
 }

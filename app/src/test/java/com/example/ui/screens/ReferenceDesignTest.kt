@@ -62,7 +62,7 @@ class ReferenceDesignTest {
         compose.onNodeWithText("إنشاء حساب").performScrollTo().assertIsNotEnabled()
         compose.onNode(isToggleable()).performScrollTo().performClick()
         compose.onNodeWithText("إنشاء حساب").assertIsNotEnabled()
-        compose.onNodeWithText("الاسم").performScrollTo().performTextInput("نور")
+        compose.onNodeWithText("الاسم الظاهر").performScrollTo().performTextInput("نور")
         compose.onNodeWithText("كلمة المرور").performScrollTo().performTextInput("Sunrise8")
         compose.onNodeWithContentDescription("إظهار كلمة المرور").performClick()
         compose.onNodeWithContentDescription("إخفاء كلمة المرور").assertExists()

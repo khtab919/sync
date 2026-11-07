@@ -58,7 +58,7 @@ class ApiTests(TestCase):
         user = get_user_model().objects.get(username='لي')
         self.assertEqual(user.email, 'member@example.com')
         self.assertTrue(user.check_password('Sunrise8'))
-        self.assertEqual(self.post('/api/login', {'username': 'لي', 'password': 'Sunrise8'}).status_code, 200)
+        self.assertEqual(self.post('/api/login', {'email': 'MEMBER@example.com', 'password': 'Sunrise8'}).status_code, 200)
 
     def test_simple_registration_errors_identify_the_field(self):
         p = {'username': 'newmember', 'email': 'newmember@example.com', 'password': 'short', 'adult_confirmed': True, 'accept_non_explicit_policy': True}
@@ -71,12 +71,12 @@ class ApiTests(TestCase):
         p['email'] = 'nour@example.com'
         p['username'] = 'Nour Hassan'
         self.assertEqual(self.post('/api/register', p).status_code, 201)
-        self.assertEqual(self.post('/api/login', {'username': ' @NOUR   HASSAN ', 'password': 'Sunrise8'}).status_code, 200)
+        self.assertEqual(self.post('/api/login', {'email': 'nour@example.com', 'password': 'Sunrise8'}).status_code, 200)
 
     def test_health_advertises_simplified_registration(self):
         response = self.client.get('/health/')
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()['registration_version'], 4)
+        self.assertEqual(response.json()['registration_version'], 5)
 
     def test_booking_uses_server_price_and_is_unpaid(self):
         service = Service.objects.create(owner=self.creator, title='Call', description='Description', price_cents=200, approved=True)
@@ -138,8 +138,8 @@ class ApiTests(TestCase):
 
     def test_login_rate_limit(self):
         for _ in range(20):
-            self.assertEqual(self.post('/api/login', {'username': 'buyer', 'password': 'wrong'}).status_code, 401)
-        self.assertEqual(self.post('/api/login', {'username': 'buyer', 'password': 'wrong'}).status_code, 429)
+            self.assertEqual(self.post('/api/login', {'email': 'buyer@example.com', 'password': 'wrong'}).status_code, 401)
+        self.assertEqual(self.post('/api/login', {'email': 'buyer@example.com', 'password': 'wrong'}).status_code, 429)
 
 
 @override_settings(SECURE_SSL_REDIRECT=False)
@@ -395,7 +395,7 @@ class MobileAdministrationTests(TestCase):
     def test_console_created_admin_can_login_without_existing_profile(self):
         Profile.objects.filter(user=self.admin).delete()
         Wallet.objects.filter(user=self.admin).delete()
-        response = self.call('/api/login', {'username': 'mobileadmin', 'password': 'unique-admin-pass'})
+        response = self.call('/api/login', {'email': 'root@example.com', 'password': 'unique-admin-pass'})
         self.assertEqual(response.status_code, 200)
         token = response.json()['token']
         self.assertTrue(self.call('/api/me', token=token).json()['is_admin'])
