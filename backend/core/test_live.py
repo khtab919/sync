@@ -28,6 +28,7 @@ class LiveBroadcastTests(TestCase):
         r=self.request('/api/live',p);self.assertEqual(r.status_code,201);row=LiveBroadcast.objects.get(pk=r.json()['id']);self.join(row,self.owner);self.parts=[{'identity':'host-'+str(self.owner.pk),'tracks':[{'type':'VIDEO','muted':False}]}];live.synchronize(row,True);return row
     def join(self,row,user=None):return self.request(f'/api/live/{row.pk}/admission',{'confirmed':True,'price_cents':100},user or self.viewer)
     def test_public_host_eligibility_and_no_recording_grants(self):
+        Profile.objects.filter(user=self.viewer).update(broadcast_allowed=False)
         self.assertEqual(self.request('/api/live',{'title':'Denied'},self.viewer).status_code,403)
         row=self.create();r=self.join(row);self.assertEqual(r.status_code,200);self.assertEqual(FinancialOperation.objects.count(),0)
         room=self.client.post(f'/api/live/{row.pk}/room',{'ticket':r.json()['ticket']});self.assertEqual(room.status_code,200)

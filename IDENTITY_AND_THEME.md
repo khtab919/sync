@@ -32,3 +32,24 @@ bash backend/deploy.sh
 ## التحقق
 
 اختبارات الخلفية تغطي الفصل بين الاسم واسم المستخدم، البريد المكرر، حفظ الحسابات القديمة، عدم قابلية تغيير رقم العرض، التصادم والتفرد، البحث والخصوصية، والتسجيل المتزامن على PostgreSQL. اختبار ترحيل فعلي يرجع المخطط إلى 0021 ثم يعيد تطبيق ترحيل الهوية ويتحقق من بقاء المعرفات الداخلية وكلمات المرور والرسائل والأرصدة. تستمر اختبارات المدفوعات والمصادقة الثنائية والمكالمات والبث الحالية.
+
+## 10.6 — registration gender and universal access
+
+Registration now requires `gender: male|female` alongside `display_name`, email,
+and password (existing adult/policy confirmation remains). Email/password login
+is unchanged. Migration 0024 leaves existing genders NULL; accounts may choose
+one in profile settings. Internal IDs, public numbers, passwords, balances and
+existing relationships remain intact. Gender is shown on profiles and native
+administration, including read-only preview. A database check rejects other values.
+
+Publishing/upload/service/paid-media access uses `publishing_allowed` (default
+true for existing and new accounts), independently of the historical `creator`
+approval badge. Live hosting uses `broadcast_allowed`, not gender or that badge.
+The people directory and following include regular accounts and respect blocks
+and active bans. Review of published content, age confirmation, sanctions,
+feature switches and financial authorization remain enforced. Native admins may
+revoke/restore publishing independently; older creator_on/off actions also update
+the permission for compatibility. No automatic verification badges are granted.
+
+Install Android 10.6 (versionCode 22) and deploy the matching backend/migration.
+No production deployment or real-money operation is implied by repository tests.

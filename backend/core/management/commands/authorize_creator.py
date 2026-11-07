@@ -17,6 +17,7 @@ class Command(BaseCommand):
             raise CommandError('Account is banned; review it in administration first.')
         profile, _ = Profile.objects.get_or_create(user=user)
         profile.creator = True
-        profile.save(update_fields=['creator'])
+        profile.publishing_allowed = True
+        profile.save(update_fields=['creator','publishing_allowed'])
         Wallet.objects.get_or_create(user=user)
         self.stdout.write(self.style.SUCCESS('Publishing and creator discovery enabled for account #' + str(user.pk)))

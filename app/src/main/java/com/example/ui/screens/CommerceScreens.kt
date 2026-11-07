@@ -26,7 +26,7 @@ import java.math.BigDecimal
 internal fun commerceError(e: Exception): String = when(e.message) {
     "file_too_large" -> "الحد الأقصى للصورة أو الصوت 8MB، وللريلز 20MB."
     "invalid_image", "invalid_file", "invalid_media" -> "الملف غير مدعوم. اختر صورة JPG/PNG/WEBP أو فيديو MP4."
-    "creator_account_required" -> "قدّم طلب تفعيل البائع وانتظر موافقة الإدارة."
+    "creator_account_required" -> "صلاحية النشر موقوفة لهذا الحساب. تواصل مع الدعم."
     "transaction_already_submitted" -> "هذا التحويل مستخدم في طلب سابق."
     "invalid_transaction_hash" -> "أدخل رقم المعاملة TxID الكامل المكوّن من 64 خانة."
     "seller_request_pending" -> "طلب تفعيل البائع موجود بالفعل وقيد المراجعة."
@@ -176,7 +176,7 @@ internal fun SellerPublishScreen(api: LayaliApi, back: () -> Unit) {
     Surface(Modifier.fillMaxSize()) { Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding().verticalScroll(rememberScrollState()).padding(22.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         TextButton(back, enabled = !busy) { Text("رجوع") }
         Text("مساحة النشر", style = MaterialTheme.typography.headlineLarge)
-        Text("للبائعين المفعّلين فقط · محتوى 18+ غير صريح · مراجعة الإدارة قبل الظهور")
+        Text("متاح للجميع · محتوى 18+ غير صريح · مراجعة الإدارة قبل الظهور")
         Row { FilterChip(!reel, { reel = false; media = JSONObject() }, label = { Text("خدمة أو منتج") }, enabled = !busy); Spacer(Modifier.width(8.dp)); FilterChip(reel, { reel = true; media = JSONObject() }, label = { Text("ريلز") }, enabled = !busy) }
         if(busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         if(note.isNotBlank()) Text(note)

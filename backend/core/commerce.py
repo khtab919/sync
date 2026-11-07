@@ -77,7 +77,7 @@ def upload(request):
     purpose = request.payload.get('purpose')
     if purpose not in ('offer', 'receipt', 'chat_image', 'chat_audio', 'chat_video', 'reel'):
         raise ApiError('invalid_purpose')
-    if purpose in ('offer', 'reel') and not Profile.objects.filter(user=request.actor, creator=True).exists():
+    if purpose in ('offer', 'reel') and not Profile.objects.filter(user=request.actor, publishing_allowed=True).exists():
         raise ApiError('creator_account_required', 403)
     encoded = text(request.payload, 'data', 4, 28 * 1024 * 1024)
     try:

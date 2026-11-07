@@ -53,7 +53,7 @@ def eligible(user,host=False):
         if age<18:raise ApiError('adult_confirmation_required',403)
     from .admin_security import blocked
     if blocked(user,'live' if host else 'ban'):raise ApiError('feature_restricted',403)
-    if not user.is_active or (host and (not p.creator or not p.broadcast_allowed)):raise ApiError('broadcast_permission_required',403)
+    if not user.is_active or (host and not p.broadcast_allowed):raise ApiError('broadcast_permission_required',403)
     return p
 
 def find(user,pk,owner=False):
@@ -131,7 +131,7 @@ def synchronize(row,force=False):
                 elif not present and not a.last_seen_at and now-a.created_at>timedelta(seconds=90):finance.refund(a.operation,'لم يبدأ الاتصال خلال المهلة')
         locked.viewers=viewers;locked.save();row.__dict__.update(locked.__dict__)
     for identity in invalid:provider('RemoveParticipant',{'room':room_name(row),'identity':identity},room_name(row))
-    if (not row.owner.is_active or not row.owner.profile.creator or not row.owner.profile.broadcast_allowed) or (row.host_missing_at and now-row.host_missing_at>timedelta(seconds=45)) or now-row.created_at>timedelta(hours=2):close(row,'انتهى الاتصال بصاحب البث',True);row.refresh_from_db()
+    if (not row.owner.is_active or not row.owner.profile.broadcast_allowed) or (row.host_missing_at and now-row.host_missing_at>timedelta(seconds=45)) or now-row.created_at>timedelta(hours=2):close(row,'انتهى الاتصال بصاحب البث',True);row.refresh_from_db()
 
 @endpoint(['GET','POST'])
 def broadcasts(request):
@@ -174,7 +174,7 @@ def broadcasts(request):
         except ApiError:continue
         if request.GET.get('q','').strip().lower() not in (row.title+' '+row.owner.profile.display_name+' '+row.owner.username).lower():continue
         items.append(describe(row,request.actor))
-    return JsonResponse({'items':items,'available':healthy,'can_broadcast':profile.creator and profile.broadcast_allowed,'recording':False,'max_viewers':min(100,int(os.environ.get('LAYALI_MAX_LIVE_VIEWERS','25')))})
+    return JsonResponse({'items':items,'available':healthy,'can_broadcast':profile.broadcast_allowed,'recording':False,'max_viewers':min(100,int(os.environ.get('LAYALI_MAX_LIVE_VIEWERS','25')))})
 
 @endpoint(['GET','POST'])
 def detail(request,broadcast_id):

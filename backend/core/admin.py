@@ -12,9 +12,9 @@ from .models import Profile, Service, Booking, Wallet, Withdrawal, Reel, Report,
 
 @admin.register(Profile)
 class ProfileAdmin(admin.ModelAdmin):
-    list_display = ('user', 'creator')
+    list_display = ('user', 'gender', 'creator', 'publishing_allowed')
     search_fields = ('user__username', 'user__email')
-    list_filter = ('creator',)
+    list_filter = ('gender', 'creator', 'publishing_allowed')
     exclude = ('identity_verified',)
     readonly_fields = ('date_of_birth', 'policy_version', 'policy_accepted_at')
 

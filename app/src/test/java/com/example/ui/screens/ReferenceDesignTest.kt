@@ -44,15 +44,17 @@ class ReferenceDesignTest {
     @Test fun loginSwitchesToRealRegistrationFields() {
         compose.setContent {
             var register by remember { mutableStateOf(false) }
+            var gender by remember { mutableStateOf("") }
             var adultConfirmed by remember { mutableStateOf(false) }
             var name by remember { mutableStateOf("") }
             var password by remember { mutableStateOf("") }
             var email by remember { mutableStateOf("") }
             MyApplicationTheme {
-                ReferenceLogin(register, false, "", name, password, email, adultConfirmed, { name = it }, { password = it }, { email = it }, { adultConfirmed = it }, { register = !register }, {})
+                ReferenceLogin(register, false, "", name, password, email, adultConfirmed, { name = it }, { password = it }, { email = it }, { adultConfirmed = it }, { register = !register }, {}, gender=gender,onGender={gender=it})
             }
         }
         compose.onNodeWithText("أهلًا بعودتك").assertExists()
+        compose.onNodeWithText("الجنس").assertDoesNotExist()
         screenshot("01-login")
         compose.onNodeWithText("جديد هنا؟ أنشئ حسابًا").performScrollTo().performClick()
         compose.onNodeWithText("Relaxia").assertExists()
@@ -60,7 +62,7 @@ class ReferenceDesignTest {
         compose.onNodeWithText("البريد الإلكتروني (اختياري)").assertDoesNotExist()
         compose.onNodeWithText("تاريخ الميلاد YYYY-MM-DD").assertDoesNotExist()
         compose.onNodeWithText("إنشاء حساب").performScrollTo().assertIsNotEnabled()
-        compose.onNode(isToggleable()).performScrollTo().performClick()
+        compose.onNode(isToggleable() and SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.Role, androidx.compose.ui.semantics.Role.Checkbox)).performScrollTo().performClick()
         compose.onNodeWithText("إنشاء حساب").assertIsNotEnabled()
         compose.onNodeWithText("الاسم الظاهر").performScrollTo().performTextInput("نور")
         compose.onNodeWithText("كلمة المرور").performScrollTo().performTextInput("Sunrise8")
@@ -68,7 +70,9 @@ class ReferenceDesignTest {
         compose.onNodeWithContentDescription("إخفاء كلمة المرور").assertExists()
         compose.onNodeWithText("إنشاء حساب").assertIsNotEnabled()
         compose.onNodeWithText("البريد الإلكتروني").performScrollTo().performTextInput("member@example.com")
-        compose.onNodeWithText("إنشاء حساب").assertIsEnabled()
+        compose.onNodeWithText("إنشاء حساب").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithText("أنثى").performScrollTo().performClick()
+        compose.onNodeWithText("إنشاء حساب").performScrollTo().assertIsEnabled()
         screenshot("02-register")
     }
 

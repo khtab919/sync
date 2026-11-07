@@ -22,7 +22,7 @@ def account_json(user):
     profile, _ = Profile.objects.get_or_create(user=user)
     wallet, _ = Wallet.objects.get_or_create(user=user)
     from .admin_security import blocked
-    return {'id': user.pk,'public_id':profile.public_id, 'username': user.username, 'email': user.email, 'display_name': profile.display_name or user.username,
+    return {'id': user.pk,'public_id':profile.public_id, 'username': user.username, 'email': user.email, 'display_name': profile.display_name or user.username, 'gender':profile.gender,'publishing_allowed':profile.publishing_allowed,
             'bio': profile.bio, 'avatar_url': profile.avatar_url, 'selected_frame': profile.selected_frame,
             'created_at':user.date_joined,'identity_verified':profile.identity_verified,'active': user.is_active and not blocked(user,'ban'), 'creator': profile.creator, 'live_moderator':user.has_perm('core.moderate_livebroadcast'), 'broadcast_allowed':profile.broadcast_allowed, 'protected': user.is_superuser,
             'balance_cents': wallet.balance_cents, 'reserved_cents': wallet.reserved_cents}
@@ -50,13 +50,13 @@ def account(request, user_id):
         raise ApiError('account_unavailable', 404)
     if request.method == 'POST':
         action = request.payload.get('action')
-        if action not in ('ban', 'unban', 'creator_on', 'creator_off', 'broadcast_on','broadcast_off','moderator_on','moderator_off','verification_on','verification_off','credit'):
+        if action not in ('ban', 'unban', 'creator_on', 'creator_off', 'publishing_on', 'publishing_off', 'broadcast_on','broadcast_off','moderator_on','moderator_off','verification_on','verification_off','credit'):
             raise ApiError('invalid_action')
         with transaction.atomic():
             locked = {u.pk: u for u in User.objects.select_for_update().filter(pk__in=sorted({user_id, request.actor.pk})).order_by("pk")}
             user = locked[user_id]
             if user.is_superuser and action!='credit':raise ApiError('protected_account',403)
-            if action in ('ban', 'unban', 'creator_on', 'creator_off') and (user.is_superuser or user.pk == request.actor.pk):
+            if action in ('ban', 'unban', 'creator_on', 'creator_off', 'publishing_on', 'publishing_off') and (user.is_superuser or user.pk == request.actor.pk):
                 raise ApiError('protected_account', 403)
             if action in ('ban', 'unban'):
                 user.is_active = action == 'unban'
@@ -73,10 +73,11 @@ def account(request, user_id):
                 why=text(request.payload,'reason',3,300);profile,_=Profile.objects.get_or_create(user=user);profile.identity_verified=action=='verification_on';profile.save(update_fields=['identity_verified']);audit(request.actor,user,'Verification decision: '+why)
             elif action in ('broadcast_on','broadcast_off'):
                 profile,_=Profile.objects.get_or_create(user=user);profile.broadcast_allowed=action=='broadcast_on';profile.save(update_fields=['broadcast_allowed'])
-            elif action in ('creator_on', 'creator_off'):
+            elif action in ('creator_on', 'creator_off', 'publishing_on', 'publishing_off'):
                 profile, _ = Profile.objects.get_or_create(user=user)
-                profile.creator = action == 'creator_on'
-                profile.save(update_fields=['creator'])
+                profile.publishing_allowed = action in ('creator_on','publishing_on')
+                if action.startswith('creator_'):profile.creator = action == 'creator_on'
+                profile.save(update_fields=['creator','publishing_allowed'])
             else:
                 cents = amount(request.payload, 'amount_cents')
                 reason = text(request.payload, 'reason', 3, 300)

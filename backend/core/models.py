@@ -11,11 +11,13 @@ class Profile(models.Model):
     from .identity import allocate_public_id
     public_id=models.CharField(max_length=5,unique=True,default=allocate_public_id)
     class Meta:
-        constraints=[models.CheckConstraint(condition=Q(public_id__regex=r'^[1-9][0-9]{4}$'),name='profile_public_id_five_digits')]
+        constraints=[models.CheckConstraint(condition=Q(gender__isnull=True)|Q(gender__in=['male','female']),name='profile_valid_gender'),models.CheckConstraint(condition=Q(public_id__regex=r'^[1-9][0-9]{4}$'),name='profile_public_id_five_digits')]
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     date_of_birth = models.DateField(null=True, blank=True)
     policy_version = models.CharField(max_length=32, default='2026-11-06')
     policy_accepted_at = models.DateTimeField(auto_now_add=True)
+    gender = models.CharField(max_length=6, choices=[("male", "ذكر"), ("female", "أنثى")], null=True, blank=True)
+    publishing_allowed = models.BooleanField(default=True)
     creator = models.BooleanField(default=False)
     identity_verified = models.BooleanField(default=False)
     chat_price_cents = models.PositiveIntegerField(default=0)

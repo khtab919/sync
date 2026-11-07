@@ -27,7 +27,7 @@ with tempfile.TemporaryDirectory(prefix='live-sfu-test-') as directory:
     call_command('migrate',verbosity=0)
     ids=[];tokens=[]
     for i in range(14):
-        u=get_user_model().objects.create_user('sfu_test_'+str(i),password=secrets.token_urlsafe(24));Profile.objects.create(user=u,creator=i==0);Wallet.objects.create(user=u,balance_cents=10000 if i>0 else 0)
+        u=get_user_model().objects.create_user('sfu_test_'+str(i),password=secrets.token_urlsafe(24));Profile.objects.create(user=u,gender="male" if i%2==0 else "female");Wallet.objects.create(user=u,balance_cents=10000 if i>0 else 0)
         token=secrets.token_urlsafe(48);SessionToken.objects.create(user=u,digest=hashlib.sha256(token.encode()).hexdigest(),expires_at=timezone.now()+timedelta(hours=1));ids.append(u.pk);tokens.append(token)
     Path(os.environ['LIVE_SMOKE_CONFIG']).write_text(json.dumps({'ids':ids,'tokens':tokens}));Path(os.environ['LIVE_SMOKE_CONFIG']).chmod(0o600)
     # SQLite is a media-fixture store, not the production concurrency test database.

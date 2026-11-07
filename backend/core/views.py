@@ -114,12 +114,14 @@ def issue_token(user):
 def health(request):
     with connection.cursor() as cursor:
         cursor.execute('SELECT 1')
-    return JsonResponse({'status': 'ok', 'registration_version': 5, 'identity_required': False, 'brand': 'Relaxia', 'mobile_admin_version': 2, 'commerce_version': 1, 'calls_version': 2, 'messaging_version': 3, 'paid_chat_version':1, 'shop_version': 2, 'live_version':1, 'booking_payment_version':1})
+    return JsonResponse({'status': 'ok', 'registration_version': 6, 'identity_required': False, 'brand': 'Relaxia', 'mobile_admin_version': 2, 'commerce_version': 1, 'calls_version': 2, 'messaging_version': 3, 'paid_chat_version':1, 'shop_version': 2, 'live_version':1, 'booking_payment_version':1})
 
 @endpoint(['POST'], authenticated=False)
 def register(request):
     p = request.payload
     from .identity import normalize_email,email_matches,lock_registry
+    gender=p.get('gender')
+    if gender not in ('male','female'):raise ApiError('invalid_gender')
     modern='display_name' in p
     display_name=text(p,'display_name' if modern else 'username',2,100 if modern else 50)
     if modern:
@@ -159,7 +161,7 @@ def register(request):
         user.username = username.lower()
         user.set_password(password)
         user.save()
-        Profile.objects.create(user=user, date_of_birth=born,display_name=display_name)
+        Profile.objects.create(user=user, date_of_birth=born,display_name=display_name,gender=gender)
         Wallet.objects.create(user=user)
         token = issue_token(user)
     return JsonResponse({'token':token,'user_id':user.pk,'public_id':user.profile.public_id},status=201)
@@ -198,7 +200,7 @@ def profile_json(user, viewer):
         'account_restricted':__import__('core.admin_security',fromlist=['blocked']).blocked(user,'ban') if user==viewer else False,
         'id': user.pk,'public_id':profile.public_id,'username': user.username,
         'display_name': profile.display_name or user.username,
-        'bio': profile.bio, 'email': user.email if user == viewer else '', 'creator': profile.creator,
+        'gender': profile.gender, 'publishing_allowed':profile.publishing_allowed, 'bio': profile.bio, 'email': user.email if user == viewer else '', 'creator': profile.creator,
         'identity_verified': profile.identity_verified,
         'selected_frame': frame.value if frame else profile.selected_frame, 'avatar_url': profile.avatar_url, 'chat_price_cents': profile.chat_price_cents,
         'followers_count': Follow.objects.filter(creator=user, user__is_active=True).count(),
@@ -217,9 +219,10 @@ def me(request):
     profile = Profile.objects.get(user=request.actor)
     if request.method == 'PATCH':
         p = request.payload
-        if set(p) - {'bio', 'display_name', 'selected_frame', 'chat_price_cents', 'avatar_url', 'email','username'}:
+        if set(p) - {'bio', 'display_name', 'selected_frame', 'chat_price_cents', 'avatar_url', 'email','username','gender'}:
             raise ApiError('unsupported_profile_field')
-        if 'chat_price_cents' in p and (type(p['chat_price_cents']) is not int or not 0 <= p['chat_price_cents'] <= 500000 or not profile.creator):
+        if 'gender' in p and p['gender'] not in ('male','female'):raise ApiError('invalid_gender')
+        if 'chat_price_cents' in p and (type(p['chat_price_cents']) is not int or not 0 <= p['chat_price_cents'] <= 500000 or not profile.publishing_allowed):
             raise ApiError('invalid_chat_price')
         if 'selected_frame' in p and (type(p['selected_frame']) is not int or p['selected_frame'] not in range(11)):
             raise ApiError('invalid_frame')
@@ -249,6 +252,7 @@ def me(request):
         bio = text(p, 'bio', 0, 300) if 'bio' in p else profile.bio
         name = text(p, 'display_name', 1, 100) if 'display_name' in p else profile.display_name
         if handle!=request.actor.username and not name:name=request.actor.username
+        profile.gender = p.get("gender", profile.gender)
         profile.bio, profile.display_name = bio, name
         profile.avatar_url = avatar_url
         profile.selected_frame = p.get('selected_frame', profile.selected_frame)
@@ -281,7 +285,7 @@ def services(request):
     if request.method == 'GET':
         rows = Service.objects.filter(approved=True, active=True, owner__is_active=True).exclude(category='كورس').select_related('owner').order_by('-id')[:100]
         return JsonResponse({'items': [service_json(row, request.actor) for row in rows]})
-    if not Profile.objects.filter(user=request.actor, creator=True).exists():
+    if not Profile.objects.filter(user=request.actor, publishing_allowed=True).exists():
         raise ApiError('creator_account_required', 403)
     p = request.payload
     image_url = p.get('image_url', '')
@@ -330,7 +334,10 @@ def saved(request):
 
 @endpoint(['GET'])
 def creators(request):
-    users=User.objects.filter(is_active=True,profile__creator=True)
+    from .models import UserBlock,AccountSanction
+    blocked_ids=list(UserBlock.objects.filter(user=request.actor).values_list('blocked_id',flat=True))+list(UserBlock.objects.filter(blocked=request.actor).values_list('user_id',flat=True))
+    bans=AccountSanction.objects.filter(kind='ban',revoked_at__isnull=True).filter(Q(expires_at__isnull=True)|Q(expires_at__gt=timezone.now())).values('user_id')
+    users=User.objects.filter(is_active=True,profile__isnull=False).exclude(pk__in=blocked_ids).exclude(pk__in=bans)
     q=request.GET.get('q','').strip().removeprefix('@')[:100]
     if q:users=users.filter(Q(username__icontains=q)|Q(profile__display_name__icontains=q)|Q(profile__public_id=q))
     users=users.order_by('id')[:100]
@@ -338,8 +345,10 @@ def creators(request):
 
 @endpoint(['POST'])
 def follow(request, creator_id):
-    creator = User.objects.filter(pk=creator_id, is_active=True, profile__creator=True).first()
-    if creator is None or creator == request.actor:
+    creator = User.objects.filter(pk=creator_id, is_active=True).first()
+    from .admin_security import blocked
+    from .models import UserBlock
+    if creator is None or creator == request.actor or blocked(creator,'ban') or UserBlock.objects.filter(Q(user=request.actor,blocked=creator)|Q(user=creator,blocked=request.actor)).exists():
         raise ApiError('creator_unavailable', 404)
     enabled = request.payload.get('enabled')
     if type(enabled) is not bool:
@@ -428,7 +437,7 @@ def messages(request, peer_id):
                 return JsonResponse(message_json(request, previous))
         profile=Profile.objects.select_for_update().filter(user=peer).first()
         if not profile:raise ApiError('recipient_unavailable',404)
-        price=profile.chat_price_cents if profile.creator else 0
+        price=profile.chat_price_cents
         if price and (not client_key or type(request.payload.get('price_consent')) is not int or request.payload['price_consent']!=price):
             raise ApiError('paid_price_changed',409)
         p = request.payload
@@ -456,7 +465,7 @@ def messages(request, peer_id):
             if not reply:raise ApiError('invalid_reply')
         media_price=p.get('media_price_cents',0)
         if type(media_price) is not int or not 0<=media_price<=1000000:raise ApiError('invalid_media_price')
-        if media_price and (not attachment or attachment.purpose not in ('chat_image','chat_video') or not Profile.objects.filter(user=request.actor,creator=True).exists()):raise ApiError('creator_account_required',403)
+        if media_price and (not attachment or attachment.purpose not in ('chat_image','chat_video') or not Profile.objects.filter(user=request.actor,publishing_allowed=True).exists()):raise ApiError('creator_account_required',403)
         message=Message.objects.create(sender=request.actor,recipient=peer,body=body.strip(),attachment=attachment,client_key=client_key,media_price_cents=media_price,reply_to=reply)
         if price:
             from .commerce import charge_chat
@@ -475,7 +484,7 @@ def delivered(request, peer_id):
 def reels(request):
     from .models import UploadedMedia
     if request.method == 'POST':
-        if not Profile.objects.filter(user=request.actor, creator=True).exists():
+        if not Profile.objects.filter(user=request.actor, publishing_allowed=True).exists():
             raise ApiError('creator_account_required', 403)
         media = UploadedMedia.objects.filter(pk=uuid.UUID(text(request.payload, 'media_id', 36, 36)), owner=request.actor, purpose='reel').first()
         if not media:
@@ -494,7 +503,7 @@ def wallet(request):
 def withdrawals(request):
     if request.method == 'GET':
         return JsonResponse({'items': list(Withdrawal.objects.filter(user=request.actor).order_by('-created_at').values('id', 'amount_cents', 'status', 'created_at', 'payout_reference','processed_at')[:100])})
-    if not Profile.objects.filter(user=request.actor, creator=True).exists():
+    if not Profile.objects.filter(user=request.actor, publishing_allowed=True).exists():
         raise ApiError('creator_account_required', 403)
     p = request.payload
     key = uuid.UUID(text(p, 'request_key', 36, 36))

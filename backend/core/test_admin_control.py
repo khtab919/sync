@@ -22,6 +22,17 @@ class NativeAdminSecurityTests(TestCase):
     def verify(self,u):
         secret=pyotp.random_base32();AdminAccess.objects.update_or_create(user=u,defaults={'totp_secret':cipher().encrypt(secret.encode()).decode(),'last_counter':-1})
         result=self.call('/api/admin/auth',{'action':'verify','code':pyotp.TOTP(secret).now()},u);self.assertEqual(result.status_code,200);return secret
+    def test_gender_and_distinct_publishing_permission_are_admin_visible(self):
+        self.verify(self.owner)
+        Profile.objects.filter(user=self.user).update(gender='female')
+        url=f'/api/admin/accounts/{self.user.pk}'
+        self.assertEqual(self.call(url).json()['gender'],'female')
+        for action,allowed in [('publishing_off',False),('publishing_on',True)]:
+            r=self.call(url,{'action':action,'reason':'Account publishing permission review'})
+            self.assertEqual(r.status_code,200);self.assertEqual(r.json()['publishing_allowed'],allowed)
+            self.assertFalse(r.json()['creator'])
+        self.assertEqual(self.call(url,{'action':'publishing_on','reason':'Unauthorized permission request'},self.user).status_code,403)
+
     def test_owner_requires_real_mfa_and_replay_is_rejected(self):
         self.assertEqual(self.call('/api/admin/control/dashboard').json()['error'],'admin_mfa_required')
         secret=self.verify(self.owner)
@@ -33,7 +44,7 @@ class NativeAdminSecurityTests(TestCase):
         for _ in range(5):self.call('/api/admin/auth',{'action':'setup','password':'wrong'})
         self.assertEqual(self.call('/api/admin/auth',{'action':'setup','password':'strong-owner-password'}).status_code,429)
     def test_registration_cannot_create_reserved_owner(self):
-        r=self.call('/api/register',{'username':'super_admin','password':'safe-long-pass','email':'test@example.com','adult_confirmed':True,'accept_non_explicit_policy':True,'is_superuser':True},self.user)
+        r=self.call('/api/register',{'gender':'male','username':'super_admin','password':'safe-long-pass','email':'test@example.com','adult_confirmed':True,'accept_non_explicit_policy':True,'is_superuser':True},self.user)
         self.assertEqual(r.status_code,409);self.user.refresh_from_db();self.assertFalse(self.user.is_staff)
     def test_support_preview_is_readonly_audited_and_has_no_private_content(self):
         self.verify(self.staff);Message.objects.create(sender=self.user,recipient=self.owner,body='PRIVATE_SECRET')

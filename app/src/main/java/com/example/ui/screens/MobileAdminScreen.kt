@@ -203,16 +203,17 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
                         Text(account.optString("display_name"), style = MaterialTheme.typography.titleLarge)
                         Text("#${account.optString("public_id","—")} · ${account.optString("username")}")
                         Text(account.optString("email"))
+                        Text("الجنس: "+genderLabel(account.optString("gender")))
                         if(!account.optBoolean("protected"))TextButton({perform{selected=securePost("/api/admin/accounts/${account.optInt("id")}",JSONObject().put("action",if(account.optBoolean("live_moderator"))"moderator_off"else"moderator_on"))}},enabled=!busy){Text(if(account.optBoolean("live_moderator"))"إلغاء إشراف البث"else"منح إشراف البث فقط")}
                         Text(account.optString("bio"))
                         Text(if (account.optBoolean("active")) "الحساب نشط" else "الحساب محظور")
-                        Text(if (account.optBoolean("creator")) "النشر والظهور في الاستكشاف مفعّلان" else "صلاحية النشر غير مفعّلة")
-                        if(!account.optBoolean("protected"))TextButton({perform{selected=securePost("/api/admin/accounts/${account.optInt("id")}",JSONObject().put("action",if(account.optBoolean("broadcast_allowed"))"broadcast_off"else"broadcast_on"))}},enabled=!busy){Text(if(account.optBoolean("broadcast_allowed"))"تعطيل صلاحية البث"else"السماح بالبث للحساب المؤهل")}
+                        Text(if (account.optBoolean("publishing_allowed")) "النشر والظهور في الاستكشاف مفعّلان" else "صلاحية النشر غير مفعّلة")
+                        if(!account.optBoolean("protected"))TextButton({perform{selected=securePost("/api/admin/accounts/${account.optInt("id")}",JSONObject().put("action",if(account.optBoolean("broadcast_allowed"))"broadcast_off"else"broadcast_on"))}},enabled=!busy){Text(if(account.optBoolean("broadcast_allowed"))"تعطيل صلاحية البث"else"السماح بالبث للحساب")}
                         Text("الرصيد: ${cents(account.optLong("balance_cents"))}")
                         Text("المحجوز: ${cents(account.optLong("reserved_cents"))}")
                         if (!account.optBoolean("protected")) {
                             OutlinedButton(onClick = { confirmation = JSONObject().put("action", if (account.optBoolean("active")) "ban" else "unban").put("label", if (account.optBoolean("active")) "حظر الحساب" else "إلغاء الحظر") }, enabled = !busy) { Text(if (account.optBoolean("active")) "حظر الحساب" else "إلغاء الحظر") }
-                            OutlinedButton(onClick = { confirmation = JSONObject().put("action", if (account.optBoolean("creator")) "creator_off" else "creator_on").put("label", if (account.optBoolean("creator")) "إيقاف صلاحية النشر" else "تفعيل النشر والاستكشاف") }, enabled = !busy) { Text(if (account.optBoolean("creator")) "إيقاف صلاحية النشر" else "تفعيل النشر والاستكشاف") }
+                            OutlinedButton(onClick = { confirmation = JSONObject().put("action", if (account.optBoolean("publishing_allowed")) "publishing_off" else "publishing_on").put("label", if (account.optBoolean("publishing_allowed")) "إيقاف صلاحية النشر" else "تفعيل النشر والاستكشاف") }, enabled = !busy) { Text(if (account.optBoolean("publishing_allowed")) "إيقاف صلاحية النشر" else "تفعيل النشر والاستكشاف") }
                         }
                     } }
                 }

@@ -107,6 +107,8 @@ fun ServerAppScreen(baseUrl: String) {
     var username by rememberSaveable { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var email by rememberSaveable { mutableStateOf("") }
+    var gender by rememberSaveable { mutableStateOf("") }
+    var profileGender by rememberSaveable { mutableStateOf("") }
     var adultConfirmed by rememberSaveable { mutableStateOf(false) }
     var title by rememberSaveable { mutableStateOf("") }
     var description by rememberSaveable { mutableStateOf("") }
@@ -155,6 +157,7 @@ fun ServerAppScreen(baseUrl: String) {
     } }
     fun startChat(id: Int, name: String) { peerId = id.toString(); peerName = name; message = ""; open("محادثة") }
     fun editProfile() {
+        profileGender=profile.optString("gender").takeIf { it in listOf("male","female") } ?: ""
         displayName = profile.optString("display_name", profile.optString("username"))
         bio = profile.optString("bio")
         avatarUrl = profile.optString("avatar_url")
@@ -171,7 +174,7 @@ fun ServerAppScreen(baseUrl: String) {
         else { notice = "هذا الملف غير متاح حاليًا." }
     }
     LaunchedEffect(query,page,tab,signedIn){
-        if(!signedIn||(if(page.isBlank())destinations[tab]else page) !in listOf("تصفح","المذيعات")||query.trim().length<2){accountMatches=emptyList();return@LaunchedEffect}
+        if(!signedIn||(if(page.isBlank())destinations[tab]else page) !in listOf("تصفح","صنّاع المحتوى")||query.trim().length<2){accountMatches=emptyList();return@LaunchedEffect}
         delay(250)
         try{accountMatches=api.request("/api/accounts/search?q="+java.net.URLEncoder.encode(query.trim(),"UTF-8")).rows()}catch(e:CancellationException){throw e}catch(e:Exception){accountMatches=emptyList()}
     }
@@ -290,14 +293,14 @@ fun ServerAppScreen(baseUrl: String) {
                     val body = JSONObject().put("email",email.trim()).put("password",password)
                     if (register) {
                         api.requireSimpleRegistration()
-                        body.put("display_name",username.trim()).put("adult_confirmed", adultConfirmed).put("accept_non_explicit_policy", true)
+                        body.put("gender",gender).put("display_name",username.trim()).put("adult_confirmed", adultConfirmed).put("accept_non_explicit_policy", true)
                         if (email.isNotBlank()) body.put("email", email.trim())
                     }
                     api.request(if (register) "/api/register" else "/api/login", "POST", body)
                     profile = api.request("/api/me")
                     password = ""; signedIn = true; tab = 0; page = ""
                     if (!api.sessionSaved) notice = "تم الدخول. تعذّر حفظ الجلسة على هذا الجهاز، وقد تحتاج للدخول مجددًا عند إغلاق التطبيق."
-                } })
+                } }, gender=gender, onGender={gender=it})
             return@MyApplicationTheme
         }
         if (signedIn && profile.optBoolean("account_restricted")) {
@@ -332,7 +335,7 @@ fun ServerAppScreen(baseUrl: String) {
         }
         if (screen == "محادثة" && peerId.toIntOrNull() != null) {
             chatState.SaveableStateProvider("conversation-$peerId") {
-                ConversationScreen(api, peerId.toInt(), peerName, profile.optInt("id"), message, { message = it }, { buyCredits() }, { openInternalCall(it) }, isSeller=profile.optBoolean("creator")) { back(); revision++ }
+                ConversationScreen(api, peerId.toInt(), peerName, profile.optInt("id"), message, { message = it }, { buyCredits() }, { openInternalCall(it) }, isSeller=profile.optBoolean("publishing_allowed")) { back(); revision++ }
             }
             return@MyApplicationTheme
         }
@@ -405,7 +408,7 @@ fun ServerAppScreen(baseUrl: String) {
                             } }
                             val ids = creators.filter { it.optBoolean("following") }.map { it.optInt("id") }.toSet()
                             val visible = services.filter { (!followingOnly || it.optInt("owner_id") in ids) && (it.optString("title") + it.optString("owner_name")).contains(query, true) }
-                            if (visible.isEmpty() && !loading && contentError.isBlank()) item { ReferenceEmpty(Icons.Outlined.Explore, "مساحتك لاكتشاف الجديد", "ستظهر هنا عروض المذيعات المعتمدة فور نشرها.") }
+                            if (visible.isEmpty() && !loading && contentError.isBlank()) item { ReferenceEmpty(Icons.Outlined.Explore, "مساحتك لاكتشاف الجديد", "ستظهر هنا العروض بعد مراجعتها.") }
                             items(visible, key = { it.optInt("id") }) { service ->
                                 FeedCard(service, { showCreator(service.optInt("owner_id")) }, { showService(service) }, { kind -> perform {
                                     val updated = api.request("/api/services/${service.optInt("id")}/reaction", "POST", JSONObject().put("kind", kind).put("enabled", !service.optBoolean(if (kind == "like") "liked" else "saved")))
@@ -486,7 +489,7 @@ fun ServerAppScreen(baseUrl: String) {
                             val person = if (own) profile else creator
                             if (own) item { Box(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) { WalletSummary(if(walletAccountId == profile.optInt("id") && wallet.has("available_cents")) wallet.optLong("available_cents") else null, walletLoading, walletError, { buyCredits() }, { open("المحفظة") }, { revision++ }) } }
                             item { ProfileHero(person, own, { if (own) open("الإعدادات") else back() }, { if (own) editProfile() else startChat(person.optInt("id"), person.optString("display_name")) }, {
-                                if (own) open("إطاراتي") else if(!person.optBoolean("creator")){(context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("Relaxia ID",person.optString("public_id")));notice="تم نسخ معرف الحساب"} else perform {
+                                if (own) open("إطاراتي") else perform {
                                     creator = api.request("/api/creators/${person.optInt("id")}/follow", "POST", JSONObject().put("enabled", !person.optBoolean("following")))
                                     creators = creators.map { if (it.optInt("id") == creator.optInt("id")) creator else it }
                                 }
@@ -503,7 +506,6 @@ fun ServerAppScreen(baseUrl: String) {
                                 ReferenceRow(Icons.Outlined.Notifications,"الإشعارات والاعتراضات"){open("التنبيهات")}
                                 ReferenceRow(Icons.Outlined.AddCard, "متجر الرصيد") { buyCredits() }
                                 ReferenceRow(Icons.Outlined.Casino, "عجلة الحظ المدفوعة") { open("العجلة") }
-                                if (!profile.optBoolean("creator")) ReferenceRow(Icons.Outlined.Storefront, "طلب تفعيل البائع") { open("تفعيل البائع") }
                                 ReferenceRow(Icons.Outlined.AccountBalanceWallet, "المحفظة والسحب") { price = ""; open("المحفظة") }
                                 ReferenceRow(Icons.Outlined.Sensors,"إعدادات البث والبثوث النشطة"){open("البث المباشر")}
                                 ReferenceRow(Icons.Outlined.ReceiptLong,"سجل العمليات"){open("سجل العمليات")}
@@ -519,12 +521,14 @@ fun ServerAppScreen(baseUrl: String) {
                             Field(profileUsername, { profileUsername = it }, "اسم المستخدم @username")
                             Text("اسم مستخدم مستقل وفريد؛ يبدأ بحرف إنجليزي ويحتوي 3–30 خانة.",style=MaterialTheme.typography.bodySmall)
                             Field(profileEmail, { profileEmail = it }, "البريد الإلكتروني")
+                            GenderChoice(profileGender,{profileGender=it})
                             Field(bio, { bio = it }, "نبذة عنك", lines = 4)
                             Field(avatarUrl, { avatarUrl = it }, "رابط صورة ملفك HTTPS · اختياري")
-                            if (profile.optBoolean("creator")) Field(chatPrice, { chatPrice = it }, "رسوم المحادثة بالدولار · 0 للمجانية", numeric = true)
+                            if (profile.optBoolean("publishing_allowed")) Field(chatPrice, { chatPrice = it }, "رسوم المحادثة بالدولار · 0 للمجانية", numeric = true)
                             ReferencePrimary("حفظ التغييرات", !submitting) { perform {
                                 val body = JSONObject().put("display_name", displayName).put("username",profileUsername).put("bio", bio).put("avatar_url", avatarUrl).put("email", profileEmail.trim())
-                                if (profile.optBoolean("creator")) body.put("chat_price_cents", cents(chatPrice))
+                                if(profileGender.isNotBlank())body.put("gender",profileGender)
+                                if (profile.optBoolean("publishing_allowed")) body.put("chat_price_cents", cents(chatPrice))
                                 profile = api.request("/api/me", "PATCH", body)
                                 page = ""; tab = 4; notice = "تم حفظ التغييرات."
                             } }
@@ -544,7 +548,7 @@ fun ServerAppScreen(baseUrl: String) {
                         } }
                         "من نحن", "سياسة الخصوصية" -> item { FormColumn {
                             Text(if (screen == "من نحن") "Relaxia" else "خصوصيتك وحدودك أولًا", style = MaterialTheme.typography.headlineLarge)
-                            Text(if (screen == "من نحن") "مساحة عربية للبالغين لاكتشاف المذيعات وخدماتهن والتواصل معهن، بمحتوى غير صريح وواجهات هادئة وواضحة." else "تُحفظ بيانات حسابك ورسائلك وحجوزاتك على خادم Relaxia. يُمنع المحتوى الجنسي الصريح والعري والتحرش ومشاركة بيانات الآخرين دون إذن. الريلز متاحة للحسابات المسجلة، والخدمات تُراجع قبل ظهورها. لا تضع معلومات دفع حساسة داخل المحادثات.", style = MaterialTheme.typography.bodyLarge)
+                            Text(if (screen == "من نحن") "مساحة عربية للبالغين لاكتشاف صنّاع المحتوى وخدماتهم والتواصل معهم، بمحتوى غير صريح وواجهات هادئة وواضحة." else "تُحفظ بيانات حسابك ورسائلك وحجوزاتك على خادم Relaxia. يُمنع المحتوى الجنسي الصريح والعري والتحرش ومشاركة بيانات الآخرين دون إذن. الريلز متاحة للحسابات المسجلة، والخدمات تُراجع قبل ظهورها. لا تضع معلومات دفع حساسة داخل المحادثات.", style = MaterialTheme.typography.bodyLarge)
                         } }
                         "الحجوزات" -> {
                             if (rows.isEmpty() && !loading && contentError.isBlank()) item { ReferenceEmpty(Icons.Outlined.ShoppingBag, "لم تبدأ حجوزاتك بعد", "تصفح العروض وسجّل طلب الخدمة المناسب لك.") }
@@ -556,7 +560,7 @@ fun ServerAppScreen(baseUrl: String) {
                         }
                         "إضافة عرض" -> item { FormColumn {
                             Text("اعرض خدمة أو جلسة أو منتجًا", style = MaterialTheme.typography.headlineMedium)
-                            Text("النشر متاح لحسابات المذيعات بعد تفعيلها من الإدارة. كل عرض يمر بمراجعة الإدارة.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("النشر متاح لجميع المستخدمين. كل عرض يمر بمراجعة الإدارة.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("خدمة", "منتج", "جلسة").forEach { kind -> FilterChip(offerKind == kind, { offerKind = kind }, label = { Text(kind) }) } }
                             Field(title, { title = it }, "عنوان العرض")
                             Field(description, { description = it }, "وصف العرض", lines = 4)
@@ -641,7 +645,7 @@ private fun FeedCard(service: JSONObject, owner: () -> Unit, details: () -> Unit
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { react("like") }) { Icon(if (service.optBoolean("liked")) Icons.Outlined.Favorite else Icons.Outlined.FavoriteBorder, "إعجاب", tint = if (service.optBoolean("liked")) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface) }
             Text(service.optInt("like_count").toString(), fontSize = 12.sp)
-            IconButton(onClick = chat) { Icon(Icons.Outlined.ChatBubbleOutline, "التحدث مع المذيعة") }
+            IconButton(onClick = chat) { Icon(Icons.Outlined.ChatBubbleOutline, "محادثة صاحب الحساب") }
             Spacer(Modifier.weight(1f))
             TextButton(onClick = details) { Text("عرض التفاصيل") }
         }
@@ -671,23 +675,24 @@ internal fun ProfileHero(person: JSONObject, own: Boolean, settings: () -> Unit,
         ReferenceAvatar(person.optString("display_name", person.optString("username")), person.optInt("selected_frame"), 124, person.optString("avatar_url"))
         Text(person.optString("display_name", person.optString("username")), color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold)
         Text("حساب #${person.optString("public_id","—")} · 18+", color = Color.White.copy(alpha = .75f), fontSize = 13.sp)
+        Text("الجنس: "+genderLabel(person.optString("gender")),color=Color.White.copy(alpha=.75f),fontSize=13.sp)
         Text("@"+person.optString("username"),style=LocalTextStyle.current.copy(textDirection=androidx.compose.ui.text.style.TextDirection.Ltr),color=Color.White.copy(alpha=.8f),fontSize=15.sp)
-        if (person.optBoolean("creator")) Surface(color = Color.White.copy(alpha = .09f), shape = RoundedCornerShape(30.dp)) { Row(Modifier.padding(horizontal = 14.dp, vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Outlined.WorkspacePremium, null, Modifier.size(15.dp), tint = Color(0xFFD7AD72)); Text("مذيعة معتمدة", color = Color(0xFFD7AD72), fontSize = 11.sp) } }
+        if (person.optBoolean("creator")) Surface(color = Color.White.copy(alpha = .09f), shape = RoundedCornerShape(30.dp)) { Row(Modifier.padding(horizontal = 14.dp, vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Outlined.WorkspacePremium, null, Modifier.size(15.dp), tint = Color(0xFFD7AD72)); Text("حساب معتمد", color = Color(0xFFD7AD72), fontSize = 11.sp) } }
         if (person.optString("bio").isNotBlank()) Text(person.optString("bio"), color = Color.White.copy(alpha = .7f), fontSize = 13.sp)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
             listOf("المتابعون" to person.optInt("followers_count"), "أتابع" to person.optInt("following_count"), "العروض" to person.optInt("service_count"), "الريلز" to person.optInt("reel_count")).forEach { (label, count) -> Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(count.toString(), color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold); Text(label, color = Color.White.copy(alpha = .55f), fontSize = 11.sp) } }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedButton(editOrChat, Modifier.weight(1f).heightIn(min = 48.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)) { Text(if (own) "تعديل الملف" else "محادثة", fontSize = 13.sp) }
-            Button(frameOrFollow, Modifier.weight(1f).heightIn(min = 48.dp), colors = ButtonDefaults.buttonColors(containerColor = WisalSage, contentColor = WisalInk)) { Text(if (own) "إطاراتي" else if(!person.optBoolean("creator"))"نسخ ID"else if (person.optBoolean("following")) "إلغاء المتابعة" else "متابعة", fontSize = 13.sp) }
+            Button(frameOrFollow, Modifier.weight(1f).heightIn(min = 48.dp), colors = ButtonDefaults.buttonColors(containerColor = WisalSage, contentColor = WisalInk)) { Text(if (own) "إطاراتي" else if (person.optBoolean("following")) "إلغاء المتابعة" else "متابعة", fontSize = 13.sp) }
         }
     }
 }
 
 @Composable
-internal fun ReferenceLogin(register: Boolean, busy: Boolean, notice: String, username: String, password: String, email: String, adultConfirmed: Boolean, onUsername: (String) -> Unit, onPassword: (String) -> Unit, onEmail: (String) -> Unit, onAdultConfirmed: (Boolean) -> Unit, toggle: () -> Unit, submit: () -> Unit) {
+internal fun ReferenceLogin(register: Boolean, busy: Boolean, notice: String, username: String, password: String, email: String, adultConfirmed: Boolean, onUsername: (String) -> Unit, onPassword: (String) -> Unit, onEmail: (String) -> Unit, onAdultConfirmed: (Boolean) -> Unit, toggle: () -> Unit, submit: () -> Unit, gender:String="", onGender:(String)->Unit={}) {
     var showPassword by remember { mutableStateOf(false) }
-    val ready=!busy && email.trim().contains("@") && password.isNotBlank() && (!register||(username.trim().length>=2&&password.length>=8&&adultConfirmed))
+    val ready=!busy && email.trim().contains("@") && password.isNotBlank() && (!register||(username.trim().length>=2&&password.length>=8&&adultConfirmed&&gender in listOf("male","female")))
     Surface(Modifier.fillMaxSize(),color=MaterialTheme.colorScheme.background){
         LazyColumn(Modifier.fillMaxSize().imePadding(),contentPadding=PaddingValues(bottom=28.dp),verticalArrangement=Arrangement.spacedBy(20.dp)){
             item{Column(Modifier.fillMaxWidth().background(WisalInk,RoundedCornerShape(bottomEnd=40.dp)).statusBarsPadding().padding(24.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
@@ -703,6 +708,7 @@ internal fun ReferenceLogin(register: Boolean, busy: Boolean, notice: String, us
                 OutlinedTextField(email,onEmail,label={Text("البريد الإلكتروني")},modifier=Modifier.fillMaxWidth(),singleLine=true,keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Email,imeAction=ImeAction.Next))
                 OutlinedTextField(password,onPassword,label={Text("كلمة المرور")},visualTransformation=if(showPassword)VisualTransformation.None else PasswordVisualTransformation(),trailingIcon={IconButton({showPassword=!showPassword}){Icon(if(showPassword)Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,if(showPassword)"إخفاء كلمة المرور"else"إظهار كلمة المرور")}},modifier=Modifier.fillMaxWidth(),singleLine=true,keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Password,imeAction=ImeAction.Done),keyboardActions=KeyboardActions(onDone={if(ready)submit()}))
                 if(register){
+                    GenderChoice(gender,onGender)
                     Text("8 خانات أو أكثر. يمكنك اختيار اسم المستخدم لاحقًا من ملفك.",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
                     Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){Checkbox(adultConfirmed,onAdultConfirmed);Text("أؤكد أن عمري 18 عامًا أو أكثر وأوافق على ضوابط المحتوى غير الصريح.",Modifier.weight(1f),style=MaterialTheme.typography.bodyMedium)}
                 }
@@ -741,7 +747,7 @@ private fun friendlyError(code: String?): String = when (code) {
     "server_update_required" -> "يلزم تحديث خادم Relaxia لتفعيل الاسم والبريد الإلزاميين والميزات الجديدة."
     "server_unavailable" -> "الخادم غير متاح الآن. حاول بعد قليل؛ لا تغيّر كلمة المرور."
     "adult_policy_required" -> "فعّل تأكيد 18+ والموافقة على ضوابط المحتوى."
-    "verified_creator_required", "creator_account_required" -> "النشر وطلبات السحب متاحة لحسابات المذيعات بعد تفعيلها من الإدارة."
+    "verified_creator_required", "creator_account_required" -> "صلاحية النشر موقوفة لهذا الحساب. تواصل مع الدعم."
     "identity_verification_required" -> "خادم التطبيق ما زال بالنسخة القديمة. حدّثه لتفعيل عرض الريلز للجميع."
     "paid_chat_requires_verified_payment" -> "المحادثة مدفوعة. الدفع غير مفعّل بعد، ولم تُرسل الرسالة."
     "insufficient_funds" -> "رصيدك المتاح لا يكفي لطلب السحب."
@@ -750,6 +756,13 @@ private fun friendlyError(code: String?): String = when (code) {
     "conflict" -> "الطلب موجود بالفعل. حدّث الصفحة قبل إعادة المحاولة."
     "invalid_chat_price" -> "أدخل سعر محادثة صحيحًا، أو صفرًا للمحادثة المجانية."
     "invalid_image_url" -> "أدخل رابط صورة صحيحًا يبدأ بـ https://."
+    "invalid_gender" -> "اختر الجنس: ذكر أو أنثى."
     "recipient_unavailable", "creator_unavailable" -> "الحساب غير متاح حاليًا."
     else -> "تعذّر الاتصال بالخادم. تحقق من الإنترنت ثم أعد المحاولة."
+}
+
+internal fun genderLabel(value:String)=when(value){"male"->"ذكر";"female"->"أنثى";else->"غير محدد"}
+@Composable
+internal fun GenderChoice(value:String,onChange:(String)->Unit){
+ Column(verticalArrangement=Arrangement.spacedBy(8.dp)){Text("الجنس");Row(horizontalArrangement=Arrangement.spacedBy(12.dp)){listOf("male","female").forEach{choice->FilterChip(selected=value==choice,onClick={onChange(choice)},label={Text(genderLabel(choice))})}}
 }

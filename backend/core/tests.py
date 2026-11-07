@@ -21,7 +21,7 @@ class ApiTests(TestCase):
         return self.client.post(path, json.dumps(data), content_type='application/json', HTTP_AUTHORIZATION='Bearer ' + (token or self.token))
 
     def test_registration_enforces_age_and_policy(self):
-        p = {'username': 'newuser', 'email': 'new@example.com', 'password': 'some-unique-2026-password!', 'date_of_birth': date.today().isoformat(), 'accept_non_explicit_policy': True}
+        p = {'gender':'female', 'username': 'newuser', 'email': 'new@example.com', 'password': 'some-unique-2026-password!', 'date_of_birth': date.today().isoformat(), 'accept_non_explicit_policy': True}
         self.assertEqual(self.post('/api/register', p).status_code, 400)
         p['date_of_birth'] = '1990-01-01'
         p['accept_non_explicit_policy'] = False
@@ -33,7 +33,7 @@ class ApiTests(TestCase):
         self.assertTrue(user.check_password(p['password']))
 
     def test_registration_without_birth_date_requires_explicit_adult_confirmation(self):
-        p = {'username': 'adultnew', 'email': 'adult@example.com', 'password': 'unique-new-account-pass-2026!', 'accept_non_explicit_policy': True}
+        p = {'gender':'male', 'username': 'adultnew', 'email': 'adult@example.com', 'password': 'unique-new-account-pass-2026!', 'accept_non_explicit_policy': True}
         self.assertEqual(self.post('/api/register', p).status_code, 400)
         p['adult_confirmed'] = 'true'
         self.assertEqual(self.post('/api/register', p).status_code, 400)
@@ -48,7 +48,7 @@ class ApiTests(TestCase):
         self.assertIsNone(profile.date_of_birth)
 
     def test_registration_requires_name_and_email_with_simple_password(self):
-        p = {'username': '  لي  ', 'password': 'Sunrise8', 'adult_confirmed': True, 'accept_non_explicit_policy': True}
+        p = {'gender':'female', 'username': '  لي  ', 'password': 'Sunrise8', 'adult_confirmed': True, 'accept_non_explicit_policy': True}
         self.assertEqual(self.post('/api/register', p).status_code, 400)
         p['email'] = ''
         self.assertEqual(self.post('/api/register', p).status_code, 400)
@@ -61,7 +61,7 @@ class ApiTests(TestCase):
         self.assertEqual(self.post('/api/login', {'email': 'MEMBER@example.com', 'password': 'Sunrise8'}).status_code, 200)
 
     def test_simple_registration_errors_identify_the_field(self):
-        p = {'username': 'newmember', 'email': 'newmember@example.com', 'password': 'short', 'adult_confirmed': True, 'accept_non_explicit_policy': True}
+        p = {'gender':'male', 'username': 'newmember', 'email': 'newmember@example.com', 'password': 'short', 'adult_confirmed': True, 'accept_non_explicit_policy': True}
         self.assertEqual(self.post('/api/register', p).json()['error'], 'invalid_password')
         p['password'] = '12345678'
         self.assertEqual(self.post('/api/register', p).json()['error'], 'password_too_common')
@@ -76,7 +76,7 @@ class ApiTests(TestCase):
     def test_health_advertises_simplified_registration(self):
         response = self.client.get('/health/')
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()['registration_version'], 5)
+        self.assertEqual(response.json()['registration_version'], 6)
 
     def test_booking_uses_server_price_and_is_unpaid(self):
         service = Service.objects.create(owner=self.creator, title='Call', description='Description', price_cents=200, approved=True)
@@ -130,11 +130,11 @@ class ApiTests(TestCase):
         result = self.client.get(f'/api/messages/{self.creator.pk}', HTTP_AUTHORIZATION='Bearer ' + outsider_token)
         self.assertEqual(result.json()['items'], [])
 
-    def test_reels_do_not_require_identity_but_publication_requires_creator_role(self):
+    def test_reels_and_publication_are_available_to_regular_accounts(self):
         Profile.objects.filter(user=self.user).update(identity_verified=False)
         response = self.client.get('/api/reels', HTTP_AUTHORIZATION='Bearer ' + self.token)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(self.post('/api/services', {'title': 'test', 'description': 'test description', 'price_cents': 200}).status_code, 403)
+        self.assertEqual(self.post('/api/services', {'title': 'test', 'description': 'test description', 'price_cents': 200}).status_code, 201)
 
     def test_login_rate_limit(self):
         for _ in range(20):
@@ -195,7 +195,8 @@ class ReferenceInteractionTests(TestCase):
         invalid = self.client.patch('/api/me', json.dumps({'selected_frame': 11}), content_type='application/json', HTTP_AUTHORIZATION='Bearer ' + self.token)
         self.assertEqual(invalid.status_code, 400)
 
-    def test_only_creator_can_change_chat_fee(self):
+    def test_chat_fee_requires_publishing_permission(self):
+        Profile.objects.filter(user=self.user).update(publishing_allowed=False)
         payload = json.dumps({'chat_price_cents': 200})
         self.assertEqual(self.client.patch('/api/me', payload, content_type='application/json', HTTP_AUTHORIZATION='Bearer ' + self.token).status_code, 400)
         self.assertEqual(self.client.patch('/api/me', payload, content_type='application/json', HTTP_AUTHORIZATION='Bearer ' + self.creator_token).status_code, 200)
@@ -252,7 +253,7 @@ class RelaxiaRequirementsTests(TestCase):
 
     def test_creator_directory_and_following_do_not_require_identity(self):
         result = self.client.get('/api/creators', HTTP_AUTHORIZATION='Bearer ' + self.token)
-        self.assertEqual(result.json()['items'][0]['id'], self.creator.pk)
+        self.assertIn(self.creator.pk, [x['id'] for x in result.json()['items']])
         self.assertEqual(self.post(f'/api/creators/{self.creator.pk}/follow', {'enabled': True}).status_code, 200)
 
     def test_eleven_frames_are_stored_and_avatar_urls_are_validated(self):
@@ -352,7 +353,7 @@ class MobileAdministrationTests(TestCase):
         self.assertEqual(self.call(url, {'action': 'creator_on'}).status_code, 200)
         self.user.profile.refresh_from_db()
         self.assertTrue(self.user.profile.creator)
-        self.assertEqual(self.call('/api/creators', token=self.user_token).json()['items'][0]['id'], self.user.pk)
+        self.assertIn(self.user.pk, [x['id'] for x in self.call('/api/creators', token=self.user_token).json()['items']])
         self.assertEqual(self.call(url).json()['email'], self.user.email)
         self.assertEqual(self.call(url, {'action': 'ban'}).status_code, 200)
         self.assertEqual(self.call('/api/me', token=self.user_token).status_code, 401)
@@ -479,6 +480,7 @@ class CommerceTests(TestCase):
     def test_upload_validation_and_reel_publishing_gate(self):
         import base64
         self.assertEqual(self.call('/api/upload', {'purpose':'receipt','data':base64.b64encode(b'<html>not an image</html>').decode()}).status_code, 400)
+        Profile.objects.filter(user=self.user).update(publishing_allowed=False)
         self.assertEqual(self.call('/api/upload', {'purpose':'offer','data':'a'*40}).status_code, 403)
         self.assertEqual(self.call('/api/reels', {'media_id':str(uuid.uuid4())}).status_code, 403)
         self.assertEqual(self.call('/api/admin/requests').status_code, 403)
