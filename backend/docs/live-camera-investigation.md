@@ -51,6 +51,9 @@ playback, audio-only capture, exit during capture missing decoded frames and lat
 verify authenticated diagnostic intake and rejection of arbitrary/raw values. The SFU smoke
 checks actual decoded host preview and explicit denied-camera UI in addition to existing
 12-participant media, paid admission, revocation, reconnection and gift accounting coverage.
+An additional browser test uses the real pinned SDK to capture and decode a camera frame
+with no SFU connection, and verifies cleanup after microphone denial. Local Chromium could
+not launch because the workspace forbids its required socket; CI runs that test.
 Browser media in CI is synthetic; this is not an Android device, 4G/5G or production test.
 
 Not implemented by this patch: preview before server room creation with a separate Start

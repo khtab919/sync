@@ -70,6 +70,7 @@ jobs:
           LIVE_PREVIEW_DIR: ${{ runner.temp }}/live-previews
         run: |
           python backend/fetch_live_sdk.py
+          NODE_PATH="$RUNNER_TEMP/rtc-node/node_modules" node backend/qa/live_capture_browser_test.cjs
           cat > "$RUNNER_TEMP/livekit-smoke.yaml" <<'YAML'
           port: 7880
           rtc:
