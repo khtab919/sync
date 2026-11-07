@@ -13,6 +13,8 @@ def hold(buyer,creator,kind,key,reference,amount):
     if previous:
         if previous.creator_id!=creator.pk or previous.reference!=reference or previous.amount_cents!=amount:raise ApiError('payment_request_conflict',409)
         return previous
+    from .admin_security import ensure_payments
+    ensure_payments()
     source,_=accounts(buyer,creator)
     if source.balance_cents-source.reserved_cents<amount:raise ApiError('insufficient_balance',409)
     source.reserved_cents+=amount;source.save(update_fields=['reserved_cents'])

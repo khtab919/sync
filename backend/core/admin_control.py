@@ -157,6 +157,7 @@ def settings_control(request):
         key=request.payload.get('key');value=request.payload.get('enabled')
         if key not in keys or type(value) is not bool:raise ApiError('invalid_feature')
         AdminFeature.objects.update_or_create(key=key,defaults={'enabled':value,'reason':reason(request)});event(request.actor,'feature_changed',key,reason(request))
+        if key=='calls' and not value:InternalCall.objects.filter(status__in=['ringing','accepted']).update(status='ended',ended_at=timezone.now())
         if key=='live' and not value:
             from .live import close
             for room in LiveBroadcast.objects.filter(status__in=['starting','active','reconnecting']):close(room,'Administrative emergency stop',True)

@@ -126,3 +126,41 @@ class NativeAdminSecurityTests(TestCase):
         self.assertEqual(self.call('/api/notices',user=self.user).status_code,200)
         self.assertEqual(self.call('/api/my-cases',{'body':'Please review this decision'},self.user).status_code,200)
         self.assertEqual(self.call('/api/services',user=self.user).status_code,403)
+
+    def test_banned_staff_cannot_keep_administrative_access(self):
+        self.verify(self.staff);AccountSanction.objects.create(user=self.staff,actor=self.owner,kind='ban',reason='Administrative access suspended')
+        self.assertEqual(self.call('/api/admin/control/dashboard',user=self.staff).status_code,403)
+
+    def test_ban_does_not_allow_profile_writes(self):
+        AccountSanction.objects.create(user=self.user,actor=self.owner,kind='ban',reason='Read-only appeal access')
+        r=self.client.patch('/api/me',json.dumps({'bio':'Forbidden write'}),content_type='application/json',HTTP_AUTHORIZATION='Bearer '+self.tokens[self.user.pk])
+        self.assertEqual(r.status_code,403)
+    def test_emergency_call_stop_ends_existing_sessions(self):
+        self.verify(self.owner)
+        c=InternalCall.objects.create(caller=self.user,callee=self.staff,status='accepted')
+        self.assertEqual(self.call('/api/admin/control/settings',{'key':'calls','enabled':False,'reason':'Emergency call shutdown'}).status_code,200)
+        c.refresh_from_db();self.assertEqual(c.status,'ended')
+    def test_console_recovery_revokes_sessions_and_is_audited(self):
+        from django.core.management import call_command
+        from io import StringIO
+        self.verify(self.owner)
+        with patch('builtins.input',side_effect=['Lost authenticator; console recovery','super_admin']):call_command('reset_admin_mfa','super_admin',stdout=StringIO())
+        self.assertFalse(SessionToken.objects.filter(user=self.owner).exists());self.assertFalse(AdminAccess.objects.get(user=self.owner).totp_enabled);self.assertTrue(AdminEvent.objects.filter(action='console_mfa_recovery').exists())
+
+    def test_payment_emergency_blocks_new_service_reservations(self):
+        import uuid
+        self.verify(self.owner);Profile.objects.filter(user=self.staff).update(creator=True);Wallet.objects.filter(user=self.user).update(balance_cents=1000)
+        service=Service.objects.create(owner=self.staff,title='Actual fixture service',price_cents=100,approved=True)
+        self.call('/api/admin/control/settings',{'key':'payments','enabled':False,'reason':'Stop new financial commitments'})
+        r=self.call('/api/bookings',{'service_id':service.pk,'confirmed':True,'price_cents':100,'request_key':str(uuid.uuid4())},self.user)
+        self.assertEqual(r.status_code,503);self.assertEqual(FinancialOperation.objects.count(),0);self.assertEqual(Wallet.objects.get(user=self.user).reserved_cents,0)
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+class OwnerProvisioningTests(TestCase):
+    def test_owner_is_created_only_from_console_without_default_password(self):
+        from django.core.management import call_command,CommandError
+        from io import StringIO
+        output=StringIO()
+        with patch('builtins.input',return_value='owner@example.com'),patch('core.management.commands.provision_owner.getpass',return_value='TestOnlyStrongPass!8492'):call_command('provision_owner',stdout=output)
+        u=get_user_model().objects.get(username='super_admin');self.assertTrue(u.is_superuser);self.assertTrue(u.is_staff);self.assertTrue(u.check_password('TestOnlyStrongPass!8492'));self.assertEqual(Wallet.objects.get(user=u).balance_cents,0);self.assertNotIn('TestOnlyStrongPass',output.getvalue());self.assertEqual(AdminAccess.objects.get(user=u).role,'owner')
+        with self.assertRaises(CommandError):call_command('provision_owner',stdout=StringIO())

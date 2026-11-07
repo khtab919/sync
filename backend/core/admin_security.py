@@ -19,7 +19,7 @@ ROLES={
  'support':['dashboard.view','users.view','users.preview','support.view','support.edit']}
 
 def scopes(user):
-    if not user.is_staff:return []
+    if not user.is_staff or blocked(user,'ban'):return []
     if user.is_superuser:return SCOPES
     a=AdminAccess.objects.filter(user=user).first()
     if a:return list(dict.fromkeys(([p for p in a.permissions if p in SCOPES] if a.customized else ROLES.get(a.role,[]))))
@@ -61,8 +61,11 @@ def check_operation(request):
     from .views import ApiError
     p=request.path;kind=None;feature=None
     if p.startswith('/api/admin/') or p in ['/api/login','/api/register','/api/logout']:return
-    if p not in ['/api/me','/api/notices','/api/my-cases'] and blocked(request.actor,'ban'):raise ApiError('account_restricted',403)
+    readable=(p in ['/api/me','/api/notices'] and request.method=='GET') or p=='/api/my-cases'
+    if not readable and blocked(request.actor,'ban'):raise ApiError('account_restricted',403)
     if request.method in ['POST','PATCH']:
+        if p.startswith('/api/calls/') and request.payload.get('action') in ['end','reject']:return
+        if p.startswith('/api/messages/') and (p.endswith(('/read','/delivered','/unlock')) or (p.endswith('/action') and request.payload.get('action')=='delete')):return
         if p.startswith('/api/messages/'):kind='messages';feature='messages'
         elif p.startswith('/api/calls'):kind='calls';feature='calls'
         elif p=='/api/live':kind='live';feature='live'
@@ -118,3 +121,8 @@ def prepare_approval(request,target):
     if not a:a=AdminApproval.objects.create(requester=request.actor,path=request.path,payload_digest=key,payload=request.payload,target_user_id=target,reason=str(request.payload.get('reason') or request.payload.get('review_note') or 'Financial action requires independent review')[:500],expires_at=timezone.now()+timedelta(hours=1))
     event(request.actor,'approval_requested',a.pk,a.reason)
     return JsonResponse({'error':'independent_approval_required','approval_id':str(a.pk)},status=409)
+
+
+def ensure_payments():
+    from .views import ApiError
+    if AdminFeature.objects.filter(key='payments',enabled=False).exists():raise ApiError('feature_maintenance',503)

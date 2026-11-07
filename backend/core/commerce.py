@@ -397,6 +397,8 @@ def wheel_configuration(request):
 def charge_chat(message,kind,buyer,creator,cents):
     from .models import ChatCharge
     if ChatCharge.objects.filter(message=message,kind=kind,buyer=buyer).exists():return
+    from .admin_security import ensure_payments
+    ensure_payments()
     for person in sorted([buyer,creator],key=lambda user:user.pk):Wallet.objects.get_or_create(user=person)
     wallets={wallet.user_id:wallet for wallet in Wallet.objects.select_for_update().filter(user_id__in=[buyer.pk,creator.pk]).order_by('user_id')}
     source,target=wallets[buyer.pk],wallets[creator.pk]
