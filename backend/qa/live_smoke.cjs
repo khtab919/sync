@@ -4,7 +4,7 @@ const {chromium}=require('playwright');const fs=require('fs');
  const fixture=JSON.parse(fs.readFileSync(process.env.LIVE_SMOKE_CONFIG,'utf8'));
  const browser=await chromium.launch({headless:true,args:['--no-sandbox','--disable-dev-shm-usage','--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream','--autoplay-policy=no-user-gesture-required']});
  const contexts=[],pages=[];const previewDir=process.env.LIVE_PREVIEW_DIR;if(previewDir)fs.mkdirSync(previewDir,{recursive:true});
- async function preview(page,name){if(!previewDir)return;await page.setViewportSize({width:390,height:844});await page.screenshot({path:previewDir+'/'+name+'.png'});if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('Live UI overflow '+name)}
+ async function preview(page,name){if(!previewDir)return;await page.setViewportSize({width:390,height:844});await page.bringToFront();await page.waitForFunction(()=>getComputedStyle(document.getElementById('stage')).position==='relative');await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));await page.screenshot({path:previewDir+'/'+name+'.png'});if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('Live UI overflow '+name)}
 const base='http://127.0.0.1:8880';
  try{
  for(let i=0;i<14;i++)contexts.push(await browser.newContext({permissions:['microphone','camera']}));

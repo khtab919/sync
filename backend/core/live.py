@@ -262,7 +262,7 @@ def room(request,broadcast_id):
         ws_origin=public.scheme+'://'+public.netloc
         response=render(request,'core/live_room.html',{'config':config,'nonce':nonce,'theme':'light' if request.POST.get('theme')=='light' else 'dark'})
         response['Cache-Control']='no-store';response['Referrer-Policy']='no-referrer'
-        response['Content-Security-Policy']=f"default-src 'none'; script-src 'self' 'nonce-{nonce}'; style-src 'unsafe-inline'; connect-src 'self' {ws_origin}; media-src 'self' blob:; img-src 'self' data: https:; frame-ancestors 'none'; base-uri 'none'"
+        response['Content-Security-Policy']=f"default-src 'none'; script-src 'self' 'nonce-{nonce}'; style-src 'self' 'unsafe-inline'; connect-src 'self' {ws_origin}; media-src 'self' blob:; img-src 'self' data: https:; frame-ancestors 'none'; base-uri 'none'"
         return response
     except ApiError as e:return JsonResponse({'error':e.message},status=e.status)
 

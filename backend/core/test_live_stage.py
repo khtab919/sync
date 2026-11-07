@@ -69,6 +69,7 @@ class StageTests(TestCase):
         row=self.stage();admitted=self.join(row,self.viewer).json()
         page=self.client.post(f'/api/live/{row.pk}/room',{'ticket':admitted['ticket']})
         config=json.loads(re.search(r'<script id="config" type="application/json">(.*?)</script>',page.content.decode(),re.S).group(1))
+        self.assertIn("style-src 'self'",page['Content-Security-Policy'])
         path=f'/api/live/{row.pk}/control'
         headers={'HTTP_X_LIVE_CONTROL':config['control']}
         self.assertEqual(self.client.get(path,**headers).status_code,200)
