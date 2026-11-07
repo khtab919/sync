@@ -1,4 +1,5 @@
 'use strict';
+if(typeof LivekitClient==='undefined'||typeof RelaxiaMedia==='undefined')throw Error('live_dependencies_unavailable');
 const config=JSON.parse(document.getElementById('config').textContent),$=id=>document.getElementById(id);
 const {Room,RoomEvent,Track,ConnectionState}=LivekitClient;
 let room,closed=false,muted=false,cameraOff=false,facing='user',commentsVisible=true,lastComments='',leaving=false,retrying=false,polling=false;
