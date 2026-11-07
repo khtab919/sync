@@ -30,12 +30,25 @@ with tempfile.TemporaryDirectory(prefix='live-sfu-test-') as directory:
         u=get_user_model().objects.create_user('sfu_test_'+str(i),password=secrets.token_urlsafe(24));Profile.objects.create(user=u,creator=i==0);Wallet.objects.create(user=u,balance_cents=10000 if i>0 else 0)
         token=secrets.token_urlsafe(48);SessionToken.objects.create(user=u,digest=hashlib.sha256(token.encode()).hexdigest(),expires_at=timezone.now()+timedelta(hours=1));ids.append(u.pk);tokens.append(token)
     Path(os.environ['LIVE_SMOKE_CONFIG']).write_text(json.dumps({'ids':ids,'tokens':tokens}));Path(os.environ['LIVE_SMOKE_CONFIG']).chmod(0o600)
+    # SQLite is a media-fixture store, not the production concurrency test database.
+    # Serialize fixture HTTP/reconciliation writes; PostgreSQL races are tested separately.
+    fixture_lock=threading.RLock()
     def reconcile():
         while True:
             try:
-                for row in LiveBroadcast.objects.filter(status__in=live.LIVE):live.synchronize(row,True)
+                with fixture_lock:
+                    for row in LiveBroadcast.objects.filter(status__in=live.LIVE):live.synchronize(row,True)
             except Exception:pass
             close_old_connections();time.sleep(5)
     threading.Thread(target=reconcile,daemon=True).start()
     print('Isolated live SFU fixture ready',flush=True)
-    make_server('127.0.0.1',8766,get_wsgi_application(),server_class=ThreadingServer,handler_class=Quiet).serve_forever()
+    import logging
+    logger=logging.getLogger('django.request');logger.addHandler(logging.StreamHandler());logger.setLevel(logging.ERROR)
+    actual_app=get_wsgi_application()
+    def fixture_app(environ,start_response):
+        with fixture_lock:
+            response=actual_app(environ,start_response)
+            try:return list(response)
+            finally:
+                if hasattr(response,'close'):response.close()
+    make_server('127.0.0.1',8766,fixture_app,server_class=ThreadingServer,handler_class=Quiet).serve_forever()

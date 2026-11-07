@@ -270,7 +270,7 @@ class ReferenceDesignTest {
         var dark by mutableStateOf(false)
         var background=androidx.compose.ui.graphics.Color.Unspecified
         var primary=androidx.compose.ui.graphics.Color.Unspecified
-        compose.setContent {MyApplicationTheme(darkTheme=dark){SideEffect{background=MaterialTheme.colorScheme.background;primary=MaterialTheme.colorScheme.primary};Surface{androidx.compose.material3.Text("Relaxia")}}}
+        compose.setContent {MyApplicationTheme(darkTheme=dark){val colors=MaterialTheme.colorScheme;SideEffect{background=colors.background;primary=colors.primary};Surface{androidx.compose.material3.Text("Relaxia")}}}
         compose.runOnIdle{org.junit.Assert.assertEquals(androidx.compose.ui.graphics.Color(0xFFF4F8FA),background);org.junit.Assert.assertEquals(androidx.compose.ui.graphics.Color(0xFF277C9D),primary);dark=true}
         compose.runOnIdle{org.junit.Assert.assertEquals(androidx.compose.ui.graphics.Color(0xFF101820),background);org.junit.Assert.assertEquals(androidx.compose.ui.graphics.Color(0xFF3187A8),primary)}
     }
