@@ -313,8 +313,8 @@ def services(request):
     if type(duration) is not int or not 1<=duration<=1440:raise ApiError('invalid_duration')
     terms=p.get('terms','')
     if not isinstance(terms,str) or len(terms)>600:raise ApiError('invalid_terms')
-    service = Service.objects.create(duration_minutes=duration,terms=terms,image=media, owner=request.actor, title=text(p, 'title', 3, 150), description=text(p, 'description', 10, 600), price_cents=amount(p, 'price_cents'), image_url=image_url, category=category)
-    return JsonResponse({'id': service.pk, 'status': 'pending_review'}, status=201)
+    service = Service.objects.create(duration_minutes=duration,terms=terms,image=media, owner=request.actor, title=text(p, 'title', 3, 150), description=text(p, 'description', 10, 600), price_cents=amount(p, 'price_cents'), image_url=image_url, category=category, approved=True)
+    return JsonResponse({'id': service.pk, 'status': 'published'}, status=201)
 
 @endpoint(['POST'])
 def reaction(request, service_id):
@@ -494,8 +494,8 @@ def reels(request):
         media = UploadedMedia.objects.filter(pk=uuid.UUID(text(request.payload, 'media_id', 36, 36)), owner=request.actor, purpose='reel').first()
         if not media:
             raise ApiError('invalid_media')
-        reel = Reel.objects.create(owner=request.actor, media=media, video_url=request.build_absolute_uri(f'/api/media/{media.pk}'))
-        return JsonResponse({'id': reel.pk, 'status': 'pending_review'}, status=201)
+        reel = Reel.objects.create(owner=request.actor, media=media, video_url=request.build_absolute_uri(f'/api/media/{media.pk}'), approved=True)
+        return JsonResponse({'id': reel.pk, 'status': 'published'}, status=201)
     return JsonResponse({'items': list(Reel.objects.filter(approved=True, owner__is_active=True).order_by('-id').values('id', 'owner_id', 'video_url')[:100])})
 
 @endpoint(['GET'])
