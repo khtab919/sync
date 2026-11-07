@@ -130,11 +130,11 @@ class ReferenceDesignTest {
         compose.onNodeWithText("مساحة النشر").assertExists()
         compose.onNodeWithText("رفع صورة من الهاتف · حتى 8MB").performScrollTo().assertExists()
         compose.onNodeWithText("رابط صورة HTTPS · اختياري").assertDoesNotExist()
-        compose.onNodeWithText("إرسال للمراجعة").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithText("نشر الآن").performScrollTo().assertIsNotEnabled()
         screenshot("06-seller-upload")
         compose.onNodeWithText("ريلز").performScrollTo().performClick()
         compose.onNodeWithText("اختيار فيديو MP4 من الهاتف · حتى 20MB").performScrollTo().assertExists()
-        compose.onNodeWithText("إرسال للمراجعة").assertIsNotEnabled()
+        compose.onNodeWithText("نشر الآن").assertIsNotEnabled()
         screenshot("07-reel-upload")
     }
 
