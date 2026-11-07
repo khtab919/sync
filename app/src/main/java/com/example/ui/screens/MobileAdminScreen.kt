@@ -295,14 +295,14 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
                         Text("${row.optString("username")} · #${row.optInt("user_id")}")
                         Text(when(row.optString("status")) { "pending" -> "قيد المراجعة"; "approved" -> "معتمد"; else -> if(row.optString("kind")=="gateway") row.optString("status") else "مرفوض" })
                         if(row.optString("kind") == "topup") {
-                            Text("المحوّل: ${cents(row.optLong("amount_cents"))} · المكافأة: ${cents(row.optLong("bonus_cents"))}")
+                            Text("المحوّل: ${cents(row.optLong("amount_cents"))} · نقاط ترويجية: ${row.optLong("bonus_cents")}")
                             Text("${row.optString("method","usdt")} · المطلوب: ${row.optString("payment_amount")} ${row.optString("payment_currency")}")
                             if(row.optBoolean("late_submission"))Text("إيصال أُرسل بعد انتهاء مهلة الطلب — راجع وقت التحويل.")
                             Text(row.optString("transaction_hash"))
                             ReferenceImage(row.optString("receipt_url"), Modifier.fillMaxWidth().height(220.dp))
                             if(row.optString("method","usdt")=="usdt") TextButton(onClick = { runCatching { uriHandler.openUri("https://bscscan.com/tx/" + row.optString("transaction_hash")) } }) { Text("فحص التحويل على BscScan") }
                         } else if(row.optString("kind")=="gateway") {
-                            Text("${cents(row.optLong("amount_cents"))} · المكافأة ${cents(row.optLong("bonus_cents"))}")
+                            Text("${cents(row.optLong("amount_cents"))} · نقاط ترويجية ${row.optLong("bonus_cents")}")
                             Text("رقم البوابة: ${row.optString("provider_id")}")
                             Text("الاعتماد آلي بعد التحقق من إشعار البوابة. لا يعتمد بمجرد صورة دفع.",style=MaterialTheme.typography.bodySmall)
                         } else Text(row.optString("description"))
