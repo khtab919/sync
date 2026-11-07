@@ -21,9 +21,10 @@ def audit(actor, obj, message):
 def account_json(user):
     profile, _ = Profile.objects.get_or_create(user=user)
     wallet, _ = Wallet.objects.get_or_create(user=user)
+    from .admin_security import blocked
     return {'id': user.pk, 'username': user.username, 'email': user.email, 'display_name': profile.display_name or user.username,
             'bio': profile.bio, 'avatar_url': profile.avatar_url, 'selected_frame': profile.selected_frame,
-            'created_at':user.date_joined,'identity_verified':profile.identity_verified,'active': user.is_active, 'creator': profile.creator, 'live_moderator':user.has_perm('core.moderate_livebroadcast'), 'broadcast_allowed':profile.broadcast_allowed, 'protected': user.is_superuser,
+            'created_at':user.date_joined,'identity_verified':profile.identity_verified,'active': user.is_active and not blocked(user,'ban'), 'creator': profile.creator, 'live_moderator':user.has_perm('core.moderate_livebroadcast'), 'broadcast_allowed':profile.broadcast_allowed, 'protected': user.is_superuser,
             'balance_cents': wallet.balance_cents, 'reserved_cents': wallet.reserved_cents}
 
 

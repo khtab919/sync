@@ -330,6 +330,7 @@ class MobileAdministrationTests(TestCase):
         self.user_token = issue_token(self.user)
 
     def call(self, path, data=None, token=None):
+        if data is not None and path.startswith('/api/admin/') and not data.get('reason') and not data.get('review_note'):data=dict(data,reason='Explicit legacy administrative fixture')
         kwargs = {'HTTP_AUTHORIZATION': 'Bearer ' + (token or self.admin_token)}
         if data is None:
             return self.client.get(path, **kwargs)
@@ -420,6 +421,7 @@ class CommerceTests(TestCase):
         self.admin_token = issue_token(self.admin)
 
     def call(self, path, data=None, token=None):
+        if data is not None and path.startswith('/api/admin/') and not data.get('reason') and not data.get('review_note'):data=dict(data,reason='Explicit legacy administrative fixture')
         kwargs = {'HTTP_AUTHORIZATION': 'Bearer ' + (token or self.token)}
         if data is None: return self.client.get(path, **kwargs)
         return self.client.post(path, json.dumps(data), content_type='application/json', **kwargs)

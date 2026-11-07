@@ -186,6 +186,7 @@ def profile_json(user, viewer):
     from .models import BenefitGrant
     frame=BenefitGrant.objects.filter(user=user,kind='frame',expires_at__gt=timezone.now()).order_by('-id').first()
     return {
+        'account_restricted':__import__('core.admin_security',fromlist=['blocked']).blocked(user,'ban') if user==viewer else False,
         'id': user.pk, 'username': user.username,
         'display_name': profile.display_name or user.username,
         'bio': profile.bio, 'email': user.email if user == viewer else '', 'creator': profile.creator,

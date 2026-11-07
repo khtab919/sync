@@ -19,15 +19,21 @@ ADDRESS = '0xc35797768180752b67743d791f79f812bb0972d1'
 
 
 def grant_url(request, media):
-    token = signing.dumps({'media': str(media.pk), 'viewer': request.actor.pk}, salt='media-access')
+    payload={'media':str(media.pk),'viewer':request.actor.pk}
+    if media.owner_id!=request.actor.pk and request.actor.is_staff and hasattr(request,'api_token'):
+        payload['admin_session']=request.api_token.pk
+    token=signing.dumps(payload,salt='media-access')
     return request.build_absolute_uri(f'/api/media/{media.pk}?grant={token}')
 
 
 def may_read(media, user):
     if user is None or not user.is_active:
         return False
-    if user.is_staff and user.is_superuser:
-        return True
+    from .admin_security import blocked
+    if blocked(user,'ban'):return False
+    from .admin_security import scopes
+    allowed=scopes(user)
+    if (media.purpose=='receipt' and 'finance.view' in allowed) or (media.purpose in ['offer','reel'] and 'store.view' in allowed):return True
     if not media.owner.is_active:
         return False
     if user.pk == media.owner_id:
@@ -37,7 +43,9 @@ def may_read(media, user):
         if not row or row.deleted_at:return False
         from .models import ChatCharge
         return not row.media_price_cents or ChatCharge.objects.filter(message=row,buyer=user,kind='unlock').exists()
-    return False
+    from .admin_security import scopes
+    allowed=scopes(user)
+    return (media.purpose=='receipt' and 'finance.view' in allowed) or (media.purpose in ['offer','reel'] and 'store.view' in allowed)
 
 
 def media_file(request, media_id):
@@ -49,6 +57,10 @@ def media_file(request, media_id):
         try:
             data = signing.loads(request.GET.get('grant', ''), salt='media-access', max_age=600)
             viewer = User.objects.filter(pk=data['viewer'], is_active=True).first()
+            if viewer and viewer.pk!=media.owner_id and viewer.is_staff and not media.purpose.startswith('chat_'):
+                from .models import SessionToken
+                session=SessionToken.objects.filter(pk=data.get('admin_session'),user=viewer,expires_at__gt=timezone.now(),admin_verified_at__gt=timezone.now()-timedelta(hours=1)).first()
+                if not session:return HttpResponse(status=403)
             if data['media'] != str(media.pk) or not may_read(media, viewer):
                 return HttpResponse(status=403)
         except (signing.BadSignature, KeyError, ValueError):

@@ -20,7 +20,8 @@ def moderator(user):
     from .admin_security import scopes
     return 'live.moderate' in scopes(user)
 def require_moderator(request):
-    if not moderator(request.actor):raise ApiError('administrator_required',403)
+    from .admin_security import require
+    require(request,'live.moderate',request.method!='GET')
 
 def enabled():return os.environ.get('LAYALI_LIVE_ENABLED')=='1' and bool(os.environ.get('LIVEKIT_API_KEY') and os.environ.get('LIVEKIT_API_SECRET'))
 def room_name(row):return 'live-'+str(row.pk)
@@ -189,7 +190,11 @@ def detail(request,broadcast_id):
 
 @endpoint(['POST'])
 def admission(request,broadcast_id):
-    row=find(request.actor,broadcast_id);authorized(row,request.actor);synchronize(row,True)
+    row=find(request.actor,broadcast_id);authorized(row,request.actor)
+    if request.actor.pk!=row.owner_id and moderator(request.actor):
+        from .admin_security import require
+        require(request,'live.moderate')
+    synchronize(row,True)
     if row.status!='active' and request.actor.pk!=row.owner_id:raise ApiError('host_not_transmitting',409)
     with transaction.atomic():
         list(User.objects.select_for_update().filter(pk__in=sorted({request.actor.pk,row.owner_id})).order_by('pk'))

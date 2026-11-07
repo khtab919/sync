@@ -37,9 +37,10 @@ def require(request,scope,fresh=False):
     request.actor._admin_reason=str(request.payload.get('reason') or request.payload.get('review_note') or '')[:500]
     verified=request.api_token.admin_verified_at
     if not verified or timezone.now()-verified>timedelta(minutes=10 if fresh else 60):raise ApiError('admin_mfa_required',403)
-    if request.method!='GET' and request.path.startswith('/api/admin/control'):
+    if request.method!='GET' and request.path.startswith('/api/admin/'):
         from .views import text
-        text(request.payload,'reason',3,500)
+        why=request.payload.get('reason') or request.payload.get('review_note')
+        text({'reason':why},'reason',3,500)
 
 def route_scope(request):
     path=request.path;write=request.method!='GET'
@@ -60,7 +61,7 @@ def check_operation(request):
     from .views import ApiError
     p=request.path;kind=None;feature=None
     if p.startswith('/api/admin/') or p in ['/api/login','/api/register','/api/logout']:return
-    if blocked(request.actor,'ban'):raise ApiError('account_restricted',403)
+    if p not in ['/api/me','/api/notices','/api/my-cases'] and blocked(request.actor,'ban'):raise ApiError('account_restricted',403)
     if request.method in ['POST','PATCH']:
         if p.startswith('/api/messages/'):kind='messages';feature='messages'
         elif p.startswith('/api/calls'):kind='calls';feature='calls'

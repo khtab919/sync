@@ -291,6 +291,10 @@ fun ServerAppScreen(baseUrl: String) {
                 } })
             return@MyApplicationTheme
         }
+        if (signedIn && profile.optBoolean("account_restricted")) {
+            AccountNotices(api){perform{api.request("/api/logout","POST",JSONObject());signedIn=false;remembered=false;profile=JSONObject();page=""}}
+            return@MyApplicationTheme
+        }
         if (activeCall.isNotBlank() && signedIn) {
             InternalCallScreen(api, baseUrl, activeCall) { finishInternalCall() }
             return@MyApplicationTheme
@@ -557,6 +561,7 @@ fun ServerAppScreen(baseUrl: String) {
                                     Text("الرصيد المتاح", color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     Text(usd(wallet.optLong("available_cents")), fontSize = 32.sp, fontWeight = FontWeight.Bold)
                                     Text("محجوز: ${usd(wallet.optLong("reserved_cents"))}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("نقاط ترويجية منفصلة: ${wallet.optLong("promotional_points")} · غير قابلة للسحب",style=MaterialTheme.typography.bodySmall)
                                 } }
                                 ReferenceRow(Icons.Outlined.ReceiptLong,"سجل العمليات والإيصالات"){open("سجل العمليات")}
                                 ReferencePrimary("شراء رصيد", !submitting) { buyCredits() }

@@ -112,3 +112,17 @@ class NativeAdminSecurityTests(TestCase):
         self.verify(self.staff);Message.objects.create(sender=self.user,recipient=self.owner,body='REDACT_ME')
         r=self.call('/api/admin/control/communications',user=self.staff)
         self.assertEqual(r.status_code,200);self.assertNotIn('REDACT_ME',r.content.decode());self.assertFalse(r.json()['content_access'])
+
+    def test_owner_has_no_arbitrary_private_chat_media_override(self):
+        from .commerce import may_read
+        media=UploadedMedia.objects.create(owner=self.user,purpose='chat_image',file='private-test.jpg',mime='image/jpeg',size=1)
+        Message.objects.create(sender=self.user,recipient=self.staff,attachment=media,body='Private attachment')
+        self.assertFalse(may_read(media,self.owner));self.assertTrue(may_read(media,self.staff))
+
+    def test_banned_customer_can_appeal_but_not_use_restricted_features(self):
+        self.verify(self.owner)
+        self.assertEqual(self.call('/api/admin/control/sanctions',{'user_id':self.user.pk,'kind':'ban','hours':1,'reason':'Temporary account investigation'}).status_code,200)
+        self.assertTrue(self.call('/api/me',user=self.user).json()['account_restricted'])
+        self.assertEqual(self.call('/api/notices',user=self.user).status_code,200)
+        self.assertEqual(self.call('/api/my-cases',{'body':'Please review this decision'},self.user).status_code,200)
+        self.assertEqual(self.call('/api/services',user=self.user).status_code,403)

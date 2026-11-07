@@ -19,6 +19,7 @@ class LiveBroadcastTests(TestCase):
         def provider(method,payload,room=None):return {'participants':self.parts} if method=='ListParticipants' else {}
         self.provider=patch('core.live.provider',side_effect=provider);self.mock=self.provider.start();self.addCleanup(self.provider.stop)
     def request(self,path,payload=None,user=None):
+        if payload is not None and path.startswith('/api/admin/') and not payload.get('reason'):payload=dict(payload,reason='Explicit live administration fixture')
         token=self.tokens[(user or self.owner).pk]
         if payload is None:return self.client.get(path,HTTP_AUTHORIZATION='Bearer '+token)
         return self.client.post(path,json.dumps(payload),content_type='application/json',HTTP_AUTHORIZATION='Bearer '+token)
@@ -88,7 +89,7 @@ class LiveBroadcastTests(TestCase):
         wallet=Wallet.objects.get(user=self.viewer);wallet.reserved_cents=100;wallet.save()
         w=Withdrawal.objects.create(user=self.viewer,amount_cents=100,destination='test destination',request_key=uuid.uuid4())
         p={'id':str(w.pk),'action':'paid','payout_reference':'external-test-ref'}
-        self.assertEqual(self.request('/api/admin/payouts',p,self.admin).status_code,409);p['paid_verified']=True;p=reviewed_payload(self.admin,'/api/admin/payouts',p,self.viewer.pk)
+        self.assertEqual(self.request('/api/admin/payouts',p,self.admin).status_code,409);p['paid_verified']=True;p['reason']='Explicit live administration fixture';p=reviewed_payload(self.admin,'/api/admin/payouts',p,self.viewer.pk)
         self.assertEqual(self.request('/api/admin/payouts',p,self.admin).status_code,200);self.assertEqual(self.request('/api/admin/payouts',p,self.admin).status_code,200)
         self.assertEqual(Wallet.objects.get(user=self.viewer).balance_cents,900)
 
