@@ -642,6 +642,23 @@ class InternalCallingTests(TestCase):
         config=json.loads(re.search(r'<script id="config" type="application/json">(.*?)</script>',room.content.decode(),re.S).group(1))
         return config['token']
 
+    def test_call_room_uses_verified_profile_and_real_media_controls(self):
+        import re
+        Profile.objects.filter(user=self.callee).update(identity_verified=False)
+        call_id = self.create('video')
+        bootstrap = self.call(f'/api/calls/{call_id}/ticket', {}, self.caller_token).json()
+        page = self.client.post(f'/api/calls/{call_id}/room', {'ticket': bootstrap['ticket']})
+        self.assertEqual(page.status_code, 200)
+        config = json.loads(re.search(
+            r'<script id="config" type="application/json">(.*?)</script>',
+            page.content.decode(), re.S,
+        ).group(1))
+        self.assertFalse(config['peerVerified'])
+        self.assertContains(page, 'id="pipContainer"')
+        self.assertContains(page, 'id="pipSwitch"')
+        self.assertContains(page, 'id="signalIndicator"')
+        self.assertContains(page, 'pc.getStats()')
+
     def test_invite_accept_reject_permissions_and_busy_state(self):
         call_id=self.create('video')
         url=f'/api/calls/{call_id}'
