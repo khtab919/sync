@@ -512,13 +512,26 @@ def reels(request):
             raise ApiError('invalid_media')
         reel = Reel.objects.create(owner=request.actor, media=media, video_url=request.build_absolute_uri(f'/api/media/{media.pk}'), approved=True)
         return JsonResponse({'id': reel.pk, 'status': 'published'}, status=201)
-    reels = Reel.objects.filter(approved=True, owner__is_active=True).select_related('owner', 'owner__profile').order_by('-id')[:100]
+    reels = list(Reel.objects.filter(approved=True, owner__is_active=True)
+        .select_related('owner', 'owner__profile').order_by('-id')[:100])
+    # Values come only from persisted accounts and relationships, never demo fixtures.
+    following_ids = set(Follow.objects.filter(
+        user=request.actor, creator_id__in=[r.owner_id for r in reels]
+    ).values_list('creator_id', flat=True))
     items = []
     for reel in reels:
         owner_profile = reel.owner.profile
-        items.append({'id': reel.pk, 'owner_id': reel.owner_id, 'video_url': reel.video_url,
+        items.append({
+            'id': reel.pk, 'owner_id': reel.owner_id, 'video_url': reel.video_url,
             'owner_name': owner_profile.display_name or reel.owner.username,
-            'avatar_url': owner_profile.avatar_url, 'selected_frame': owner_profile.selected_frame})
+            'owner_username': reel.owner.username,
+            'owner_public_id': owner_profile.public_id,
+            'identity_verified': owner_profile.identity_verified,
+            'following': reel.owner_id in following_ids,
+            'avatar_url': owner_profile.avatar_url,
+            'selected_frame': owner_profile.selected_frame,
+            'created_at': reel.created_at.isoformat()
+        })
     return JsonResponse({'items': items})
 
 @endpoint(['GET'])
