@@ -110,11 +110,13 @@ class ReferenceDesignTest {
                 }
             }
         }
-        compose.onNodeWithText("وردة الياقوت").assertExists()
+        // The new 100-level catalog displays owned frames per tier. Older
+        // tests used the deprecated list-only names, not the new compact cards.
+        compose.onNodeWithText("Lv.1").assertExists()
         screenshot("04-frames")
-        compose.onNodeWithText("التاج الملكي").performScrollTo().performClick()
-        org.junit.Assert.assertEquals(10, chosen)
-        screenshot("05-frames-last")
+        compose.onNodeWithText("Lv.1").performClick()
+        org.junit.Assert.assertEquals(1, chosen)
+        screenshot("05-frames-selected")
     }
 
 
