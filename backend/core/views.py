@@ -204,7 +204,7 @@ def profile_json(user, viewer):
         'display_name': profile.display_name or user.username,
         'gender': profile.gender, 'publishing_allowed':profile.publishing_allowed, 'bio': profile.bio, 'email': user.email if user == viewer else '', 'creator': profile.creator,
         'identity_verified': profile.identity_verified,
-        'selected_frame': profile.selected_frame if profile.selected_frame in progress['owned_frames'] else (frame.value if frame else 0),
+        'selected_frame': frame.value if frame else (profile.selected_frame if profile.selected_frame in progress['owned_frames'] else 0),
         'level': progress['level'], 'xp_points': progress['xp_points'],
         'next_level_xp': progress['next_level_xp'],
         'owned_frames': progress['owned_frames'] if user==viewer else [],
@@ -232,7 +232,10 @@ def me(request):
             raise ApiError('invalid_chat_price')
         if 'selected_frame' in p:
             from .profile_levels import can_equip_frame
-            if not can_equip_frame(request.actor, p['selected_frame']):
+            frame_id = p['selected_frame']
+            if type(frame_id) is not int or not 0 <= frame_id <= 100:
+                raise ApiError('invalid_frame')
+            if not can_equip_frame(request.actor, frame_id):
                 raise ApiError('frame_locked',403)
         avatar_url = p.get('avatar_url', profile.avatar_url)
         if not isinstance(avatar_url, str) or len(avatar_url) > 500:
