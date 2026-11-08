@@ -665,43 +665,59 @@ fun ProfileScreen(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 // ====================================================================
-                // 2. STATS ROW: FOLLOWERS, LIKES, VIEWS (إحصائيات المتابعين والإعجابات والمشاهدات)
                 // ====================================================================
+                // 2. REAL STATS ROW: FOLLOWERS, FOLLOWING, REELS, OFFERS (إحصائيات حقيقية بالكامل)
+                // ====================================================================
+                val followersDisplay = "—" // No verified follower count in this legacy profile model
+                val reelsDisplay = "—" // Services are not reels; never miscount them
+                val offersTotalCount = publishedServices.count { it.category != "منشور مدفوع" }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 32.dp)
+                        .padding(horizontal = 20.dp)
                         .testTag("profile_level_xp_card"),
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     MinimalStatItem(
-                        value = if (isFollowing) "24.9K" else "24.8K",
-                        label = "المتابعين"
+                        value = followersDisplay,
+                        label = "المتابعون"
                     )
 
                     Box(
                         modifier = Modifier
                             .width(1.dp)
-                            .height(22.dp)
-                            .background(MaterialTheme.colorScheme.outline)
+                            .height(20.dp)
+                            .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
                     )
 
                     MinimalStatItem(
-                        value = "186.4K",
-                        label = "الإعجابات"
+                        value = "—",
+                        label = "أتابع"
                     )
 
                     Box(
                         modifier = Modifier
                             .width(1.dp)
-                            .height(22.dp)
-                            .background(MaterialTheme.colorScheme.outline)
+                            .height(20.dp)
+                            .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
                     )
 
                     MinimalStatItem(
-                        value = "1.4M",
-                        label = "المشاهدات"
+                        value = reelsDisplay,
+                        label = "الريلز"
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .width(1.dp)
+                            .height(20.dp)
+                            .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
+                    )
+
+                    MinimalStatItem(
+                        value = offersTotalCount.toString(),
+                        label = "العروض"
                     )
                 }
 
