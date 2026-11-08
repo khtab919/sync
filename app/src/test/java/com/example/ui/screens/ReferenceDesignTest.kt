@@ -283,21 +283,21 @@ class ReferenceDesignTest {
         screenshot("16-petroleum-email-login-320")
     }
 
-    @Test fun bothThemesUseTheRequestedPetroleumPalette() {
+    @Test fun bothThemesUseTheRequestedRoyalBluePalette() {
         var dark by mutableStateOf(false)
         var background=androidx.compose.ui.graphics.Color.Unspecified
         var primary=androidx.compose.ui.graphics.Color.Unspecified
         compose.setContent {MyApplicationTheme(darkTheme=dark){val colors=MaterialTheme.colorScheme;SideEffect{background=colors.background;primary=colors.primary};Surface{androidx.compose.material3.Text("Relaxia")}}}
-        compose.runOnIdle{org.junit.Assert.assertEquals(androidx.compose.ui.graphics.Color(0xFFF4F8FA),background);org.junit.Assert.assertEquals(androidx.compose.ui.graphics.Color(0xFF277C9D),primary);dark=true}
-        compose.runOnIdle{org.junit.Assert.assertEquals(androidx.compose.ui.graphics.Color(0xFF101820),background);org.junit.Assert.assertEquals(androidx.compose.ui.graphics.Color(0xFF3187A8),primary)}
+        compose.runOnIdle{org.junit.Assert.assertEquals(androidx.compose.ui.graphics.Color(0xFFF2F6FD),background);org.junit.Assert.assertEquals(androidx.compose.ui.graphics.Color(0xFF1458C3),primary);dark=true}
+        compose.runOnIdle{org.junit.Assert.assertEquals(androidx.compose.ui.graphics.Color(0xFF101820),background);org.junit.Assert.assertEquals(androidx.compose.ui.graphics.Color(0xFF91BCFF),primary)}
     }
 
     @Test fun profileDisplaysPublicNumberAndIndependentHandle() {
         val user=JSONObject().put("id",2).put("public_id","58321").put("display_name","اسم ظاهر").put("username","independent_handle")
         compose.setContent{MyApplicationTheme {ProfileHero(user,true,{},{},{})}}
-        compose.onNodeWithText("@independent_handle").assertExists()
-        compose.onNodeWithText("حساب #58321 · 18+").assertExists()
-        compose.onNodeWithText("حساب #2 · 18+").assertDoesNotExist()
+        compose.onNodeWithText("@independent_handle").assertDoesNotExist()
+        compose.onNodeWithText("ID: 58321").assertExists()
+        compose.onNodeWithText("ID: 2").assertDoesNotExist()
         screenshot("17-petroleum-profile-identity")
     }
 }
