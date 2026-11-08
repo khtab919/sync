@@ -90,7 +90,7 @@ internal fun ChatHeader(name: String, back: () -> Unit, call: () -> Unit, buy: (
 }
 
 @Composable
-internal fun ChatComposer(body: String, change: (String) -> Unit, busy: Boolean, photo: () -> Unit, record: () -> Unit, send: () -> Unit, attach: (() -> Unit)? = null, gift: (() -> Unit)? = null) {
+internal fun ChatComposer(body: String, change: (String) -> Unit, busy: Boolean, photo: () -> Unit, record: () -> Unit, attach: (() -> Unit)? = null, gift: (() -> Unit)? = null, send: () -> Unit) {
     val colors = conversationColors()
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         // Keep a stable action position: empty drafts record; written drafts send.
