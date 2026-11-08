@@ -158,6 +158,9 @@ class ApiTests(TestCase):
         self.assertTrue(reel.approved)
         visible_reels = self.client.get('/api/reels', HTTP_AUTHORIZATION='Bearer ' + self.creator_token).json()['items']
         self.assertIn(reel.pk, [item['id'] for item in visible_reels])
+        reel_info = next(item for item in visible_reels if item['id'] == reel.pk)
+        self.assertEqual(reel_info['owner_name'], self.user.profile.display_name or self.user.username)
+        self.assertIn('avatar_url', reel_info)
 
         # Post-publication moderation must still remove reported content.
         Service.objects.filter(pk=service.pk).update(approved=False)
