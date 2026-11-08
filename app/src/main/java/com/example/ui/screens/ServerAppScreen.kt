@@ -993,6 +993,15 @@ private fun ReelItemView(
     LaunchedEffect(player, active, isPlaying) {
         player?.playWhenReady = active && isPlaying && playbackError == null
     }
+    LaunchedEffect(player, retryKey, active) {
+        if (player != null && active) {
+            delay(15000)
+            if (buffering && playbackError == null) {
+                playbackError = "تأخر ظهور الفيديو. تأكد من الشبكة وأعد المحاولة."
+                player.pause()
+            }
+        }
+    }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         if (player != null) {
