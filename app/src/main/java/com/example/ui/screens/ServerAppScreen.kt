@@ -458,9 +458,20 @@ fun ServerAppScreen(baseUrl: String) {
                                 row = row,
                                 active = pager.currentPage == index,
                                 onChat = { startChat(row.optInt("owner_id"), row.optString("owner_name")) },
-                                onCreator = { showCreator(row.optInt("owner_id")) }
+                                onCreator = { showCreator(row.optInt("owner_id")) },
+                                api = api,
+                                viewerId = profile.optInt("id")
                             )
                         }
+                        Text(
+                            "الريلز",
+                            modifier = Modifier.align(Alignment.TopCenter)
+                                .padding(top = 20.dp)
+                                .background(Color.Black.copy(alpha = 0.42f), RoundedCornerShape(16.dp))
+                                .padding(horizontal = 18.dp, vertical = 8.dp),
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        )
                         IconButton(
                             onClick = { tab = 0; page = ""; notice = ""; revision++ },
                             modifier = Modifier.align(Alignment.TopStart).padding(start=12.dp, top=12.dp)
@@ -955,12 +966,19 @@ internal fun ReferenceLogin(register: Boolean, busy: Boolean, notice: String, us
     }
 }
 
+private fun formatReelTime(ms: Long): String {
+    val seconds = (ms.coerceAtLeast(0L) / 1000)
+    return "${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}"
+}
+
 @Composable
 private fun ReelItemView(
     row: JSONObject,
     active: Boolean,
     onChat: () -> Unit,
-    onCreator: () -> Unit
+    onCreator: () -> Unit,
+    api: LayaliApi,
+    viewerId: Int
 ) {
     val url = row.optString("video_url")
     val context = LocalContext.current
@@ -968,6 +986,13 @@ private fun ReelItemView(
     var playbackError by remember(url) { mutableStateOf<String?>(null) }
     var buffering by remember(url) { mutableStateOf(true) }
     var retryKey by remember(url) { mutableIntStateOf(0) }
+    var muted by remember(url) { mutableStateOf(false) }
+    var durationMs by remember(url) { mutableLongStateOf(0L) }
+    var positionMs by remember(url) { mutableLongStateOf(0L) }
+    var following by remember(row.optInt("owner_id")) { mutableStateOf(row.optBoolean("following")) }
+    var followBusy by remember { mutableStateOf(false) }
+    var followError by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(active) { isPlaying = active }
     // A player is owned by the current page only. Swiping releases its decoder.
@@ -994,8 +1019,18 @@ private fun ReelItemView(
             player?.release()
         }
     }
-    LaunchedEffect(player, active, isPlaying) {
+    LaunchedEffect(player, active, isPlaying, muted) {
         player?.playWhenReady = active && isPlaying && playbackError == null
+        player?.volume = if (muted) 0f else 1f
+    }
+    // All timing shown in the UI comes from the actual decoder timeline.
+    LaunchedEffect(player, active) {
+        while (active && player != null) {
+            val length = player.duration
+            durationMs = if (length > 0 && length < 24 * 60 * 60 * 1000L) length else 0L
+            positionMs = player.currentPosition.coerceAtLeast(0L)
+            delay(250)
+        }
     }
     LaunchedEffect(player, retryKey, active) {
         if (player != null && active) {
@@ -1065,6 +1100,46 @@ private fun ReelItemView(
             )
         }
 
+        // Real player controls; no invented duration, likes or viewer counts.
+        if (active && playbackError == null && !buffering) {
+            Column(
+                Modifier.align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .background(Color.Black.copy(alpha = 0.48f))
+                    .padding(horizontal = 12.dp, vertical = 5.dp)
+            ) {
+                Slider(
+                    value = if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f,
+                    onValueChange = { fraction ->
+                        if (durationMs > 0) {
+                            val next = (durationMs * fraction).toLong()
+                            player?.seekTo(next)
+                            positionMs = next
+                        }
+                    },
+                    enabled = durationMs > 0,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    IconButton(onClick = { isPlaying = !isPlaying }) {
+                        Icon(if (isPlaying) Icons.Outlined.Pause else Icons.Outlined.PlayArrow, "تشغيل أو إيقاف", tint = Color.White)
+                    }
+                    Text(
+                        "${formatReelTime(positionMs)} / ${formatReelTime(durationMs)}",
+                        color = Color.White,
+                        fontSize = 12.sp
+                    )
+                    IconButton(onClick = { muted = !muted }) {
+                        Icon(if (muted) Icons.Outlined.VolumeOff else Icons.Outlined.VolumeUp, if (muted) "تشغيل الصوت" else "كتم الصوت", tint = Color.White)
+                    }
+                }
+            }
+        }
+
         // Center Play icon when paused
         if (!isPlaying) {
             Surface(
@@ -1090,12 +1165,12 @@ private fun ReelItemView(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .fillMaxWidth(0.72f)
-                .padding(start = 16.dp, end = 16.dp, bottom = 24.dp),
+                .padding(start = 16.dp, end = 16.dp, bottom = 106.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier.clickable(onClick = onCreator)
             ) {
                 ReferenceAvatar(
@@ -1112,14 +1187,44 @@ private fun ReelItemView(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                if (row.optBoolean("identity_verified")) {
+                    Icon(Icons.Outlined.Verified, "حساب موثق", tint = Color(0xFF9DCDE4), modifier = Modifier.size(17.dp))
+                }
             }
+            val handle = row.optString("owner_username")
+            if (handle.isNotBlank()) Text("@$handle", color = Color.White.copy(alpha = .85f), fontSize = 12.sp)
+            if (viewerId > 0 && row.optInt("owner_id") != viewerId && row.optInt("owner_id") > 0) {
+                OutlinedButton(
+                    onClick = {
+                        if (!followBusy) {
+                            followBusy = true
+                            followError = ""
+                            scope.launch {
+                                try {
+                                    val result = api.request(
+                                        "/api/creators/${row.optInt("owner_id")}/follow",
+                                        "POST",
+                                        JSONObject().put("enabled", !following)
+                                    )
+                                    following = result.optBoolean("following")
+                                } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                                catch (e: Exception) { followError = "تعذّرت المتابعة" }
+                                finally { followBusy = false }
+                            }
+                        }
+                    },
+                    enabled = !followBusy,
+                    contentPadding = PaddingValues(horizontal = 15.dp, vertical = 3.dp)
+                ) { Text(if (following) "إلغاء المتابعة" else "متابعة", color = Color.White, fontSize = 12.sp) }
+            }
+            if (followError.isNotBlank()) Text(followError, color = Color(0xFFFFC5C5), fontSize = 11.sp)
         }
 
         // Floating Action Buttons (Bottom End)
         Column(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(end = 12.dp, bottom = 24.dp),
+                .padding(end = 12.dp, bottom = 110.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
