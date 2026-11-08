@@ -496,7 +496,14 @@ def reels(request):
             raise ApiError('invalid_media')
         reel = Reel.objects.create(owner=request.actor, media=media, video_url=request.build_absolute_uri(f'/api/media/{media.pk}'), approved=True)
         return JsonResponse({'id': reel.pk, 'status': 'published'}, status=201)
-    return JsonResponse({'items': list(Reel.objects.filter(approved=True, owner__is_active=True).order_by('-id').values('id', 'owner_id', 'video_url')[:100])})
+    reels = Reel.objects.filter(approved=True, owner__is_active=True).select_related('owner', 'owner__profile').order_by('-id')[:100]
+    items = []
+    for reel in reels:
+        owner_profile = reel.owner.profile
+        items.append({'id': reel.pk, 'owner_id': reel.owner_id, 'video_url': reel.video_url,
+            'owner_name': owner_profile.display_name or reel.owner.username,
+            'avatar_url': owner_profile.avatar_url, 'selected_frame': owner_profile.selected_frame})
+    return JsonResponse({'items': items})
 
 @endpoint(['GET'])
 def wallet(request):
