@@ -102,9 +102,12 @@ fun ServerAppScreen(baseUrl: String) {
     var walletError by remember { mutableStateOf("") }
     var wallet by remember { mutableStateOf(JSONObject()) }
     var accountMatches by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var searchReels by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var selectedReelId by remember { mutableIntStateOf(0) }
     var showCreationSheet by remember { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
     var category by rememberSaveable { mutableStateOf("الكل") }
+    var searchCategory by rememberSaveable { mutableStateOf("الكل") }
     var followingOnly by rememberSaveable { mutableStateOf(false) }
     var username by rememberSaveable { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -132,7 +135,7 @@ fun ServerAppScreen(baseUrl: String) {
     var reportId by rememberSaveable { mutableStateOf("") }
     var reason by rememberSaveable { mutableStateOf("") }
 
-    fun open(route: String) { page = route; notice = ""; contentError = ""; query = "" }
+    fun open(route: String) { page = route; notice = ""; contentError = ""; query = ""; searchCategory = "الكل" }
     fun buyCredits() { purchaseReturn = page; open("شحن الرصيد") }
     fun back() { if (page == "شحن الرصيد" && purchaseReturn.isNotBlank()) { page = purchaseReturn; purchaseReturn = "" } else { page = "" }; query = ""; notice = "" }
     fun perform(action: suspend () -> Unit) {
@@ -196,9 +199,17 @@ fun ServerAppScreen(baseUrl: String) {
         else { notice = "هذا الملف غير متاح حاليًا." }
     }
     LaunchedEffect(query,page,tab,signedIn){
-        if(!signedIn||(if(page.isBlank())destinations[tab]else page) !in listOf("تصفح","صنّاع المحتوى")||query.trim().length<2){accountMatches=emptyList();return@LaunchedEffect}
-        delay(250)
-        try{accountMatches=api.request("/api/accounts/search?q="+java.net.URLEncoder.encode(query.trim(),"UTF-8")).rows()}catch(e:CancellationException){throw e}catch(e:Exception){accountMatches=emptyList()}
+        if(!signedIn||(if(page.isBlank())destinations[tab]else page) !in listOf("تصفح","صنّاع المحتوى")||query.trim().length<2){
+            accountMatches=emptyList();searchReels=emptyList();return@LaunchedEffect
+        }
+        delay(300)
+        try{
+            val term=query.trim().removePrefix("@")
+            accountMatches=api.request("/api/accounts/search?q="+java.net.URLEncoder.encode(term,"UTF-8")).rows()
+            searchReels=api.request("/api/reels").rows().filter {
+                (it.optString("owner_name")+" "+it.optString("id")).contains(term,true)
+            }
+        }catch(e:CancellationException){throw e}catch(e:Exception){accountMatches=emptyList();searchReels=emptyList()}
     }
     LaunchedEffect(api, resumeRevision) {
         restoring = true
@@ -383,7 +394,7 @@ fun ServerAppScreen(baseUrl: String) {
             },
             containerColor = MaterialTheme.colorScheme.background,
             topBar = {
-                if (screen != "حسابي" && screen != "صفحة المذيعة") TopAppBar(
+                if (screen != "حسابي" && screen != "صفحة المذيعة" && screen != "ريلز") TopAppBar(
                     title = {
                         if (screen == "تصفح") Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                             Image(painterResource(R.drawable.relaxia_logo), "شعار Relaxia", Modifier.size(30.dp).clip(RoundedCornerShape(10.dp)))
@@ -408,9 +419,9 @@ fun ServerAppScreen(baseUrl: String) {
                 )
             },
             bottomBar = {
-                if (page.isBlank()) NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp, modifier = Modifier.heightIn(min = 72.dp)) {
+                if (page.isBlank() && screen != "ريلز") NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp, modifier = Modifier.heightIn(min = 72.dp)) {
                     destinations.forEachIndexed { index, name -> NavigationBarItem(selected = tab == index,
-                        onClick = { tab = index; query = ""; category = "الكل"; notice = "" },
+                        onClick = { tab = index; query = ""; category = "الكل"; searchCategory = "الكل"; notice = "" },
                         icon = { Icon(destinationIcons[index], null, Modifier.size(24.dp)) }, label = { Text(name, fontSize = 12.sp) },
                         colors = NavigationBarItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.primaryContainer,selectedIconColor=MaterialTheme.colorScheme.primary,selectedTextColor=MaterialTheme.colorScheme.primary)) }
                 }
@@ -423,28 +434,62 @@ fun ServerAppScreen(baseUrl: String) {
                 }
                 if (screen == "ريلز" && rows.isNotEmpty()) {
                     val pager = rememberPagerState(pageCount = { rows.size })
-                    VerticalPager(state = pager, modifier = Modifier.weight(1f)) { index ->
-                        val row = rows[index]
-                        ReelItemView(
-                            row = row,
-                            active = pager.currentPage == index,
-                            onChat = { startChat(row.optInt("owner_id"), row.optString("owner_name")) },
-                            onCreator = {
-                                creator = JSONObject()
-                                    .put("id", row.optInt("owner_id"))
-                                    .put("display_name", row.optString("owner_name"))
-                                    .put("avatar_url", row.optString("avatar_url"))
-                                    .put("selected_frame", row.optInt("selected_frame"))
-                                open("صفحة المذيعة")
-                            }
-                        )
+                    LaunchedEffect(rows, selectedReelId) {
+                        if(selectedReelId > 0){
+                            val index = rows.indexOfFirst { it.optInt("id") == selectedReelId }
+                            if(index >= 0){ pager.scrollToPage(index); selectedReelId = 0 }
+                        }
+                    }
+                    Box(Modifier.weight(1f).fillMaxWidth().background(Color.Black)) {
+                        VerticalPager(state = pager, modifier = Modifier.fillMaxSize()) { index ->
+                            val row = rows[index]
+                            ReelItemView(
+                                row = row,
+                                active = pager.currentPage == index,
+                                onChat = { startChat(row.optInt("owner_id"), row.optString("owner_name")) },
+                                onCreator = {
+                                    creator = JSONObject()
+                                        .put("id", row.optInt("owner_id"))
+                                        .put("display_name", row.optString("owner_name"))
+                                        .put("avatar_url", row.optString("avatar_url"))
+                                        .put("selected_frame", row.optInt("selected_frame"))
+                                    open("صفحة المذيعة")
+                                }
+                            )
+                        }
+                        IconButton(
+                            onClick = { tab = 0; page = ""; notice = ""; revision++ },
+                            modifier = Modifier.align(Alignment.TopStart).padding(start=12.dp, top=12.dp)
+                                .background(Color.Black.copy(alpha=0.48f), CircleShape)
+                        ) { Icon(Icons.Outlined.ArrowForward, "العودة للتصفح", tint=Color.White) }
                     }
                 } else LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     when (screen) {
                         "تصفح" -> {
-                            item { SearchField(query, { query = it }, "ابحث بالاسم أو @username أو ID") }
-                            items(accountMatches,key={"account-"+it.optInt("id")}){person->OutlinedCard(onClick={showCreator(person.optInt("id"))},modifier=Modifier.padding(horizontal=20.dp).fillMaxWidth()){Column(Modifier.padding(16.dp)){Text(person.optString("display_name"),style=MaterialTheme.typography.titleMedium);Text("@"+person.optString("username")+" · #"+person.optString("public_id"),style=LocalTextStyle.current.copy(textDirection=androidx.compose.ui.text.style.TextDirection.Ltr))}}}
+                            item { SearchField(query, { query = it }, "ابحث عن حساب أو ريل أو عرض") }
                             item {
+                                LazyRow(contentPadding=PaddingValues(horizontal=18.dp), horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                                    items(listOf("الكل","الحسابات","الريلز","العروض")) { label ->
+                                        FilterChip(selected=searchCategory==label, onClick={searchCategory=label}, label={Text(label)})
+                                    }
+                                }
+                            }
+                            if(searchCategory in listOf("الكل","الحسابات"))
+                            items(accountMatches,key={"account-"+it.optInt("id")}){person->OutlinedCard(onClick={showCreator(person.optInt("id"))},modifier=Modifier.padding(horizontal=20.dp).fillMaxWidth()){Column(Modifier.padding(16.dp)){Text(person.optString("display_name"),style=MaterialTheme.typography.titleMedium);Text("@"+person.optString("username")+" · #"+person.optString("public_id"),style=LocalTextStyle.current.copy(textDirection=androidx.compose.ui.text.style.TextDirection.Ltr))}}}
+                            if (query.trim().length >= 2 && searchCategory in listOf("الكل","الريلز")) {
+                                items(searchReels, key={"search-reel-"+it.optInt("id")}){ reel ->
+                                    Surface(onClick={selectedReelId=reel.optInt("id");tab=1;query="";searchCategory="الكل"},
+                                        modifier=Modifier.padding(horizontal=18.dp).fillMaxWidth(),
+                                        color=MaterialTheme.colorScheme.surfaceVariant, shape=RoundedCornerShape(16.dp)){
+                                        Row(Modifier.padding(16.dp),horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=Alignment.CenterVertically){
+                                            Icon(Icons.Outlined.SmartDisplay,"ريل",tint=MaterialTheme.colorScheme.primary)
+                                            Text("ريل من "+reel.optString("owner_name"),Modifier.weight(1f))
+                                            Icon(Icons.Outlined.PlayArrow,"مشاهدة")
+                                        }
+                                    }
+                                }
+                            }
+                            if(searchCategory in listOf("الكل","الحسابات")) item {
                                 LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                     item { Story("مساحتك", profile.optInt("selected_frame"), profile.optString("avatar_url")) { tab = 4 } }
                                     items(creators.filter{it.optInt("id")!=profile.optInt("id")}) { person -> Story(person.optString("display_name"), person.optInt("selected_frame"), person.optString("avatar_url")) { creator = person; open("صفحة المذيعة") } }
@@ -455,8 +500,11 @@ fun ServerAppScreen(baseUrl: String) {
                                 TextButton(onClick = { followingOnly = true }) { Text("أتابعهم", color = if (followingOnly) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }
                             } }
                             val ids = creators.filter { it.optBoolean("following") }.map { it.optInt("id") }.toSet()
-                            val visible = services.filter { (!followingOnly || it.optInt("owner_id") in ids) && (it.optString("title") + it.optString("owner_name")).contains(query, true) }
-                            if (visible.isEmpty() && !loading && contentError.isBlank()) item { ReferenceEmpty(Icons.Outlined.Explore, "مساحتك لاكتشاف الجديد", "ستظهر هنا العروض التي ينشرها المستخدمون.") }
+                            val visible = if (searchCategory in listOf("الكل","العروض")) services.filter {
+                                (!followingOnly || it.optInt("owner_id") in ids) &&
+                                (it.optString("title") + it.optString("owner_name")).contains(query, true)
+                            } else emptyList()
+                            if (visible.isEmpty() && !loading && contentError.isBlank() && query.isBlank() && searchCategory in listOf("الكل","العروض")) item { ReferenceEmpty(Icons.Outlined.Explore, "مساحتك لاكتشاف الجديد", "ستظهر هنا العروض التي ينشرها المستخدمون.") }
                             items(visible, key = { it.optInt("id") }) { service ->
                                 FeedCard(service, { showCreator(service.optInt("owner_id")) }, { showService(service) }, { kind -> perform {
                                     val updated = api.request("/api/services/${service.optInt("id")}/reaction", "POST", JSONObject().put("kind", kind).put("enabled", !service.optBoolean(if (kind == "like") "liked" else "saved")))
