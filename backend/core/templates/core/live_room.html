@@ -1,14 +1,93 @@
-<!doctype html><html lang="ar" dir="rtl" data-theme="{{ theme|default:'dark' }}"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Relaxia · مباشر</title>
-<link rel="stylesheet" href="/static/core/live-stage.css?v=media-2">
-<body{% if config.mode == "audio" %} class="audio-mode"{% endif %}><main id="stage"><div id="video" aria-label="البث المباشر"{% if config.mode == "audio" %} hidden{% endif %}></div><div id="audioStage"{% if config.mode != "audio" %} hidden{% endif %}><div class="audio-person"><div class="audio-placeholder">{{ config.ownerName|first }}</div><span>{{ config.ownerName }}</span><p>جارٍ تجهيز الصوت…</p></div></div><div class="shade"></div>
-<header><button id="profile" class="identity" aria-label="ملف صاحب البث"><img id="ownerAvatar" hidden alt=""><span><strong id="name"></strong><small id="title"></small></span></button><button id="follow" class="accent">متابعة</button><span id="viewers" class="pill">—</span><button id="exit" class="round" aria-label="خروج">×</button></header>
-<div id="connection"><span class="dot"></span><span id="status" role="status">جارٍ الاتصال…</span><button id="retryMedia" hidden>إعادة تجهيز الكاميرا والميكروفون</button><span id="badge"></span></div>
-<section id="pk" hidden><div id="pkTeams"></div><progress id="pkProgress" max="100" value="50"></progress><small id="pkTimer"></small></section>
-<div id="goal" hidden></div><div id="giftEffect" aria-live="polite" hidden></div><div id="pinned" hidden></div><section id="messages" aria-label="التعليقات"></section>
-<footer><div id="publisherControls" hidden><button id="mute">كتم الميكروفون</button><button id="camera">إيقاف الفيديو</button><button id="switch">تبديل الكاميرا</button></div><div class="bottom"><form id="composer"><input id="text" maxlength="300" placeholder="قل شيئًا…" aria-label="اكتب تعليقًا" autocomplete="off"><button aria-label="إرسال التعليق">↑</button></form><button id="gift" class="tool" hidden>هدية</button><button id="guests" class="tool">الضيوف</button><button id="share" class="tool">مشاركة</button><button id="more" class="tool" aria-label="المزيد">•••</button></div></footer>
-<div id="ended" hidden><div><h2 id="endedTitle"></h2><p>لا يتوفر تسجيل أو إعادة مشاهدة.</p><button id="closeEnded">العودة للتطبيق</button></div></div>
-<dialog id="sheet"><div class="sheet-head"><h2 id="sheetTitle"></h2><button id="closeSheet" class="round" aria-label="إغلاق القائمة">×</button></div><div id="sheetBody"></div></dialog>
-</main>{{ config|json_script:"config" }}
+<!doctype html>
+<html lang="ar" dir="rtl" data-theme="{{ theme|default:'dark' }}">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Relaxia · مباشر</title>
+<link rel="stylesheet" href="/static/core/live-stage.css?v=media-3">
+<body{% if config.mode == "audio" %} class="audio-mode"{% endif %}>
+<main id="stage">
+  <div id="video" aria-label="البث المباشر"{% if config.mode == "audio" %} hidden{% endif %}></div>
+  <div id="audioStage"{% if config.mode != "audio" %} hidden{% endif %}>
+    <div class="audio-person host-person">
+      <div class="audio-waves" aria-hidden="true"><span></span><span></span><span></span></div>
+      <div class="audio-placeholder">{{ config.ownerName|first }}</div>
+      <span class="audio-name">{{ config.ownerName }}</span>
+      <p class="audio-status">بث صوتي مباشر</p>
+    </div>
+  </div>
+  <div class="shade"></div>
+  <div id="floatingHearts" class="floating-hearts-layer" aria-hidden="true"></div>
+
+  <header>
+    <button id="exit" class="round" aria-label="خروج">×</button>
+    <span id="viewers" class="pill" title="المشاهدون"><svg class="pill-eye" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span id="viewerCount">—</span></span>
+    <span class="live-pill"><span class="pulse-dot"></span>بث مباشر</span>
+    <button id="profile" class="identity" aria-label="ملف صاحب البث">
+      <div class="identity-avatar-ring">
+        <img id="ownerAvatar" hidden alt="">
+        <div class="identity-fallback">{{ config.ownerName|first }}</div>
+      </div>
+      <span class="identity-meta">
+        <strong id="name">{{ config.ownerName }}</strong>
+        <small id="title">ID: {{ config.ownerId }}</small>
+      </span>
+    </button>
+    <button id="follow" class="accent" hidden>متابعة</button>
+  </header>
+
+  <div id="connection"><span class="dot"></span><span id="status" role="status">جارٍ الاتصال…</span><button id="retryMedia" hidden>إعادة تجهيز الكاميرا والميكروفون</button><span id="badge"></span></div>
+  <section id="pk" hidden><div id="pkTeams"></div><progress id="pkProgress" max="100" value="50"></progress><small id="pkTimer"></small></section>
+
+  <div id="goal" class="goal-card" hidden>
+    <div class="goal-row">
+      <span class="goal-label">هدف البث</span>
+      <span id="goalText" class="goal-amount">0 / 0</span>
+      <span class="goal-icon">🎁</span>
+    </div>
+    <div class="goal-bar"><div id="goalProgress" class="goal-progress-fill"></div></div>
+  </div>
+
+  <div id="giftEffect" aria-live="polite" hidden></div>
+  <div id="pinned" hidden></div>
+  <section id="messages" aria-label="التعليقات"></section>
+
+  <footer>
+    <div id="publisherControls" hidden>
+      <button id="mute">كتم الميكروفون</button>
+      <button id="camera">إيقاف الفيديو</button>
+      <button id="switch">تبديل الكاميرا</button>
+    </div>
+    <div class="bottom">
+      <button id="more" class="tool-circle" aria-label="المزيد">•••</button>
+      <button id="gift" class="tool-circle" aria-label="هدية"{% if not config.gifts %} hidden{% endif %}>🎁</button>
+      <button id="guests" class="tool-circle" aria-label="الضيوف">👥</button>
+      <button id="share" class="tool-circle" aria-label="مشاركة">↗</button>
+      <form id="composer">
+        <input id="text" maxlength="300" placeholder="اكتب رسالة…" aria-label="اكتب تعليقًا" autocomplete="off">
+        <button id="emojiBtn" type="button" class="composer-emoji" aria-label="رمز تعبيري">😊</button>
+        <button class="composer-send" aria-label="إرسال التعليق">↑</button>
+      </form>
+      <button id="bigGiftBtn" class="gift-fab" aria-label="إرسال هدية"{% if not config.gifts %} hidden{% endif %}>🎁</button>
+    </div>
+  </footer>
+
+  <div id="ended" hidden>
+    <div>
+      <h2 id="endedTitle"></h2>
+      <p>لا يتوفر تسجيل أو إعادة مشاهدة.</p>
+      <button id="closeEnded">العودة للتطبيق</button>
+    </div>
+  </div>
+  <dialog id="sheet">
+    <div class="sheet-head">
+      <h2 id="sheetTitle"></h2>
+      <button id="closeSheet" class="round" aria-label="إغلاق القائمة">×</button>
+    </div>
+    <div id="sheetBody"></div>
+  </dialog>
+</main>
+
+{{ config|json_script:"config" }}
 <script nonce="{{ nonce }}">
 (function () {
   var timer;
@@ -26,4 +105,9 @@
     if (window.LayaliLive) window.LayaliLive.closeRoom(); else history.back();
   };
 })();
-</script><script src="/static/core/livekit-client.umd.min.js"></script><script src="/static/core/live-media.js?v=media-2"></script><script src="/static/core/live-stage.js?v=media-2"></script></body></html>
+</script>
+<script src="/static/core/livekit-client.umd.min.js"></script>
+<script src="/static/core/live-media.js?v=media-3"></script>
+<script src="/static/core/live-stage.js?v=media-3"></script>
+</body>
+</html>
