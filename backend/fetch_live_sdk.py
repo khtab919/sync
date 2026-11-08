@@ -8,4 +8,21 @@ def fetch():
     if hashlib.sha256(data).hexdigest()!=SHA256:raise SystemExit('Live transport dependency checksum mismatch')
     target=Path(__file__).parent/'core/static/core/livekit-client.umd.min.js'
     target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(data)
-if __name__=='__main__':fetch()
+def verify_static():
+    """Refuse to serve a release whose collected LiveKit client is absent/stale."""
+    artifact=Path(__file__).parent/'staticfiles/core/livekit-client.umd.min.js'
+    try:
+        actual=hashlib.sha256(artifact.read_bytes()).hexdigest()
+    except FileNotFoundError:
+        raise SystemExit('LiveKit JS missing from collected staticfiles; run collectstatic')
+    if actual!=SHA256:
+        raise SystemExit('LiveKit JS checksum mismatch in collected staticfiles')
+
+if __name__=='__main__':
+    import sys
+    if sys.argv[1:]==['--verify-static']:
+        verify_static()
+    elif not sys.argv[1:]:
+        fetch()
+    else:
+        raise SystemExit('Usage: fetch_live_sdk.py [--verify-static]')
