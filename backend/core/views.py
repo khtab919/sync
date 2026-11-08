@@ -348,6 +348,22 @@ def creators(request):
     users=users.order_by('id')[:100]
     return JsonResponse({'items': [profile_json(user, request.actor) for user in users]})
 
+@endpoint(['GET'])
+def creator_detail(request, creator_id):
+    from .models import UserBlock
+    from .admin_security import blocked
+    creator = User.objects.select_related('profile').filter(
+        pk=creator_id, is_active=True, profile__isnull=False
+    ).first()
+    if (creator is None or blocked(creator, 'ban') or
+        UserBlock.objects.filter(
+            Q(user=request.actor, blocked=creator) |
+            Q(user=creator, blocked=request.actor)
+        ).exists()):
+        raise ApiError('creator_unavailable', 404)
+    return JsonResponse(profile_json(creator, request.actor))
+
+
 @endpoint(['POST'])
 def follow(request, creator_id):
     creator = User.objects.filter(pk=creator_id, is_active=True).first()
