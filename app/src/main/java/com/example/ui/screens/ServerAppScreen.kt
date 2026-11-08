@@ -194,9 +194,13 @@ fun ServerAppScreen(baseUrl: String) {
     fun showService(item: JSONObject) { selected = item; open("تفاصيل العرض") }
     fun showCreator(id: Int) {
         if (id == profile.optInt("id")) { page = ""; tab = 4; return }
-        creator = (creators+accountMatches).firstOrNull { it.optInt("id") == id } ?: JSONObject().put("id", id)
-        if (creator.has("display_name")) open("صفحة المذيعة")
-        else { notice = "هذا الملف غير متاح حاليًا." }
+        if (id <= 0) { notice = "هذا الملف غير متاح حاليًا."; return }
+        perform {
+            creator = api.request("/api/creators/$id")
+            open("صفحة المذيعة")
+            // Refresh public offers for the selected creator.
+            revision++
+        }
     }
     LaunchedEffect(query,page,tab,signedIn){
         if(!signedIn||(if(page.isBlank())destinations[tab]else page) !in listOf("تصفح","صنّاع المحتوى")||query.trim().length<2){
@@ -447,14 +451,7 @@ fun ServerAppScreen(baseUrl: String) {
                                 row = row,
                                 active = pager.currentPage == index,
                                 onChat = { startChat(row.optInt("owner_id"), row.optString("owner_name")) },
-                                onCreator = {
-                                    creator = JSONObject()
-                                        .put("id", row.optInt("owner_id"))
-                                        .put("display_name", row.optString("owner_name"))
-                                        .put("avatar_url", row.optString("avatar_url"))
-                                        .put("selected_frame", row.optInt("selected_frame"))
-                                    open("صفحة المذيعة")
-                                }
+                                onCreator = { showCreator(row.optInt("owner_id")) }
                             )
                         }
                         IconButton(
