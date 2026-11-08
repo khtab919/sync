@@ -9,6 +9,15 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.material.icons.filled.*
+
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
@@ -75,22 +84,7 @@ private fun liveError(e:Exception)=when(e.message){
         }
     }
     selected?.let{row->AlertDialog(onDismissRequest={selected=null},title={Text(row.optString("title"))},text={Column(verticalArrangement=Arrangement.spacedBy(10.dp)){Text(row.optString("owner_name"));Text(if(row.optBoolean("private"))"سعر الدخول: ${row.optLong("price_cents")} من الرصيد"else if(row.optBoolean("invite_only"))"بث بالدعوة · مجاني"else"بث عام مجاني");Text(row.optString("refund_policy"),style=MaterialTheme.typography.bodySmall);TextButton({selected=null;openProfile(row.optInt("owner_id"))}){Text("عرض الملف الشخصي")}}},confirmButton={TextButton({enter(row)},enabled=!busy){Text(if(row.optBoolean("private"))"تأكيد الدخول وحجز المبلغ"else"مشاهدة")}},dismissButton={TextButton({selected=null}){Text("إلغاء")}})}
-    if(create)AlertDialog(onDismissRequest={create=false},title={Text("إنشاء بث مباشر")},text={Column(Modifier.heightIn(max=420.dp).verticalScroll(androidx.compose.foundation.rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)){
-        OutlinedTextField(title,{title=it.take(120)},label={Text("عنوان البث")})
-        Row(verticalAlignment=Alignment.CenterVertically){Switch(audioOnly,{audioOnly=it});Text("بث صوتي فقط")}
-        Text("عدد المتحدثين يشمل صاحب البث. طلبات الضيوف تحتاج موافقتك.",style=MaterialTheme.typography.bodySmall)
-        Row(Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(5.dp)){listOf("1","2","4","6","12").forEach{n->FilterChip(speakers==n,{speakers=n},label={Text(n)})}}
-        if(error.isNotBlank())Text(error,color=MaterialTheme.colorScheme.error)
-        Row(verticalAlignment=Alignment.CenterVertically){Switch(privateLive,{privateLive=it});Text("دخول مدفوع")}
-        if(privateLive)OutlinedTextField(price,{price=it.filter{c->c.isDigit()}.take(7)},label={Text("سعر الدخول من الرصيد")})
-        Row(verticalAlignment=Alignment.CenterVertically){Switch(inviteOnly,{inviteOnly=it});Text("للمدعوين فقط")}
-        if(inviteOnly)OutlinedTextField(invites,{invites=it.take(1000)},label={Text("أسماء المستخدمين مفصولة بفاصلة")})
-        OutlinedTextField(limit,{limit=it.filter{c->c.isDigit()}.take(3)},label={Text("أقصى عدد مشاهدين · حتى $maximumLimit")})
-        OutlinedTextField(minimum,{minimum=it.filter{c->c.isDigit()}.take(4)},label={Text("مدة استحقاق الخدمة بالثواني · 30 على الأقل")})
-        Row(verticalAlignment=Alignment.CenterVertically){Switch(gifts,{gifts=it});Text("إتاحة الهدايا المدفوعة")}
-        if(gifts)OutlinedTextField(giftGoal,{giftGoal=it.filter{c->c.isDigit()}.take(8)},label={Text("هدف الهدايا · 0 دون هدف")})
-        Text("تحصل على 80٪ من الإيراد المستحق. يعاد الحجز إذا انتهى البث قبل مدة الخدمة. البث لا يحفظ.",style=MaterialTheme.typography.bodySmall)
-    }},confirmButton={TextButton({act{val p=price.toIntOrNull()?:0;val n=limit.toIntOrNull()?:0;val m=minimum.toIntOrNull()?:0;if(title.trim().length<2||n !in 1..maximumLimit||m !in 30..3600||(privateLive&&p !in 1..1000000))throw IllegalArgumentException("invalid_input");val row=api.request("/api/live","POST",JSONObject().put("title",title.trim()).put("private",privateLive).put("invite_only",inviteOnly).put("price_cents",p).put("max_viewers",n).put("minimum_seconds",m).put("gifts_enabled",gifts).put("mode",if(audioOnly)"audio"else"video").put("max_speakers",speakers.toInt()).put("gift_goal_cents",giftGoal.toIntOrNull()?:0).put("invite_names",JSONArray(invites.split(',', '،').map{it.trim().removePrefix("@")}.filter{it.isNotBlank()})));create=false;active=api.request("/api/live/${row.getString("id")}/admission","POST",JSONObject());activeId=row.getString("id")}},enabled=!busy){Text("بدء البث")}},dismissButton={TextButton({create=false}){Text("إلغاء")}})
+    if(create){LiveHostSetupScreen(onClose={create=false},audioOnly=audioOnly,onAudioOnlyChange={audioOnly=it},title=title,onTitleChange={title=it},privateLive=privateLive,onPrivateLiveChange={privateLive=it},price=price,onPriceChange={price=it},inviteOnly=inviteOnly,onInviteOnlyChange={inviteOnly=it},invites=invites,onInvitesChange={invites=it},speakers=speakers,onSpeakersChange={speakers=it},limit=limit,onLimitChange={limit=it},minimum=minimum,onMinimumChange={minimum=it},gifts=gifts,onGiftsChange={gifts=it},giftGoal=giftGoal,onGiftGoalChange={giftGoal=it},maximumLimit=maximumLimit,busy=busy,error=error,onStartStream={act{val p=price.toIntOrNull()?:0;val n=limit.toIntOrNull()?:0;val m=minimum.toIntOrNull()?:0;val t=title.trim().ifEmpty{"بث مباشر"};if(t.length<2||n !in 1..maximumLimit||m !in 30..3600||(privateLive&&p !in 1..1000000))throw IllegalArgumentException("invalid_input");val row=api.request("/api/live","POST",JSONObject().put("title",t).put("private",privateLive).put("invite_only",inviteOnly).put("price_cents",p).put("max_viewers",n).put("minimum_seconds",m).put("gifts_enabled",gifts).put("mode",if(audioOnly)"audio"else"video").put("max_speakers",speakers.toInt()).put("gift_goal_cents",giftGoal.toIntOrNull()?:0).put("invite_names",JSONArray(invites.split(',', '،').map{it.trim().removePrefix("@")}.filter{it.isNotBlank()})));create=false;active=api.request("/api/live/${row.getString("id")}/admission","POST",JSONObject());activeId=row.getString("id")}})}
 }
 
 @Composable internal fun LiveRoomView(baseUrl:String,bootstrap:JSONObject,profile:((Int)->Unit)?=null,finish:()->Unit){
@@ -111,7 +105,7 @@ private fun liveError(e:Exception)=when(e.message){
     Surface(Modifier.fillMaxSize(),color=Color(0xFF101820),contentColor=Color.White){Column(Modifier.fillMaxSize().safeDrawingPadding()){
         if(error.isNotBlank()){Text(error,Modifier.padding(20.dp));if(owner&&!granted)TextButton({requestedMode=if(audioOnly)"audio"else"video";permission.launch(if(audioOnly)arrayOf(Manifest.permission.RECORD_AUDIO)else arrayOf(Manifest.permission.RECORD_AUDIO,Manifest.permission.CAMERA))}){Text("إعادة طلب الأذونات")};TextButton(finish){Text("رجوع")}}
         if(granted&&error.isBlank())AndroidView(modifier=Modifier.fillMaxSize(),factory={ctx->WebView(ctx).apply{
-            view=this;setBackgroundColor(android.graphics.Color.rgb(23,21,23));settings.javaScriptEnabled=true;settings.allowFileAccess=false;settings.allowContentAccess=false;settings.domStorageEnabled=false;settings.cacheMode=WebSettings.LOAD_NO_CACHE;settings.mixedContentMode=WebSettings.MIXED_CONTENT_NEVER_ALLOW;settings.mediaPlaybackRequiresUserGesture=false
+            view=this;setBackgroundColor(android.graphics.Color.rgb(23,21,23));settings.javaScriptEnabled=true;settings.allowFileAccess=false;settings.allowContentAccess=false;settings.domStorageEnabled=true;settings.databaseEnabled=true;settings.cacheMode=WebSettings.LOAD_NO_CACHE;settings.mixedContentMode=WebSettings.MIXED_CONTENT_NEVER_ALLOW;settings.mediaPlaybackRequiresUserGesture=false
             val allowedPath=Uri.parse(bootstrap.getString("url")).path
             addJavascriptInterface(object{@JavascriptInterface fun canOpenProfile():Boolean=profile!=null
             @JavascriptInterface fun openProfile(id:Int){android.os.Handler(android.os.Looper.getMainLooper()).post{if(trustedCallOrigin(url.orEmpty(),baseUrl)&&Uri.parse(url).path==allowedPath)profile?.invoke(id)}}
@@ -129,7 +123,7 @@ private fun liveError(e:Exception)=when(e.message){
                 override fun onReceivedError(v:WebView?,r:WebResourceRequest?,e:WebResourceError?){if(r?.isForMainFrame==true)error="تعذر تحميل غرفة البث. تحقق من الاتصال بالخادم."}
                 override fun onPageFinished(v:WebView?,url:String?){if(url!=null&&trustedCallOrigin(url,baseUrl)&&Uri.parse(url).path==allowedPath)v?.evaluateJavascript("typeof LivekitClient !== 'undefined' && typeof RelaxiaMedia !== 'undefined' && typeof connect === 'function'"){ready->if(ready=="false")error="لم تُحمّل ملفات محرك البث. يلزم فحص ملفات الخادم؛ لم يبدأ الفيديو."}}
                 override fun shouldOverrideUrlLoading(v:WebView?,r:WebResourceRequest?)=r?.url?.let{!trustedCallOrigin(it.toString(),baseUrl)||it.path!=allowedPath}?:true;override fun onReceivedSslError(v:WebView?,h:SslErrorHandler?,e:android.net.http.SslError?){h?.cancel();error="شهادة أمان الخادم غير صالحة."}}
-            webChromeClient=object:WebChromeClient(){override fun onPermissionRequest(r:PermissionRequest?){if(r==null)return;if(!trustedCallOrigin(r.origin.toString(),baseUrl)){r.deny();return};val accepted=r.resources.filter{(it==PermissionRequest.RESOURCE_AUDIO_CAPTURE&&ContextCompat.checkSelfPermission(context,Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED)||(it==PermissionRequest.RESOURCE_VIDEO_CAPTURE&&ContextCompat.checkSelfPermission(context,Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED)};if(accepted.size==r.resources.size&&accepted.isNotEmpty())r.grant(accepted.toTypedArray())else r.deny()}}
+            webChromeClient=object:WebChromeClient(){override fun onPermissionRequest(r:PermissionRequest?){if(r==null)return;if(!trustedCallOrigin(r.origin.toString(),baseUrl)){r.deny();return};val accepted=r.resources.filter{(it==PermissionRequest.RESOURCE_AUDIO_CAPTURE&&ContextCompat.checkSelfPermission(context,Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED)||(it==PermissionRequest.RESOURCE_VIDEO_CAPTURE&&ContextCompat.checkSelfPermission(context,Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED)};if(accepted.isNotEmpty())r.grant(accepted.toTypedArray())else r.deny()}}
             val target=bootstrap.getString("url");if(trustedCallOrigin(target,baseUrl)&&allowedPath?.startsWith("/api/live/")==true&&allowedPath.endsWith("/room"))postUrl(target,("theme="+transportTheme+"&ticket="+URLEncoder.encode(bootstrap.getString("ticket"),"UTF-8")).toByteArray())else error="عنوان بث غير صالح."
         }})else if(error.isBlank())Text("جارٍ تجهيز البث…",Modifier.padding(24.dp))
     }}
@@ -142,4 +136,516 @@ private fun liveError(e:Exception)=when(e.message){
                     Icon(Icons.Outlined.PlayCircleOutline,null)
                 }
             }
+}
+
+private class PreviewCameraResources {
+    var device: android.hardware.camera2.CameraDevice? = null
+    var session: android.hardware.camera2.CameraCaptureSession? = null
+    var surface: android.view.Surface? = null
+    var closed: Boolean = false
+
+    fun close() {
+        if (closed) return
+        closed = true
+        runCatching { session?.stopRepeating() }
+        runCatching { session?.close() }
+        runCatching { device?.close() }
+        runCatching { surface?.release() }
+        session = null
+        device = null
+        surface = null
+    }
+}
+
+@Composable
+internal fun CameraPreviewSurface(
+    context: android.content.Context,
+    facingFront: Boolean,
+    modifier: Modifier = Modifier,
+    onError: (String) -> Unit = {}
+) {
+    val resources = remember(facingFront) { PreviewCameraResources() }
+    val reportError = onError
+    DisposableEffect(resources) {
+        onDispose { resources.close() }
+    }
+    // A new TextureView is required for every camera switch. AndroidView.factory
+    // is not re-executed by ordinary Compose recomposition.
+    key(facingFront) {
+        AndroidView(
+            modifier = modifier,
+            factory = { ctx ->
+                android.view.TextureView(ctx).apply {
+                    surfaceTextureListener = object : android.view.TextureView.SurfaceTextureListener {
+                        override fun onSurfaceTextureAvailable(st: android.graphics.SurfaceTexture, width: Int, height: Int) {
+                            if (resources.closed) return
+                            try {
+                                val manager = ctx.getSystemService(android.content.Context.CAMERA_SERVICE) as? android.hardware.camera2.CameraManager
+                                    ?: throw IllegalStateException("Camera service unavailable")
+                                val facing = if (facingFront) android.hardware.camera2.CameraCharacteristics.LENS_FACING_FRONT
+                                             else android.hardware.camera2.CameraCharacteristics.LENS_FACING_BACK
+                                val target = manager.cameraIdList.firstOrNull { id ->
+                                    manager.getCameraCharacteristics(id).get(android.hardware.camera2.CameraCharacteristics.LENS_FACING) == facing
+                                } ?: throw IllegalStateException("Requested camera unavailable")
+                                if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                                    reportError("لم يُمنح إذن الكاميرا للمعاينة.")
+                                    return
+                                }
+                                val configurations = manager.getCameraCharacteristics(target)
+                                    .get(android.hardware.camera2.CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+                                val supported = configurations?.getOutputSizes(android.graphics.SurfaceTexture::class.java)
+                                val previewSize = supported?.minByOrNull {
+                                    kotlin.math.abs(it.width - 1280) + kotlin.math.abs(it.height - 720)
+                                }
+                                if (previewSize != null) st.setDefaultBufferSize(previewSize.width, previewSize.height)
+                                manager.openCamera(target, object : android.hardware.camera2.CameraDevice.StateCallback() {
+                                    override fun onOpened(camera: android.hardware.camera2.CameraDevice) {
+                                        if (resources.closed) { camera.close(); return }
+                                        resources.device = camera
+                                        try {
+                                            val surface = android.view.Surface(st)
+                                            resources.surface = surface
+                                            val request = camera.createCaptureRequest(android.hardware.camera2.CameraDevice.TEMPLATE_PREVIEW).apply {
+                                                addTarget(surface)
+                                            }
+                                            camera.createCaptureSession(
+                                                listOf(surface),
+                                                object : android.hardware.camera2.CameraCaptureSession.StateCallback() {
+                                                    override fun onConfigured(session: android.hardware.camera2.CameraCaptureSession) {
+                                                        if (resources.closed) { session.close(); return }
+                                                        resources.session = session
+                                                        try { session.setRepeatingRequest(request.build(), null, null) }
+                                                        catch (_: Exception) { reportError("تعذّر عرض معاينة الكاميرا.") }
+                                                    }
+                                                    override fun onConfigureFailed(session: android.hardware.camera2.CameraCaptureSession) {
+                                                        session.close()
+                                                        reportError("تعذّر تجهيز معاينة الكاميرا.")
+                                                    }
+                                                },
+                                                null
+                                            )
+                                        } catch (_: Exception) {
+                                            resources.close()
+                                            reportError("تعذّر تشغيل معاينة الكاميرا.")
+                                        }
+                                    }
+                                    override fun onDisconnected(camera: android.hardware.camera2.CameraDevice) {
+                                        camera.close()
+                                        val wasActive = !resources.closed
+                                        resources.close()
+                                        if (wasActive) reportError("انقطع اتصال الكاميرا.")
+                                    }
+                                    override fun onError(camera: android.hardware.camera2.CameraDevice, error: Int) {
+                                        camera.close()
+                                        resources.close()
+                                        reportError("فشل فتح الكاميرا. تحقق من الجهاز وأعد المحاولة.")
+                                    }
+                                }, null)
+                            } catch (_: Exception) {
+                                resources.close()
+                                reportError("الكاميرا غير متاحة للمعاينة. تحقق من أذوناتها.")
+                            }
+                        }
+                        override fun onSurfaceTextureSizeChanged(st: android.graphics.SurfaceTexture, width: Int, height: Int) {}
+                        override fun onSurfaceTextureDestroyed(st: android.graphics.SurfaceTexture): Boolean {
+                            resources.close()
+                            return true
+                        }
+                        override fun onSurfaceTextureUpdated(st: android.graphics.SurfaceTexture) {}
+                    }
+                }
+            }
+        )
+    }
+}
+
+@Composable internal fun LiveHostSetupScreen(
+    onClose: () -> Unit,
+    audioOnly: Boolean,
+    onAudioOnlyChange: (Boolean) -> Unit,
+    title: String,
+    onTitleChange: (String) -> Unit,
+    privateLive: Boolean,
+    onPrivateLiveChange: (Boolean) -> Unit,
+    price: String,
+    onPriceChange: (String) -> Unit,
+    inviteOnly: Boolean,
+    onInviteOnlyChange: (Boolean) -> Unit,
+    invites: String,
+    onInvitesChange: (String) -> Unit,
+    speakers: String,
+    onSpeakersChange: (String) -> Unit,
+    limit: String,
+    onLimitChange: (String) -> Unit,
+    minimum: String,
+    onMinimumChange: (String) -> Unit,
+    gifts: Boolean,
+    onGiftsChange: (Boolean) -> Unit,
+    giftGoal: String,
+    onGiftGoalChange: (String) -> Unit,
+    maximumLimit: Int,
+    busy: Boolean,
+    error: String,
+    onStartStream: () -> Unit
+){
+    val context = LocalContext.current
+    var facingFront by remember{mutableStateOf(true)}
+    var hasCameraPermission by remember{
+        mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
+    }
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()){ granted ->
+        hasCameraPermission = granted
+    }
+    var showAdvancedSettings by remember{mutableStateOf(false)}
+    var showPriceDialog by remember{mutableStateOf(false)}
+    var showInviteDialog by remember{mutableStateOf(false)}
+    var previewError by remember { mutableStateOf("") }
+    var starting by remember { mutableStateOf(false) }
+    val previewLifecycle = LocalLifecycleOwner.current.lifecycle
+    var foreground by remember { mutableStateOf(previewLifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) }
+    DisposableEffect(previewLifecycle) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START -> foreground = true
+                Lifecycle.Event.ON_STOP -> foreground = false
+                else -> Unit
+            }
+        }
+        previewLifecycle.addObserver(observer)
+        onDispose { previewLifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(starting) {
+        if (starting) {
+            // Unmount/close the native camera before the WebView/LiveKit requests it.
+            withFrameNanos { }
+            delay(120)
+            onStartStream()
+        }
+    }
+    LaunchedEffect(busy) {
+        if (!busy && starting) {
+            // The parent closes this composable on success; reset only after a
+            // failed request has returned control to the user.
+            delay(150)
+            if (!busy) starting = false
+        }
+    }
+    LaunchedEffect(audioOnly, facingFront) { previewError = "" }
+
+    LaunchedEffect(audioOnly){
+        if(!audioOnly && !hasCameraPermission){
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
+
+    BackHandler{onClose()}
+
+    Box(Modifier.fillMaxSize().background(Color(0xFF101820))){
+        // Live camera preview layer (or calm visualizer for audio-only)
+        if(!audioOnly && hasCameraPermission && foreground && !starting){
+            CameraPreviewSurface(
+                context = context,
+                facingFront = facingFront,
+                modifier = Modifier.fillMaxSize(),
+                onError = { previewError = it }
+            )
+            // Soft dark gradient overlay to ensure UI elements are legible
+            Box(Modifier.fillMaxSize().background(
+                Brush.verticalGradient(
+                    listOf(
+                        Color(0xB3101820),
+                        Color(0x33101820),
+                        Color(0x80101820),
+                        Color(0xE6101820)
+                    )
+                )
+            ))
+        } else {
+            // Calm, refined Relaxia obsidian/ocean stage
+            Box(Modifier.fillMaxSize().background(
+                Brush.verticalGradient(listOf(Color(0xFF131D26), Color(0xFF0F171F), Color(0xFF101820)))
+            )){
+                Box(Modifier.size(320.dp).align(Alignment.TopEnd).background(Brush.radialGradient(listOf(Color(0x2E3187A8), Color.Transparent)), CircleShape))
+                Box(Modifier.size(260.dp).align(Alignment.BottomStart).background(Brush.radialGradient(listOf(Color(0x1AD7AD72), Color.Transparent)), CircleShape))
+                if(audioOnly){
+                    Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally){
+                        Box(Modifier.size(100.dp).background(Color(0x22FFFFFF), CircleShape), contentAlignment = Alignment.Center){
+                            Icon(Icons.Filled.VolumeUp, null, tint = Color(0xFF3187A8), modifier = Modifier.size(48.dp))
+                        }
+                        Spacer(Modifier.height(14.dp))
+                        Text("نمط البث الصوتي", color = Color(0xFFF4F7F9), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("المايكروفون فقط سيكون مفعلًا", color = Color(0xFFA3B1BA), style = MaterialTheme.typography.bodySmall)
+                    }
+                } else if(!hasCameraPermission){
+                    Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally){
+                        Icon(Icons.Filled.CameraAlt, null, tint = Color(0xFFA3B1BA), modifier = Modifier.size(44.dp))
+                        Spacer(Modifier.height(10.dp))
+                        Text("إذن الكاميرا مطلوب للمعاينة", color = Color(0xFFF4F7F9), style = MaterialTheme.typography.bodyMedium)
+                        Spacer(Modifier.height(8.dp))
+                        TextButton(onClick = { cameraPermissionLauncher.launch(Manifest.permission.CAMERA) }){
+                            Text("منح الإذن", color = Color(0xFF3187A8))
+                        }
+                    }
+                }
+            }
+        }
+
+        // Top Navigation Bar
+        Row(
+            Modifier.fillMaxWidth().safeDrawingPadding().padding(horizontal=16.dp,vertical=8.dp),
+            horizontalArrangement=Arrangement.SpaceBetween,
+            verticalAlignment=Alignment.CenterVertically
+        ){
+            IconButton(onClick=onClose, modifier=Modifier.size(40.dp).background(Color(0x55101820), CircleShape)){
+                Icon(Icons.Filled.Close, "إغلاق", tint=Color.White)
+            }
+        }
+
+        // Right-Side Controls: Camera flip and Settings
+        Column(
+            horizontalAlignment=Alignment.CenterHorizontally,
+            modifier=Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(top=54.dp, end=16.dp),
+            verticalArrangement=Arrangement.spacedBy(16.dp)
+        ){
+            if(!audioOnly && hasCameraPermission){
+                Column(horizontalAlignment=Alignment.CenterHorizontally){
+                    IconButton(onClick={ facingFront = !facingFront }, modifier=Modifier.size(44.dp).background(Color(0x55101820), CircleShape)){
+                        Icon(Icons.Filled.CameraAlt, "تبديل الكاميرا", tint=Color.White)
+                    }
+                    Text(if(facingFront)"أمامية" else "خلفية", color=Color(0xDDFFFFFF), style=MaterialTheme.typography.labelSmall)
+                }
+            }
+            Column(horizontalAlignment=Alignment.CenterHorizontally){
+                IconButton(onClick={ showAdvancedSettings = true }, modifier=Modifier.size(44.dp).background(Color(0x55101820), CircleShape)){
+                    Icon(Icons.Filled.Settings, "إعدادات البث", tint=Color.White)
+                }
+                Text("إعدادات", color=Color(0xDDFFFFFF), style=MaterialTheme.typography.labelSmall)
+            }
+        }
+
+        // Bottom Controls Area
+        Column(
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().safeDrawingPadding().padding(horizontal=18.dp, vertical=16.dp),
+            verticalArrangement=Arrangement.spacedBy(12.dp)
+        ){
+            if(error.isNotBlank()){
+                Text(error, color=Color(0xFFFF6B6B), style=MaterialTheme.typography.bodySmall, modifier=Modifier.padding(horizontal=8.dp))
+            }
+            if(previewError.isNotBlank() && !audioOnly){
+                Text(previewError, color=Color(0xFFFFC078), style=MaterialTheme.typography.bodySmall, modifier=Modifier.padding(horizontal=8.dp))
+            }
+
+            // Mode Selector Capsule
+            Row(
+                Modifier.align(Alignment.CenterHorizontally).background(Color(0x77101820), RoundedCornerShape(30.dp)).padding(4.dp),
+                horizontalArrangement=Arrangement.spacedBy(4.dp),
+                verticalAlignment=Alignment.CenterVertically
+            ){
+                Row(
+                    Modifier.clip(RoundedCornerShape(26.dp)).background(if(audioOnly) Color(0x44FFFFFF) else Color.Transparent)
+                        .clickable{ onAudioOnlyChange(true) }.padding(horizontal=18.dp, vertical=8.dp),
+                    verticalAlignment=Alignment.CenterVertically
+                ){
+                    Icon(Icons.Filled.VolumeUp, null, tint=Color.White, modifier=Modifier.size(17.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("صوت فقط", color=Color.White, fontWeight=if(audioOnly) FontWeight.Bold else FontWeight.Normal, style=MaterialTheme.typography.bodyMedium)
+                }
+                Row(
+                    Modifier.clip(RoundedCornerShape(26.dp)).background(if(!audioOnly) Color(0x44FFFFFF) else Color.Transparent)
+                        .clickable{ onAudioOnlyChange(false) }.padding(horizontal=18.dp, vertical=8.dp),
+                    verticalAlignment=Alignment.CenterVertically
+                ){
+                    Icon(Icons.Filled.Videocam, null, tint=Color.White, modifier=Modifier.size(17.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("فيديو مباشر", color=Color.White, fontWeight=if(!audioOnly) FontWeight.Bold else FontWeight.Normal, style=MaterialTheme.typography.bodyMedium)
+                }
+            }
+
+            // Stream Title Input
+            OutlinedTextField(
+                value=title,
+                onValueChange={ onTitleChange(it.take(120)) },
+                placeholder={ Text("عنوان البث (اختياري)", color=Color(0x99FFFFFF)) },
+                leadingIcon={ Icon(Icons.Filled.Edit, null, tint=Color(0xAAFFFFFF)) },
+                shape=RoundedCornerShape(24.dp),
+                colors=OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor=Color(0x66101820),
+                    unfocusedContainerColor=Color(0x4D101820),
+                    focusedBorderColor=Color(0xFF3187A8),
+                    unfocusedBorderColor=Color(0x33FFFFFF),
+                    focusedTextColor=Color.White,
+                    unfocusedTextColor=Color.White
+                ),
+                singleLine=true,
+                modifier=Modifier.fillMaxWidth()
+            )
+
+            // Horizontally Scrollable Action Chips (Responsive on all screen widths)
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState()),
+                horizontalArrangement=Arrangement.spacedBy(8.dp),
+                verticalAlignment=Alignment.CenterVertically
+            ){
+                // Paid Admission Chip (Controls privateLive with price)
+                FilterChip(
+                    selected=privateLive,
+                    onClick={ showPriceDialog = true },
+                    label={ Text(if(privateLive)"دخول مدفوع: $price رصيد" else "دخول مدفوع") },
+                    leadingIcon={ Icon(Icons.Filled.AttachMoney, null, modifier=Modifier.size(16.dp)) },
+                    shape=RoundedCornerShape(20.dp),
+                    colors=FilterChipDefaults.filterChipColors(
+                        selectedContainerColor=Color(0x66277C9D),
+                        selectedLabelColor=Color.White,
+                        containerColor=Color(0x4D101820),
+                        labelColor=Color(0xDDFFFFFF)
+                    )
+                )
+
+                // Invite-Only Chip (Controls inviteOnly with invite list)
+                FilterChip(
+                    selected=inviteOnly,
+                    onClick={ showInviteDialog = true },
+                    label={ Text(if(inviteOnly)"للمدعوين فقط (مفعّل)" else "للمدعوين فقط") },
+                    leadingIcon={ Icon(Icons.Filled.PersonAdd, null, modifier=Modifier.size(16.dp)) },
+                    shape=RoundedCornerShape(20.dp),
+                    colors=FilterChipDefaults.filterChipColors(
+                        selectedContainerColor=Color(0x66277C9D),
+                        selectedLabelColor=Color.White,
+                        containerColor=Color(0x4D101820),
+                        labelColor=Color(0xDDFFFFFF)
+                    )
+                )
+
+                // Advanced Settings Chip
+                FilterChip(
+                    selected=gifts || speakers != "1",
+                    onClick={ showAdvancedSettings = true },
+                    label={ Text("خيارات متقدمة") },
+                    leadingIcon={ Icon(Icons.Filled.Settings, null, modifier=Modifier.size(16.dp)) },
+                    shape=RoundedCornerShape(20.dp),
+                    colors=FilterChipDefaults.filterChipColors(
+                        selectedContainerColor=Color(0x66277C9D),
+                        selectedLabelColor=Color.White,
+                        containerColor=Color(0x4D101820),
+                        labelColor=Color(0xDDFFFFFF)
+                    )
+                )
+            }
+
+            // Start Live Broadcast Button (Calm Relaxia teal/gold gradient)
+            Button(
+                onClick={ starting = true },
+                enabled=!busy && !starting && (audioOnly || hasCameraPermission),
+                modifier=Modifier.fillMaxWidth().height(52.dp),
+                shape=RoundedCornerShape(26.dp),
+                colors=ButtonDefaults.buttonColors(containerColor=Color.Transparent),
+                contentPadding=PaddingValues()
+            ){
+                Box(
+                    Modifier.fillMaxSize().background(
+                        Brush.horizontalGradient(listOf(Color(0xFF277C9D), Color(0xFF1E5B74)))
+                    ),
+                    contentAlignment=Alignment.Center
+                ){
+                    Text(
+                        if(busy || starting)"جارٍ البدء…" else "بدء البث ((•))",
+                        color=Color.White,
+                        style=MaterialTheme.typography.titleMedium,
+                        fontWeight=FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+
+    // Advanced Settings Dialog
+    if(showAdvancedSettings){
+        AlertDialog(
+            onDismissRequest={showAdvancedSettings=false},
+            title={Text("إعدادات البث المتقدمة")},
+            text={
+                Column(Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState()), verticalArrangement=Arrangement.spacedBy(10.dp)){
+                    Text("عدد المتحدثين المسموح به:")
+                    Row(Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                        listOf("1","2","4","6","12").forEach{n->
+                            FilterChip(selected=speakers==n, onClick={onSpeakersChange(n)}, label={Text(n)})
+                        }
+                    }
+                    OutlinedTextField(
+                        value=limit,
+                        onValueChange={onLimitChange(it.filter{c->c.isDigit()}.take(3))},
+                        label={Text("أقصى عدد مشاهدين (حتى $maximumLimit)")}
+                    )
+                    OutlinedTextField(
+                        value=minimum,
+                        onValueChange={onMinimumChange(it.filter{c->c.isDigit()}.take(4))},
+                        label={Text("مدة استحقاق الخدمة بالثواني (30 فأكثر)")}
+                    )
+                    Row(verticalAlignment=Alignment.CenterVertically){
+                        Switch(checked=gifts, onCheckedChange=onGiftsChange)
+                        Spacer(Modifier.width(8.dp))
+                        Text("إتاحة الهدايا في البث")
+                    }
+                    if(gifts){
+                        OutlinedTextField(
+                            value=giftGoal,
+                            onValueChange={onGiftGoalChange(it.filter{c->c.isDigit()}.take(8))},
+                            label={Text("هدف الهدايا (0 دون هدف)")}
+                        )
+                    }
+                }
+            },
+            confirmButton={TextButton({showAdvancedSettings=false}){Text("تم")}}
+        )
+    }
+
+    // Paid Admission Dialog
+    if(showPriceDialog){
+        AlertDialog(
+            onDismissRequest={showPriceDialog=false},
+            title={Text("الدخول المدفوع")},
+            text={
+                Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
+                    Row(verticalAlignment=Alignment.CenterVertically){
+                        Switch(checked=privateLive, onCheckedChange=onPrivateLiveChange)
+                        Spacer(Modifier.width(8.dp))
+                        Text("تفعيل رسم الدخول من الرصيد")
+                    }
+                    if(privateLive){
+                        OutlinedTextField(
+                            value=price,
+                            onValueChange={onPriceChange(it.filter{c->c.isDigit()}.take(7))},
+                            label={Text("سعر الدخول من الرصيد")}
+                        )
+                    }
+                }
+            },
+            confirmButton={TextButton({showPriceDialog=false}){Text("حفظ")}}
+        )
+    }
+
+    // Invite-Only Dialog
+    if(showInviteDialog){
+        AlertDialog(
+            onDismissRequest={showInviteDialog=false},
+            title={Text("البث للمدعوين فقط")},
+            text={
+                Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
+                    Row(verticalAlignment=Alignment.CenterVertically){
+                        Switch(checked=inviteOnly, onCheckedChange=onInviteOnlyChange)
+                        Spacer(Modifier.width(8.dp))
+                        Text("قصر الدخول على أسماء محددة")
+                    }
+                    if(inviteOnly){
+                        OutlinedTextField(
+                            value=invites,
+                            onValueChange={onInvitesChange(it.take(1000))},
+                            label={Text("أسماء المستخدمين مفصولة بفاصلة")}
+                        )
+                    }
+                }
+            },
+            confirmButton={TextButton({showInviteDialog=false}){Text("حفظ")}}
+        )
+    }
 }
