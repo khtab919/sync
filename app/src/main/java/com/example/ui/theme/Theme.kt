@@ -9,28 +9,28 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 
-val WisalInk = Color(0xFF153E53)
-val WisalPaper = Color(0xFFF4F8FA)
-val WisalSage = Color(0xFFDCECF2)
+val WisalInk = Color(0xFF0E3276)
+val WisalPaper = Color(0xFFF2F6FD)
+val WisalSage = Color(0xFFDCE9FC)
 val WisalMuted = Color(0xFF788792)
 val RelaxiaGold = Color(0xFFD7AD72)
 private val ReferenceLight = lightColorScheme(
-    primary=Color(0xFF277C9D),onPrimary=Color.White,
+    primary=Color(0xFF1458C3),onPrimary=Color.White,
     primaryContainer=WisalSage,onPrimaryContainer=WisalInk,
     secondary=WisalInk,onSecondary=Color.White,
-    secondaryContainer=Color(0xFFE5EEF3),onSecondaryContainer=WisalInk,
+    secondaryContainer=Color(0xFFE5EFFB),onSecondaryContainer=WisalInk,
     tertiary=RelaxiaGold,onTertiary=WisalInk,
     tertiaryContainer=Color(0xFFF5E9D8),onTertiaryContainer=WisalInk,
     background=WisalPaper,onBackground=Color(0xFF202D36),
     surface=Color.White,onSurface=Color(0xFF202D36),
-    surfaceVariant=Color(0xFFE9F0F4),onSurfaceVariant=WisalMuted,
-    outline=Color(0xFF788792),outlineVariant=Color(0xFFD7E2E8),
+    surfaceVariant=Color(0xFFE8F0FC),onSurfaceVariant=WisalMuted,
+    outline=Color(0xFF788792),outlineVariant=Color(0xFFD0DEEF),
     error=Color(0xFFAD4652),onError=Color.White,
     surfaceContainer=Color.White,surfaceContainerLow=Color(0xFFF0F5F8),surfaceContainerHigh=Color(0xFFE9F0F4)
 )
 private val ReferenceDark = darkColorScheme(
-    primary=Color(0xFF3187A8),onPrimary=Color(0xFF101820),
-    primaryContainer=Color(0xFF214C61),onPrimaryContainer=Color(0xFFE4F2F8),
+    primary=Color(0xFF91BCFF),onPrimary=Color(0xFF101820),
+    primaryContainer=Color(0xFF193A73),onPrimaryContainer=Color(0xFFE4F2F8),
     secondary=Color(0xFFA3B1BA),onSecondary=Color(0xFF101820),
     secondaryContainer=Color(0xFF263E4D),onSecondaryContainer=Color(0xFFF4F7F9),
     tertiary=RelaxiaGold,onTertiary=Color(0xFF101820),
