@@ -622,30 +622,72 @@ fun ServerAppScreen(baseUrl: String) {
 
                         }
                         "تعديل الملف" -> item { FormColumn {
-                            Field(displayName, { displayName = it }, "الاسم الظاهر")
-                            Field(profileUsername, { profileUsername = it }, "اسم المستخدم @username")
-                            Text("اسم مستخدم مستقل وفريد؛ يبدأ بحرف إنجليزي ويحتوي 3–30 خانة.",style=MaterialTheme.typography.bodySmall)
-                            Field(profileEmail, { profileEmail = it }, "البريد الإلكتروني")
-                            GenderChoice(profileGender,{profileGender=it})
-                            Field(bio, { bio = it }, "نبذة عنك", lines = 4)
-                            ChatAvatar(displayName,72,avatarUrl)
-                            Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
-                                OutlinedButton({avatarPicker.launch("image/*")},enabled=!submitting){Text("رفع صورة من المعرض")}
-                                if(avatarUrl.isNotBlank())TextButton({perform{profile=api.request("/api/me","PATCH",JSONObject().put("avatar_url",""));avatarUrl="";notice="حُذفت صورة الملف."}},enabled=!submitting){Text("حذف الصورة")}
+                            var advanced by rememberSaveable { mutableStateOf(false) }
+                            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                ReferenceAvatar(displayName, profile.optInt("selected_frame"), 142, avatarUrl)
+                                Button(
+                                    onClick = { avatarPicker.launch("image/*") },
+                                    enabled = !submitting,
+                                    shape = RoundedCornerShape(24.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF104BB5))
+                                ) { Icon(Icons.Outlined.CameraAlt, null); Spacer(Modifier.width(8.dp)); Text("تغيير الصورة") }
+                                if (avatarUrl.isNotBlank()) TextButton(
+                                    onClick = { perform {
+                                        profile = api.request("/api/me", "PATCH", JSONObject().put("avatar_url", ""))
+                                        avatarUrl = ""; notice = "تم حذف صورة الملف."
+                                    } }, enabled = !submitting
+                                ) { Text("حذف الصورة") }
+                                if (submitting) LinearProgressIndicator(Modifier.fillMaxWidth())
                             }
-                            if (profile.optBoolean("publishing_allowed")) Field(chatPrice, { chatPrice = it }, "رسوم المحادثة بالدولار · 0 للمجانية", numeric = true)
-                            ReferencePrimary("حفظ التغييرات", !submitting) { perform {
-                                val body = JSONObject().put("display_name", displayName).put("username",profileUsername).put("bio", bio).put("avatar_url", avatarUrl).put("email", profileEmail.trim())
-                                if(profileGender.isNotBlank())body.put("gender",profileGender)
-                                if (profile.optBoolean("publishing_allowed")) body.put("chat_price_cents", cents(chatPrice))
+                            Field(displayName, { displayName = it.take(100) }, "الاسم الظاهر")
+                            Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant) {
+                                Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Icon(Icons.Outlined.Badge, null)
+                                    Column { Text("رقم الحساب: ${profile.optString("public_id", "—")}",
+                                        fontWeight = FontWeight.SemiBold)
+                                        Text("معرّف ثابت لا يمكن تعديله", fontSize = 12.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                            }
+                            GenderChoice(profileGender, { profileGender = it })
+                            Field(bio, { bio = it.take(150) }, "نبذة عني · ${bio.length}/150", lines = 3)
+                            TextButton(onClick = { advanced = !advanced }) {
+                                Icon(if (advanced) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, null)
+                                Spacer(Modifier.width(6.dp))
+                                Text("بيانات الحساب والإعدادات المتقدمة")
+                            }
+                            if (advanced) {
+                                Field(profileUsername, { profileUsername = it }, "اسم المستخدم الاختياري @username")
+                                Text("اسم المستخدم يختلف عن رقم الحساب الثابت.", style = MaterialTheme.typography.bodySmall)
+                                Field(profileEmail, { profileEmail = it }, "البريد الإلكتروني لتسجيل الدخول")
+                                if (profile.optBoolean("publishing_allowed"))
+                                    Field(chatPrice, { chatPrice = it }, "رسوم المحادثة بالدولار · 0 للمجانية", numeric = true)
+                            }
+                            ReferencePrimary("حفظ التعديلات", !submitting && displayName.isNotBlank()) { perform {
+                                val body = JSONObject().put("display_name", displayName.trim())
+                                    .put("bio", bio.trim()).put("avatar_url", avatarUrl)
+                                if (profileGender.isNotBlank()) body.put("gender", profileGender)
+                                if (advanced) {
+                                    body.put("username", profileUsername).put("email", profileEmail.trim())
+                                    if (profile.optBoolean("publishing_allowed")) body.put("chat_price_cents", cents(chatPrice))
+                                }
                                 profile = api.request("/api/me", "PATCH", body)
-                                page = ""; tab = 4; notice = "تم حفظ التغييرات."
+                                page = ""; tab = 4; notice = "تم حفظ التعديلات."
                             } }
                         } }
                         "إطاراتي" -> item {
-                            RelaxiaFramePicker(profile.optInt("selected_frame"), profile.optString("display_name"), profile.optString("avatar_url")) { frame -> perform {
+                            val frameArray = profile.optJSONArray("owned_frames")
+                            val owned = if (frameArray == null) (0..10).toSet()
+                                else (0 until frameArray.length()).map { frameArray.optInt(it) }.toSet()
+                            RelaxiaFramePicker(profile.optInt("selected_frame"),
+                                profile.optString("display_name"), profile.optString("avatar_url"),
+                                profile.optInt("level", 1), owned) { frame -> perform {
                                 profile = api.request("/api/me", "PATCH", JSONObject().put("selected_frame", frame))
-                                notice = "تم حفظ الإطار."
+                                notice = "تم تجهيز الإطار."
                             } }
                         }
                         "نشاطي" -> item { FormColumn {
@@ -907,29 +949,116 @@ private fun OfferCard(service: JSONObject, click: () -> Unit) {
 }
 
 @Composable
-internal fun ProfileHero(person: JSONObject, own: Boolean, settings: () -> Unit, editOrChat: () -> Unit, frameOrFollow: () -> Unit) {
-    Column(Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(Color(0xFF153E53), WisalInk)), RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)).padding(start = 20.dp, end = 20.dp, bottom = 18.dp, top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+internal fun ProfileHero(
+    person: JSONObject, own: Boolean,
+    settings: () -> Unit, editOrChat: () -> Unit, frameOrFollow: () -> Unit
+) {
+    val context = LocalContext.current
+    val blue = Color(0xFF104BB5)
+    val navy = Color(0xFF08295F)
+    Column(Modifier.fillMaxWidth()
+        .background(Brush.verticalGradient(listOf(blue, navy)),
+            RoundedCornerShape(bottomStart = 30.dp, bottomEnd = 30.dp))
+        .padding(horizontal = 18.dp, vertical = 14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(if (own) "حسابي" else "الملف الشخصي", Modifier.weight(1f), color = Color.White, fontSize = 19.sp)
-            IconButton(onClick = settings) { Icon(if (own) Icons.Outlined.Settings else Icons.Outlined.ArrowForward, if (own) "الإعدادات" else "رجوع", tint = Color.White.copy(alpha = .75f)) }
-        }
-        Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(14.dp)) {
-        ReferenceAvatar(person.optString("display_name", person.optString("username")), person.optInt("selected_frame"), 88, person.optString("avatar_url"))
-            Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(5.dp)) {
-        Text(person.optString("display_name", person.optString("username")), color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        Text("حساب #${person.optString("public_id","—")} · 18+", color = Color.White.copy(alpha = .75f), fontSize = 13.sp)
-        Text("الجنس: "+genderLabel(person.optString("gender")),color=Color.White.copy(alpha=.75f),fontSize=13.sp)
-        Text("@"+person.optString("username"),style=LocalTextStyle.current.copy(textDirection=androidx.compose.ui.text.style.TextDirection.Ltr),color=Color.White.copy(alpha=.8f),fontSize=15.sp)
+            Text(if (own) "حسابي" else "الملف الشخصي",
+                modifier = Modifier.weight(1f), fontSize = 20.sp,
+                fontWeight = FontWeight.Bold, color = Color.White)
+            IconButton(onClick = settings) {
+                Icon(if (own) Icons.Outlined.Settings else Icons.Outlined.ArrowForward,
+                    if (own) "الإعدادات" else "رجوع", tint = Color.White)
             }
         }
-        if (person.optBoolean("identity_verified")) Surface(color = Color.White.copy(alpha = .09f), shape = RoundedCornerShape(30.dp)) { Row(Modifier.padding(horizontal = 14.dp, vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Outlined.WorkspacePremium, null, Modifier.size(15.dp), tint = Color(0xFFD7AD72)); Text("تم التحقق من الهوية", color = Color(0xFFD7AD72), fontSize = 11.sp) } }
-        if (person.optString("bio").isNotBlank()) Text(person.optString("bio"), color = Color.White.copy(alpha = .7f), fontSize = 13.sp)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
-            listOf("المتابعون" to person.optInt("followers_count"), "أتابع" to person.optInt("following_count"), "العروض" to person.optInt("service_count"), "الريلز" to person.optInt("reel_count")).forEach { (label, count) -> Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(count.toString(), color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold); Text(label, color = Color.White.copy(alpha = .55f), fontSize = 11.sp) } }
+        ReferenceAvatar(person.optString("display_name", person.optString("username")),
+            person.optInt("selected_frame"), 128, person.optString("avatar_url"))
+        Row(verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(person.optString("display_name", "المستخدم"),
+                fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val genderMark = when(person.optString("gender")) {
+                "male" -> "♂"
+                "female" -> "♀"
+                else -> ""
+            }
+            if(genderMark.isNotBlank()) Text(genderMark, fontSize = 23.sp, color = Color(0xFFB8DDFF))
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            OutlinedButton(editOrChat, Modifier.weight(1f).heightIn(min = 48.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)) { Text(if (own) "تعديل الملف" else "محادثة", fontSize = 13.sp) }
-            Button(frameOrFollow, Modifier.weight(1f).heightIn(min = 48.dp), colors = ButtonDefaults.buttonColors(containerColor = WisalSage, contentColor = WisalInk)) { Text(if (own) "إطاراتي" else if (person.optBoolean("following")) "إلغاء المتابعة" else "متابعة", fontSize = 13.sp) }
+        Row(verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            val id = person.optString("public_id", "—")
+            Text("ID: $id", color = Color.White.copy(alpha = .85f), fontSize = 15.sp)
+            if(id != "—") IconButton(
+                onClick = {
+                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                        as android.content.ClipboardManager
+                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Relaxia ID", id))
+                }, modifier = Modifier.size(34.dp)) {
+                Icon(Icons.Outlined.ContentCopy, "نسخ رقم الحساب",
+                    tint = Color.White, modifier = Modifier.size(19.dp))
+            }
+        }
+        if(person.optBoolean("identity_verified")) Text("✓ حساب موثق",
+            color = Color(0xFFB6DBFF), fontSize = 12.sp)
+        if(person.optString("bio").isNotBlank()) Text(person.optString("bio"),
+            color = Color.White.copy(alpha = .85f), maxLines = 2,
+            overflow = TextOverflow.Ellipsis, fontSize = 13.sp)
+        Surface(color = Color.White.copy(alpha = .12f), shape = RoundedCornerShape(20.dp),
+            modifier = Modifier.fillMaxWidth()) {
+            Row(Modifier.padding(vertical = 14.dp, horizontal = 7.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly) {
+                listOf("الريلز" to person.optInt("reel_count"),
+                    "العروض" to person.optInt("service_count"),
+                    "المتابعون" to person.optInt("followers_count"),
+                    "أتابع" to person.optInt("following_count")).forEach { (label, count) ->
+                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(count.toString(), color = Color.White, fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold)
+                        Text(label, color = Color.White.copy(alpha = .82f), fontSize = 11.sp)
+                    }
+                }
+            }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+            Button(onClick = editOrChat, modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color.White,
+                    contentColor = navy)) {
+                Icon(if (own) Icons.Outlined.Edit else Icons.Outlined.ChatBubbleOutline,
+                    null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(5.dp))
+                Text(if(own) "تعديل الملف" else "محادثة", maxLines = 1, fontSize = 13.sp)
+            }
+            OutlinedButton(onClick = frameOrFollow,
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha=.65f))) {
+                Icon(if(own) Icons.Outlined.WorkspacePremium else Icons.Outlined.PersonAdd,
+                    null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(5.dp))
+                Text(if(own) "إطاراتي" else if(person.optBoolean("following"))
+                    "إلغاء المتابعة" else "متابعة", fontSize = 13.sp, maxLines = 1)
+            }
+        }
+        if (own && person.has("level")) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.WorkspacePremium, null, tint = Color(0xFFE3C88D))
+                Spacer(Modifier.width(8.dp))
+                Text("المستوى ${person.optInt("level")}", color = Color.White,
+                    fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                Text("${person.optLong("xp_points")} XP", color = Color.White.copy(alpha=.84f),
+                    fontSize = 12.sp)
+            }
+            LinearProgressIndicator(
+                progress = {
+                    val current = person.optLong("xp_points")
+                    val cap = person.optLong("next_level_xp", 200L)
+                    if(person.optInt("level") >= 100) 1f
+                    else ((current - (cap - 200)).toFloat() / 200f).coerceIn(0f, 1f)
+                },
+                modifier = Modifier.fillMaxWidth().height(5.dp),
+                color = Color(0xFFD3ECFF), trackColor = Color.White.copy(alpha=.2f)
+            )
         }
     }
 }

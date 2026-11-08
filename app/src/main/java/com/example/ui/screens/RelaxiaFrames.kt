@@ -3,6 +3,11 @@ package com.example.ui.screens
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.material3.*
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
@@ -42,11 +47,22 @@ internal val relaxiaFrames = listOf(
     RelaxiaFrame(8, "هالة الألماس", "أجنحة وأطراف كريستالية", Color(0xFF3187A8), Color(0xFFDCECF2)),
     RelaxiaFrame(9, "حديقة اللؤلؤ", "بتلات ولآلئ متشابكة", Color(0xFF3187A8), Color(0xFFD5B080)),
     RelaxiaFrame(10, "التاج الملكي", "تاج مجسّم وجناحان ذهبيان", Color(0xFF3187A8), Color(0xFFE6BD71))
-)
+) + (11..100).map { id ->
+    val tier = (id - 1) / 10
+    val names = listOf("البداية","البرونزي","الفضي","الذهبي","البلاتيني",
+        "الماسي","النخبة","الأسطوري","الملكي","القمة")
+    val palette = listOf(
+        0xFF386DA5L,0xFFB87A51L,0xFFA7B4CCL,0xFFD4A44FL,0xFF8FBDD4L,
+        0xFF57B6E3L,0xFF736ED4L,0xFFD77B5BL,0xFFB98B49L,0xFF3C8FE3L
+    )
+    val accent = Color(palette[tier].toInt())
+    RelaxiaFrame(id, "${names[tier]} · ${id}", "مستوى ${id} · إطار ${names[tier]}",
+        accent, Color(palette[(tier + 2) % palette.size].toInt()))
+}
 
 @Composable
 internal fun RelaxiaAvatar(name: String, frame: Int, size: Int, imageUrl: String = "") {
-    val style = relaxiaFrames[frame.coerceIn(0, 10)]
+    val style = relaxiaFrames.getOrNull(frame.coerceIn(0, 100)) ?: relaxiaFrames.first()
     val padding = if (frame == 0) (size * .075f).dp else (size * .205f).dp
     Box(Modifier.size(size.dp), contentAlignment = Alignment.Center) {
         Box(Modifier.fillMaxSize().padding(padding).shadow(5.dp, CircleShape, clip = false)
@@ -63,17 +79,19 @@ private fun DrawScope.drawRelaxiaFrame(frame: RelaxiaFrame, detailed: Boolean) {
     val w = size.minDimension
     val c = Offset(size.width / 2, size.height / 2)
     val r = w * if (frame.id == 0) .45f else .326f
+    val family = if (frame.id <= 10) frame.id else ((frame.id - 1) % 10) + 1
+    val tier = (frame.id - 1).coerceAtLeast(0) / 10
     val depth = (w * .025f).coerceAtLeast(1f)
     drawCircle(Color(0xFF153E53).copy(alpha = .20f), r + depth * 1.8f, c + Offset(0f, depth * 1.7f), style = Stroke(depth * 1.5f))
     drawCircle(Brush.linearGradient(listOf(Color.White, frame.gold, frame.accent, Color(0xFF277C9D), frame.gold, Color.White)), r, c, style = Stroke(depth * 2f))
     drawCircle(Color.White.copy(alpha = .9f), r - depth, c, style = Stroke((w * .007f).coerceAtLeast(.6f)))
     drawCircle(frame.accent.copy(alpha = .7f), r + depth, c, style = Stroke((w * .006f).coerceAtLeast(.5f)))
     if (frame.id == 0) return
-    val count = if (detailed) 20 else 10
+    val count = (if (detailed) 20 else 10) + tier * 2
     for (i in 0 until count) {
         val angle = 2 * PI * i / count
         val p = c + Offset(cos(angle).toFloat() * (r + depth * 1.4f), sin(angle).toFloat() * (r + depth * 1.4f))
-        when (frame.id) {
+        when (family) {
             2 -> pearl(p, w * .028f, frame.gold)
             3 -> diamond(p, w * .046f, w * .063f, frame.accent, angle.toFloat() - PI.toFloat() / 2)
             8 -> diamond(p, w * .028f, w * .045f, frame.accent, angle.toFloat() - PI.toFloat() / 2)
@@ -82,7 +100,7 @@ private fun DrawScope.drawRelaxiaFrame(frame: RelaxiaFrame, detailed: Boolean) {
             else -> pearl(p, w * .017f, if (i % 2 == 0) frame.accent else frame.gold)
         }
     }
-    if (frame.id in listOf(6, 8, 10)) {
+    if (family in listOf(6, 8, 10)) {
         for (side in listOf(-1f, 1f)) {
             for (i in 0..5) {
                 val y = c.y + r * .65f - i * r * .25f
@@ -98,7 +116,7 @@ private fun DrawScope.drawRelaxiaFrame(frame: RelaxiaFrame, detailed: Boolean) {
             }
         }
     }
-    if (frame.id == 5) {
+    if (family == 5) {
         val p = Offset(c.x, c.y - r - w * .03f)
         for (side in listOf(-1f, 1f)) {
             val wing = Path().apply {
@@ -112,7 +130,7 @@ private fun DrawScope.drawRelaxiaFrame(frame: RelaxiaFrame, detailed: Boolean) {
         }
         pearl(p + Offset(0f, w * .03f), w * .022f, frame.gold)
     }
-    if (frame.id in listOf(4, 10)) {
+    if (family in listOf(4, 10)) {
         val y = c.y - r - w * .01f
         val crown = Path().apply {
             moveTo(c.x - w * .11f, y)
@@ -128,11 +146,22 @@ private fun DrawScope.drawRelaxiaFrame(frame: RelaxiaFrame, detailed: Boolean) {
         drawPath(crown, Color.White.copy(alpha = .7f), style = Stroke(w * .008f))
         diamond(Offset(c.x, y - w * .07f), w * .023f, w * .035f, frame.accent)
     }
-    if (frame.id == 7 || frame.id == 9) {
+    if (family == 7 || family == 9) {
         for (side in listOf(-1f, 1f)) {
             val p = c + Offset(side * r * .78f, r * .8f)
             drawLine(frame.gold, p, p + Offset(0f, w * .12f), strokeWidth = w * .009f)
             diamond(p + Offset(0f, w * .135f), w * .025f, w * .05f, frame.accent)
+        }
+    }
+    if (frame.id > 10) {
+        // Each level adds distinct, progressively denser geometric facets.
+        val facets = 4 + frame.id % 9 + tier
+        for (i in 0 until facets) {
+            val angle = (2 * PI * i / facets)
+            val p = c + Offset(cos(angle).toFloat() * (r + depth * (2.2f + tier * .12f)),
+                sin(angle).toFloat() * (r + depth * (2.2f + tier * .12f)))
+            diamond(p, w * (.008f + tier * .0014f), w * (.017f + tier * .0018f),
+                if (i % 2 == 0) frame.accent else frame.gold, angle.toFloat())
         }
     }
     // Satin base with bevels, sized to remain readable on small avatars.
@@ -172,21 +201,62 @@ private fun DrawScope.flower(p: Offset, radius: Float, color: Color, gold: Color
 }
 
 @Composable
-internal fun RelaxiaFramePicker(current: Int, name: String, imageUrl: String, onChoose: (Int) -> Unit) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text("إطارات بعمق ولمعة", fontWeight = FontWeight.Bold, fontSize = 22.sp, color = androidx.compose.material3.MaterialTheme.colorScheme.onBackground)
-        Text("عشرة تصاميم؛ اختر إطارك ليظهر على ملفك وفي المحادثات.", color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
-        ReferenceRow(androidx.compose.material.icons.Icons.Outlined.RadioButtonUnchecked, "الإطار الناعم", if (current == 0) "إطارك الحالي" else "العودة إلى الحلقة البسيطة") { onChoose(0) }
-        for (pair in relaxiaFrames.drop(1).chunked(2)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                for (frame in pair) {
-                    Box(Modifier.weight(1f)) {
-                        ReferenceCard(onClick = { onChoose(frame.id) }) {
-                            Column(Modifier.fillMaxWidth().padding(12.dp).heightIn(min = 220.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                RelaxiaAvatar(name, frame.id, 128, imageUrl)
-                                Text(frame.name, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface)
-                                Text(if (current == frame.id) "إطارك الحالي ✓" else frame.detail, fontSize = 11.sp, color = if (current == frame.id) androidx.compose.material3.MaterialTheme.colorScheme.primary else androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
+internal fun RelaxiaFramePicker(
+    current: Int, name: String, imageUrl: String, onChoose: (Int) -> Unit
+) {
+    // Compatibility with older feature screens and UI tests. Legacy frames
+    // only; the backend still validates all frame equip requests.
+    RelaxiaFramePicker(current, name, imageUrl, 1, (0..10).toSet(), onChoose)
+}
+
+@Composable
+internal fun RelaxiaFramePicker(
+    current: Int, name: String, imageUrl: String,
+    level: Int, ownedFrames: Set<Int>, onChoose: (Int) -> Unit
+) {
+    val tierLabels = listOf("البداية","البرونزي","الفضي","الذهبي","البلاتيني",
+        "الماسي","النخبة","الأسطوري","الملكي","القمة")
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text("إطاراتي", fontWeight = FontWeight.Bold, fontSize = 23.sp,
+            color = MaterialTheme.colorScheme.onBackground)
+        Text("مستواك الحالي: $level · مستويات الإطارات 1–100. الإطارات المقفلة للمعاينة فقط.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+        OutlinedButton(onClick = { onChoose(0) }, enabled = 0 in ownedFrames) {
+            Text(if(current==0) "الإطار الأساسي ✓" else "تجهيز الإطار الأساسي")
+        }
+        tierLabels.forEachIndexed { tier, title ->
+            Text("$title · المستويات ${tier*10+1}–${(tier+1)*10}",
+                fontWeight = FontWeight.SemiBold, fontSize = 17.sp,
+                color = MaterialTheme.colorScheme.onBackground)
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = PaddingValues(vertical = 3.dp)) {
+                items(relaxiaFrames.filter { it.id in (tier*10+1)..((tier+1)*10) }, key = { it.id }) { frame ->
+                    val unlocked = frame.id in ownedFrames
+                    Surface(
+                        onClick = { if(unlocked)onChoose(frame.id) },
+                        enabled = unlocked,
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(18.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(if(current==frame.id) 2.dp else 1.dp,
+                            if(current==frame.id) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.outlineVariant),
+                        modifier = Modifier.width(136.dp)
+                    ) {
+                        Column(Modifier.padding(horizontal = 8.dp, vertical = 12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                            RelaxiaAvatar(name, frame.id, 115, imageUrl)
+                            Text("Lv.${frame.id}", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            Text(
+                                when {
+                                    current == frame.id -> "مُجهّز ✓"
+                                    unlocked -> "تجهيز الإطار"
+                                    else -> "مقفل · مستوى ${frame.id}"
+                                }, fontSize = 11.sp,
+                                color = if(unlocked) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                 }

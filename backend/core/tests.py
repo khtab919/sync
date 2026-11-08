@@ -155,6 +155,45 @@ class ApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(self.post('/api/services', {'title': 'test', 'description': 'test description', 'price_cents': 200}).status_code, 201)
 
+    def test_real_xp_and_secure_luxury_frames_1_to_100(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        from .models import Reel, BenefitGrant
+        auth = {'HTTP_AUTHORIZATION': 'Bearer ' + self.token}
+        def equip(frame):
+            return self.client.patch('/api/me', json.dumps({'selected_frame': frame}),
+                content_type='application/json', **auth)
+        me = self.client.get('/api/me', **auth).json()
+        self.assertEqual(me['level'], 1)
+        self.assertEqual(me['xp_points'], 0)
+        self.assertIn(0, me['owned_frames'])
+        self.assertIn(10, me['owned_frames'])  # Legacy frames remain available.
+        self.assertNotIn(11, me['owned_frames'])
+        self.assertEqual(equip(11).status_code, 403)
+        self.assertEqual(equip(101).status_code, 400)
+        self.assertEqual(equip(10).status_code, 200)
+
+        Reel.objects.bulk_create([
+            Reel(owner=self.user, approved=True,
+                 video_url=f'https://example.com/real-{i}.mp4')
+            for i in range(67)
+        ])
+        raised = self.client.get('/api/me', **auth).json()
+        self.assertEqual(raised['xp_points'], 67 * 30)
+        self.assertEqual(raised['level'], 11)
+        self.assertIn(11, raised['owned_frames'])
+        self.assertNotIn(12, raised['owned_frames'])
+        self.assertEqual(equip(11).status_code, 200)
+        self.assertEqual(equip(90).status_code, 403)
+
+        BenefitGrant.objects.create(
+            user=self.user, actor=self.creator, kind='frame', value=90,
+            reason='Admin-approved special frame',
+            expires_at=timezone.now()+timedelta(days=1),
+        )
+        self.assertEqual(equip(90).status_code, 200)
+        self.assertIn(90, self.client.get('/api/me', **auth).json()['owned_frames'])
+
     def test_regular_user_publishes_service_and_reel_immediately(self):
         from .models import Reel, UploadedMedia
         offer = self.post('/api/services', {
@@ -313,7 +352,9 @@ class ReferenceInteractionTests(TestCase):
         self.assertEqual(response.json()['selected_frame'], 2)
         self.assertEqual(response.json()['display_name'], 'New display name')
         self.assertFalse(response.json()['creator'])
-        invalid = self.client.patch('/api/me', json.dumps({'selected_frame': 11}), content_type='application/json', HTTP_AUTHORIZATION='Bearer ' + self.token)
+        locked = self.client.patch('/api/me', json.dumps({'selected_frame': 11}), content_type='application/json', HTTP_AUTHORIZATION='Bearer ' + self.token)
+        self.assertEqual(locked.status_code, 403)
+        invalid = self.client.patch('/api/me', json.dumps({'selected_frame': 101}), content_type='application/json', HTTP_AUTHORIZATION='Bearer ' + self.token)
         self.assertEqual(invalid.status_code, 400)
 
     def test_chat_fee_requires_publishing_permission(self):
