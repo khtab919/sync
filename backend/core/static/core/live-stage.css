@@ -114,6 +114,20 @@ audio { display: none; }
   z-index: 1;
 }
 
+/* In audio-only mode the day theme is truly light, not just light panels
+   over the old dark room canvas. */
+html[data-theme=light] body.audio-mode {
+  background: #f4f8fa;
+  color: #202d36;
+}
+html[data-theme=light] body.audio-mode #stage {
+  background: #f4f8fa;
+  color: #202d36;
+}
+html[data-theme=light] body.audio-mode .shade {
+  background: linear-gradient(180deg, rgba(244,248,250,0.58), transparent 27%, transparent 70%, rgba(244,248,250,0.6));
+}
+
 /* Audio Stage */
 #audioStage {
   position: absolute;
