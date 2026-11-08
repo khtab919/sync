@@ -681,8 +681,8 @@ fun ServerAppScreen(baseUrl: String) {
                         } }
                         "إطاراتي" -> item {
                             val frameArray = profile.optJSONArray("owned_frames")
-                            val owned = (0 until (frameArray?.length() ?: 0))
-                                .map { frameArray!!.optInt(it) }.toSet()
+                            val owned = if (frameArray == null) (0..10).toSet()
+                                else (0 until frameArray.length()).map { frameArray.optInt(it) }.toSet()
                             RelaxiaFramePicker(profile.optInt("selected_frame"),
                                 profile.optString("display_name"), profile.optString("avatar_url"),
                                 profile.optInt("level", 1), owned) { frame -> perform {
