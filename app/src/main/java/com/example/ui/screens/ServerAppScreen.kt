@@ -12,8 +12,12 @@ import kotlinx.coroutines.withContext
 import com.example.data.api.MessageInbox
 import android.content.Intent
 import android.net.Uri
-import android.widget.MediaController
-import android.widget.VideoView
+import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
+import android.view.LayoutInflater
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -957,42 +961,55 @@ private fun ReelItemView(
     val url = row.optString("video_url")
     val context = LocalContext.current
     var isPlaying by remember(url) { mutableStateOf(active) }
+    var playbackError by remember(url) { mutableStateOf<String?>(null) }
+    var buffering by remember(url) { mutableStateOf(true) }
+    var retryKey by remember(url) { mutableIntStateOf(0) }
 
-    LaunchedEffect(active) {
-        isPlaying = active
+    LaunchedEffect(active) { isPlaying = active }
+    // A player is owned by the current page only. Swiping releases its decoder.
+    val player = remember(url, active, retryKey) {
+        if (active && url.startsWith("https://")) {
+            ExoPlayer.Builder(context).build().apply {
+                repeatMode = Player.REPEAT_MODE_ONE
+                setMediaItem(MediaItem.fromUri(url))
+                prepare()
+            }
+        } else null
+    }
+    DisposableEffect(player) {
+        val listener = object : Player.Listener {
+            override fun onPlayerError(error: PlaybackException) {
+                playbackError = "تعذّر تشغيل الفيديو (رمز ${error.errorCode})."
+                buffering = false
+            }
+            override fun onRenderedFirstFrame() { buffering = false }
+        }
+        player?.addListener(listener)
+        onDispose {
+            player?.removeListener(listener)
+            player?.release()
+        }
+    }
+    LaunchedEffect(player, active, isPlaying) {
+        player?.playWhenReady = active && isPlaying && playbackError == null
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .clickable { isPlaying = !isPlaying }
-    ) {
-        if (url.startsWith("https://")) {
-            val video = remember(url) {
-                VideoView(context).apply {
-                    setVideoURI(Uri.parse(url))
-                    setOnPreparedListener { mp ->
-                        mp.isLooping = true
-                        if (active && isPlaying) start()
-                    }
-                }
-            }
-            DisposableEffect(video) {
-                onDispose { video.stopPlayback() }
-            }
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        if (player != null) {
             AndroidView(
-                factory = { video },
+                factory = { viewContext ->
+                    LayoutInflater.from(viewContext).inflate(
+                        R.layout.reel_video_player, null, false
+                    ) as PlayerView
+                },
                 modifier = Modifier.fillMaxSize(),
-                update = {
-                    if (active && isPlaying) {
-                        if (!it.isPlaying) it.start()
-                    } else {
-                        if (it.isPlaying) it.pause()
-                    }
-                }
+                update = { it.player = player }
             )
         }
+        // TextureView, not SurfaceView: Compose actions stay in front of the video.
+        Box(Modifier.fillMaxSize().clickable {
+            if (playbackError == null) isPlaying = !isPlaying
+        })
 
         // Gradient scrims
         Box(
@@ -1010,6 +1027,30 @@ private fun ReelItemView(
                     )
                 )
         )
+
+        if(active && (playbackError != null || !url.startsWith("https://"))) {
+            Column(
+                modifier = Modifier.align(Alignment.Center).padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Icon(Icons.Outlined.ErrorOutline, "خطأ تشغيل", tint = Color.White, modifier = Modifier.size(36.dp))
+                Text(
+                    playbackError ?: "رابط الفيديو غير صالح.",
+                    color = Color.White, fontSize = 15.sp
+                )
+                if(url.startsWith("https://")) Button(onClick = {
+                    playbackError = null
+                    buffering = true
+                    retryKey++
+                }) { Text("إعادة المحاولة") }
+            }
+        } else if(active && buffering) {
+            CircularProgressIndicator(
+                modifier = Modifier.align(Alignment.Center),
+                color = Color.White
+            )
+        }
 
         // Center Play icon when paused
         if (!isPlaying) {
@@ -1120,18 +1161,6 @@ private fun ReelItemView(
             }
         }
     }
-}
-
-@Composable
-private fun NativeReel(url: String, active: Boolean) {
-    if (!url.startsWith("https://")) return
-    val context = LocalContext.current
-    val video = remember(url) { VideoView(context).apply {
-        setVideoURI(Uri.parse(url))
-        setOnPreparedListener { it.isLooping = true; if (active) start() }
-    } }
-    DisposableEffect(video) { onDispose { video.stopPlayback() } }
-    AndroidView(factory = { video }, modifier = Modifier.fillMaxSize(), update = { if (active) { if (!it.isPlaying) it.start() } else it.pause() })
 }
 
 private fun friendlyError(code: String?): String = when (code) {
