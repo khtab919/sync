@@ -24,11 +24,11 @@ function stop(label){releasePrepared();if(closed)return;closed=true;room?.remove
 function leave(){releasePrepared();if(window.LayaliLive){leaving=true;closed=true;room?.disconnect();window.LayaliLive.closeRoom()}else stop('غادرت البث')}
 $('closeEnded').onclick=()=>window.LayaliLive?window.LayaliLive.closeRoom():history.back();
 function renderTrack(track,participant,local=false){
- const el=track.attach();el.controls=false;el.autoplay=true;el.playsInline=true;el.addEventListener('contextmenu',e=>e.preventDefault());
+ const el=track.attach();el.controls=false;el.autoplay=true;el.playsInline=true;el.setAttribute('playsinline','');el.setAttribute('webkit-playsinline','');el.addEventListener('contextmenu',e=>e.preventDefault());
  if(track.kind===Track.Kind.Audio){if(local){track.detach(el);return}document.body.appendChild(el);return}
  if(track.kind!==Track.Kind.Video)return;
  const key=participant.identity;document.querySelectorAll('.tile').forEach(t=>{if(t.dataset.identity===key)t.remove()});
- const tile=document.createElement('div');tile.className='tile';tile.dataset.identity=key;el.muted=local;
+ const tile=document.createElement('div');tile.className='tile';tile.dataset.identity=key;el.muted=local;if(local)el.setAttribute('muted','');
  if(local&&facing==='user')el.style.transform='scaleX(-1)';const label=document.createElement('small');label.textContent=state.speakers?.find(s=>s.identity===key)?.name||(local?config.userName:participant.identity==='host-'+config.ownerId?config.ownerName:'ضيف');tile.append(el,label);$('video').appendChild(tile);layout();el.play().catch(()=>{});return el;
 }
 function layout(){const n=document.querySelectorAll('.tile').length;$('video').classList.toggle('group',n>1);$('video').classList.toggle('many',n>4);$('video').hidden=config.mode==='audio';$('audioStage').hidden=config.mode!=='audio';}
@@ -52,14 +52,14 @@ async function connect(token=config.token){
  try{
  if(config.owner||speaking){await prepareTracks();const fresh=await api({action:'token'});state.can_publish=fresh.can_publish;state.publish_sources=fresh.publish_sources;if(!fresh.can_publish){releasePrepared();throw Error('stage_unavailable')}token=fresh.token;}
  if(closed||leaving){releasePrepared();return}
- room=new Room({adaptiveStream:true,dynacast:true,audioCaptureDefaults:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},videoCaptureDefaults:{resolution:{width:1280,height:720,frameRate:30},facingMode:facing},publishDefaults:{simulcast:true,videoSimulcastLayers:[{width:320,height:180,encoding:{maxBitrate:150000,maxFramerate:15}},{width:640,height:360,encoding:{maxBitrate:500000,maxFramerate:20}}]}});
+ room=new Room({adaptiveStream:true,dynacast:true,audioCaptureDefaults:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},videoCaptureDefaults:{resolution:{width:1280,height:720,frameRate:30},facingMode:facing},publishDefaults:{simulcast:false,videoEncoding:{maxBitrate:1500000,maxFramerate:30}}});
  room.on(RoomEvent.TrackSubscribed,(track,pub,participant)=>renderTrack(track,participant));
  room.on(RoomEvent.TrackUnsubscribed,track=>{track.detach().forEach(el=>{const tile=el.closest('.tile');el.remove();tile?.remove()});layout()});
  room.on(RoomEvent.ConnectionStateChanged,s=>{$('status').textContent=s===ConnectionState.Connected?((config.owner||speaking)&&!mediaReady?'جارٍ نشر الصوت والصورة…':'متصل'):s===ConnectionState.Reconnecting?'إعادة الاتصال…':'جارٍ الاتصال…'});
  room.on(RoomEvent.ConnectionQualityChanged,(q,p)=>{if(p===room.localParticipant&&['poor','lost'].includes(String(q).toLowerCase()))$('status').textContent='الشبكة ضعيفة · يجري تكييف الجودة'});
  room.on(RoomEvent.ActiveSpeakersChanged,participants=>{activeSpeakerIds=new Set(participants.map(p=>p.identity));document.querySelectorAll('.audio-person').forEach(el=>el.classList.toggle('speaking',activeSpeakerIds.has(el.dataset.identity)))});
  room.on(RoomEvent.Disconnected,()=>{if(!closed&&!leaving)reconnect()});
- await room.connect(config.url,token);if(closed||leaving){room.removeAllListeners();await room.disconnect();releasePrepared();return}if(config.owner||speaking)await enableTracks();$('status').textContent='مباشر';
+ await room.connect(config.url,token);for(const participant of room.remoteParticipants.values()){for(const publication of participant.trackPublications.values()){if(publication.isSubscribed&&publication.track)renderTrack(publication.track,participant);}}if(closed||leaving){room.removeAllListeners();await room.disconnect();releasePrepared();return}if(config.owner||speaking)await enableTracks();$('status').textContent='مباشر';
  $('follow').hidden=config.owner;$('gift').hidden=!config.gifts;
  layout();if(!polling){polling=true;poll()}
  }catch(e){room?.removeAllListeners();try{await room?.disconnect()}finally{releasePrepared();mediaReady=false}throw e}

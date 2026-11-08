@@ -318,7 +318,7 @@ internal fun CameraPreviewSurface(
         if (starting) {
             // Unmount/close the native camera before the WebView/LiveKit requests it.
             withFrameNanos { }
-            delay(120)
+            delay(280)
             onStartStream()
         }
     }
