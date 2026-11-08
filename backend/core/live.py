@@ -301,7 +301,7 @@ def room_events(request,broadcast_id):
         if action=='media_diagnostic':
             # Client-reported diagnostics, never permission or financial authority.
             from django.core.cache import cache
-            stages={'camera_capture','camera_preview','microphone_capture','media_publish'}
+            stages={'camera_capture','camera_preview','microphone_capture','media_publish','room_video'}
             stage=request.payload.get('stage');outcome=request.payload.get('outcome');reason=request.payload.get('reason','')
             if stage not in stages or outcome not in ('ready','failed') or reason not in ('','Failed','NotAllowedError','NotFoundError','NotReadableError','OverconstrainedError','SecurityError','AbortError') or request.payload.get('build')!='media-1':raise ApiError('invalid_input')
             key=f'live-media-diagnostic:{row.pk}:{request.actor.pk}'
