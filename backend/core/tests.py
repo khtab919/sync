@@ -170,7 +170,7 @@ class ApiTests(TestCase):
         self.assertIn(10, me['owned_frames'])  # Legacy frames remain available.
         self.assertNotIn(11, me['owned_frames'])
         self.assertEqual(equip(11).status_code, 403)
-        self.assertEqual(equip(101).status_code, 403)
+        self.assertEqual(equip(101).status_code, 400)
         self.assertEqual(equip(10).status_code, 200)
 
         Reel.objects.bulk_create([
@@ -352,7 +352,9 @@ class ReferenceInteractionTests(TestCase):
         self.assertEqual(response.json()['selected_frame'], 2)
         self.assertEqual(response.json()['display_name'], 'New display name')
         self.assertFalse(response.json()['creator'])
-        invalid = self.client.patch('/api/me', json.dumps({'selected_frame': 11}), content_type='application/json', HTTP_AUTHORIZATION='Bearer ' + self.token)
+        locked = self.client.patch('/api/me', json.dumps({'selected_frame': 11}), content_type='application/json', HTTP_AUTHORIZATION='Bearer ' + self.token)
+        self.assertEqual(locked.status_code, 403)
+        invalid = self.client.patch('/api/me', json.dumps({'selected_frame': 101}), content_type='application/json', HTTP_AUTHORIZATION='Bearer ' + self.token)
         self.assertEqual(invalid.status_code, 400)
 
     def test_chat_fee_requires_publishing_permission(self):
