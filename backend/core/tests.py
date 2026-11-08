@@ -180,6 +180,22 @@ class ApiTests(TestCase):
         reel_info = next(item for item in visible_reels if item['id'] == reel.pk)
         self.assertEqual(reel_info['owner_name'], self.user.profile.display_name or self.user.username)
         self.assertIn('avatar_url', reel_info)
+        self.assertEqual(reel_info['owner_username'], self.user.username)
+        self.assertEqual(reel_info['owner_public_id'], self.user.profile.public_id)
+        self.assertFalse(reel_info['following'])
+        self.assertFalse(reel_info['identity_verified'])
+        self.assertIn('created_at', reel_info)
+        self.assertNotIn('likes', reel_info)
+        self.assertNotIn('comments', reel_info)
+
+        # Follow and verification labels must reflect the database, not fake metrics.
+        from .models import Follow
+        Follow.objects.create(user=self.creator, creator=self.user)
+        Profile.objects.filter(user=self.user).update(identity_verified=True)
+        updated = self.client.get('/api/reels', HTTP_AUTHORIZATION='Bearer ' + self.creator_token).json()['items']
+        publisher = next(item for item in updated if item['id'] == reel.pk)
+        self.assertTrue(publisher['following'])
+        self.assertTrue(publisher['identity_verified'])
 
         # Post-publication moderation must still remove reported content.
         Service.objects.filter(pk=service.pk).update(approved=False)
