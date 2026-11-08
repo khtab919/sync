@@ -195,6 +195,8 @@ def logout(request):
 def profile_json(user, viewer):
     profile = Profile.objects.get(user=user)
     from .models import BenefitGrant
+    from .profile_levels import profile_progress
+    progress = profile_progress(user)
     frame=BenefitGrant.objects.filter(user=user,kind='frame',expires_at__gt=timezone.now()).order_by('-id').first()
     return {
         'account_restricted':__import__('core.admin_security',fromlist=['blocked']).blocked(user,'ban') if user==viewer else False,
@@ -202,7 +204,11 @@ def profile_json(user, viewer):
         'display_name': profile.display_name or user.username,
         'gender': profile.gender, 'publishing_allowed':profile.publishing_allowed, 'bio': profile.bio, 'email': user.email if user == viewer else '', 'creator': profile.creator,
         'identity_verified': profile.identity_verified,
-        'selected_frame': frame.value if frame else profile.selected_frame, 'avatar_url': profile.avatar_url, 'chat_price_cents': profile.chat_price_cents,
+        'selected_frame': profile.selected_frame if profile.selected_frame in progress['owned_frames'] else (frame.value if frame else 0),
+        'level': progress['level'], 'xp_points': progress['xp_points'],
+        'next_level_xp': progress['next_level_xp'],
+        'owned_frames': progress['owned_frames'] if user==viewer else [],
+        'avatar_url': profile.avatar_url, 'chat_price_cents': profile.chat_price_cents,
         'followers_count': Follow.objects.filter(creator=user, user__is_active=True).count(),
         'following_count': Follow.objects.filter(user=user, creator__is_active=True).count(),
         'service_count': Service.objects.filter(owner=user, approved=True, active=True).count(),
@@ -224,8 +230,10 @@ def me(request):
         if 'gender' in p and p['gender'] not in ('male','female'):raise ApiError('invalid_gender')
         if 'chat_price_cents' in p and (type(p['chat_price_cents']) is not int or not 0 <= p['chat_price_cents'] <= 500000 or not profile.publishing_allowed):
             raise ApiError('invalid_chat_price')
-        if 'selected_frame' in p and (type(p['selected_frame']) is not int or p['selected_frame'] not in range(11)):
-            raise ApiError('invalid_frame')
+        if 'selected_frame' in p:
+            from .profile_levels import can_equip_frame
+            if not can_equip_frame(request.actor, p['selected_frame']):
+                raise ApiError('frame_locked',403)
         avatar_url = p.get('avatar_url', profile.avatar_url)
         if not isinstance(avatar_url, str) or len(avatar_url) > 500:
             raise ApiError('invalid_image_url')
