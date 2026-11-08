@@ -224,7 +224,8 @@ fun ServerAppScreen(baseUrl: String) {
         try {
             if (api.token != null || api.restoreSession()) {
                 profile = api.request("/api/me")
-                page = ""
+                // Admins use the same app login and enter the in-app MFA screen.
+                page = if (profile.optBoolean("is_admin")) "لوحة الإدارة" else ""
                 signedIn = true
                 remembered = true
                 notice = ""
@@ -330,7 +331,8 @@ fun ServerAppScreen(baseUrl: String) {
             ReferenceLogin(register, submitting, notice, username, password, email, adultConfirmed,
                 { username = it }, { password = it }, { email = it }, { adultConfirmed = it },
                 { register = !register; notice = "" }, { perform {
-                    api.requireSimpleRegistration()
+                    // Existing accounts (including administrators) must not be blocked by
+                    // the *registration* version handshake.
                     val body = JSONObject().put("email",email.trim()).put("password",password)
                     if (register) {
                         api.requireSimpleRegistration()
@@ -339,7 +341,8 @@ fun ServerAppScreen(baseUrl: String) {
                     }
                     api.request(if (register) "/api/register" else "/api/login", "POST", body)
                     profile = api.request("/api/me")
-                    password = ""; signedIn = true; tab = 0; page = ""
+                    password = ""; signedIn = true; tab = 0
+                    page = if (profile.optBoolean("is_admin")) "لوحة الإدارة" else ""
                     if (!api.sessionSaved) notice = "تم الدخول. تعذّر حفظ الجلسة على هذا الجهاز، وقد تحتاج للدخول مجددًا عند إغلاق التطبيق."
                 } }, gender=gender, onGender={gender=it})
             return@MyApplicationTheme
@@ -934,6 +937,7 @@ internal fun ReferenceLogin(register: Boolean, busy: Boolean, notice: String, us
             item{Column(Modifier.padding(horizontal=24.dp),verticalArrangement=Arrangement.spacedBy(16.dp)){
                 Text(if(register)"مساحتك تبدأ هنا"else"أهلًا بعودتك",style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold)
                 Text(if(register)"أنشئ حسابك بخطوات بسيطة."else"ادخل ببريدك الإلكتروني وكلمة المرور.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+                if(!register) Text("المسؤول يدخل من الشاشة نفسها بحسابه الإداري؛ تظهر لوحة الإدارة بعد الدخول والتحقق الثنائي.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                 if(notice.isNotBlank())Text(notice,color=MaterialTheme.colorScheme.error)
                 if(register)OutlinedTextField(username,onUsername,label={Text("الاسم الظاهر")},modifier=Modifier.fillMaxWidth(),singleLine=true,keyboardOptions=KeyboardOptions(imeAction=ImeAction.Next))
                 OutlinedTextField(email,onEmail,label={Text("البريد الإلكتروني")},modifier=Modifier.fillMaxWidth(),singleLine=true,keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Email,imeAction=ImeAction.Next))

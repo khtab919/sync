@@ -22,6 +22,35 @@ class NativeAdminSecurityTests(TestCase):
     def verify(self,u):
         secret=pyotp.random_base32();AdminAccess.objects.update_or_create(user=u,defaults={'totp_secret':cipher().encrypt(secret.encode()).decode(),'last_counter':-1})
         result=self.call('/api/admin/auth',{'action':'verify','code':pyotp.TOTP(secret).now()},u);self.assertEqual(result.status_code,200);return secret
+    def test_owner_signs_into_android_account_api_then_enters_in_app_mfa(self):
+        # The public login is shared by users and administrators. It must not
+        # grant an admin role to registrants or bypass the extra MFA layer.
+        signed = self.client.post(
+            '/api/login',
+            json.dumps({'email': 'owner@example.com', 'password': 'strong-owner-password'}),
+            content_type='application/json',
+        )
+        self.assertEqual(signed.status_code, 200, signed.content)
+        auth = {'HTTP_AUTHORIZATION': 'Bearer ' + signed.json()['token']}
+        me = self.client.get('/api/me', **auth)
+        self.assertEqual(me.status_code, 200)
+        self.assertTrue(me.json()['is_admin'])
+        self.assertTrue(me.json()['is_staff'])
+        self.assertIn('dashboard.view', me.json()['admin_permissions'])
+        self.assertEqual(me.json()['admin_scope'], 'full')
+
+        entry = self.client.get('/api/admin/auth', **auth)
+        self.assertEqual(entry.status_code, 200)
+        self.assertFalse(entry.json()['verified'])
+        self.assertEqual(
+            self.client.get('/api/admin/control/dashboard', **auth).json()['error'],
+            'admin_mfa_required',
+        )
+        customer = self.client.get(
+            '/api/me', HTTP_AUTHORIZATION='Bearer ' + self.tokens[self.user.pk],
+        ).json()
+        self.assertFalse(customer['is_admin'])
+
     def test_gender_and_distinct_publishing_permission_are_admin_visible(self):
         self.verify(self.owner)
         Profile.objects.filter(user=self.user).update(gender='female')
