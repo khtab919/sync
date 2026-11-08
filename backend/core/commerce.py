@@ -9,7 +9,7 @@ from django.core import signing
 from django.core.files.base import ContentFile
 from django.db import transaction
 from django.db.models import Sum, Case, When, Value, IntegerField
-from django.http import FileResponse, JsonResponse, HttpResponse
+from django.http import FileResponse, JsonResponse, HttpResponse, StreamingHttpResponse
 from django.utils import timezone
 from .views import endpoint, ApiError, text, amount, User
 from .mobile_admin import require_admin, audit
@@ -65,7 +65,54 @@ def media_file(request, media_id):
                 return HttpResponse(status=403)
         except (signing.BadSignature, KeyError, ValueError):
             return HttpResponse(status=403)
-    response = FileResponse(media.file.open('rb'), content_type=media.mime)
+    # Android video players request byte ranges to read MP4 metadata and seek.
+    # Keep media authorization above this block; partial responses never bypass it.
+    size = media.file.size
+    requested_range = request.headers.get('Range', '').strip()
+    start, end = 0, size - 1
+    if requested_range:
+        match = re.fullmatch(r'bytes=(\\d*)-(\\d*)', requested_range)
+        if not match or (not match.group(1) and not match.group(2)):
+            response = HttpResponse(status=416)
+            response['Content-Range'] = f'bytes */{size}'
+        else:
+            first, last = match.groups()
+            if first:
+                start = int(first)
+                end = min(int(last), size - 1) if last else size - 1
+            else:
+                length = int(last)
+                start = max(0, size - length) if length else size
+                end = size - 1
+            if start >= size or start > end:
+                response = HttpResponse(status=416)
+                response['Content-Range'] = f'bytes */{size}'
+            else:
+                count = end - start + 1
+                def chunks():
+                    with media.file.open('rb') as source:
+                        source.seek(start)
+                        remaining = count
+                        while remaining:
+                            chunk = source.read(min(64 * 1024, remaining))
+                            if not chunk:
+                                break
+                            remaining -= len(chunk)
+                            yield chunk
+                response = StreamingHttpResponse(
+                    chunks(), status=206, content_type=media.mime
+                ) if request.method != 'HEAD' else HttpResponse(
+                    status=206, content_type=media.mime
+                )
+                response['Content-Range'] = f'bytes {start}-{end}/{size}'
+                response['Content-Length'] = str(count)
+    else:
+        if request.method == 'HEAD':
+            response = HttpResponse(content_type=media.mime)
+            response['Content-Length'] = str(size)
+        else:
+            response = FileResponse(media.file.open('rb'), content_type=media.mime)
+    response['Accept-Ranges'] = 'bytes'
     response['Cache-Control'] = 'private, no-store'
     response['X-Content-Type-Options'] = 'nosniff'
     response['Content-Security-Policy'] = "default-src 'none'; media-src 'self'"
