@@ -394,7 +394,7 @@ fun ServerAppScreen(baseUrl: String) {
             },
             containerColor = MaterialTheme.colorScheme.background,
             topBar = {
-                if (screen != "حسابي" && screen != "صفحة المذيعة" && screen != "ريلز") TopAppBar(
+                if (screen != "حسابي" && screen != "صفحة المذيعة" && (screen != "ريلز" || rows.isEmpty())) TopAppBar(
                     title = {
                         if (screen == "تصفح") Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                             Image(painterResource(R.drawable.relaxia_logo), "شعار Relaxia", Modifier.size(30.dp).clip(RoundedCornerShape(10.dp)))
@@ -419,7 +419,7 @@ fun ServerAppScreen(baseUrl: String) {
                 )
             },
             bottomBar = {
-                if (page.isBlank() && screen != "ريلز") NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp, modifier = Modifier.heightIn(min = 72.dp)) {
+                if (page.isBlank() && (screen != "ريلز" || rows.isEmpty())) NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp, modifier = Modifier.heightIn(min = 72.dp)) {
                     destinations.forEachIndexed { index, name -> NavigationBarItem(selected = tab == index,
                         onClick = { tab = index; query = ""; category = "الكل"; searchCategory = "الكل"; notice = "" },
                         icon = { Icon(destinationIcons[index], null, Modifier.size(24.dp)) }, label = { Text(name, fontSize = 12.sp) },
