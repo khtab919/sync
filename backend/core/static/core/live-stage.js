@@ -14,7 +14,7 @@ $('profile').onclick=()=>{if(!config.owner&&window.LayaliLive?.canOpenProfile())
 async function api(action){const abort=new AbortController(),timer=setTimeout(()=>abort.abort(),8000);try{const r=await fetch(path,{method:action?'POST':'GET',headers:{'Content-Type':'application/json','X-Live-Control':config.control},body:action?JSON.stringify(action):undefined,signal:abort.signal,cache:'no-store'});const value=await r.json();if(!r.ok)throw Error(value.error||'network');return value}finally{clearTimeout(timer)}}
 function diagnostic(stage,outcome,reason=''){api({action:'media_diagnostic',stage,outcome,reason,build:'media-1'}).catch(()=>{})}
 function mediaMessage(e){
- mediaFault=true;mediaReady=false;$('connection').classList.add('media-fault');const labels={camera_capture:'تعذر تشغيل الكاميرا',camera_preview:'الكاميرا لا تعرض صورة',microphone_capture:'تعذر تشغيل الميكروفون',media_publish:'تعذر نشر الصوت أو الصورة'};
+ mediaFault=true;mediaReady=false;$('connection').classList.add('media-fault');const labels={camera_capture:'تعذر تشغيل الكاميرا',camera_preview:'الكاميرا لا تعرض صورة',microphone_capture:'تعذر تشغيل الميكروفون',media_publish:'تعذر نشر الصوت أو الصورة',room_video:'نُشر الفيديو لكن لم تظهر صورته داخل الغرفة'};
  const reasons={NotAllowedError:'تحقق من أذونات التطبيق والكاميرا في Android.',NotReadableError:'قد تكون الكاميرا أو الميكروفون مستخدمة في تطبيق آخر.',NotFoundError:'لم يعثر الجهاز على الكاميرا أو الميكروفون.'};
  $('status').textContent=(labels[e.stage]||'تعذر تجهيز البث')+' · '+(reasons[e.reason]||'أعد المحاولة أو ارجع وافتح البث مجددًا.');$('retryMedia').hidden=false;diagnostic(e.stage,'failed',e.reason);
 }
@@ -44,9 +44,24 @@ async function prepareTracks(){
 }
 async function enableTracks(){
  try{
-  for(const track of preparedTracks){await room.localParticipant.publishTrack(track,{source:track.kind===Track.Kind.Video?Track.Source.Camera:Track.Source.Microphone});if(track.kind===Track.Kind.Video){track.detach().forEach(el=>el.closest('.tile')?.remove());renderTrack(track,room.localParticipant,true)}if(track.kind===Track.Kind.Audio&&muted)await track.mute()}
+  let roomVideo=null;
+  for(const track of preparedTracks){
+   const publication=await room.localParticipant.publishTrack(track,{source:track.kind===Track.Kind.Video?Track.Source.Camera:Track.Source.Microphone});
+   if(!publication||!publication.track)throw Error('publication_missing');
+   if(track.kind===Track.Kind.Video){
+    track.detach().forEach(el=>el.closest('.tile')?.remove());
+    roomVideo=renderTrack(track,room.localParticipant,true);
+   }
+   if(track.kind===Track.Kind.Audio&&muted)await track.mute();
+  }
+  // Verify the actual room renderer, not only the initial camera preview.
+  if(roomVideo){
+   $('status').textContent='جارٍ التحقق من صورة البث…';
+   try{await RelaxiaMedia.frameReady(roomVideo,10000)}
+   catch(e){throw new RelaxiaMedia.MediaFailure('room_video',e)}
+  }
   mediaReady=true;speaking=true;diagnostic('media_publish','ready');await configurePublishing();
- }catch(e){room.removeAllListeners();await room.disconnect();releasePrepared();throw new RelaxiaMedia.MediaFailure('media_publish',e)}
+ }catch(e){room?.removeAllListeners();await room?.disconnect();releasePrepared();throw e.name==='MediaFailure'?e:new RelaxiaMedia.MediaFailure('media_publish',e)}
 }
 async function connect(token=config.token){
  try{

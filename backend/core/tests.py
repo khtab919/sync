@@ -130,6 +130,25 @@ class ApiTests(TestCase):
         result = self.client.get(f'/api/messages/{self.creator.pk}', HTTP_AUTHORIZATION='Bearer ' + outsider_token)
         self.assertEqual(result.json()['items'], [])
 
+    def test_creator_detail_uses_real_counts_and_respects_blocks(self):
+        from .models import Follow, UserBlock
+        Follow.objects.create(user=self.user, creator=self.creator)
+        response = self.client.get(
+            f'/api/creators/{self.creator.pk}',
+            HTTP_AUTHORIZATION='Bearer ' + self.token,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['id'], self.creator.pk)
+        self.assertEqual(response.json()['followers_count'], 1)
+        self.assertEqual(response.json()['following_count'], 0)
+        self.assertEqual(response.json()['reel_count'], 0)
+        UserBlock.objects.create(user=self.user, blocked=self.creator)
+        hidden = self.client.get(
+            f'/api/creators/{self.creator.pk}',
+            HTTP_AUTHORIZATION='Bearer ' + self.token,
+        )
+        self.assertEqual(hidden.status_code, 404)
+
     def test_reels_and_publication_are_available_to_regular_accounts(self):
         Profile.objects.filter(user=self.user).update(identity_verified=False)
         response = self.client.get('/api/reels', HTTP_AUTHORIZATION='Bearer ' + self.token)
@@ -158,6 +177,9 @@ class ApiTests(TestCase):
         self.assertTrue(reel.approved)
         visible_reels = self.client.get('/api/reels', HTTP_AUTHORIZATION='Bearer ' + self.creator_token).json()['items']
         self.assertIn(reel.pk, [item['id'] for item in visible_reels])
+        reel_info = next(item for item in visible_reels if item['id'] == reel.pk)
+        self.assertEqual(reel_info['owner_name'], self.user.profile.display_name or self.user.username)
+        self.assertIn('avatar_url', reel_info)
 
         # Post-publication moderation must still remove reported content.
         Service.objects.filter(pk=service.pk).update(approved=False)
