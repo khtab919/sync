@@ -55,9 +55,9 @@ internal val relaxiaFrames = listOf(
         0xFF386DA5L,0xFFB87A51L,0xFFA7B4CCL,0xFFD4A44FL,0xFF8FBDD4L,
         0xFF57B6E3L,0xFF736ED4L,0xFFD77B5BL,0xFFB98B49L,0xFF3C8FE3L
     )
-    val accent = Color(palette[tier])
+    val accent = Color(palette[tier].toInt())
     RelaxiaFrame(id, "${names[tier]} · ${id}", "مستوى ${id} · إطار ${names[tier]}",
-        accent, Color(palette[(tier + 2) % palette.size]))
+        accent, Color(palette[(tier + 2) % palette.size].toInt()))
 }
 
 @Composable
