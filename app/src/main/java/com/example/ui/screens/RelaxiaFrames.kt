@@ -202,6 +202,15 @@ private fun DrawScope.flower(p: Offset, radius: Float, color: Color, gold: Color
 
 @Composable
 internal fun RelaxiaFramePicker(
+    current: Int, name: String, imageUrl: String, onChoose: (Int) -> Unit
+) {
+    // Compatibility with older feature screens and UI tests. Legacy frames
+    // only; the backend still validates all frame equip requests.
+    RelaxiaFramePicker(current, name, imageUrl, 1, (0..10).toSet(), onChoose)
+}
+
+@Composable
+internal fun RelaxiaFramePicker(
     current: Int, name: String, imageUrl: String,
     level: Int, ownedFrames: Set<Int>, onChoose: (Int) -> Unit
 ) {
