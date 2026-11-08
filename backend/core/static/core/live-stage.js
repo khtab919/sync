@@ -25,7 +25,7 @@ function leave(){releasePrepared();if(window.LayaliLive){leaving=true;closed=tru
 $('closeEnded').onclick=()=>window.LayaliLive?window.LayaliLive.closeRoom():history.back();
 function renderTrack(track,participant,local=false){
  const el=track.attach();el.controls=false;el.autoplay=true;el.playsInline=true;el.setAttribute('playsinline','');el.setAttribute('webkit-playsinline','');el.addEventListener('contextmenu',e=>e.preventDefault());
- if(track.kind===Track.Kind.Audio){if(local){track.detach(el);return}document.body.appendChild(el);return}
+ if(track.kind===Track.Kind.Audio){if(local){track.detach(el);return}document.body.appendChild(el);el.play().catch(()=>{if(!closed){$('status').textContent='تعذر تشغيل الصوت تلقائياً. اضغط لإعادة المحاولة.';el.addEventListener('click',()=>el.play().catch(()=>{}),{once:true})}});return el;}
  if(track.kind!==Track.Kind.Video)return;
  const key=participant.identity;document.querySelectorAll('.tile').forEach(t=>{if(t.dataset.identity===key)t.remove()});
  const tile=document.createElement('div');tile.className='tile';tile.dataset.identity=key;el.muted=local;if(local)el.setAttribute('muted','');
