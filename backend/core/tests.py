@@ -189,6 +189,49 @@ class ApiTests(TestCase):
         self.assertNotIn(service.pk, [item['id'] for item in offers])
         self.assertNotIn(reel.pk, [item['id'] for item in reels])
 
+    def test_reel_media_supports_http_ranges_without_bypassing_access(self):
+        import tempfile
+        from django.core.files.base import ContentFile
+        from .models import UploadedMedia, Reel
+        payload = bytes(range(128))
+        with tempfile.TemporaryDirectory() as folder, override_settings(MEDIA_ROOT=folder):
+            media = UploadedMedia(owner=self.user, purpose='reel',
+                                  mime='video/mp4', size=len(payload))
+            media.file.save('range-test.mp4', ContentFile(payload), save=False)
+            media.save()
+            reel = Reel.objects.create(
+                owner=self.user, media=media, approved=True,
+                video_url='https://example.test/range-test.mp4'
+            )
+            url = f'/api/media/{media.pk}'
+            first = self.client.get(url, HTTP_RANGE='bytes=10-24')
+            self.assertEqual(first.status_code, 206)
+            self.assertEqual(first['Content-Range'], 'bytes 10-24/128')
+            self.assertEqual(first['Content-Length'], '15')
+            self.assertEqual(first['Accept-Ranges'], 'bytes')
+            self.assertEqual(first['Content-Type'], 'video/mp4')
+            self.assertEqual(b''.join(first.streaming_content), payload[10:25])
+
+            suffix = self.client.get(url, HTTP_RANGE='bytes=-8')
+            self.assertEqual(suffix.status_code, 206)
+            self.assertEqual(suffix['Content-Range'], 'bytes 120-127/128')
+            self.assertEqual(b''.join(suffix.streaming_content), payload[-8:])
+
+            invalid = self.client.get(url, HTTP_RANGE='bytes=200-')
+            self.assertEqual(invalid.status_code, 416)
+            self.assertEqual(invalid['Content-Range'], 'bytes */128')
+            malformed = self.client.get(url, HTTP_RANGE='bytes=0-1,4-5')
+            self.assertEqual(malformed.status_code, 416)
+            head = self.client.head(url)
+            self.assertEqual(head.status_code, 200)
+            self.assertEqual(head['Content-Length'], '128')
+            self.assertEqual(head['Accept-Ranges'], 'bytes')
+
+            Reel.objects.filter(pk=reel.pk).update(approved=False)
+            self.assertEqual(
+                self.client.get(url, HTTP_RANGE='bytes=0-15').status_code, 403
+            )
+
     def test_disabled_publishing_permission_still_restricts_services_and_reels(self):
         Profile.objects.filter(user=self.user).update(publishing_allowed=False)
         response = self.post('/api/services', {
