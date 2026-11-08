@@ -156,7 +156,7 @@ def room(request, call_id):
     nonce = secrets.token_urlsafe(24)
     peer = call.callee if user.pk == call.caller_id else call.caller
     peer_profile = Profile.objects.filter(user=peer).first()
-    config = {'peerAvatar':peer_profile.avatar_url if peer_profile else '', 'peerName': (peer_profile.display_name if peer_profile else '') or peer.username, 'call': str(call.pk), 'caller': user.pk == call.caller_id, 'video': call.mode == 'video', 'token': token, 'iceServers': ice_servers(user, call.pk), 'relayOnly': os.environ.get('LAYALI_TESTING') == '1' and os.environ.get('LAYALI_CALL_TEST_RELAY_ONLY') == '1'}
+    config = {'peerAvatar':peer_profile.avatar_url if peer_profile else '', 'peerName': (peer_profile.display_name if peer_profile else '') or peer.username, 'peerVerified': bool(peer_profile and peer_profile.identity_verified), 'call': str(call.pk), 'caller': user.pk == call.caller_id, 'video': call.mode == 'video', 'token': token, 'iceServers': ice_servers(user, call.pk), 'relayOnly': os.environ.get('LAYALI_TESTING') == '1' and os.environ.get('LAYALI_CALL_TEST_RELAY_ONLY') == '1'}
     response = render(request, 'core/call_room.html', {'config': config, 'nonce': nonce,'theme':'light' if request.POST.get('theme')=='light' else 'dark'})
     response['Cache-Control'] = 'no-store'
     response['Referrer-Policy'] = 'no-referrer'
