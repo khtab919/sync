@@ -8,4 +8,6 @@ RUN python fetch_live_sdk.py
 RUN mkdir -p staticfiles media && chown -R layali:layali /app
 USER layali
 EXPOSE 8000
-CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2", "--timeout", "90", "--access-logfile", "-"]
+# The named static volume may persist across image upgrades. Refresh on every start
+# and fail loudly if the LiveKit SDK never reaches the files served by Caddy.
+CMD ["sh", "-ec", "python manage.py collectstatic --noinput && python fetch_live_sdk.py --verify-static && exec gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 90 --access-logfile -"]

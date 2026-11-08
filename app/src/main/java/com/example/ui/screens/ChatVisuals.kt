@@ -41,10 +41,16 @@ internal fun conversationColors(): ConversationColors = if (MaterialTheme.colorS
 else ConversationColors(Color(0xFFF4F8FA), Color(0xFFE9F0F4), Color(0xFF277C9D), Color(0xFFDCECF2))
 
 @Composable
-internal fun ChatAvatar(name:String, size:Int, url:String="") {
-    Box(Modifier.size(size.dp).clip(CircleShape).background(conversationColors().soft).border(1.dp,conversationColors().accent.copy(alpha=.35f),CircleShape),contentAlignment=Alignment.Center) {
-        Text(name.trim().take(1),fontSize=(size*.32f).sp,color=MaterialTheme.colorScheme.onSurface)
-        if(url.startsWith("https://"))coil.compose.AsyncImage(url,name,Modifier.fillMaxSize(),contentScale=androidx.compose.ui.layout.ContentScale.Crop)
+internal fun ChatAvatar(name:String, size:Int, url:String="", online:Boolean=false) {
+    Box(Modifier.size(size.dp)) {
+        Box(Modifier.fillMaxSize().clip(CircleShape).background(conversationColors().soft).border(1.dp,conversationColors().accent.copy(alpha=.35f),CircleShape),contentAlignment=Alignment.Center) {
+            Text(name.trim().take(1),fontSize=(size*.32f).sp,color=MaterialTheme.colorScheme.onSurface)
+            if(url.startsWith("https://"))coil.compose.AsyncImage(url,name,Modifier.fillMaxSize(),contentScale=androidx.compose.ui.layout.ContentScale.Crop)
+        }
+        if(online) Box(
+            Modifier.align(Alignment.BottomEnd).size((size*.27f).dp)
+                .background(Color(0xFF20B679),CircleShape).border(2.dp,conversationColors().background,CircleShape)
+        )
     }
 }
 
@@ -53,7 +59,7 @@ internal fun ChatHeader(name: String, back: () -> Unit, call: () -> Unit, buy: (
     val colors = conversationColors()
     Column(Modifier.background(colors.background).statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ChatAvatar(name, 44, avatar)
+            ChatAvatar(name, 44, avatar, online=presenceKnown && online)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     Text(name, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 18.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
@@ -69,7 +75,7 @@ internal fun ChatHeader(name: String, back: () -> Unit, call: () -> Unit, buy: (
             Row(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Icon(if(priceCoins > 0) Icons.Outlined.Lock else Icons.Outlined.ChatBubbleOutline, null, Modifier.size(24.dp), tint = colors.accent)
                 Column(Modifier.weight(1f)) {
-                    Text(if(priceCoins > 0) "رسائل $name مدفوعة" else "مساحتكما الخاصة", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    Text(if(priceCoins > 0) "مساحتكما الخاصة · رسائل مدفوعة" else "مساحتكما الخاصة", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     Text(if(priceCoins > 0) "$priceCoins رصيد لكل رسالة · بتأكيدك قبل الإرسال" else "رسائل وصور وتسجيلات صوتية", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Button(buy, enabled = enabled, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp), colors = ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = Color.White), shape = RoundedCornerShape(20.dp)) { Text("شراء رصيد", fontSize = 12.sp) }
@@ -85,6 +91,11 @@ internal fun ChatHeader(name: String, back: () -> Unit, call: () -> Unit, buy: (
 
 @Composable
 internal fun ChatComposer(body: String, change: (String) -> Unit, busy: Boolean, photo: () -> Unit, record: () -> Unit, send: () -> Unit) {
+    ChatComposerWithActions(body, change, busy, photo, record, send = send)
+}
+
+@Composable
+internal fun ChatComposerWithActions(body: String, change: (String) -> Unit, busy: Boolean, photo: () -> Unit, record: () -> Unit, attach: (() -> Unit)? = null, gift: (() -> Unit)? = null, send: () -> Unit) {
     val colors = conversationColors()
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         // Keep a stable action position: empty drafts record; written drafts send.
@@ -94,7 +105,13 @@ internal fun ChatComposer(body: String, change: (String) -> Unit, busy: Boolean,
         }
         OutlinedTextField(body, change, placeholder = { Text("اكتب رسالة…", fontSize = 16.sp) }, minLines = 1, maxLines = 4, enabled = !busy, shape = RoundedCornerShape(28.dp), modifier = Modifier.weight(1f),
             colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = Color.Transparent, focusedBorderColor = colors.accent.copy(alpha = .35f), unfocusedContainerColor = colors.incoming, focusedContainerColor = colors.incoming))
-        FilledIconButton(photo, enabled = !busy, modifier = Modifier.size(48.dp), shape = RoundedCornerShape(18.dp), colors = IconButtonDefaults.filledIconButtonColors(containerColor = colors.soft, contentColor = MaterialTheme.colorScheme.onSurface)) { Icon(Icons.Outlined.Image, "إرسال صورة", Modifier.size(25.dp)) }
+        if(gift!=null) IconButton(onClick=gift,enabled=!busy,modifier=Modifier.size(40.dp)) {
+            Icon(Icons.Outlined.CardGiftcard,"إرسال هدية",tint=colors.accent)
+        }
+        if(attach!=null) IconButton(onClick=attach,enabled=!busy,modifier=Modifier.size(40.dp)){
+            Icon(Icons.Outlined.AddCircleOutline,"إرفاق ملف",tint=MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        FilledIconButton(photo, enabled = !busy, modifier = Modifier.size(48.dp), shape = CircleShape, colors = IconButtonDefaults.filledIconButtonColors(containerColor = colors.soft, contentColor = MaterialTheme.colorScheme.onSurface)) { Icon(Icons.Outlined.Image, "إرسال صورة", Modifier.size(25.dp)) }
     }
 }
 
