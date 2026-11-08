@@ -71,7 +71,7 @@ def media_file(request, media_id):
     requested_range = request.headers.get('Range', '').strip()
     start, end = 0, size - 1
     if requested_range:
-        match = re.fullmatch(r'bytes=(\\d*)-(\\d*)', requested_range)
+        match = re.fullmatch(r'bytes=(\d*)-(\d*)', requested_range)
         if not match or (not match.group(1) and not match.group(2)):
             response = HttpResponse(status=416)
             response['Content-Range'] = f'bytes */{size}'
