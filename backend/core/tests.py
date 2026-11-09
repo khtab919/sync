@@ -155,6 +155,65 @@ class ApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(self.post('/api/services', {'title': 'test', 'description': 'test description', 'price_cents': 200}).status_code, 201)
 
+    def test_conversations_with_messages_and_live_frame_grants(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        from .models import BenefitGrant
+        Message.objects.create(sender=self.user, recipient=self.creator, body='hello')
+        headers = {'HTTP_AUTHORIZATION': 'Bearer ' + self.token}
+        response = self.client.get('/api/conversations', **headers)
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()['items'][0]['selected_frame'],
+                         self.creator.profile.selected_frame)
+        BenefitGrant.objects.create(user=self.creator, actor=self.user,
+            kind='frame', value=30, reason='temporary frame',
+            expires_at=timezone.now() + timedelta(days=1))
+        response = self.client.get('/api/conversations', **headers)
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()['items'][0]['selected_frame'], 30)
+
+    def test_reel_likes_are_real_idempotent_and_protected(self):
+        from .models import Reel, ReelLike
+        reel = Reel.objects.create(owner=self.creator, approved=True,
+                                   video_url='https://example.com/real-reel.mp4')
+        url = f'/api/reels/{reel.pk}/like'
+        self.assertEqual(self.post(url, {'enabled': 'yes'}).status_code, 400)
+        self.assertEqual(self.post(url, {'enabled': True}, self.creator_token).status_code, 403)
+        for _ in range(2):
+            response = self.post(url, {'enabled': True})
+            self.assertEqual(response.status_code, 200, response.content)
+            self.assertTrue(response.json()['liked'])
+            self.assertEqual(response.json()['like_count'], 1)
+        self.assertEqual(ReelLike.objects.filter(reel=reel).count(), 1)
+        listing = self.client.get('/api/reels', HTTP_AUTHORIZATION='Bearer ' + self.token)
+        self.assertEqual(listing.status_code, 200, listing.content)
+        item = next(x for x in listing.json()['items'] if x['id'] == reel.pk)
+        self.assertTrue(item['liked'])
+        self.assertEqual(item['like_count'], 1)
+        self.assertEqual(self.post(url, {'enabled': False}).json()['like_count'], 0)
+        Reel.objects.filter(pk=reel.pk).update(approved=False)
+        self.assertEqual(self.post(url, {'enabled': True}).status_code, 404)
+
+    def test_offers_rank_by_real_engagement_and_diversify_creators(self):
+        from .models import ServiceReaction, Reel
+        from .feed_ranking import rank_feed
+        a = Service.objects.create(owner=self.user, title='Normal offer',
+            description='Regular service', price_cents=100, approved=True)
+        b = Service.objects.create(owner=self.creator, title='Popular offer',
+            description='A liked service', price_cents=100, approved=True)
+        ServiceReaction.objects.create(user=self.user, service=b, kind='like')
+        response = self.client.get('/api/services',
+            HTTP_AUTHORIZATION='Bearer ' + self.token)
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()['items'][0]['id'], b.pk)
+        reels = [
+            Reel.objects.create(owner=self.user if i < 2 else self.creator,
+                approved=True, video_url=f'https://example.com/{i}.mp4')
+            for i in range(3)
+        ]
+        ranked = rank_feed(reels, likes={}, viewer_id=self.user.pk)
+        self.assertNotEqual(ranked[0].owner_id, ranked[1].owner_id)
+
     def test_real_xp_and_secure_luxury_frames_1_to_100(self):
         from datetime import timedelta
         from django.utils import timezone
