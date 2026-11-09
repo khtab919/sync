@@ -235,7 +235,12 @@ fun ServerAppScreen(baseUrl: String) {
         finally { restoring = false }
     }
     val screen = page.ifBlank { destinations[tab] }
-    BackHandler(enabled = signedIn && page.isNotBlank()) { back() }
+    // Android back from a full-screen Reel must return home, never exit the app.
+    BackHandler(enabled = signedIn && (page.isNotBlank() || tab == 1)) {
+        if (screen == "ريلز") {
+            page = ""; tab = 0; query = ""; contentError = ""; notice = ""
+        } else back()
+    }
     LaunchedEffect(signedIn, profile.optInt("id"), screen, revision) {
         if (!signedIn) return@LaunchedEffect
         if (screen !in listOf("تصفح", "حسابي", "دردشة", "المحفظة")) return@LaunchedEffect
@@ -441,7 +446,10 @@ fun ServerAppScreen(baseUrl: String) {
             Column(Modifier.fillMaxSize().padding(padding)) {
                 if (loading || submitting) LinearProgressIndicator(Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.primary)
                 if (notice.isNotBlank() || contentError.isNotBlank()) Surface(color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), shape = RoundedCornerShape(14.dp)) {
-                    Text(notice.ifBlank { contentError }, Modifier.padding(14.dp), style = MaterialTheme.typography.bodyMedium)
+                    Row(Modifier.padding(14.dp),verticalAlignment=Alignment.CenterVertically) {
+                        Text(notice.ifBlank { contentError }, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                        if (contentError.isNotBlank()) TextButton(onClick={revision++}, enabled=!loading) { Text("إعادة المحاولة") }
+                    }
                 }
                 if (screen == "ريلز" && rows.isNotEmpty()) {
                     val pager = rememberPagerState(pageCount = { rows.size })
@@ -1121,6 +1129,10 @@ private fun ReelItemView(
     var following by remember(row.optInt("owner_id")) { mutableStateOf(row.optBoolean("following")) }
     var followBusy by remember { mutableStateOf(false) }
     var followError by remember { mutableStateOf("") }
+    var liked by remember(row.optInt("id")) { mutableStateOf(row.optBoolean("liked")) }
+    var likeCount by remember(row.optInt("id")) { mutableIntStateOf(row.optInt("like_count")) }
+    var likeBusy by remember(row.optInt("id")) { mutableStateOf(false) }
+    var likeError by remember(row.optInt("id")) { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(active) { isPlaying = active }
@@ -1357,6 +1369,35 @@ private fun ReelItemView(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                IconButton(
+                    onClick = {
+                        if (!likeBusy) {
+                            likeBusy = true
+                            likeError = ""
+                            scope.launch {
+                                try {
+                                    val result = api.request(
+                                        "/api/reels/${row.optInt("id")}/like", "POST",
+                                        JSONObject().put("enabled", !liked)
+                                    )
+                                    liked = result.optBoolean("liked")
+                                    likeCount = result.optInt("like_count")
+                                } catch (e: CancellationException) { throw e }
+                                catch (e: Exception) { likeError = "تعذّر تسجيل الإعجاب" }
+                                finally { likeBusy = false }
+                            }
+                        }
+                    },
+                    enabled = !likeBusy,
+                    modifier = Modifier.size(45.dp).background(Color(0x66000000), CircleShape)
+                ) {
+                    Icon(if (liked) Icons.Outlined.Favorite else Icons.Outlined.FavoriteBorder,
+                        "إعجاب بالريل", tint = if (liked) Color(0xFFFF6B80) else Color.White)
+                }
+                Text(likeCount.toString(), color = Color.White, fontSize = 11.sp)
+                if (likeError.isNotBlank()) Text(likeError, color = Color(0xFFFFB3BA), fontSize = 9.sp)
+            }
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.clickable(onClick = onChat)
