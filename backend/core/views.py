@@ -406,6 +406,7 @@ def follow(request, creator_id):
 
 @endpoint(['GET'])
 def conversations(request):
+    from .models import BenefitGrant
     rows = Message.objects.filter(Q(sender=request.actor) | Q(recipient=request.actor)).select_related('sender', 'recipient').order_by('-id')
     peers, result = set(), []
     for message in rows.iterator():
