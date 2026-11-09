@@ -8,11 +8,11 @@ from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError,ObjectDoesNotExist
 from django.db import IntegrityError, connection, transaction
-from django.db.models import Q
+from django.db.models import Q, Count
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
-from .models import Profile, Service, Booking, Wallet, Withdrawal, Message, Reel, Report, SessionToken, AuthRateLimit, ServiceReaction, Follow, SupportTicket
+from .models import Profile, Service, Booking, Wallet, Withdrawal, Message, Reel, ReelLike, Report, SessionToken, AuthRateLimit, ServiceReaction, Follow, SupportTicket
 
 User = get_user_model()
 
@@ -299,8 +299,21 @@ def service_json(service, viewer):
 @endpoint(['GET', 'POST'])
 def services(request):
     if request.method == 'GET':
-        rows = Service.objects.filter(approved=True, active=True, owner__is_active=True).exclude(category='كورس').select_related('owner').order_by('-id')[:100]
-        return JsonResponse({'items': [service_json(row, request.actor) for row in rows]})
+        from .feed_ranking import rank_feed
+        rows = list(Service.objects.filter(
+            approved=True, active=True, owner__is_active=True
+        ).exclude(category='كورس').select_related('owner').order_by('-id')[:300])
+        ids = [row.pk for row in rows]
+        likes = dict(ServiceReaction.objects.filter(
+            service_id__in=ids, kind='like', user__is_active=True
+        ).values('service_id').annotate(n=Count('id')).values_list('service_id', 'n'))
+        completed = dict(Booking.objects.filter(
+            service_id__in=ids, status='completed'
+        ).values('service_id').annotate(n=Count('id')).values_list('service_id', 'n'))
+        followed = Follow.objects.filter(user=request.actor).values_list('creator_id', flat=True)
+        ordered = rank_feed(rows, likes=likes, bookings=completed,
+                            following=followed, viewer_id=request.actor.pk)
+        return JsonResponse({'items': [service_json(row, request.actor) for row in ordered[:100]]})
     if not Profile.objects.filter(user=request.actor, publishing_allowed=True).exists():
         raise ApiError('creator_account_required', 403)
     p = request.payload
@@ -526,12 +539,22 @@ def reels(request):
             raise ApiError('invalid_media')
         reel = Reel.objects.create(owner=request.actor, media=media, video_url=request.build_absolute_uri(f'/api/media/{media.pk}'), approved=True)
         return JsonResponse({'id': reel.pk, 'status': 'published'}, status=201)
+    from .feed_ranking import rank_feed
     reels = list(Reel.objects.filter(approved=True, owner__is_active=True)
-        .select_related('owner', 'owner__profile').order_by('-id')[:100])
-    # Values come only from persisted accounts and relationships, never demo fixtures.
+        .select_related('owner', 'owner__profile').order_by('-id')[:300])
+    reel_ids = [reel.pk for reel in reels]
+    likes = dict(ReelLike.objects.filter(
+        reel_id__in=reel_ids, user__is_active=True
+    ).values('reel_id').annotate(n=Count('id')).values_list('reel_id', 'n'))
+    liked_ids = set(ReelLike.objects.filter(
+        user=request.actor, reel_id__in=reel_ids
+    ).values_list('reel_id', flat=True))
     following_ids = set(Follow.objects.filter(
         user=request.actor, creator_id__in=[r.owner_id for r in reels]
     ).values_list('creator_id', flat=True))
+    reels = rank_feed(reels, likes=likes, following=following_ids,
+                      viewer_id=request.actor.pk)[:100]
+    # Real reactions only, with no fabricated views, comments, or metrics.
     items = []
     for reel in reels:
         owner_profile = reel.owner.profile
@@ -544,9 +567,32 @@ def reels(request):
             'following': reel.owner_id in following_ids,
             'avatar_url': owner_profile.avatar_url,
             'selected_frame': owner_profile.selected_frame,
-            'created_at': reel.created_at.isoformat()
+            'created_at': reel.created_at.isoformat(),
+            'liked': reel.pk in liked_ids,
+            'like_count': likes.get(reel.pk, 0)
         })
     return JsonResponse({'items': items})
+
+@endpoint(['POST'])
+def reel_like(request, reel_id):
+    reel = Reel.objects.filter(
+        pk=reel_id, approved=True, owner__is_active=True
+    ).first()
+    if reel is None:
+        raise ApiError('reel_unavailable', 404)
+    enabled = request.payload.get('enabled')
+    if type(enabled) is not bool:
+        raise ApiError('invalid_reaction')
+    if reel.owner_id == request.actor.pk:
+        raise ApiError('cannot_like_own_reel', 403)
+    if enabled:
+        ReelLike.objects.get_or_create(reel=reel, user=request.actor)
+    else:
+        ReelLike.objects.filter(reel=reel, user=request.actor).delete()
+    count = ReelLike.objects.filter(reel=reel, user__is_active=True).count()
+    return JsonResponse({'reel_id': reel.pk, 'liked': enabled,
+                         'like_count': count})
+
 
 @endpoint(['GET'])
 def wallet(request):
