@@ -403,6 +403,9 @@ def conversations(request):
         profile = Profile.objects.filter(user=peer).first()
         if profile is None:
             continue
+        frame = BenefitGrant.objects.filter(
+            user=peer, kind='frame', expires_at__gt=timezone.now()
+        ).order_by('-id').first()
         result.append({'id': peer.pk,'public_id':profile.public_id,'username':peer.username,'display_name': profile.display_name or peer.username,
                        'selected_frame': frame.value if frame else profile.selected_frame, 'avatar_url': profile.avatar_url, 'last_message': message.body,
                        'created_at': message.created_at})
