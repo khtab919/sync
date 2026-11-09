@@ -272,7 +272,12 @@ fun ServerAppScreen(baseUrl: String) {
                 "الدعم وخدمة العملاء" -> rows = api.request("/api/support").rows()
             }
         } catch (e: CancellationException) { throw e }
-        catch (e: Exception) { contentError = friendlyError(e.message); if (api.token == null) signedIn = false }
+        catch (e: Exception) {
+            contentError = if (screen == "دردشة" && e.message == "server_unavailable")
+                "تعذّر تحميل المحادثات من الخادم. اضغط «إعادة المحاولة»."
+                else friendlyError(e.message)
+            if (api.token == null) signedIn = false
+        }
         finally { loading = false }
     }
 
