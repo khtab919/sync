@@ -3,7 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from unittest import skipUnless
 from django.test import TransactionTestCase,override_settings
 from django.contrib.auth import get_user_model
-from django.db import connection,close_old_connections
+from django.db import connection,connections,close_old_connections
 from .models import Profile,Wallet,ExperienceAward,PushDevice,PushDelivery
 from .activity_events import award
 from .push import enqueue
@@ -19,7 +19,7 @@ class ReleaseConcurrencyTests(TransactionTestCase):
         def run(_):
             close_old_connections()
             try:award(uid,'same-event',80)
-            finally:close_old_connections()
+            finally:connections.close_all()
         with ThreadPoolExecutor(max_workers=4) as pool:list(pool.map(run,range(8)))
         self.assertEqual(ExperienceAward.objects.filter(user=self.user).count(),1)
         self.assertEqual(ExperienceAward.objects.get().points,80)
@@ -28,6 +28,6 @@ class ReleaseConcurrencyTests(TransactionTestCase):
         def run(_):
             close_old_connections()
             try:enqueue(uid,'same-event','wallet','1','update')
-            finally:close_old_connections()
+            finally:connections.close_all()
         with ThreadPoolExecutor(max_workers=4) as pool:list(pool.map(run,range(8)))
         self.assertEqual(PushDelivery.objects.count(),1)
