@@ -296,10 +296,14 @@ class ReferenceDesignTest {
 
     @Test fun profileDisplaysPublicNumberAndIndependentHandle() {
         val user=JSONObject().put("id",2).put("public_id","58321").put("display_name","اسم ظاهر").put("username","independent_handle")
-        compose.setContent{MyApplicationTheme {ProfileHero(user,true,{},{},{})}}
+        var dark by mutableStateOf(false)
+        compose.setContent{MyApplicationTheme(darkTheme=dark) {Surface(Modifier.fillMaxSize(), color=MaterialTheme.colorScheme.background) {Column {ProfileHero(user,true,{},{},{})}}}}
         compose.onNodeWithText("@independent_handle").assertDoesNotExist()
         compose.onNodeWithText("ID: 58321").assertExists()
         compose.onNodeWithText("ID: 2").assertDoesNotExist()
         screenshot("17-petroleum-profile-identity")
+        compose.runOnIdle { dark = true }
+        compose.waitForIdle()
+        screenshot("18-profile-dark")
     }
 }
