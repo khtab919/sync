@@ -3,6 +3,7 @@ package com.example.ui.screens
 import android.graphics.BitmapFactory
 import android.provider.Settings
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -114,8 +115,27 @@ internal fun MilestoneAvatar(name: String, frame: Int, size: Int, imageUrl: Stri
 
 @Composable
 internal fun RelaxiaLevelBadge(level: Int) {
-    Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = RoundedCornerShape(12.dp)) {
-        Text("المستوى ${level.coerceIn(1,100)}", Modifier.padding(horizontal=12.dp, vertical=6.dp),
-            color=MaterialTheme.colorScheme.onPrimaryContainer, style=MaterialTheme.typography.labelLarge, fontWeight=FontWeight.Bold)
+    val tierColor = when(level.coerceIn(1,100)) {
+        in 1..10 -> Color(0xFF30A66B)
+        in 11..25 -> Color(0xFF3187DA)
+        in 26..40 -> Color(0xFF9666D9)
+        in 41..60 -> Color(0xFFD3A64F)
+        in 61..80 -> Color(0xFFB8CDD9)
+        else -> Color(0xFFE1A5D0)
+    }
+    Surface(
+        color=tierColor.copy(alpha=.16f),
+        shape=RoundedCornerShape(12.dp),
+        border=BorderStroke(1.dp,tierColor.copy(alpha=.55f))
+    ) {
+        Row(
+            Modifier.padding(horizontal=11.dp,vertical=6.dp),
+            horizontalArrangement=Arrangement.spacedBy(7.dp),
+            verticalAlignment=Alignment.CenterVertically
+        ) {
+            Box(Modifier.size(8.dp).background(tierColor,CircleShape))
+            Text("LV ${level.coerceIn(1,100)}",color=tierColor,
+                style=MaterialTheme.typography.labelLarge,fontWeight=FontWeight.Bold)
+        }
     }
 }
