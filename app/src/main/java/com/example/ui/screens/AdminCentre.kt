@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
@@ -46,11 +47,28 @@ private data class AdminForm(val title:String,val fields:List<Pair<String,String
 internal fun AdminCentre(api:LayaliApi,name:String,ownerId:Int,back:()->Unit){
  val scope=rememberCoroutineScope();var auth by remember{mutableStateOf<JSONObject?>(null)};var secret by remember{mutableStateOf("")};var code by remember{mutableStateOf("")};var password by remember{mutableStateOf("")}
  var page by remember{mutableStateOf("الرئيسية")};var data by remember{mutableStateOf(JSONObject())};var detail by remember{mutableStateOf<JSONObject?>(null)};var preview by remember{mutableStateOf<JSONObject?>(null)}
- var query by remember{mutableStateOf("")};var period by remember{mutableStateOf("day")};var revision by remember{mutableIntStateOf(0)};var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf("")};var form by remember{mutableStateOf<AdminForm?>(null)}
+ var query by remember{mutableStateOf("")};var period by remember{mutableStateOf("day")};var revision by remember{mutableIntStateOf(0)};var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf("")};var success by remember{mutableStateOf("")};var form by remember{mutableStateOf<AdminForm?>(null)}
  var selectedRole by remember{mutableStateOf("support")};var roleUser by remember{mutableStateOf("")};var custom by remember{mutableStateOf(setOf<String>())};var legacy by remember{mutableStateOf(false)};var navigation by remember{mutableStateOf(false)}
- fun perform(block:suspend()->Unit){if(busy)return;busy=true;error="";scope.launch{try{block()}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){if(e.message=="admin_mfa_required")auth=null;error=when(e.message){"admin_mfa_required"->"أعد التحقق برمز المصادقة للمتابعة.";"independent_approval_required"->"سُجل طلب موافقة مستقلة. افتح الموافقات المالية لمراجعته وتنفيذه بعد الاعتماد.";"independent_reviewer_required"->"يجب أن يراجع الطلب مسؤول آخر لا تخصه العملية.";"invalid_totp"->"الرمز غير صحيح أو استُخدم سابقًا. انتظر الرمز التالي.";"too_many_attempts"->"تجاوزت المحاولات. انتظر 15 دقيقة.";else->"تعذر تنفيذ الطلب. تحقق من البيانات والصلاحية والاتصال."}}finally{busy=false}}}
- fun post(path:String,payload:JSONObject){perform{api.request(path,"POST",payload);revision++;detail=null}}
+ fun perform(block:suspend()->Unit){if(busy)return;busy=true;error="";success="";scope.launch{try{block()}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){if(e.message=="admin_mfa_required")auth=null;error=when(e.message){"admin_mfa_required"->"أعد التحقق برمز المصادقة للمتابعة.";"independent_approval_required"->"سُجل طلب موافقة مستقلة. افتح الموافقات المالية لمراجعته وتنفيذه بعد الاعتماد.";"independent_reviewer_required"->"يجب أن يراجع الطلب مسؤول آخر لا تخصه العملية.";"invalid_totp"->"الرمز غير صحيح أو استُخدم سابقًا. انتظر الرمز التالي.";"too_many_attempts"->"تجاوزت المحاولات. انتظر 15 دقيقة.";else->"تعذر تنفيذ الطلب. تحقق من البيانات والصلاحية والاتصال."}}finally{busy=false}}}
+ fun post(path:String,payload:JSONObject){perform{
+    val updated=api.request(path,"POST",payload)
+    if(path.startsWith("/api/admin/accounts/")&&detail!=null)detail=updated
+    revision++
+    success="تم حفظ الإجراء بنجاح"
+}}
  fun ask(title:String,fields:List<Pair<String,String>> = emptyList(),action:(Map<String,String>)->Unit){form=AdminForm(title,fields+listOf("reason" to "سبب الإجراء"),action)}
+ fun navigateBack(){
+    when{
+        form!=null -> form=null
+        navigation -> navigation=false
+        preview!=null -> preview=null
+        detail!=null -> detail=null
+        page!="الرئيسية" -> {page="الرئيسية";query=""}
+        else -> back()
+    }
+ }
+ val adminListState=rememberLazyListState()
+ LaunchedEffect(page,detail?.optInt("id")){adminListState.scrollToItem(0)}
  LaunchedEffect(Unit){try{auth=api.request("/api/admin/auth")}catch(e:Exception){error="تعذر التحقق من صلاحية الإدارة."}}
  val context=androidx.compose.ui.platform.LocalContext.current
  DisposableEffect(Unit){val window=(context as? android.app.Activity)?.window;val existing=window?.attributes?.flags?:0;window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);onDispose{if(existing and android.view.WindowManager.LayoutParams.FLAG_SECURE==0)window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)}}
@@ -59,18 +77,17 @@ internal fun AdminCentre(api:LayaliApi,name:String,ownerId:Int,back:()->Unit){
  val sections=listOf("الرئيسية" to "dashboard.view","الحسابات" to "users.view","الصلاحيات" to "roles.edit","المستويات وVIP" to "benefits.view","هدايا البث" to "live.view","العمليات الحالية" to "live.view","الدعم والبلاغات" to "support.view","حالات التواصل" to "support.view","العقوبات" to "users.sanction","الموافقات المالية" to (if(can("finance.approve"))"finance.approve"else"finance.adjust"),"حدود العجلة" to "wheel.view","سجل التدقيق" to "audit.view","التحكم العام" to "settings.edit","الإشعارات" to "notices.send").filter{can(it.second)}
  LaunchedEffect(verified){if(verified&&sections.none{it.first==page})page=sections.firstOrNull()?.first?:"الرئيسية"}
  LaunchedEffect(page,query,period,revision,verified){if(!verified)return@LaunchedEffect;do{try{val path=when(page){"هدايا البث"->"/api/admin/live/gifts";"الرئيسية"->"/api/admin/control/dashboard?period=$period";"الحسابات"->"/api/admin/accounts?q="+URLEncoder.encode(query,"UTF-8");"العقوبات"->"/api/admin/control/sanctions?q="+URLEncoder.encode(query,"UTF-8");"الدعم والبلاغات"->"/api/admin/control/cases";"حالات التواصل"->"/api/admin/control/communications";"الموافقات المالية"->"/api/admin/control/approvals";"الصلاحيات"->"/api/admin/control/roles";"المستويات وVIP"->"/api/admin/control/benefits";"حدود العجلة"->"/api/admin/control/wheel-limits";"سجل التدقيق"->"/api/admin/control/audit?q="+URLEncoder.encode(query,"UTF-8");"التحكم العام"->"/api/admin/control/settings";"الإشعارات"->"/api/admin/control/notices";else->"/api/admin/control/dashboard"};data=api.request(path);if(page=="الصلاحيات"&&custom.isEmpty()){val a=data.optJSONObject("roles")?.optJSONArray(selectedRole);if(a!=null)custom=(0 until a.length()).map{a.getString(it)}.toSet()}}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){if(e.message=="admin_mfa_required")auth=null;error="تعذر تحديث البيانات."};if(page=="الرئيسية")delay(15000)}while(page=="الرئيسية"&&verified)}
- BackHandler(enabled=!legacy&&(preview!=null||detail!=null||navigation||form!=null)) {
-     when {
-         form!=null -> form=null
-         navigation -> navigation=false
-         preview!=null -> preview=null
-         detail!=null -> detail=null
-     }
+ BackHandler(enabled=verified&&!legacy){navigateBack()}
+ if(legacy&&verified){MaterialTheme(colorScheme=AdminRoyalPalette){MobileAdminScreen(api,name,allowed=buildList{if(can("live.view"))add("البث المباشر");if(can("store.view")){add("الحجوزات");add("المحتوى")};if(can("finance.view")){add("السحب");add("الدفع");add("الطلبات")};if(can("wheel.view"))add("العجلة")},exit={legacy=false}){legacy=false}};return}
+ if(preview!=null){
+    MaterialTheme(colorScheme=AdminRoyalPalette) {
+        AdminAccountPreviewScreen(preview!!) { preview=null }
+    }
+    return
  }
- if(legacy&&verified){MobileAdminScreen(api,name,allowed=buildList{if(can("live.view"))add("البث المباشر");if(can("store.view")){add("الحجوزات");add("المحتوى")};if(can("finance.view")){add("السحب");add("الدفع");add("الطلبات")};if(can("wheel.view"))add("العجلة")},exit={legacy=false}){back()};return}
  MaterialTheme(colorScheme=AdminRoyalPalette) {
  Surface(Modifier.fillMaxSize(),color=MaterialTheme.colorScheme.background){
- LazyColumn(Modifier.fillMaxSize().safeDrawingPadding(),contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
+ LazyColumn(Modifier.fillMaxSize().safeDrawingPadding(),state=adminListState,contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
   item {
      Card(
          shape=RoundedCornerShape(26.dp),
@@ -91,8 +108,8 @@ internal fun AdminCentre(api:LayaliApi,name:String,ownerId:Int,back:()->Unit){
          }
      }
  }
-  if(!verified){item{Text("التحقق الثنائي",style=MaterialTheme.typography.titleLarge);Text("استخدم تطبيق مصادقة. لا تشارك مفتاح الإعداد أو الرمز مع أحد.");if(auth?.optBoolean("enabled")==false&&secret.isBlank()){OutlinedTextField(password,{password=it},label={Text("كلمة المرور لتأكيد إعداد المصادقة")},visualTransformation=PasswordVisualTransformation(),modifier=Modifier.fillMaxWidth());Button({perform{secret=api.request("/api/admin/auth","POST",JSONObject().put("action","setup").put("password",password)).getString("secret");password=""}},enabled=!busy){Text("إعداد المصادقة")}};if(secret.isNotBlank()){Text("مفتاح الإعداد: $secret");TextButton({val clip=android.content.ClipData.newPlainText("Relaxia MFA",secret);if(android.os.Build.VERSION.SDK_INT>=33)clip.description.extras=android.os.PersistableBundle().apply{putBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE,true)};(context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(clip)}){Text("نسخ مفتاح الإعداد")}};OutlinedTextField(code,{code=it.filter{c->c.isDigit()}.take(6)},label={Text("رمز المصادقة · 6 أرقام")},modifier=Modifier.fillMaxWidth());Button({perform{api.request("/api/admin/auth","POST",JSONObject().put("action","verify").put("code",code));code="";secret="";auth=api.request("/api/admin/auth");revision++}},enabled=code.length==6&&!busy){Text("تحقق")}}}
-  else if(preview!=null){val p=preview!!;stickyHeader{Card(Modifier.fillMaxWidth()){Column(Modifier.padding(16.dp)){Text("وضع معاينة إدارية · قراءة فقط",fontWeight=FontWeight.Bold);Text("لا يمكن تنفيذ عمليات باسم المستخدم.");Button(onClick={preview=null},modifier=Modifier.fillMaxWidth()){Text("العودة إلى الإدارة • إنهاء المعاينة")}}}};item{val profile=p.getJSONObject("profile");RelaxiaAvatar(profile.optString("display_name"),profile.optInt("frame"),72,profile.optString("avatar_url"));Text(profile.optString("display_name"),style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold);Text("@"+profile.optString("username"),color=MaterialTheme.colorScheme.onSurfaceVariant);Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)){RelaxiaLevelBadge(profile.optInt("level",1));if(profile.optInt("vip_tier")>0)Text("VIP "+profile.optInt("vip_tier"),fontWeight=FontWeight.Bold,color=Color(0xFFB59BE6))};Text(profile.optString("bio"));Text("الجنس: "+genderLabel(profile.optString("gender")));Text(if(profile.optBoolean("publishing_allowed"))"صلاحية النشر مفعلة"else"حساب مستخدم");Text("الخدمات والحجوزات والمزايا المعروضة تعكس بيانات الخادم.")};items(p.list("services")){r->AdminDataCard(r.optString("title"),"السعر: ${r.optLong("price_cents")} · ${r.optInt("duration_minutes")} دقيقة")};items(p.list("benefits")){r->AdminDataCard("ميزة "+r.optString("kind"),r.optString("value")+" · "+r.optString("expires_at"))};items(p.list("bookings")){r->AdminDataCard("حجز ${r.optString("id")}",r.optString("status"))};item{p.optJSONObject("wallet")?.let{Text("الرصيد: ${it.optLong("balance_cents")} · المحجوز: ${it.optLong("reserved_cents")}")};val c=p.getJSONObject("communication");Text("حالات التواصل فقط: ${c.optInt("sent")} مرسلة · ${c.optInt("received")} مستلمة · ${c.optInt("read")} مقروءة");Text("محتوى المحادثات غير متاح للمعاينة.")}}
+  if(success.isNotBlank())item{Text(success,color=MaterialTheme.colorScheme.primary)}
+ if(!verified){item{Text("التحقق الثنائي",style=MaterialTheme.typography.titleLarge);Text("استخدم تطبيق مصادقة. لا تشارك مفتاح الإعداد أو الرمز مع أحد.");if(auth?.optBoolean("enabled")==false&&secret.isBlank()){OutlinedTextField(password,{password=it},label={Text("كلمة المرور لتأكيد إعداد المصادقة")},visualTransformation=PasswordVisualTransformation(),modifier=Modifier.fillMaxWidth());Button({perform{secret=api.request("/api/admin/auth","POST",JSONObject().put("action","setup").put("password",password)).getString("secret");password=""}},enabled=!busy){Text("إعداد المصادقة")}};if(secret.isNotBlank()){Text("مفتاح الإعداد: $secret");TextButton({val clip=android.content.ClipData.newPlainText("Relaxia MFA",secret);if(android.os.Build.VERSION.SDK_INT>=33)clip.description.extras=android.os.PersistableBundle().apply{putBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE,true)};(context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(clip)}){Text("نسخ مفتاح الإعداد")}};OutlinedTextField(code,{code=it.filter{c->c.isDigit()}.take(6)},label={Text("رمز المصادقة · 6 أرقام")},modifier=Modifier.fillMaxWidth());Button({perform{api.request("/api/admin/auth","POST",JSONObject().put("action","verify").put("code",code));code="";secret="";auth=api.request("/api/admin/auth");revision++}},enabled=code.length==6&&!busy){Text("تحقق")}}}
   else{
    item {
     Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
