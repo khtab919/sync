@@ -16,6 +16,9 @@ val CleanSansFontFamily = FontFamily(
 )
 
 val Typography = Typography(
+    displayMedium = TextStyle(fontFamily = CleanSansFontFamily, fontWeight = FontWeight.SemiBold, fontSize = 28.sp, lineHeight = 38.sp),
+    displaySmall = TextStyle(fontFamily = CleanSansFontFamily, fontWeight = FontWeight.SemiBold, fontSize = 26.sp, lineHeight = 36.sp),
+    bodySmall = TextStyle(fontFamily = CleanSansFontFamily, fontWeight = FontWeight.Normal, fontSize = 12.sp, lineHeight = 19.sp),
     displayLarge = TextStyle(
         fontFamily = CleanSansFontFamily,
         fontWeight = FontWeight.SemiBold,
@@ -50,7 +53,7 @@ val Typography = Typography(
         fontFamily = CleanSansFontFamily,
         fontWeight = FontWeight.Medium,
         fontSize = 15.sp,
-        lineHeight = 21.sp
+        lineHeight = 24.sp
     ),
     titleSmall = TextStyle(
         fontFamily = CleanSansFontFamily,
@@ -68,19 +71,19 @@ val Typography = Typography(
         fontFamily = CleanSansFontFamily,
         fontWeight = FontWeight.Normal,
         fontSize = 13.5.sp,
-        lineHeight = 20.sp
+        lineHeight = 23.sp
     ),
     labelLarge = TextStyle(
         fontFamily = CleanSansFontFamily,
         fontWeight = FontWeight.Medium,
         fontSize = 13.5.sp,
-        lineHeight = 18.sp
+        lineHeight = 21.sp
     ),
     labelMedium = TextStyle(
         fontFamily = CleanSansFontFamily,
         fontWeight = FontWeight.Normal,
         fontSize = 12.sp,
-        lineHeight = 16.sp
+        lineHeight = 19.sp
     ),
     labelSmall = TextStyle(
         fontFamily = CleanSansFontFamily,

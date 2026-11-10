@@ -12,7 +12,7 @@ import androidx.compose.ui.unit.dp
 val WisalInk = Color(0xFF0E3276)
 val WisalPaper = Color(0xFFF2F6FD)
 val WisalSage = Color(0xFFDCE9FC)
-val WisalMuted = Color(0xFF788792)
+val WisalMuted = Color(0xFF566776)
 val RelaxiaGold = Color(0xFFD7AD72)
 private val ReferenceLight = lightColorScheme(
     primary=Color(0xFF1458C3),onPrimary=Color.White,
@@ -26,7 +26,7 @@ private val ReferenceLight = lightColorScheme(
     surfaceVariant=Color(0xFFE8F0FC),onSurfaceVariant=WisalMuted,
     outline=Color(0xFF788792),outlineVariant=Color(0xFFD0DEEF),
     error=Color(0xFFAD4652),onError=Color.White,
-    surfaceContainer=Color.White,surfaceContainerLow=Color(0xFFF0F5F8),surfaceContainerHigh=Color(0xFFE9F0F4)
+    surfaceContainer=Color.White,surfaceContainerLow=Color(0xFFF5F7FB),surfaceContainerHigh=Color(0xFFE9F0F4)
 )
 private val ReferenceDark = darkColorScheme(
     primary=Color(0xFF91BCFF),onPrimary=Color(0xFF101820),

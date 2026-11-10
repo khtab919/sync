@@ -1046,57 +1046,57 @@ internal fun ProfileHero(
     settings: () -> Unit, editOrChat: () -> Unit, frameOrFollow: () -> Unit
 ) {
     val context = LocalContext.current
-    val blue = Color(0xFF104BB5)
-    val navy = Color(0xFF08295F)
+    val colors = MaterialTheme.colorScheme
+    val navy = colors.primary
     Column(Modifier.fillMaxWidth()
-        .background(Brush.verticalGradient(listOf(blue, navy)),
+        .background(colors.surface,
             RoundedCornerShape(bottomStart = 30.dp, bottomEnd = 30.dp))
-        .padding(horizontal = 18.dp, vertical = 14.dp),
+        .padding(horizontal = 22.dp, vertical = 18.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(if (own) "حسابي" else "الملف الشخصي",
                 modifier = Modifier.weight(1f), fontSize = 20.sp,
-                fontWeight = FontWeight.Bold, color = Color.White)
+                fontWeight = FontWeight.Bold, color = colors.onSurface)
             IconButton(onClick = settings) {
                 Icon(if (own) Icons.Outlined.Settings else Icons.Outlined.ArrowForward,
-                    if (own) "الإعدادات" else "رجوع", tint = Color.White)
+                    if (own) "الإعدادات" else "رجوع", tint = colors.primary)
             }
         }
         ReferenceAvatar(person.optString("display_name", person.optString("username")),
-            person.optInt("selected_frame"), 128, person.optString("avatar_url"))
+            person.optInt("selected_frame"), 104, person.optString("avatar_url"))
         Row(verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(person.optString("display_name", "المستخدم"),
-                fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White,
+                fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = colors.onSurface,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
             val genderMark = when(person.optString("gender")) {
                 "male" -> "♂"
                 "female" -> "♀"
                 else -> ""
             }
-            if(genderMark.isNotBlank()) Text(genderMark, fontSize = 23.sp, color = Color(0xFFB8DDFF))
+            if(genderMark.isNotBlank()) Text(genderMark, fontSize = 23.sp, color = colors.primary)
         }
         Row(verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val id = person.optString("public_id", "—")
-            Text("ID: $id", color = Color.White.copy(alpha = .85f), fontSize = 15.sp)
+            Text("ID: $id", color = colors.onSurfaceVariant, fontSize = 15.sp)
             if(id != "—") IconButton(
                 onClick = {
                     val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
                         as android.content.ClipboardManager
                     clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Relaxia ID", id))
-                }, modifier = Modifier.size(34.dp)) {
+                }, modifier = Modifier.size(48.dp)) {
                 Icon(Icons.Outlined.ContentCopy, "نسخ رقم الحساب",
-                    tint = Color.White, modifier = Modifier.size(19.dp))
+                    tint = colors.primary, modifier = Modifier.size(19.dp))
             }
         }
         if(person.optBoolean("identity_verified")) Text("✓ حساب موثق",
-            color = Color(0xFFB6DBFF), fontSize = 12.sp)
+            color = colors.primary, fontSize = 12.sp)
         if(person.optString("bio").isNotBlank()) Text(person.optString("bio"),
-            color = Color.White.copy(alpha = .85f), maxLines = 2,
+            color = colors.onSurfaceVariant, maxLines = 2,
             overflow = TextOverflow.Ellipsis, fontSize = 13.sp)
-        Surface(color = Color.White.copy(alpha = .12f), shape = RoundedCornerShape(20.dp),
+        Surface(color = colors.surfaceContainerLow, shape = RoundedCornerShape(20.dp),
             modifier = Modifier.fillMaxWidth()) {
             Row(Modifier.padding(vertical = 14.dp, horizontal = 7.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly) {
@@ -1105,17 +1105,17 @@ internal fun ProfileHero(
                     "المتابعون" to person.optInt("followers_count"),
                     "أتابع" to person.optInt("following_count")).forEach { (label, count) ->
                     Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(count.toString(), color = Color.White, fontSize = 18.sp,
+                        Text(count.toString(), color = colors.onSurface, fontSize = 18.sp,
                             fontWeight = FontWeight.Bold)
-                        Text(label, color = Color.White.copy(alpha = .82f), fontSize = 11.sp)
+                        Text(label, color = colors.onSurfaceVariant, fontSize = 11.sp)
                     }
                 }
             }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
             Button(onClick = editOrChat, modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White,
-                    contentColor = navy)) {
+                colors = ButtonDefaults.buttonColors(containerColor = navy,
+                    contentColor = colors.onPrimary)) {
                 Icon(if (own) Icons.Outlined.Edit else Icons.Outlined.ChatBubbleOutline,
                     null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(5.dp))
@@ -1123,8 +1123,8 @@ internal fun ProfileHero(
             }
             OutlinedButton(onClick = frameOrFollow,
                 modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha=.65f))) {
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.primary),
+                border = androidx.compose.foundation.BorderStroke(1.dp, colors.outlineVariant)) {
                 Icon(if(own) Icons.Outlined.WorkspacePremium else Icons.Outlined.PersonAdd,
                     null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(5.dp))
@@ -1134,11 +1134,11 @@ internal fun ProfileHero(
         }
         if (own && person.has("level")) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.WorkspacePremium, null, tint = Color(0xFFE3C88D))
+                Icon(Icons.Outlined.WorkspacePremium, null, tint = colors.primary)
                 Spacer(Modifier.width(8.dp))
-                Text("المستوى ${person.optInt("level")}", color = Color.White,
+                Text("المستوى ${person.optInt("level")}", color = colors.onSurface,
                     fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                Text("${person.optLong("xp_points")} XP", color = Color.White.copy(alpha=.84f),
+                Text("${person.optLong("xp_points")} XP", color = colors.onSurfaceVariant,
                     fontSize = 12.sp)
             }
             LinearProgressIndicator(
@@ -1149,7 +1149,7 @@ internal fun ProfileHero(
                     else ((current - (cap - 200)).toFloat() / 200f).coerceIn(0f, 1f)
                 },
                 modifier = Modifier.fillMaxWidth().height(5.dp),
-                color = Color(0xFFD3ECFF), trackColor = Color.White.copy(alpha=.2f)
+                color = colors.primary, trackColor = colors.primaryContainer
             )
         }
     }
