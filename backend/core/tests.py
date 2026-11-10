@@ -227,11 +227,11 @@ class ApiTests(TestCase):
         self.assertEqual(me['level'], 1)
         self.assertEqual(me['xp_points'], 0)
         self.assertIn(0, me['owned_frames'])
-        self.assertIn(10, me['owned_frames'])  # Legacy frames remain available.
+        self.assertNotIn(10, me['owned_frames'])  # Retired frames remain hidden, even for legacy users.
         self.assertNotIn(11, me['owned_frames'])
         self.assertEqual(equip(11).status_code, 403)
         self.assertEqual(equip(101).status_code, 400)
-        self.assertEqual(equip(10).status_code, 200)
+        self.assertEqual(equip(10).status_code, 403)
 
         Reel.objects.bulk_create([
             Reel(owner=self.user, approved=True,
@@ -244,18 +244,18 @@ class ApiTests(TestCase):
         raised = self.client.get('/api/me', **auth).json()
         self.assertEqual(raised['xp_points'], 67 * 30)
         self.assertEqual(raised['level'], 11)
-        self.assertIn(11, raised['owned_frames'])
-        self.assertNotIn(12, raised['owned_frames'])
-        self.assertEqual(equip(11).status_code, 200)
-        self.assertEqual(equip(90).status_code, 403)
+        self.assertIn(110, raised['owned_frames'])
+        self.assertNotIn(120, raised['owned_frames'])
+        self.assertEqual(equip(110).status_code, 200)
+        self.assertEqual(equip(190).status_code, 403)
 
         BenefitGrant.objects.create(
-            user=self.user, actor=self.creator, kind='frame', value=90,
+            user=self.user, actor=self.creator, kind='frame', value=190,
             reason='Admin-approved special frame',
             expires_at=timezone.now()+timedelta(days=1),
         )
-        self.assertEqual(equip(90).status_code, 200)
-        self.assertIn(90, self.client.get('/api/me', **auth).json()['owned_frames'])
+        self.assertEqual(equip(190).status_code, 200)
+        self.assertIn(190, self.client.get('/api/me', **auth).json()['owned_frames'])
 
     def test_regular_user_publishes_service_and_reel_immediately(self):
         from .models import Reel, UploadedMedia
@@ -410,16 +410,20 @@ class ReferenceInteractionTests(TestCase):
         self.assertEqual(ServiceReaction.objects.count(), 0)
 
     def test_profile_frame_and_name_are_saved_without_privilege_changes(self):
+        from django.utils import timezone
+        from datetime import timedelta
+        from .models import BenefitGrant
         Profile.objects.filter(user=self.user).update(legacy_frames=True)
-        response = self.client.patch('/api/me', json.dumps({'display_name': 'New display name', 'selected_frame': 2, 'bio': 'New bio'}), content_type='application/json', HTTP_AUTHORIZATION='Bearer ' + self.token)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()['selected_frame'], 2)
-        self.assertEqual(response.json()['display_name'], 'New display name')
+        BenefitGrant.objects.create(user=self.user,actor=self.creator,kind='frame',value=110,reason='Temporary new-catalog frame',expires_at=timezone.now()+timedelta(days=1))
+        response=self.client.patch('/api/me',json.dumps({'display_name':'New display name','selected_frame':110,'bio':'New bio'}),content_type='application/json',HTTP_AUTHORIZATION='Bearer '+self.token)
+        self.assertEqual(response.status_code,200)
+        self.assertEqual(response.json()['selected_frame'],110)
+        self.assertEqual(response.json()['display_name'],'New display name')
         self.assertFalse(response.json()['creator'])
-        locked = self.client.patch('/api/me', json.dumps({'selected_frame': 11}), content_type='application/json', HTTP_AUTHORIZATION='Bearer ' + self.token)
-        self.assertEqual(locked.status_code, 403)
-        invalid = self.client.patch('/api/me', json.dumps({'selected_frame': 101}), content_type='application/json', HTTP_AUTHORIZATION='Bearer ' + self.token)
-        self.assertEqual(invalid.status_code, 400)
+        locked=self.client.patch('/api/me',json.dumps({'selected_frame':120}),content_type='application/json',HTTP_AUTHORIZATION='Bearer '+self.token)
+        self.assertEqual(locked.status_code,403)
+        invalid=self.client.patch('/api/me',json.dumps({'selected_frame':101}),content_type='application/json',HTTP_AUTHORIZATION='Bearer '+self.token)
+        self.assertEqual(invalid.status_code,400)
 
     def test_chat_fee_requires_publishing_permission(self):
         Profile.objects.filter(user=self.user).update(publishing_allowed=False)
@@ -484,15 +488,17 @@ class RelaxiaRequirementsTests(TestCase):
         self.assertEqual(self.post(f'/api/creators/{self.creator.pk}/follow', {'enabled': True}).status_code, 200)
 
     def test_eleven_frames_are_stored_and_avatar_urls_are_validated(self):
+        from .models import ExperienceAward
         Profile.objects.filter(user=self.user).update(legacy_frames=True)
-        for frame in range(11):
-            response = self.client.patch('/api/me', json.dumps({'selected_frame': frame}), content_type='application/json', HTTP_AUTHORIZATION='Bearer ' + self.token)
-            self.assertEqual(response.status_code, 200)
-            self.assertEqual(response.json()['selected_frame'], frame)
-        response = self.client.patch('/api/me', json.dumps({'avatar_url': 'http://example.com/a.jpg'}), content_type='application/json', HTTP_AUTHORIZATION='Bearer ' + self.token)
-        self.assertEqual(response.status_code, 400)
-        response = self.client.patch('/api/me', json.dumps({'avatar_url': 'https://example.com/a.jpg'}), content_type='application/json', HTTP_AUTHORIZATION='Bearer ' + self.token)
-        self.assertEqual(response.status_code, 200)
+        ExperienceAward.objects.create(user=self.user,source='full_progress_test',points=100*200)
+        for frame in [0]+list(range(110,201,10)):
+            response=self.client.patch('/api/me',json.dumps({'selected_frame':frame}),content_type='application/json',HTTP_AUTHORIZATION='Bearer '+self.token)
+            self.assertEqual(response.status_code,200,response.content)
+            self.assertEqual(response.json()['selected_frame'],frame)
+        response=self.client.patch('/api/me',json.dumps({'avatar_url':'http://example.com/a.jpg'}),content_type='application/json',HTTP_AUTHORIZATION='Bearer '+self.token)
+        self.assertEqual(response.status_code,400)
+        response=self.client.patch('/api/me',json.dumps({'avatar_url':'https://example.com/a.jpg'}),content_type='application/json',HTTP_AUTHORIZATION='Bearer '+self.token)
+        self.assertEqual(response.status_code,200)
 
     def test_educational_category_is_not_accepted(self):
         result = self.post('/api/services', {'title': 'عنوان عرض', 'description': 'وصف واضح لهذا العرض', 'price_cents': 200, 'category': 'كورس'}, self.creator_token)
