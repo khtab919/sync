@@ -152,11 +152,55 @@ class NativeAdminSecurityTests(TestCase):
         self.assertEqual(self.call('/api/admin/control/benefits',p).status_code,409)
     def test_frame_grant_expires_without_mutating_customer_settings(self):
         self.verify(self.owner)
-        p={'user_id':self.user.pk,'kind':'frame','value':5,'days':1,'reason':'Temporary frame benefit'}
+        p={'user_id':self.user.pk,'kind':'frame','value':110,'days':1,'reason':'Temporary frame benefit'}
         self.assertEqual(self.call('/api/admin/control/benefits',p).status_code,200)
-        self.assertEqual(self.call('/api/me',user=self.user).json()['selected_frame'],5)
+        self.assertEqual(self.call('/api/me',user=self.user).json()['selected_frame'],110)
         BenefitGrant.objects.update(expires_at=timezone.now()-timedelta(seconds=1))
         self.assertEqual(self.call('/api/me',user=self.user).json()['selected_frame'],0)
+    def test_milestone_reward_catalog_blocks_old_frames(self):
+        self.verify(self.owner)
+        path='/api/admin/control/benefits'
+        result=self.call(path,{'user_id':self.user.pk,'kind':'frame','value':5,'days':30,'reason':'Legacy frame attempt'})
+        self.assertEqual(result.status_code,400)
+        self.assertFalse(BenefitGrant.objects.filter(user=self.user,kind='frame').exists())
+
+    def test_level_and_vip_rewards_are_visible_separate_from_earned_xp_and_revocable(self):
+        self.verify(self.owner)
+        path='/api/admin/control/benefits'
+        before=self.call('/api/me',user=self.user).json()
+        self.assertEqual(before['level'],1)
+        self.assertEqual(before['vip_tier'],0)
+        level=self.call(path,{'user_id':self.user.pk,'kind':'level','value':45,'days':7,'reason':'Community achievement'})
+        vip=self.call(path,{'user_id':self.user.pk,'kind':'vip','value':3,'days':30,'reason':'Community recognition'})
+        self.assertEqual(level.status_code,200,level.content)
+        self.assertEqual(vip.status_code,200,vip.content)
+        after=self.call('/api/me',user=self.user).json()
+        self.assertEqual(after['level'],45)
+        self.assertEqual(after['earned_level'],1)
+        self.assertEqual(after['vip_tier'],3)
+        self.assertEqual(after['level_color'],'gold')
+        self.assertIn(140,after['owned_frames'])
+        self.assertEqual(after['xp_points'],before['xp_points'])
+        self.assertEqual(Wallet.objects.get(user=self.user).balance_cents,0)
+        grant=BenefitGrant.objects.get(user=self.user,kind='vip')
+        revoke=self.call(path,{'action':'revoke','id':grant.pk,'reason':'End VIP recognition'})
+        self.assertEqual(revoke.status_code,200,revoke.content)
+        self.assertEqual(self.call('/api/me',user=self.user).json()['vip_tier'],0)
+        BenefitGrant.objects.filter(user=self.user,kind='level').update(expires_at=timezone.now()-timedelta(seconds=1))
+        self.assertEqual(self.call('/api/me',user=self.user).json()['level'],1)
+        self.assertTrue(AdminEvent.objects.filter(action='benefit_revoked',actor=self.owner).exists())
+
+    def test_owner_can_revoke_admin_access_without_deleting_customer(self):
+        self.verify(self.owner)
+        self.verify(self.staff)
+        result=self.call('/api/admin/control/roles',{'action':'revoke','user_id':self.staff.pk,'reason':'End temporary appointment'})
+        self.assertEqual(result.status_code,200,result.content)
+        self.staff.refresh_from_db()
+        self.assertFalse(self.staff.is_staff)
+        self.assertFalse(AdminAccess.objects.filter(user=self.staff).exists())
+        self.assertFalse(SessionToken.objects.filter(user=self.staff).exists())
+        self.assertTrue(Profile.objects.filter(user=self.staff).exists())
+
     def test_wheel_usage_limit_does_not_modify_existing_results(self):
         self.verify(self.owner)
         r=self.call('/api/admin/control/wheel-limits',{'daily_limit':0,'daily_budget_cents':1000,'reason':'Pause spins for review'})
