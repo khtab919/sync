@@ -17,6 +17,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -36,6 +37,14 @@ internal val frameOpenings = listOf(
     FrameOpening(.4393f, .5042f, .2920f), FrameOpening(.5358f, .4702f, .2760f),
     FrameOpening(.5284f, .4652f, .2690f), FrameOpening(.4773f, .4833f, .2772f),
     FrameOpening(.4539f, .4785f, .2580f), FrameOpening(.4342f, .4766f, .2601f)
+)
+// Tight per-cell ornament bounds exclude fragments of neighbouring atlas frames.
+private val frameBounds = listOf(
+    floatArrayOf(.1212f,.0455f,.9798f,.9141f), floatArrayOf(.0907f,.0455f,.9824f,.8965f),
+    floatArrayOf(.0657f,.0101f,.9343f,.9066f), floatArrayOf(0f,.0051f,.9144f,.9066f),
+    floatArrayOf(0f,.0303f,.8967f,.9217f), floatArrayOf(.0429f,0f,1f,.9194f),
+    floatArrayOf(.0882f,.0025f,.9798f,.9144f), floatArrayOf(.0505f,0f,.9141f,.9169f),
+    floatArrayOf(0f,0f,.9169f,.9395f), floatArrayOf(0f,0f,.8892f,.9320f)
 )
 private object FrameAtlas { var image: ImageBitmap? = null }
 
@@ -84,8 +93,12 @@ internal fun MilestoneAvatar(name: String, frame: Int, size: Int, imageUrl: Stri
             val left = (.5f - opening.x * frameScale) * w
             val top = (.53f - opening.y * frameScale) * w
             val extent = (w * frameScale).toInt()
-            drawImage(atlas, srcOffset = IntOffset(x, y), srcSize = IntSize(right - x, bottom - y),
-                dstOffset = IntOffset(left.toInt(), top.toInt()), dstSize = IntSize(extent, extent))
+            val bounds = frameBounds[index]
+            clipRect(left + bounds[0]*extent, top + bounds[1]*extent,
+                left + bounds[2]*extent, top + bounds[3]*extent) {
+                drawImage(atlas, srcOffset = IntOffset(x, y), srcSize = IntSize(right - x, bottom - y),
+                    dstOffset = IntOffset(left.toInt(), top.toInt()), dstSize = IntSize(extent, extent))
+            }
             if (index >= 4 && visible && motionAllowed && size >= 48) {
                 val w = this.size.width
                 for (point in listOf(Offset(.5f,.13f), Offset(.17f,.6f), Offset(.83f,.62f)).take(if(index >= 7)3 else 1)) {
