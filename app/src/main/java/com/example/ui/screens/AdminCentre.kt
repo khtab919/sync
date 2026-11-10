@@ -37,20 +37,59 @@ internal fun AdminCentre(api:LayaliApi,name:String,ownerId:Int,back:()->Unit){
  DisposableEffect(Unit){val window=(context as? android.app.Activity)?.window;val existing=window?.attributes?.flags?:0;window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);onDispose{if(existing and android.view.WindowManager.LayoutParams.FLAG_SECURE==0)window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)}}
  val verified=auth?.optBoolean("verified")==true
  val permissions=auth?.optJSONArray("permissions");fun can(s:String)=permissions!=null&&(0 until permissions.length()).any{permissions.optString(it)==s}
- val sections=listOf("هدايا البث" to "live.view","الرئيسية" to "dashboard.view","الحسابات" to "users.view","العقوبات" to "users.sanction","الدعم والبلاغات" to "support.view","حالات التواصل" to "support.view","الموافقات المالية" to (if(can("finance.approve"))"finance.approve"else"finance.adjust"),"الصلاحيات" to "roles.edit","المزايا" to "benefits.view","حدود العجلة" to "wheel.view","سجل التدقيق" to "audit.view","التحكم العام" to "settings.edit","الإشعارات" to "notices.send","العمليات الحالية" to "live.view").filter{can(it.second)}
+ val sections=listOf("الرئيسية" to "dashboard.view","هدايا البث" to "live.view","الحسابات" to "users.view","العقوبات" to "users.sanction","الدعم والبلاغات" to "support.view","حالات التواصل" to "support.view","الموافقات المالية" to (if(can("finance.approve"))"finance.approve"else"finance.adjust"),"الصلاحيات" to "roles.edit","المزايا" to "benefits.view","حدود العجلة" to "wheel.view","سجل التدقيق" to "audit.view","التحكم العام" to "settings.edit","الإشعارات" to "notices.send","العمليات الحالية" to "live.view").filter{can(it.second)}
  LaunchedEffect(verified){if(verified&&sections.none{it.first==page})page=sections.firstOrNull()?.first?:"الرئيسية"}
  LaunchedEffect(page,query,period,revision,verified){if(!verified)return@LaunchedEffect;do{try{val path=when(page){"هدايا البث"->"/api/admin/live/gifts";"الرئيسية"->"/api/admin/control/dashboard?period=$period";"الحسابات"->"/api/admin/accounts?q="+URLEncoder.encode(query,"UTF-8");"العقوبات"->"/api/admin/control/sanctions?q="+URLEncoder.encode(query,"UTF-8");"الدعم والبلاغات"->"/api/admin/control/cases";"حالات التواصل"->"/api/admin/control/communications";"الموافقات المالية"->"/api/admin/control/approvals";"الصلاحيات"->"/api/admin/control/roles";"المزايا"->"/api/admin/control/benefits";"حدود العجلة"->"/api/admin/control/wheel-limits";"سجل التدقيق"->"/api/admin/control/audit?q="+URLEncoder.encode(query,"UTF-8");"التحكم العام"->"/api/admin/control/settings";"الإشعارات"->"/api/admin/control/notices";else->"/api/admin/control/dashboard"};data=api.request(path);if(page=="الصلاحيات"&&custom.isEmpty()){val a=data.optJSONObject("roles")?.optJSONArray(selectedRole);if(a!=null)custom=(0 until a.length()).map{a.getString(it)}.toSet()}}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){if(e.message=="admin_mfa_required")auth=null;error="تعذر تحديث البيانات."};if(page=="الرئيسية")delay(15000)}while(page=="الرئيسية"&&verified)}
  if(legacy&&verified){MobileAdminScreen(api,name,allowed=buildList{if(can("live.view"))add("البث المباشر");if(can("store.view")){add("الحجوزات");add("المحتوى")};if(can("finance.view")){add("السحب");add("الدفع");add("الطلبات")};if(can("wheel.view"))add("العجلة")},exit={legacy=false}){back()};return}
- Surface(Modifier.fillMaxSize(),color=MaterialTheme.colorScheme.background){
- LazyColumn(Modifier.fillMaxSize().safeDrawingPadding(),contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
-  item{Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){Text("إدارة Relaxia",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.Bold);TextButton(back){Text("العودة للتطبيق")}};Text(name);if(busy)LinearProgressIndicator(Modifier.fillMaxWidth());if(error.isNotBlank())Text(error,color=MaterialTheme.colorScheme.error)}
+ Scaffold(
+    containerColor=MaterialTheme.colorScheme.background,
+    bottomBar={
+        if(verified && preview==null) AdminRoyalBottomNavigation(
+            current=page,allowed={can(it)},
+            onNavigate={destination->page=destination;detail=null;query="";navigation=false}
+        )
+    }
+ ){
+  innerPadding->
+  LazyColumn(Modifier.fillMaxSize().padding(innerPadding).safeDrawingPadding(),
+    contentPadding=PaddingValues(bottom=24.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
+  item{
+    AdminRoyalHeader(
+        name=name,title=page,onMenu={if(verified)navigation=true},
+        onNotices=if(verified&&can("notices.send")) ({page="الإشعارات";detail=null}) else null,
+        onBack=back
+    )
+    if(busy)LinearProgressIndicator(Modifier.fillMaxWidth())
+    if(error.isNotBlank()) Text(error,Modifier.padding(horizontal=18.dp),
+        color=MaterialTheme.colorScheme.error)
+  }
   if(!verified){item{Text("التحقق الثنائي",style=MaterialTheme.typography.titleLarge);Text("استخدم تطبيق مصادقة. لا تشارك مفتاح الإعداد أو الرمز مع أحد.");if(auth?.optBoolean("enabled")==false&&secret.isBlank()){OutlinedTextField(password,{password=it},label={Text("كلمة المرور لتأكيد إعداد المصادقة")},visualTransformation=PasswordVisualTransformation(),modifier=Modifier.fillMaxWidth());Button({perform{secret=api.request("/api/admin/auth","POST",JSONObject().put("action","setup").put("password",password)).getString("secret");password=""}},enabled=!busy){Text("إعداد المصادقة")}};if(secret.isNotBlank()){Text("مفتاح الإعداد: $secret");TextButton({val clip=android.content.ClipData.newPlainText("Relaxia MFA",secret);if(android.os.Build.VERSION.SDK_INT>=33)clip.description.extras=android.os.PersistableBundle().apply{putBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE,true)};(context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(clip)}){Text("نسخ مفتاح الإعداد")}};OutlinedTextField(code,{code=it.filter{c->c.isDigit()}.take(6)},label={Text("رمز المصادقة · 6 أرقام")},modifier=Modifier.fillMaxWidth());Button({perform{api.request("/api/admin/auth","POST",JSONObject().put("action","verify").put("code",code));code="";secret="";auth=api.request("/api/admin/auth");revision++}},enabled=code.length==6&&!busy){Text("تحقق")}}}
   else if(preview!=null){val p=preview!!;stickyHeader{Card(Modifier.fillMaxWidth()){Column(Modifier.padding(16.dp)){Text("وضع معاينة إدارية · قراءة فقط",fontWeight=FontWeight.Bold);Text("لا يمكن تنفيذ عمليات باسم المستخدم.");TextButton({preview=null}){Text("إنهاء المعاينة")}}}};item{val profile=p.getJSONObject("profile");RelaxiaAvatar(profile.optString("display_name"),profile.optInt("frame"),72,profile.optString("avatar_url"));Text(profile.optString("display_name"),style=MaterialTheme.typography.titleLarge);Text(profile.optString("username"));Text(profile.optString("bio"));Text("الجنس: "+genderLabel(profile.optString("gender")));Text(if(profile.optBoolean("publishing_allowed"))"صلاحية النشر مفعلة"else"حساب مستخدم");Text("الخدمات والحجوزات والمزايا المعروضة تعكس بيانات الخادم.")};items(p.list("services")){r->AdminDataCard(r.optString("title"),"السعر: ${r.optLong("price_cents")} · ${r.optInt("duration_minutes")} دقيقة")};items(p.list("benefits")){r->AdminDataCard("ميزة "+r.optString("kind"),r.optString("value")+" · "+r.optString("expires_at"))};items(p.list("bookings")){r->AdminDataCard("حجز ${r.optString("id")}",r.optString("status"))};item{p.optJSONObject("wallet")?.let{Text("الرصيد: ${it.optLong("balance_cents")} · المحجوز: ${it.optLong("reserved_cents")}")};val c=p.getJSONObject("communication");Text("حالات التواصل فقط: ${c.optInt("sent")} مرسلة · ${c.optInt("received")} مستلمة · ${c.optInt("read")} مقروءة");Text("محتوى المحادثات غير متاح للمعاينة.")}}
   else{
-   item{Column(verticalArrangement=Arrangement.spacedBy(6.dp)){OutlinedButton({navigation=true},modifier=Modifier.fillMaxWidth()){Text("أقسام الإدارة · $page")};if(can("finance.view")||can("store.view")||can("wheel.view"))TextButton({legacy=true}){Text("البث والمتجر والسحب والعجلة")}}}
-   item{Text(page,style=MaterialTheme.typography.titleLarge);if(page in listOf("الحسابات","العقوبات","سجل التدقيق"))OutlinedTextField(query,{query=it.take(100)},label={Text("بحث")},modifier=Modifier.fillMaxWidth());TextButton({revision++},enabled=!busy){Text("تحديث")}}
+   item{Column(Modifier.padding(horizontal=18.dp),verticalArrangement=Arrangement.spacedBy(6.dp)){
+        if(can("finance.view")||can("store.view")||can("wheel.view"))
+            TextButton({legacy=true}){Text("أدوات البث والمتجر والسحب")}
+   }}
+   if(page!="الرئيسية")item{Column(Modifier.padding(horizontal=18.dp)){
+     Text(page,style=MaterialTheme.typography.titleLarge)
+     if(page in listOf("الحسابات","العقوبات","سجل التدقيق"))
+        OutlinedTextField(query,{query=it.take(100)},label={Text("بحث")},
+            modifier=Modifier.fillMaxWidth())
+     TextButton({revision++},enabled=!busy){Text("تحديث")}
+   }}
    when(page){
-    "الرئيسية"->{item{Row{listOf("day" to "يومي","week" to "أسبوعي","month" to "شهري").forEach{(k,v)->FilterChip(period==k,{period=k},label={Text(v)})}}};val stats=data.optJSONObject("stats")?:JSONObject();items(stats.keys().asSequence().toList()){k->AdminDataCard(label(k),stats.optString(k))}}
+    "الرئيسية"->{item{
+        Column(Modifier.padding(horizontal=16.dp)){
+            AdminRoyalDashboard(
+                stats=data.optJSONObject("stats")?:JSONObject(),
+                period=period,onPeriod={period=it},
+                allowed={can(it)},
+                onSection={destination->page=destination;detail=null;query=""},
+                updatedAt=data.optString("updated_at"),
+                onRefresh={revision++}
+            )
+        }
+    }}
     "الحسابات"->{val user=detail;if(user==null){items(data.list()){u->OutlinedCard({perform{detail=api.request("/api/admin/accounts/${u.optInt("id")}")}},modifier=Modifier.fillMaxWidth()){Column(Modifier.padding(16.dp)){Text(u.optString("display_name"));Text(u.optString("username"));Text(u.optString("email"))}}}}else{item{TextButton({detail=null}){Text("العودة للحسابات")};Text(user.optString("display_name"),style=MaterialTheme.typography.titleMedium);Text(user.optString("email"));Text("@"+user.optString("username")+" · #"+user.optString("public_id","—"),style=LocalTextStyle.current.copy(textDirection=androidx.compose.ui.text.style.TextDirection.Ltr));Text("الإنشاء: "+user.optString("created_at"));Text(if(user.optBoolean("active"))"نشط"else"محظور");if(can("users.preview"))Button({ask("معاينة الحساب"){v->perform{preview=api.request("/api/admin/control/preview/${user.optInt("id")}","POST",JSONObject().put("reason",v["reason"]))}}}){Text("معاينة الحساب")};if(can("users.edit")&&!user.optBoolean("protected"))TextButton({ask("تغيير صلاحية النشر"){v->post("/api/admin/accounts/${user.optInt("id")}",JSONObject().put("action",if(user.optBoolean("publishing_allowed"))"publishing_off"else"publishing_on").put("reason",v["reason"]))}}){Text("تفعيل / إيقاف النشر")};if(can("users.edit")&&!user.optBoolean("protected"))TextButton({ask("قرار توثيق الحساب"){v->post("/api/admin/accounts/${user.optInt("id")}",JSONObject().put("action",if(user.optBoolean("identity_verified"))"verification_off"else"verification_on").put("reason",v["reason"]))}}){Text(if(user.optBoolean("identity_verified"))"إلغاء اعتماد التوثيق"else"اعتماد التوثيق بعد المراجعة")};if(can("finance.adjust"))TextButton({ask("طلب إضافة رصيد",listOf("amount" to "المبلغ بالسنت")){v->post("/api/admin/accounts/${user.optInt("id")}",JSONObject().put("action","credit").put("amount_cents",v["amount"]?.toLongOrNull()?:0).put("request_key",java.util.UUID.randomUUID().toString()).put("reason",v["reason"]))}}){Text("إضافة رصيد بموافقة مستقلة")}}}}
     "العقوبات"->{item{Button({ask("عقوبة محددة",listOf("user" to "معرف الحساب · 5 أرقام","kind" to "warning / ban / messages / calls / live / store / withdrawals","hours" to "المدة بالساعات · صفر للدائمة")){v->post("/api/admin/control/sanctions",JSONObject().put("public_id",v["user"]).put("kind",v["kind"]).put("hours",v["hours"]?.toIntOrNull()?:-1).put("reason",v["reason"]))}}){Text("إضافة عقوبة أو تحذير")}};items(data.list()){r->Card(Modifier.fillMaxWidth()){Column(Modifier.padding(16.dp)){Text(r.optString("username")+" · "+label(r.optString("kind")));Text(r.optString("reason"));Text("المسؤول: "+r.optString("actor"));Text("انتهاء: "+r.optString("expires_at","دائمة"));if(r.isNull("revoked_at"))TextButton({ask("إزالة العقوبة"){v->post("/api/admin/control/sanctions",JSONObject().put("action","revoke").put("id",r.optLong("id")).put("reason",v["reason"]))}}){Text("إزالة العقوبة")}}}}}
     "هدايا البث"->{item{Text("القيم بالسنت من الرصيد. تغييرات الأسعار لا تعدّل إيصالات الهدايا السابقة.");if(can("finance.adjust"))Button({ask("إضافة هدية",listOf("code" to "رمز فريد بحروف إنجليزية صغيرة","name" to "اسم الهدية","symbol" to "رمز الهدية","price" to "القيمة بالسنت","effect" to "simple أو animated أو depth")){v->post("/api/admin/live/gifts",JSONObject().put("code",v["code"]).put("name",v["name"]).put("symbol",v["symbol"]).put("price_cents",v["price"]?.toIntOrNull()?:0).put("effect",v["effect"]).put("enabled",true).put("reason",v["reason"]))}}){Text("إضافة هدية")}};items(data.list()){g->Card(Modifier.fillMaxWidth()){Column(Modifier.padding(16.dp)){Text(g.optString("symbol")+" "+g.optString("name"));Text("${g.optLong("price_cents")} · "+if(g.optBoolean("enabled"))"متاحة"else"معطلة");if(can("finance.adjust")){TextButton({ask("تغيير سعر الهدية",listOf("price" to "السعر الجديد بالسنت")){v->post("/api/admin/live/gifts",JSONObject(g.toString()).put("price_cents",v["price"]?.toIntOrNull()?:0).put("reason",v["reason"]))}}){Text("تعديل السعر")};TextButton({ask("تغيير إتاحة الهدية"){v->post("/api/admin/live/gifts",JSONObject(g.toString()).put("enabled",!g.optBoolean("enabled")).put("reason",v["reason"]))}}){Text(if(g.optBoolean("enabled"))"تعطيل"else"تفعيل")}}}}}}
@@ -67,7 +106,18 @@ internal fun AdminCentre(api:LayaliApi,name:String,ownerId:Int,back:()->Unit){
    }
   }
  }
- if(navigation)AlertDialog(onDismissRequest={navigation=false},title={Text("أقسام الإدارة")},text={Column(Modifier.verticalScroll(rememberScrollState())){sections.forEach{(title,_)->TextButton({page=title;detail=null;query="";navigation=false},modifier=Modifier.fillMaxWidth()){Text(title)}}}},confirmButton={TextButton({navigation=false}){Text("إغلاق")}})
+ if(navigation)AlertDialog(
+    onDismissRequest={navigation=false},
+    containerColor=androidx.compose.ui.graphics.Color(0xFF0A1A38),
+    title={Text("أقسام إدارة Relaxia",color=androidx.compose.ui.graphics.Color.White)},
+    text={Column(Modifier.verticalScroll(rememberScrollState())){
+        AdminRoyalMenu(sections,page){destination->
+            page=destination;detail=null;query="";navigation=false
+        }
+    }},
+    confirmButton={TextButton({navigation=false}){Text("إغلاق",
+        color=androidx.compose.ui.graphics.Color(0xFFE6BD72))}}
+ )
  form?.let{f->var values by remember(f){mutableStateOf(f.fields.associate{it.first to ""})};AlertDialog(onDismissRequest={form=null},title={Text(f.title)},text={Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)){f.fields.forEach{(key,title)->if(key=="kind"){Text("نوع الإجراء");val choices=if(f.title.contains("عقوبة"))listOf("warning" to "تحذير","ban" to "حظر الحساب","messages" to "تقييد الرسائل","calls" to "تقييد المكالمات","live" to "تقييد البث","store" to "تقييد المتجر","withdrawals" to "تعليق السحب")else listOf("frame" to "إطار مؤقت","promotion" to "نقاط ترويجية");choices.forEach{(value,caption)->FilterChip(values[key]==value,{values=values+(key to value)},label={Text(caption)})}}else OutlinedTextField(values[key]?:"",{values=values+(key to it.take(1000))},label={Text(title)},modifier=Modifier.fillMaxWidth())};Text("سيُسجل الإجراء باسم حسابك.")}},confirmButton={TextButton({form=null;f.submit(values)},enabled=(values["reason"]?.trim()?.length?:0)>=3&&!busy){Text("تأكيد")}},dismissButton={TextButton({form=null}){Text("إلغاء")}})}
  }
 }
