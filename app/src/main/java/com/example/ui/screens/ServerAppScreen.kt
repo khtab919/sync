@@ -1094,6 +1094,24 @@ internal fun ProfileHero(
                     tint = colors.primary, modifier = Modifier.size(19.dp))
             }
         }
+        if(person.has("level")) {
+            Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                RelaxiaLevelBadge(person.optInt("level",1))
+                val vip=person.optInt("vip_tier")
+                if(vip in 1..5) {
+                    Surface(
+                        color=Color(0xFF7862B4).copy(alpha=.18f),
+                        shape=RoundedCornerShape(12.dp),
+                        border=androidx.compose.foundation.BorderStroke(1.dp,Color(0xFFAD98E1).copy(alpha=.55f))
+                    ) {
+                        Row(Modifier.padding(horizontal=10.dp,vertical=6.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(5.dp)) {
+                            Icon(Icons.Outlined.WorkspacePremium,null,modifier=Modifier.size(16.dp),tint=Color(0xFFAD98E1))
+                            Text("VIP $vip",color=Color(0xFFAD98E1),style=MaterialTheme.typography.labelLarge,fontWeight=FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
         if(person.optBoolean("identity_verified")) Text("✓ حساب موثق",
             color = colors.primary, fontSize = 12.sp)
         if(person.optString("bio").isNotBlank()) Text(person.optString("bio"),
@@ -1139,7 +1157,7 @@ internal fun ProfileHero(
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.WorkspacePremium, null, tint = colors.primary)
                 Spacer(Modifier.width(8.dp))
-                RelaxiaLevelBadge(person.optInt("level"))
+                Text("التقدم المكتسب",color=colors.onSurfaceVariant,fontSize=12.sp)
                 Spacer(Modifier.weight(1f))
                 Text("${person.optLong("xp_points")} XP", color = colors.onSurfaceVariant,
                     fontSize = 12.sp)
@@ -1148,7 +1166,7 @@ internal fun ProfileHero(
                 progress = {
                     val current = person.optLong("xp_points")
                     val cap = person.optLong("next_level_xp", 200L)
-                    if(person.optInt("level") >= 100) 1f
+                    if(person.optInt("earned_level",person.optInt("level")) >= 100) 1f
                     else ((current - (cap - 200)).toFloat() / 200f).coerceIn(0f, 1f)
                 },
                 modifier = Modifier.fillMaxWidth().height(5.dp),
