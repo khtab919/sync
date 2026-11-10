@@ -1,5 +1,8 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+
 import androidx.compose.foundation.Image
 import androidx.compose.ui.res.painterResource
 import com.example.R
@@ -1136,8 +1139,8 @@ internal fun ProfileHero(
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.WorkspacePremium, null, tint = colors.primary)
                 Spacer(Modifier.width(8.dp))
-                Text("المستوى ${person.optInt("level")}", color = colors.onSurface,
-                    fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                RelaxiaLevelBadge(person.optInt("level"))
+                Spacer(Modifier.weight(1f))
                 Text("${person.optLong("xp_points")} XP", color = colors.onSurfaceVariant,
                     fontSize = 12.sp)
             }
@@ -1220,6 +1223,25 @@ private fun ReelItemView(
     var likeBusy by remember(row.optInt("id")) { mutableStateOf(false) }
     var likeError by remember(row.optInt("id")) { mutableStateOf("") }
     val scope = rememberCoroutineScope()
+    var heartPulse by remember { mutableIntStateOf(0) }
+    var showHeart by remember { mutableStateOf(false) }
+    fun setLike(enabled: Boolean) {
+        if (likeBusy || (enabled && liked)) return
+        if (row.optInt("owner_id") == viewerId) return
+        likeBusy = true; likeError = ""
+        scope.launch {
+            try {
+                val result = api.request("/api/reels/${row.optInt("id")}/like", "POST", JSONObject().put("enabled", enabled))
+                liked = result.optBoolean("liked"); likeCount = result.optInt("like_count")
+                if (liked) heartPulse++
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { likeError = "تعذّر تسجيل الإعجاب. أعد المحاولة." }
+            finally { likeBusy = false }
+        }
+    }
+    LaunchedEffect(heartPulse) {
+        if (heartPulse > 0) { showHeart = true; delay(700); showHeart = false }
+    }
     var actions by remember { mutableStateOf(false) }
     var saved by remember(row.optInt("id")) { mutableStateOf(row.optBoolean("saved")) }
     var actionBusy by remember { mutableStateOf(false) }
@@ -1303,8 +1325,11 @@ private fun ReelItemView(
             )
         }
         // TextureView, not SurfaceView: Compose actions stay in front of the video.
-        Box(Modifier.fillMaxSize().clickable {
-            if (playbackError == null) isPlaying = !isPlaying
+        Box(Modifier.fillMaxSize().pointerInput(liked, likeBusy, playbackError, isPlaying) {
+            detectTapGestures(
+                onTap = { if (playbackError == null) isPlaying = !isPlaying },
+                onDoubleTap = { if (liked) heartPulse++ else setLike(true) }
+            )
         })
 
         // Gradient scrims
@@ -1387,6 +1412,9 @@ private fun ReelItemView(
                 }
             }
         }
+
+        if (showHeart) Icon(Icons.Outlined.Favorite, null, tint = Color(0xFFFF6B80),
+            modifier = Modifier.align(Alignment.Center).size(92.dp))
 
         // Center Play icon when paused
         if (!isPlaying) {
@@ -1479,24 +1507,7 @@ private fun ReelItemView(
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 IconButton(
-                    onClick = {
-                        if (!likeBusy) {
-                            likeBusy = true
-                            likeError = ""
-                            scope.launch {
-                                try {
-                                    val result = api.request(
-                                        "/api/reels/${row.optInt("id")}/like", "POST",
-                                        JSONObject().put("enabled", !liked)
-                                    )
-                                    liked = result.optBoolean("liked")
-                                    likeCount = result.optInt("like_count")
-                                } catch (e: CancellationException) { throw e }
-                                catch (e: Exception) { likeError = "تعذّر تسجيل الإعجاب" }
-                                finally { likeBusy = false }
-                            }
-                        }
-                    },
+                    onClick = { setLike(!liked) },
                     enabled = !likeBusy,
                     modifier = Modifier.size(45.dp).background(Color(0x66000000), CircleShape)
                 ) {

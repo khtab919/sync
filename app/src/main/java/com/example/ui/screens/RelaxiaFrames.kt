@@ -62,6 +62,8 @@ internal val relaxiaFrames = listOf(
 
 @Composable
 internal fun RelaxiaAvatar(name: String, frame: Int, size: Int, imageUrl: String = "") {
+    if (frame == 0) { PlainAvatar(name, size, imageUrl); return }
+    if (frame in 110..200 && frame % 10 == 0) { MilestoneAvatar(name, frame, size, imageUrl); return }
     val style = relaxiaFrames.getOrNull(frame.coerceIn(0, 100)) ?: relaxiaFrames.first()
     val padding = if (frame == 0) (size * .075f).dp else (size * .205f).dp
     Box(Modifier.size(size.dp), contentAlignment = Alignment.Center) {
@@ -201,62 +203,47 @@ private fun DrawScope.flower(p: Offset, radius: Float, color: Color, gold: Color
 }
 
 @Composable
-internal fun RelaxiaFramePicker(
-    current: Int, name: String, imageUrl: String, onChoose: (Int) -> Unit
-) {
-    // Compatibility with older feature screens and UI tests. Legacy frames
-    // only; the backend still validates all frame equip requests.
-    RelaxiaFramePicker(current, name, imageUrl, 1, (0..10).toSet(), onChoose)
+internal fun RelaxiaFramePicker(current: Int, name: String, imageUrl: String, onChoose: (Int) -> Unit) {
+    RelaxiaFramePicker(current, name, imageUrl, 1, setOf(0), onChoose)
 }
 
 @Composable
-internal fun RelaxiaFramePicker(
-    current: Int, name: String, imageUrl: String,
-    level: Int, ownedFrames: Set<Int>, onChoose: (Int) -> Unit
-) {
-    val tierLabels = listOf("البداية","البرونزي","الفضي","الذهبي","البلاتيني",
-        "الماسي","النخبة","الأسطوري","الملكي","القمة")
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text("إطاراتي", fontWeight = FontWeight.Bold, fontSize = 23.sp,
-            color = MaterialTheme.colorScheme.onBackground)
-        Text("مستواك الحالي: $level · مستويات الإطارات 1–100. الإطارات المقفلة للمعاينة فقط.",
-            color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
-        OutlinedButton(onClick = { onChoose(0) }, enabled = 0 in ownedFrames) {
-            Text(if(current==0) "الإطار الأساسي ✓" else "تجهيز الإطار الأساسي")
+internal fun RelaxiaFramePicker(current: Int, name: String, imageUrl: String,
+    level: Int, ownedFrames: Set<Int>, onChoose: (Int) -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(horizontal=16.dp), verticalArrangement=Arrangement.spacedBy(16.dp)) {
+        Text("إطاراتي", style=MaterialTheme.typography.headlineMedium)
+        RelaxiaLevelBadge(level)
+        Text("إطار جديد عند كل 10 مستويات. يبدأ اللمعان المتحرك من المستوى 50 ويزداد في المستويات العليا.", style=MaterialTheme.typography.bodyMedium)
+        OutlinedButton(onClick={onChoose(0)}, enabled=0 in ownedFrames) { Text(if(current==0)"بدون إطار ✓"else"استخدام الصورة بدون إطار") }
+        (0..9).chunked(2).forEach { pair ->
+            Row(horizontalArrangement=Arrangement.spacedBy(10.dp)) {
+                pair.forEach { index ->
+                    val milestone=(index+1)*10
+                    val id=100+milestone
+                    val unlocked=id in ownedFrames
+                    Surface(onClick={if(unlocked)onChoose(id)}, enabled=unlocked,
+                        modifier=Modifier.weight(1f), shape=androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
+                        color=MaterialTheme.colorScheme.surface,
+                        border=BorderStroke(if(current==id)2.dp else 1.dp,if(current==id)MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant)) {
+                        Column(Modifier.padding(vertical=12.dp,horizontal=4.dp), horizontalAlignment=Alignment.CenterHorizontally, verticalArrangement=Arrangement.spacedBy(6.dp)) {
+                            RelaxiaAvatar(name,id,128,imageUrl)
+                            Text("Lv.$milestone",fontWeight=FontWeight.Bold)
+                            Text(milestoneNames[index],style=MaterialTheme.typography.labelMedium)
+                            Text(if(current==id)"مُجهّز ✓"else if(unlocked)"تجهيز الإطار"else"مقفل · مستوى $milestone",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
         }
-        tierLabels.forEachIndexed { tier, title ->
-            Text("$title · المستويات ${tier*10+1}–${(tier+1)*10}",
-                fontWeight = FontWeight.SemiBold, fontSize = 17.sp,
-                color = MaterialTheme.colorScheme.onBackground)
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp),
-                contentPadding = PaddingValues(vertical = 3.dp)) {
-                items(relaxiaFrames.filter { it.id in (tier*10+1)..((tier+1)*10) }, key = { it.id }) { frame ->
-                    val unlocked = frame.id in ownedFrames
-                    Surface(
-                        onClick = { if(unlocked)onChoose(frame.id) },
-                        enabled = unlocked,
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(18.dp),
-                        color = MaterialTheme.colorScheme.surface,
-                        border = BorderStroke(if(current==frame.id) 2.dp else 1.dp,
-                            if(current==frame.id) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.outlineVariant),
-                        modifier = Modifier.width(136.dp)
-                    ) {
-                        Column(Modifier.padding(horizontal = 8.dp, vertical = 12.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                            RelaxiaAvatar(name, frame.id, 115, imageUrl)
-                            Text("Lv.${frame.id}", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                            Text(
-                                when {
-                                    current == frame.id -> "مُجهّز ✓"
-                                    unlocked -> "تجهيز الإطار"
-                                    else -> "مقفل · مستوى ${frame.id}"
-                                }, fontSize = 11.sp,
-                                color = if(unlocked) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+        val legacy=relaxiaFrames.filter{it.id in ownedFrames && it.id != 0}
+        if(legacy.isNotEmpty()) {
+            Text("إطاراتك السابقة",style=MaterialTheme.typography.titleMedium)
+            LazyRow(horizontalArrangement=Arrangement.spacedBy(10.dp)) {
+                items(legacy,key={it.id}) { frame ->
+                    Surface(onClick={onChoose(frame.id)},shape=androidx.compose.foundation.shape.RoundedCornerShape(16.dp)) {
+                        Column(Modifier.padding(10.dp),horizontalAlignment=Alignment.CenterHorizontally) {
+                            RelaxiaAvatar(name,frame.id,80,imageUrl)
+                            Text(if(current==frame.id)"مُجهّز ✓"else"تجهيز #${frame.id}",style=MaterialTheme.typography.labelSmall)
                         }
                     }
                 }

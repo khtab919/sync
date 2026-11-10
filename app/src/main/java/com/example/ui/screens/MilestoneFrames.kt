@@ -1,0 +1,92 @@
+package com.example.ui.screens
+
+import android.graphics.BitmapFactory
+import android.provider.Settings
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.*
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import coil.compose.AsyncImage
+import com.example.R
+
+internal val milestoneNames = listOf("الفضي", "البرونزي", "التاج الفضي", "التاج الذهبي", "البلاتيني", "الماسي", "النخبة", "التنين", "الملكي", "القمة")
+private object FrameAtlas { var image: ImageBitmap? = null }
+
+@Composable
+internal fun PlainAvatar(name: String, size: Int, imageUrl: String, modifier: Modifier = Modifier) {
+    Box(modifier.size(size.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
+        Text(name.trim().take(1).ifBlank { "R" }, color = MaterialTheme.colorScheme.onPrimaryContainer,
+            fontSize = (size * .32f).sp, fontWeight = FontWeight.Medium)
+        if (imageUrl.startsWith("https://")) AsyncImage(imageUrl, name, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+    }
+}
+
+@Composable
+internal fun MilestoneAvatar(name: String, frame: Int, size: Int, imageUrl: String) {
+    val context = LocalContext.current
+    val index = ((frame - 110) / 10).coerceIn(0, 9)
+    val atlas = remember { synchronized(FrameAtlas) {
+        FrameAtlas.image ?: BitmapFactory.decodeResource(context.resources, R.drawable.relaxia_frame_atlas).asImageBitmap().also { FrameAtlas.image = it }
+    } }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    var visible by remember(lifecycle) { mutableStateOf(lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
+    DisposableEffect(lifecycle) {
+        val observer = LifecycleEventObserver { _, _ -> visible = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) }
+        lifecycle.addObserver(observer); onDispose { lifecycle.removeObserver(observer) }
+    }
+    val motionAllowed = remember(context, visible) { Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f }
+    var shimmer = .4f
+    if (index >= 4 && visible && motionAllowed && size >= 48) {
+        val transition = rememberInfiniteTransition(label = "frame-light")
+        val value by transition.animateFloat(.15f, .9f, infiniteRepeatable(tween(2400 - index * 100, easing = LinearEasing), RepeatMode.Reverse), label = "gem-light")
+        shimmer = value
+    }
+    Box(Modifier.size(size.dp), contentAlignment = Alignment.Center) {
+        // The extracted atlas keeps the photo opening separate from decoration.
+        PlainAvatar(name, (size * .59f).toInt(), imageUrl,
+            Modifier.offset(x = if(index % 5 == 0) (size * .035f).dp else 0.dp, y = (size * .015f).dp))
+        Canvas(Modifier.fillMaxSize()) {
+            val x = atlas.width * (index % 5) / 5
+            val y = atlas.height * (index / 5) / 2
+            val right = atlas.width * (index % 5 + 1) / 5
+            val bottom = atlas.height * (index / 5 + 1) / 2
+            drawImage(atlas, srcOffset = IntOffset(x, y), srcSize = IntSize(right - x, bottom - y),
+                dstSize = IntSize(this.size.width.toInt(), this.size.height.toInt()))
+            if (index >= 4 && visible && motionAllowed && size >= 48) {
+                val w = this.size.width
+                for (point in listOf(Offset(.5f,.13f), Offset(.17f,.6f), Offset(.83f,.62f)).take(if(index >= 7)3 else 1)) {
+                    val p = Offset(point.x*w, point.y*w)
+                    drawCircle(Color.White.copy(alpha=shimmer*.7f), w*.013f, p)
+                    drawLine(Color.White.copy(alpha=shimmer), p-Offset(w*.025f,0f), p+Offset(w*.025f,0f), w*.006f)
+                    drawLine(Color.White.copy(alpha=shimmer), p-Offset(0f,w*.025f), p+Offset(0f,w*.025f), w*.006f)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun RelaxiaLevelBadge(level: Int) {
+    Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = RoundedCornerShape(12.dp)) {
+        Text("المستوى ${level.coerceIn(1,100)}", Modifier.padding(horizontal=12.dp, vertical=6.dp),
+            color=MaterialTheme.colorScheme.onPrimaryContainer, style=MaterialTheme.typography.labelLarge, fontWeight=FontWeight.Bold)
+    }
+}

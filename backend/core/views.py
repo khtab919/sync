@@ -240,7 +240,7 @@ def me(request):
         if 'selected_frame' in p:
             from .profile_levels import can_equip_frame
             frame_id = p['selected_frame']
-            if type(frame_id) is not int or not 0 <= frame_id <= 100:
+            if type(frame_id) is not int or not (0 <= frame_id <= 100 or frame_id in range(110, 201, 10)):
                 raise ApiError('invalid_frame')
             if not can_equip_frame(request.actor, frame_id):
                 raise ApiError('frame_locked',403)

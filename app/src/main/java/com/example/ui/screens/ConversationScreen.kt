@@ -84,7 +84,6 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
     var recorder by remember { mutableStateOf<MediaRecorder?>(null) }
     var recordingFile by remember { mutableStateOf<File?>(null) }
     val voice = remember { VoicePlayback(context) }
-    var confirmCall by remember { mutableStateOf(false) }
     suspend fun refresh() {
         val result=api.request("/api/messages/$peerId")
         result.optJSONObject("peer")?.let { actualPeer=it.optString("display_name",it.optString("username"));peerHandle=it.optString("username");peerAvatar=it.optString("avatar_url");peerVerified=it.optBoolean("creator");peerPrice=it.optLong("chat_price_cents");peerOnline=it.optBoolean("online");presenceKnown=it.has("online") }
@@ -208,7 +207,7 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
     DisposableEffect(Unit) { onDispose { clearTemporary(stagedUri);runCatching { recorder?.stop() }; recorder?.release(); recordingFile?.delete(); voice.close() } }
     Scaffold(
         containerColor = conversationColors().background,
-        topBar = { ChatHeader(actualPeer.ifBlank { "المحادثة" }, { if(recording) finishRecording(false); back() }, { confirmCall = true }, buy, !busy && !recording, peerHandle, peerAvatar, video = { beginCall("video") }, verified = peerVerified, priceCoins = peerPrice, online = peerOnline, presenceKnown = presenceKnown, block={blockConfirm=true}) },
+        topBar = { ChatHeader(actualPeer.ifBlank { "المحادثة" }, { if(recording) finishRecording(false); back() }, { beginCall("audio") }, buy, !busy && !recording, peerHandle, peerAvatar, video = { beginCall("video") }, verified = peerVerified, priceCoins = peerPrice, online = peerOnline, presenceKnown = presenceKnown, block={blockConfirm=true}) },
         bottomBar = { Surface(color = conversationColors().background) { Column(Modifier.navigationBarsPadding().imePadding()) {
             if(replyTarget!=null)Row(Modifier.fillMaxWidth().padding(horizontal=16.dp),verticalAlignment=Alignment.CenterVertically){Text("رد: "+replyTarget!!.optString("body").ifBlank{"مرفق"},Modifier.weight(1f),maxLines=1,style=MaterialTheme.typography.bodySmall);TextButton({replyTarget=null}){Text("إلغاء")}}
             if(error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
@@ -272,9 +271,5 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
     }){Text(if(stagedCost>0)"تأكيد وخصم $stagedCost"else"إرسال")}},dismissButton={TextButton({staged=false;clearTemporary(stagedUri);stagedUri=null}){Text("إلغاء")}})
     unlockTarget?.let { target -> AlertDialog(onDismissRequest={unlockTarget=null},title={Text("فتح المرفق الخاص")},text={Text("سيُخصم ${target.optLong("media_price_cents")} رصيد مرة واحدة من رصيدك. تحصل الجهة الناشرة على 80٪. يبقى المرفق متاحًا لك بعد الشراء.")},confirmButton={TextButton({unlockTarget=null;perform{api.request("/api/messages/${target.optInt("id")}/unlock","POST",JSONObject().put("price_cents",target.optLong("media_price_cents")))}}){Text("تأكيد الشراء")}},dismissButton={TextButton({unlockTarget=null}){Text("إلغاء")}}) }
     if(chooseAttachment) AlertDialog(onDismissRequest={chooseAttachment=false},title={Text("إرسال مرفق")},text={Text("اختر صورة أو فيديو MP4. الحد الأقصى 8MB.")},confirmButton={TextButton({chooseAttachment=false;photo.launch("image/*")}){Text("صورة")}},dismissButton={TextButton({chooseAttachment=false;videoPicker.launch("video/mp4")}){Text("فيديو")}})
-    if(confirmCall) AlertDialog(onDismissRequest = { confirmCall = false }, title = { Text("اتصال داخل Relaxia") }, text = { Text("اختر نوع المكالمة. سيفتح الميكروفون أو الكاميرا بعد إذنك. الطرف الآخر يحتاج أن يكون التطبيق مفتوحًا لاستقبال الرنين.") }, confirmButton = {
-        TextButton(onClick = { confirmCall = false; beginCall("audio") }) { Text("اتصال صوتي") }
-    }, dismissButton = {
-        TextButton(onClick = { confirmCall = false; beginCall("video") }) { Text("اتصال فيديو") }
-    })
+
 }

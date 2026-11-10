@@ -106,16 +106,16 @@ class ReferenceDesignTest {
         compose.setContent {
             MyApplicationTheme {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    LazyColumn { item { RelaxiaFramePicker(0, "R", "") { chosen = it } } }
+                    LazyColumn { item { RelaxiaFramePicker(0, "R", "", 10, setOf(0,110)) { chosen = it } } }
                 }
             }
         }
         // The new 100-level catalog displays owned frames per tier. Older
         // tests used the deprecated list-only names, not the new compact cards.
-        compose.onNodeWithText("Lv.1").assertExists()
+        compose.onNodeWithText("Lv.10").assertExists()
         screenshot("04-frames")
-        compose.onNodeWithText("Lv.1").performClick()
-        org.junit.Assert.assertEquals(1, chosen)
+        compose.onNodeWithText("Lv.10").performClick()
+        org.junit.Assert.assertEquals(110, chosen)
         screenshot("05-frames-selected")
     }
 
@@ -306,4 +306,17 @@ class ReferenceDesignTest {
         compose.waitForIdle()
         screenshot("18-profile-dark")
     }
+    @Test fun purchaseSubmissionShowsPendingStateWithoutCountdown() {
+        compose.setContent { MyApplicationTheme { PurchaseStatusCard("test-order",100,"pending") } }
+        compose.onNodeWithText("تم تقديم الطلب، انتظر قليلًا").assertExists()
+        compose.onNodeWithText("مدة صلاحية طلب الشراء").assertDoesNotExist()
+        screenshot("19-purchase-submitted")
+    }
+    @Test fun newFramePickerDoesNotOfferUnearnedFrames() {
+        var chosen=-1
+        compose.setContent { MyApplicationTheme { LazyColumn { item { RelaxiaFramePicker(0,"نور",""){chosen=it} } } } }
+        compose.onNodeWithText("مقفل · مستوى 10").assertExists().performClick()
+        org.junit.Assert.assertEquals(-1,chosen)
+    }
+
 }

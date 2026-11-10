@@ -192,7 +192,7 @@ def benefits(request):
         with transaction.atomic():
             User.objects.select_for_update().get(pk=request.actor.pk)
             if kind=='frame':
-                if not 0<=value<=100:raise ApiError('invalid_frame')
+                if not (0<=value<=100 or value in range(110,201,10)):raise ApiError('invalid_frame')
                 BenefitGrant.objects.create(user=u,actor=request.actor,kind='frame',value=value,reason=why,expires_at=timezone.now()+timedelta(days=days))
             else:
                 from .promotions import grant

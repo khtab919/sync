@@ -256,6 +256,8 @@ def topups(request):
         if previous:
             if previous.user_id==request.actor.pk and previous.amount_cents==cents and str(previous.receipt_id)==request.payload.get('receipt_id'):return JsonResponse({'id':previous.pk,'status':previous.status})
             raise ApiError('transaction_already_submitted',409)
+        if quote and TopUp.objects.filter(quote=quote).exists():
+            raise ApiError('purchase_already_submitted',409)
         receipt=UploadedMedia.objects.filter(pk=uuid.UUID(text(request.payload,'receipt_id',36,36)),owner=request.actor,purpose='receipt').first()
         if not receipt:raise ApiError('receipt_required')
         row=TopUp.objects.create(user=request.actor,method=method,quote=quote,late_submission=bool(quote and quote.expires_at<timezone.now()),amount_cents=cents,transaction_hash=reference,receipt=receipt,bonus_cents=quote.bonus_cents if quote else bonus_for(cents))

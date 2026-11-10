@@ -47,7 +47,7 @@ class ComprehensiveTests(TestCase):
         award(self.user.pk,'booking:a',80);award(self.user.pk,'booking:a',80)
         award(self.user.pk,'booking:b',80);award(self.user.pk,'booking:c',80)
         self.assertEqual(profile_progress(self.user)['xp_points'],200)
-        self.assertIn(2,profile_progress(self.user)['owned_frames'])
+        self.assertNotIn(2,profile_progress(self.user)['owned_frames'])
         Reel.objects.create(owner=self.user,approved=True,video_url='https://example.org/a').delete()
         self.assertEqual(profile_progress(self.user)['xp_points'],200)
     def test_push_is_account_bound_and_deduplicated(self):
@@ -125,3 +125,41 @@ class ComprehensiveTests(TestCase):
         self.post('/api/uploads',payload)
         payload['sha256']='c'*64
         self.assertEqual(self.post('/api/uploads',payload).status_code,409)
+
+    def test_milestone_frames_require_level_even_for_legacy_accounts(self):
+        from .profile_levels import profile_progress
+        self.user.profile.legacy_frames=True;self.user.profile.save()
+        self.assertNotIn(110,profile_progress(self.user)['owned_frames'])
+        url='/api/me'
+        def equip(frame):
+            return self.client.patch(url,json.dumps({'selected_frame':frame}),content_type='application/json',HTTP_AUTHORIZATION='Bearer '+self.token)
+        self.assertEqual(equip(110).status_code,403)
+        ExperienceAward.objects.create(user=self.user,source='milestone-test',points=1800)
+        self.assertIn(110,profile_progress(self.user)['owned_frames'])
+        self.assertNotIn(120,profile_progress(self.user)['owned_frames'])
+        self.assertEqual(equip(110).status_code,200)
+        self.assertEqual(equip(111).status_code,400)
+        ExperienceAward.objects.create(user=self.user,source='milestone-max',points=18000)
+        self.assertEqual(equip(200).status_code,200)
+
+    def test_repeated_double_tap_like_does_not_toggle_or_duplicate(self):
+        reel=Reel.objects.create(owner=self.peer,approved=True,video_url='https://example.org/reel')
+        for _ in range(3):
+            response=self.post(f'/api/reels/{reel.pk}/like',{'enabled':True})
+            self.assertTrue(response.json()['liked'])
+            self.assertEqual(response.json()['like_count'],1)
+
+    def test_purchase_submission_retry_keeps_one_pending_order(self):
+        from .models import TopUp
+        quote=self.post('/api/topup-quotes',{'method':'usdt','amount_cents':100}).json()
+        receipt=UploadedMedia.objects.create(owner=self.user,purpose='receipt',file='test-receipt.png',mime='image/png',size=1)
+        payload={'quote_id':quote['id'],'receipt_id':str(receipt.pk),'transaction_hash':'a'*64}
+        first=self.post('/api/topups',payload)
+        self.assertEqual(first.status_code,201)
+        again=self.post('/api/topups',payload)
+        self.assertEqual(again.status_code,200)
+        self.assertEqual(first.json()['id'],again.json()['id'])
+        payload['transaction_hash']='b'*64
+        self.assertEqual(self.post('/api/topups',payload).status_code,409)
+        self.assertEqual(TopUp.objects.count(),1)
+        self.assertEqual(self.get('/api/topups').json()['items'][0]['status'],'pending')
