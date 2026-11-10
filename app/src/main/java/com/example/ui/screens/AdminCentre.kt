@@ -119,9 +119,123 @@ internal fun AdminCentre(api:LayaliApi,name:String,ownerId:Int,back:()->Unit){
     "الحسابات"->{val user=detail;if(user==null){items(data.list()){u->OutlinedCard({perform{detail=api.request("/api/admin/accounts/${u.optInt("id")}")}},modifier=Modifier.fillMaxWidth()){Column(Modifier.padding(16.dp)){Text(u.optString("display_name"));Text(u.optString("username"));Text(u.optString("email"))}}}}else{item{TextButton({detail=null}){Text("العودة للحسابات")};Text(user.optString("display_name"),style=MaterialTheme.typography.titleMedium);Text(user.optString("email"));Text("@"+user.optString("username")+" · #"+user.optString("public_id","—"),style=LocalTextStyle.current.copy(textDirection=androidx.compose.ui.text.style.TextDirection.Ltr));Text("الإنشاء: "+user.optString("created_at"));Text(if(user.optBoolean("active"))"نشط"else"محظور");if(can("users.preview"))Button({ask("معاينة الحساب"){v->perform{preview=api.request("/api/admin/control/preview/${user.optInt("id")}","POST",JSONObject().put("reason",v["reason"]))}}}){Text("معاينة الحساب")};if(can("users.edit")&&!user.optBoolean("protected"))TextButton({ask("تغيير صلاحية النشر"){v->post("/api/admin/accounts/${user.optInt("id")}",JSONObject().put("action",if(user.optBoolean("publishing_allowed"))"publishing_off"else"publishing_on").put("reason",v["reason"]))}}){Text("تفعيل / إيقاف النشر")};if(can("users.edit")&&!user.optBoolean("protected"))TextButton({ask("قرار توثيق الحساب"){v->post("/api/admin/accounts/${user.optInt("id")}",JSONObject().put("action",if(user.optBoolean("identity_verified"))"verification_off"else"verification_on").put("reason",v["reason"]))}}){Text(if(user.optBoolean("identity_verified"))"إلغاء اعتماد التوثيق"else"اعتماد التوثيق بعد المراجعة")};if(can("finance.adjust"))TextButton({ask("طلب إضافة رصيد",listOf("amount" to "المبلغ بالسنت")){v->post("/api/admin/accounts/${user.optInt("id")}",JSONObject().put("action","credit").put("amount_cents",v["amount"]?.toLongOrNull()?:0).put("request_key",java.util.UUID.randomUUID().toString()).put("reason",v["reason"]))}}){Text("إضافة رصيد بموافقة مستقلة")}}}}
     "العقوبات"->{item{Button({ask("عقوبة محددة",listOf("user" to "معرف الحساب · 5 أرقام","kind" to "warning / ban / messages / calls / live / store / withdrawals","hours" to "المدة بالساعات · صفر للدائمة")){v->post("/api/admin/control/sanctions",JSONObject().put("public_id",v["user"]).put("kind",v["kind"]).put("hours",v["hours"]?.toIntOrNull()?:-1).put("reason",v["reason"]))}}){Text("إضافة عقوبة أو تحذير")}};items(data.list()){r->Card(Modifier.fillMaxWidth()){Column(Modifier.padding(16.dp)){Text(r.optString("username")+" · "+label(r.optString("kind")));Text(r.optString("reason"));Text("المسؤول: "+r.optString("actor"));Text("انتهاء: "+r.optString("expires_at","دائمة"));if(r.isNull("revoked_at"))TextButton({ask("إزالة العقوبة"){v->post("/api/admin/control/sanctions",JSONObject().put("action","revoke").put("id",r.optLong("id")).put("reason",v["reason"]))}}){Text("إزالة العقوبة")}}}}}
     "هدايا البث"->{item{Text("القيم بالسنت من الرصيد. تغييرات الأسعار لا تعدّل إيصالات الهدايا السابقة.");if(can("finance.adjust"))Button({ask("إضافة هدية",listOf("code" to "رمز فريد بحروف إنجليزية صغيرة","name" to "اسم الهدية","symbol" to "رمز الهدية","price" to "القيمة بالسنت","effect" to "simple أو animated أو depth")){v->post("/api/admin/live/gifts",JSONObject().put("code",v["code"]).put("name",v["name"]).put("symbol",v["symbol"]).put("price_cents",v["price"]?.toIntOrNull()?:0).put("effect",v["effect"]).put("enabled",true).put("reason",v["reason"]))}}){Text("إضافة هدية")}};items(data.list()){g->Card(Modifier.fillMaxWidth()){Column(Modifier.padding(16.dp)){Text(g.optString("symbol")+" "+g.optString("name"));Text("${g.optLong("price_cents")} · "+if(g.optBoolean("enabled"))"متاحة"else"معطلة");if(can("finance.adjust")){TextButton({ask("تغيير سعر الهدية",listOf("price" to "السعر الجديد بالسنت")){v->post("/api/admin/live/gifts",JSONObject(g.toString()).put("price_cents",v["price"]?.toIntOrNull()?:0).put("reason",v["reason"]))}}){Text("تعديل السعر")};TextButton({ask("تغيير إتاحة الهدية"){v->post("/api/admin/live/gifts",JSONObject(g.toString()).put("enabled",!g.optBoolean("enabled")).put("reason",v["reason"]))}}){Text(if(g.optBoolean("enabled"))"تعطيل"else"تفعيل")}}}}}}
-    "الصلاحيات"->{item{Text("تغيير الرتب مخصص للمالك. تُلغى جلسات المشرف بعد تغيير صلاحياته.");OutlinedTextField(roleUser,{roleUser=it.filter{c->c.isDigit()}},label={Text("معرف الحساب · 5 أرقام")});val roles=data.optJSONObject("roles")?:JSONObject();roles.keys().forEach{k->if(k!="owner")FilterChip(selectedRole==k,{selectedRole=k;val a=roles.optJSONArray(k);custom=if(a==null)emptySet()else (0 until a.length()).map{a.getString(it)}.toSet()},label={Text(label(k))})};val ps=data.optJSONArray("permissions");if(ps!=null)for(i in 0 until ps.length()){val p=ps.getString(i);Row{Checkbox(p in custom,{custom=if(it)custom+p else custom-p});Text(label(p))}};Button({ask("اعتماد رتبة المشرف"){v->post("/api/admin/control/roles",JSONObject().put("public_id",roleUser).put("role",selectedRole).put("permissions",org.json.JSONArray(custom.toList())).put("reason",v["reason"]))}}){Text("حفظ الصلاحيات")}};items(data.list()){r->Card(Modifier.fillMaxWidth()){Column(Modifier.padding(16.dp)){Text(r.optString("username"));Text(label(r.optString("role")));if(r.optString("role")!="owner")TextButton({ask("سحب الصلاحيات الإدارية"){v->post("/api/admin/control/roles",JSONObject().put("user_id",r.optInt("id")).put("role","support").put("permissions",org.json.JSONArray()).put("reason",v["reason"]))}}){Text("سحب الصلاحيات وإلغاء الجلسات")}}}}}
+    "الصلاحيات" -> {
+        item {
+            Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
+                Text("إضافة مسؤول وتحديد صلاحياته",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold)
+                Text("استخدم معرّف الحساب العام. لا يمكن منح صلاحية المالك الرئيسي من هنا.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+                OutlinedTextField(
+                    value=roleUser,
+                    onValueChange={roleUser=it.filter { c->c.isDigit() }.take(5)},
+                    label={Text("معرّف المستخدم · 5 أرقام")},
+                    modifier=Modifier.fillMaxWidth(),
+                    singleLine=true
+                )
+                Text("نوع المسؤول",fontWeight=FontWeight.SemiBold)
+                val roles=data.optJSONObject("roles")?:JSONObject()
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+                    listOf("support","users","live","store","finance","general").forEach { k ->
+                        if(roles.has(k))FilterChip(selectedRole==k,onClick={
+                            selectedRole=k
+                            val a=roles.optJSONArray(k)
+                            custom=if(a==null)emptySet() else (0 until a.length()).map { a.getString(it) }.toSet()
+                        },label={Text(label(k))})
+                    }
+                }
+                Text("الصلاحيات التفصيلية",fontWeight=FontWeight.SemiBold)
+                val ps=data.optJSONArray("permissions")
+                if(ps!=null)for(i in 0 until ps.length()){
+                    val p=ps.getString(i)
+                    Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+                        Checkbox(p in custom,onCheckedChange={custom=if(it) custom+p else custom-p})
+                        Text(label(p),style=MaterialTheme.typography.bodyMedium)
+                    }
+                }
+                Button(
+                    onClick={ask("تأكيد تعيين المسؤول"){v->
+                        post("/api/admin/control/roles",JSONObject()
+                            .put("public_id",roleUser)
+                            .put("role",selectedRole)
+                            .put("permissions",org.json.JSONArray(custom.toList()))
+                            .put("reason",v["reason"]))
+                    }},
+                    modifier=Modifier.fillMaxWidth(),
+                    enabled=roleUser.length==5&&!busy
+                ){Text("حفظ المسؤول وصلاحياته")}
+                Text("يُلغى تسجيل دخول المسؤول عند تغيير صلاحياته، ويجب أن يعيد الدخول والتحقق الثنائي.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        items(data.list()) { r ->
+            Card(Modifier.fillMaxWidth(),shape=RoundedCornerShape(18.dp)) {
+                Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(7.dp)) {
+                    Text(r.optString("username"),fontWeight=FontWeight.Bold,style=MaterialTheme.typography.titleMedium)
+                    Text("#"+r.optString("public_id")+"  •  "+label(r.optString("role")),color=MaterialTheme.colorScheme.onSurfaceVariant)
+                    val perms=r.optJSONArray("permissions")
+                    Text("الصلاحيات المفعّلة: ${perms?.length()?:0}",style=MaterialTheme.typography.bodySmall)
+                    if(r.optString("role")!="owner")TextButton({ask("سحب جميع صلاحيات المسؤول"){v->
+                        post("/api/admin/control/roles",JSONObject()
+                            .put("action","revoke")
+                            .put("user_id",r.optInt("id"))
+                            .put("reason",v["reason"]))
+                    }}){Text("سحب الصلاحيات وإبطال الجلسات")}
+                }
+            }
+        }
+    }
     "الموافقات المالية"->{items(data.list()){r->Card(Modifier.fillMaxWidth()){Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(6.dp)){Text(r.optString("path"));Text(r.optString("reason"));Text("الحالة: "+r.optString("status"));Text("صاحب الطلب: ${r.optString("requester_public_id","—")} · الحساب: ${r.optString("target_user_public_id","—")}");Text(r.optJSONObject("payload")?.toString(2)?:"");if(r.optString("status")=="pending"&&r.optInt("requester_id")!=ownerId&&r.optInt("target_user_id")!=ownerId&&can("finance.approve"))listOf("approve" to "موافقة مستقلة","reject" to "رفض").forEach{(action,title)->TextButton({ask(title){v->post("/api/admin/control/approvals",JSONObject().put("id",r.getString("id")).put("action",action).put("reason",v["reason"]))}}){Text(title)}};if(r.optString("status")=="approved"&&r.isNull("used_at")&&r.optInt("requester_id")==ownerId)TextButton({ask("تنفيذ العملية المعتمدة"){_->post(r.getString("path"),JSONObject(r.getJSONObject("payload").toString()).put("approval_id",r.getString("id")))}}){Text("تنفيذ مرة واحدة")}}}}}
-    "المزايا"->{item{if(can("benefits.edit"))Button({ask("منح إطار أو نقاط ترويجية",listOf("user" to "معرف الحساب · 5 أرقام","kind" to "frame للإطار أو promotion للنقاط","value" to "رقم الإطار 0–10 أو عدد النقاط","days" to "مدة الإطار بالأيام")){v->post("/api/admin/control/benefits",JSONObject().put("public_id",v["user"]).put("kind",v["kind"]).put("value",v["value"]?.toIntOrNull()?:-1).put("days",v["days"]?.toIntOrNull()?:30).put("request_key",java.util.UUID.randomUUID().toString()).put("reason",v["reason"]))}}){Text("منح ميزة")};Text("النقاط منفصلة عن الأموال وغير قابلة للسحب. الحد اليومي لكل مسؤول 10000 نقطة.")};items(data.list()){r->AdminDataCard("إطار للحساب ${r.optString("public_id","—")}","${r.optInt("value")} · "+r.optString("expires_at"))};items(data.list("promotions")){r->AdminDataCard("نقاط للحساب ${r.optString("public_id","—")}",r.optInt("points").toString()+" · "+r.optString("reason"))}}
+    "المستويات وVIP" -> {
+        item {
+            Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
+                Text("رحلة المستويات",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold)
+                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(4.dp)){
+                    listOf(0xFF32A871,0xFF3589D3,0xFF8C69CB,0xFFD3A248,0xFFB8C8D8,0xFF9F557B).forEach { color ->
+                        Box(Modifier.weight(1f).height(12.dp).background(Color(color),RoundedCornerShape(5.dp)))
+                    }
+                }
+                Text("أخضر 1–10  •  أزرق 11–25  •  بنفسجي 26–40  •  ذهبي 41–60  •  ماسي 61–80  •  ملكي 81–100",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("VIP من 1 إلى 5، مستقل عن المستوى ونقاط الخبرة. تنتهي المكافأة بانتهاء المدة دون المساس بالتقدم المكتسب.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+                if(can("benefits.edit"))Button(
+                    onClick={ask("منح مكافأة تحفيزية",listOf(
+                        "user" to "معرّف المستخدم · 5 أرقام",
+                        "kind" to "نوع المكافأة",
+                        "value" to "المستوى 1–100 / VIP 1–5 / الإطار 110–200 / نقاط",
+                        "days" to "المدة بالأيام 1–365"
+                    )) { v->
+                        post("/api/admin/control/benefits",JSONObject()
+                            .put("public_id",v["user"])
+                            .put("kind",v["kind"])
+                            .put("value",v["value"]?.toIntOrNull()?:-1)
+                            .put("days",v["days"]?.toIntOrNull()?:30)
+                            .put("request_key",java.util.UUID.randomUUID().toString())
+                            .put("reason",v["reason"]))
+                    }},
+                    modifier=Modifier.fillMaxWidth()
+                ){Text("منح مستوى أو VIP أو إطار")}
+                Text("تُسجّل كل مكافأة باسم المسؤول. النقاط الترويجية ليست أموالًا ولا يمكن سحبها.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        items(data.list()) { r ->
+            Card(Modifier.fillMaxWidth(),shape=RoundedCornerShape(18.dp)){
+                Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(6.dp)){
+                    val caption=when(r.optString("kind")){
+                        "level"->"مستوى ${r.optInt("value")}"
+                        "vip"->"VIP ${r.optInt("value")}"
+                        "frame"->"إطار ${r.optInt("value")}"
+                        else->"ميزة ${r.optString("kind")}"
+                    }
+                    Text(caption,fontWeight=FontWeight.Bold,style=MaterialTheme.typography.titleMedium)
+                    Text("الحساب #"+r.optString("public_id")+"  •  حتى "+r.optString("expires_at"),color=MaterialTheme.colorScheme.onSurfaceVariant,style=MaterialTheme.typography.bodySmall)
+                    Text(r.optString("reason"),style=MaterialTheme.typography.bodySmall)
+                    if(can("benefits.edit"))TextButton({ask("سحب المكافأة"){v->
+                        post("/api/admin/control/benefits",JSONObject().put("action","revoke").put("id",r.optInt("id")).put("reason",v["reason"]))
+                    }}){Text("إنهاء المكافأة")}
+                }
+            }
+        }
+        items(data.list("promotions")) { r ->
+            AdminDataCard("نقاط ترويجية • #"+r.optString("public_id"),r.optInt("points").toString()+" • "+r.optString("reason"))
+        }
+    }
     "حدود العجلة"->{item{Text("لفات اليوم: ${data.optInt("spins")} · الإيراد: ${data.optLong("cost_cents")} · الجوائز: ${data.optLong("prizes_cents")} سنت");Text("حد المستخدم اليومي: ${data.optInt("daily_limit")} · ميزانية الجوائز اليومية: ${data.optLong("daily_budget_cents")} سنت");if(can("wheel.edit"))Button({ask("تعديل حدود العجلة",listOf("limit" to "أقصى لفات يومية لكل مستخدم","budget" to "سقف الجوائز اليومي بالسنت")){v->post("/api/admin/control/wheel-limits",JSONObject().put("daily_limit",v["limit"]?.toIntOrNull()?:-1).put("daily_budget_cents",v["budget"]?.toIntOrNull()?:-1).put("reason",v["reason"]))}}){Text("ضبط الحدود")}};items(data.list()){r->AdminDataCard("الحساب ${r.optString("public_id","—")}","تكلفة ${r.optInt("cost_cents")} · جائزة ${r.optInt("prize_cents")} · "+r.optString("created_at"))}}
     "سجل التدقيق"->items(data.list()){r->AdminDataCard(r.optString("action")+" · "+r.optString("result"),r.optString("actor")+" · "+r.optString("created_at")+"\n"+r.optString("reason")+"\n"+r.optString("target"))}
     "التحكم العام"->items(data.list()){r->Card(Modifier.fillMaxWidth()){Column(Modifier.padding(16.dp)){Text(label(r.getString("key")));Text(if(r.optBoolean("enabled"))"مفعلة"else"متوقفة");TextButton({ask("تغيير حالة الميزة"){v->post("/api/admin/control/settings",JSONObject().put("key",r.getString("key")).put("enabled",!r.optBoolean("enabled")).put("reason",v["reason"]))}}){Text(if(r.optBoolean("enabled"))"إيقاف للطوارئ"else"تفعيل")}}}}
@@ -133,7 +247,7 @@ internal fun AdminCentre(api:LayaliApi,name:String,ownerId:Int,back:()->Unit){
   }
  }
  if(navigation)AlertDialog(onDismissRequest={navigation=false},title={Text("أقسام الإدارة")},text={Column(Modifier.verticalScroll(rememberScrollState())){sections.forEach{(title,_)->TextButton({page=title;detail=null;query="";navigation=false},modifier=Modifier.fillMaxWidth()){Text(title)}}}},confirmButton={TextButton({navigation=false}){Text("إغلاق")}})
- form?.let{f->var values by remember(f){mutableStateOf(f.fields.associate{it.first to ""})};AlertDialog(onDismissRequest={form=null},title={Text(f.title)},text={Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)){f.fields.forEach{(key,title)->if(key=="kind"){Text("نوع الإجراء");val choices=if(f.title.contains("عقوبة"))listOf("warning" to "تحذير","ban" to "حظر الحساب","messages" to "تقييد الرسائل","calls" to "تقييد المكالمات","live" to "تقييد البث","store" to "تقييد المتجر","withdrawals" to "تعليق السحب")else listOf("frame" to "إطار مؤقت","promotion" to "نقاط ترويجية");choices.forEach{(value,caption)->FilterChip(values[key]==value,{values=values+(key to value)},label={Text(caption)})}}else OutlinedTextField(values[key]?:"",{values=values+(key to it.take(1000))},label={Text(title)},modifier=Modifier.fillMaxWidth())};Text("سيُسجل الإجراء باسم حسابك.")}},confirmButton={TextButton({form=null;f.submit(values)},enabled=(values["reason"]?.trim()?.length?:0)>=3&&!busy){Text("تأكيد")}},dismissButton={TextButton({form=null}){Text("إلغاء")}})}
+ form?.let{f->var values by remember(f){mutableStateOf(f.fields.associate{it.first to ""})};AlertDialog(onDismissRequest={form=null},title={Text(f.title)},text={Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)){f.fields.forEach{(key,title)->if(key=="kind"){Text("نوع الإجراء");val choices=if(f.title.contains("عقوبة"))listOf("warning" to "تحذير","ban" to "حظر الحساب","messages" to "تقييد الرسائل","calls" to "تقييد المكالمات","live" to "تقييد البث","store" to "تقييد المتجر","withdrawals" to "تعليق السحب")else listOf("level" to "منح مستوى","vip" to "عضوية VIP","frame" to "إطار مميز","promotion" to "نقاط تحفيزية");choices.forEach{(value,caption)->FilterChip(values[key]==value,{values=values+(key to value)},label={Text(caption)})}}else OutlinedTextField(values[key]?:"",{values=values+(key to it.take(1000))},label={Text(title)},modifier=Modifier.fillMaxWidth())};Text("سيُسجل الإجراء باسم حسابك.")}},confirmButton={TextButton({form=null;f.submit(values)},enabled=(values["reason"]?.trim()?.length?:0)>=3&&!busy){Text("تأكيد")}},dismissButton={TextButton({form=null}){Text("إلغاء")}})}
  }
  }
 }
