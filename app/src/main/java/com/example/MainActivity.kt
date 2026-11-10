@@ -14,9 +14,17 @@ import com.example.ui.screens.ServerAppScreen
 import com.example.ui.theme.MyApplicationTheme
 
 class MainActivity : ComponentActivity() {
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        com.example.notifications.NotificationRoutes.accept(intent)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        com.example.notifications.NotificationRoutes.setup(this)
+        com.example.notifications.NotificationRoutes.accept(intent)
         setContent {
             MyApplicationTheme {
                 if (BuildConfig.LAYALI_API_URL.isNotBlank()) {

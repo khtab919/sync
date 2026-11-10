@@ -1,7 +1,10 @@
 FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+ARG RELEASE_COMMIT=development
+ENV RELEASE_COMMIT=$RELEASE_COMMIT
 WORKDIR /app
 COPY requirements.txt .
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
 RUN pip install --no-cache-dir -r requirements.txt && useradd --uid 10001 --create-home layali
 COPY . .
 RUN python fetch_live_sdk.py

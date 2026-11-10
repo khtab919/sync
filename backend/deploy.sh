@@ -69,11 +69,19 @@ if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | head -1 | grep -q 
 fi
 python3 configure_live.py
 docker compose config --quiet
-docker compose build api
+docker compose build --build-arg "RELEASE_COMMIT=$(git rev-parse --short=12 HEAD)" api
 docker compose up -d --wait db
+# Capture a database backup before every schema change. No credentials are printed.
+umask 077
+mkdir -p backups
+chmod 700 backups
+backup_file="backups/pre-11.0-$(date -u +%Y%m%dT%H%M%SZ).sql.gz"
+docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' | gzip > "$backup_file"
+test -s "$backup_file"
 docker compose run --rm api python manage.py migrate --noinput
 docker compose run --rm api python manage.py collectstatic --noinput
 docker compose up -d
+docker compose exec -T api python manage.py release_check
 printf 'Check HTTPS health at https://%s/health/\n' "$domain"
 echo 'Create your administrator: docker compose exec api python manage.py createsuperuser'
 

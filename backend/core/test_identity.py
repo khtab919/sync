@@ -15,7 +15,9 @@ class IdentityTests(TestCase):
         for u in [self.user,self.other]:Profile.objects.create(user=u,display_name='اسم ظاهر');Wallet.objects.create(user=u,balance_cents=1234)
         self.token=issue_token(self.user)
     def post(self,path,p):return self.client.post(path,json.dumps(p),content_type='application/json',HTTP_AUTHORIZATION='Bearer '+self.token)
-    def patch(self,p):return self.client.patch('/api/me',json.dumps(p),content_type='application/json',HTTP_AUTHORIZATION='Bearer '+self.token)
+    def patch(self,p):
+        if 'email' in p:p.setdefault('current_password','ExistingPass!875')
+        return self.client.patch('/api/me',json.dumps(p),content_type='application/json',HTTP_AUTHORIZATION='Bearer '+self.token)
     def signup(self,email='new@example.com'):return self.post('/api/register',{'gender':'female','display_name':'نور علي','email':email,'password':'UniqueAccount!875','adult_confirmed':True,'accept_non_explicit_policy':True})
     def test_signup_separates_display_name_handle_and_internal_id(self):
         r=self.signup();self.assertEqual(r.status_code,201)
@@ -97,7 +99,8 @@ class PublicIdentityMigrationTests(TransactionTestCase):
             one=U.objects.create(username='legacy-one',email='Legacy@example.com',password='retained-hash');two=U.objects.create(username='legacy-two',email='legacy@example.com',password='second-hash')
             P.objects.create(user_id=one.pk,display_name='قديم');P.objects.create(user_id=two.pk);W.objects.create(user_id=one.pk,balance_cents=5432,reserved_cents=100);m=M.objects.create(sender_id=one.pk,recipient_id=two.pk,body='Existing private message')
             ids=(one.pk,two.pk,m.pk)
-            executor=MigrationExecutor(connection);executor.migrate([('core','0025_live_stage_pk_and_gifts')])
+            executor=MigrationExecutor(connection);executor.migrate(executor.loader.graph.leaf_nodes())
             self.assertIsNone(Profile.objects.get(user_id=ids[1]).gender);self.assertTrue(Profile.objects.get(user_id=ids[1]).publishing_allowed);self.assertEqual(Profile.objects.get(user_id=ids[1]).display_name,'legacy-two');self.assertEqual(Profile.objects.get(user_id=ids[0]).display_name,'قديم');self.assertEqual(get_user_model().objects.get(pk=ids[0]).password,'retained-hash');self.assertEqual(get_user_model().objects.get(pk=ids[1]).email,'legacy@example.com');self.assertEqual(Wallet.objects.get(user_id=ids[0]).balance_cents,5432);self.assertEqual(Message.objects.get(pk=ids[2]).sender_id,ids[0]);public=list(Profile.objects.filter(user_id__in=ids[:2]).values_list('public_id',flat=True));self.assertEqual(len(set(public)),2)
             for v in public:self.assertRegex(v,r'^[1-9][0-9]{4}$')
-        finally:MigrationExecutor(connection).migrate([('core','0025_live_stage_pk_and_gifts')])
+        finally:
+            executor=MigrationExecutor(connection);executor.migrate(executor.loader.graph.leaf_nodes())

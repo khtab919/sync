@@ -27,6 +27,7 @@ class Profile(models.Model):
     avatar_url = models.URLField(max_length=500, blank=True)
     last_active_at = models.DateTimeField(null=True, blank=True)
     broadcast_allowed=models.BooleanField(default=True)
+    legacy_frames=models.BooleanField(default=False)
 
 class Service(models.Model):
     duration_minutes=models.PositiveIntegerField(default=30)
@@ -85,6 +86,7 @@ class Message(models.Model):
     media_price_cents = models.PositiveIntegerField(default=0)
     class Meta:
         constraints = [models.UniqueConstraint(fields=['sender','client_key'], name='unique_message_client_key')]
+        indexes=[models.Index(fields=['sender','recipient','-id']),models.Index(fields=['recipient','delivered_at','id'])]
 
     call = models.OneToOneField("InternalCall", null=True, blank=True, on_delete=models.PROTECT)
     attachment = models.OneToOneField("UploadedMedia", null=True, blank=True, on_delete=models.PROTECT)
@@ -95,6 +97,7 @@ class Message(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
 class Reel(models.Model):
+    caption=models.CharField(max_length=500,blank=True)
     media = models.OneToOneField("UploadedMedia", null=True, blank=True, on_delete=models.PROTECT)
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     video_url = models.URLField(max_length=500)
@@ -500,3 +503,60 @@ class LiveGiftEvent(models.Model):
     pk_round=models.ForeignKey(LivePK,on_delete=models.PROTECT,null=True)
     team=models.PositiveSmallIntegerField(null=True)
     created_at=models.DateTimeField(auto_now_add=True)
+
+class ExperienceAward(models.Model):
+    user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.CASCADE)
+    source=models.CharField(max_length=120)
+    points=models.PositiveIntegerField()
+    created_at=models.DateTimeField(default=timezone.now)
+    class Meta:
+        constraints=[models.UniqueConstraint(fields=['user','source'],name='unique_experience_source')]
+
+class PushDevice(models.Model):
+    token=models.CharField(max_length=4096,unique=True)
+    user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.CASCADE)
+    updated_at=models.DateTimeField(auto_now=True)
+    enabled=models.BooleanField(default=True)
+
+class PushDelivery(models.Model):
+    device=models.ForeignKey(PushDevice,on_delete=models.CASCADE)
+    recipient=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.CASCADE)
+    event_key=models.CharField(max_length=150)
+    category=models.CharField(max_length=24)
+    target=models.CharField(max_length=100)
+    title=models.CharField(max_length=100)
+    attempts=models.PositiveIntegerField(default=0)
+    available_at=models.DateTimeField(default=timezone.now)
+    expires_at=models.DateTimeField()
+    sent_at=models.DateTimeField(null=True)
+    failed=models.BooleanField(default=False)
+    class Meta:
+        constraints=[models.UniqueConstraint(fields=['device','event_key'],name='unique_push_delivery')]
+        indexes=[models.Index(fields=['sent_at','failed','available_at'])]
+class UploadSession(models.Model):
+    request_key=models.UUIDField(null=True,blank=True)
+    id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False)
+    user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.CASCADE)
+    purpose=models.CharField(max_length=24)
+    size=models.PositiveIntegerField()
+    digest=models.CharField(max_length=64)
+    received=models.PositiveIntegerField(default=0)
+    created_at=models.DateTimeField(auto_now_add=True)
+    media=models.ForeignKey('UploadedMedia',null=True,on_delete=models.SET_NULL)
+    class Meta:
+        constraints=[models.UniqueConstraint(fields=['user','request_key'],name='unique_upload_request')]
+
+class UploadChunk(models.Model):
+    session=models.ForeignKey(UploadSession,on_delete=models.CASCADE)
+    offset=models.PositiveIntegerField()
+    data=models.BinaryField()
+    class Meta:
+        constraints=[models.UniqueConstraint(fields=['session','offset'],name='unique_upload_chunk')]
+class ReelPreference(models.Model):
+    user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.CASCADE)
+    reel=models.ForeignKey(Reel,on_delete=models.CASCADE)
+    saved=models.BooleanField(default=False)
+    hidden=models.BooleanField(default=False)
+    watch_seconds=models.PositiveIntegerField(default=0)
+    class Meta:
+        constraints=[models.UniqueConstraint(fields=['user','reel'],name='unique_reel_preference')]

@@ -86,8 +86,15 @@ internal fun InternalCallScreen(api: LayaliApi, baseUrl: String, callId: String,
         audio.isSpeakerphoneOn = speaker
         onDispose { audio.isSpeakerphoneOn = oldSpeaker; audio.mode = oldMode }
     }
+    DisposableEffect(permissionGranted,bootstrap) {
+        if(permissionGranted && bootstrap!=null)runCatching{com.example.notifications.MediaSessionService.start(context,true)}.onFailure{error="تعذّر تشغيل خدمة الصوت في الخلفية."}
+        onDispose { com.example.notifications.MediaSessionService.stop(context) }
+    }
     DisposableEffect(lifecycle, webView) {
-        val observer = LifecycleEventObserver { _, event -> if(event == Lifecycle.Event.ON_STOP && webView != null && (context as? android.app.Activity)?.isChangingConfigurations != true) finish() }
+        val observer = LifecycleEventObserver { _, event ->
+            if(event==Lifecycle.Event.ON_STOP)webView?.evaluateJavascript("window.setNativeBackground?.(true)",null)
+            if(event==Lifecycle.Event.ON_START)webView?.evaluateJavascript("window.setNativeBackground?.(false)",null)
+        }
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer) }
     }
