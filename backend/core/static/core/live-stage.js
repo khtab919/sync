@@ -154,3 +154,12 @@ if($('bigGiftBtn')){if(!config.gifts)$('bigGiftBtn').hidden=true;$('bigGiftBtn')
 if($('emojiBtn'))$('emojiBtn').onclick=()=>{const inp=$('text');if(inp){inp.value+='😊';inp.focus();}};
 layout();window.relaxiaStageLoaded=true;
 window.addEventListener('pagehide',()=>{leaving=true;releasePrepared();room?.disconnect()});connect().catch(e=>{message(e);if(e.name!=='MediaFailure')reconnect()});
+
+// Native lifecycle: keep audio connected, release camera while the app is hidden.
+let nativeCameraWasOn=false;
+window.setNativeBackground=async hidden=>{
+ try {
+  if(hidden){nativeCameraWasOn=!!room?.localParticipant?.isCameraEnabled;if(nativeCameraWasOn)await room.localParticipant.setCameraEnabled(false)}
+  else if(nativeCameraWasOn){nativeCameraWasOn=false;await room.localParticipant.setCameraEnabled(true)}
+ }catch(error){message(error)}
+};

@@ -95,13 +95,20 @@ private fun liveError(e:Exception)=when(e.message){
     var requestedMode by remember{mutableStateOf(if(audioOnly)"audio"else"video")}
     val permission=rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()){result->
         val accepted=result[Manifest.permission.RECORD_AUDIO]==true&&(requestedMode=="audio"||result[Manifest.permission.CAMERA]==true)
-        if(requestingGuest){view?.evaluateJavascript("window.dispatchEvent(new CustomEvent('publishpermissions',{detail:"+accepted+"}));",null);requestingGuest=false}
+        if(requestingGuest){if(accepted)runCatching{com.example.notifications.MediaSessionService.start(context,true)};view?.evaluateJavascript("window.dispatchEvent(new CustomEvent('publishpermissions',{detail:"+accepted+"}));",null);requestingGuest=false}
         else{granted=accepted;error="";if(!accepted)error=if(audioOnly)"اسمح بالميكروفون لبدء البث الصوتي."else"اسمح بالميكروفون والكاميرا لبدء البث."}
     }
     LaunchedEffect(Unit){if(owner){val list=if(audioOnly)arrayOf(Manifest.permission.RECORD_AUDIO)else arrayOf(Manifest.permission.RECORD_AUDIO,Manifest.permission.CAMERA);if(list.all{ContextCompat.checkSelfPermission(context,it)==PackageManager.PERMISSION_GRANTED})granted=true else permission.launch(list)}}
     BackHandler{finish()}
     DisposableEffect(Unit){val window=(context as? android.app.Activity)?.window;val already=window?.attributes?.flags?.and(WindowManager.LayoutParams.FLAG_SECURE)!=0;window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE);onDispose{view?.loadUrl("about:blank");view?.destroy();if(!already)window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)}}
-    DisposableEffect(lifecycle){val observer=LifecycleEventObserver{_,event->if(event==Lifecycle.Event.ON_STOP&&(context as? android.app.Activity)?.isChangingConfigurations!=true)finish()};lifecycle.addObserver(observer);onDispose{lifecycle.removeObserver(observer)}}
+    DisposableEffect(granted){
+        if(granted)runCatching{com.example.notifications.MediaSessionService.start(context,owner)}.onFailure{error="تعذّر تشغيل خدمة الجلسة في الخلفية."}
+        onDispose{com.example.notifications.MediaSessionService.stop(context)}
+    }
+    DisposableEffect(lifecycle){val observer=LifecycleEventObserver{_,event->
+        if(event==Lifecycle.Event.ON_STOP)view?.evaluateJavascript("window.setNativeBackground?.(true)",null)
+        if(event==Lifecycle.Event.ON_START)view?.evaluateJavascript("window.setNativeBackground?.(false)",null)
+    };lifecycle.addObserver(observer);onDispose{lifecycle.removeObserver(observer)}}
     Surface(Modifier.fillMaxSize(),color=Color(0xFF101820),contentColor=Color.White){Column(Modifier.fillMaxSize().safeDrawingPadding()){
         if(error.isNotBlank()){Text(error,Modifier.padding(20.dp));if(owner&&!granted)TextButton({requestedMode=if(audioOnly)"audio"else"video";permission.launch(if(audioOnly)arrayOf(Manifest.permission.RECORD_AUDIO)else arrayOf(Manifest.permission.RECORD_AUDIO,Manifest.permission.CAMERA))}){Text("إعادة طلب الأذونات")};TextButton(finish){Text("رجوع")}}
         if(granted&&error.isBlank())AndroidView(modifier=Modifier.fillMaxSize(),factory={ctx->WebView(ctx).apply{

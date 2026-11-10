@@ -61,24 +61,28 @@ def booking_action(request,booking_id):
     return JsonResponse({'id':row.pk,'status':row.status})
 
 @endpoint(['GET'])
-def financial_history(request):
+def financial_history(request, reference=None):
+    def scope(query, kind, field="pk"):
+        if reference is None:return query
+        prefix, value = reference.split(":",1)
+        return query.filter(**{field:value}) if prefix==kind else query.none()
     items=[]
-    for op in FinancialOperation.objects.filter(Q(buyer=request.actor)|Q(creator=request.actor)).select_related('buyer','creator').order_by('-created_at')[:100]:
+    for op in scope(FinancialOperation.objects.filter(Q(buyer=request.actor)|Q(creator=request.actor)).select_related('buyer','creator'),'op').order_by('-created_at')[:100]:
         incoming=op.creator_id==request.actor.pk
         items.append({'id':'op:'+str(op.pk),'kind':op.kind,'status':op.status,'amount_cents':(op.creator_cents if op.status=='settled' else op.amount_cents*80//100) if incoming else op.amount_cents,'incoming':incoming,'reference':op.reference,'created_at':op.created_at,'creator_share':80,'reason':op.reason})
-    for row in ChatCharge.objects.filter(Q(buyer=request.actor)|Q(creator=request.actor)).order_by('-created_at')[:100]:
+    for row in scope(ChatCharge.objects.filter(Q(buyer=request.actor)|Q(creator=request.actor)),'chat').order_by('-created_at')[:100]:
         incoming=row.creator_id==request.actor.pk
         items.append({'id':'chat:'+str(row.pk),'kind':'chat_'+row.kind,'status':'settled','amount_cents':row.creator_cents if incoming else row.amount_cents,'incoming':incoming,'reference':str(row.message_id),'created_at':row.created_at,'creator_share':80})
-    for row in TopUp.objects.filter(user=request.actor).order_by('-created_at')[:50]:items.append({'id':'topup:'+str(row.pk),'kind':'topup','status':row.status,'amount_cents':row.amount_cents,'incoming':True,'reference':row.transaction_hash,'created_at':row.created_at})
+    for row in scope(TopUp.objects.filter(user=request.actor),'topup').order_by('-created_at')[:50]:items.append({'id':'topup:'+str(row.pk),'kind':'topup','status':row.status,'amount_cents':row.amount_cents,'incoming':True,'reference':row.transaction_hash,'created_at':row.created_at})
     from .models import GatewayInvoice
-    for row in GatewayInvoice.objects.filter(quote__user=request.actor,credited_at__isnull=False).select_related('quote').order_by('-created_at')[:50]:items.append({'id':'gateway:'+str(row.quote_id),'kind':'topup','status':'approved','amount_cents':row.quote.amount_cents,'incoming':True,'reference':row.payment_id or row.invoice_id,'created_at':row.credited_at})
-    for row in Withdrawal.objects.filter(user=request.actor).order_by('-created_at')[:100]:items.append({'id':'withdrawal:'+str(row.pk),'kind':'withdrawal','status':row.status,'amount_cents':row.amount_cents,'incoming':False,'reference':row.payout_reference or str(row.pk),'created_at':row.created_at})
+    for row in scope(GatewayInvoice.objects.filter(quote__user=request.actor,credited_at__isnull=False).select_related('quote'),'gateway',"quote_id").order_by('-created_at')[:50]:items.append({'id':'gateway:'+str(row.quote_id),'kind':'topup','status':'approved','amount_cents':row.quote.amount_cents,'incoming':True,'reference':row.payment_id or row.invoice_id,'created_at':row.credited_at})
+    for row in scope(Withdrawal.objects.filter(user=request.actor),'withdrawal').order_by('-created_at')[:100]:items.append({'id':'withdrawal:'+str(row.pk),'kind':'withdrawal','status':row.status,'amount_cents':row.amount_cents,'incoming':False,'reference':row.payout_reference or str(row.pk),'created_at':row.created_at})
     items.sort(key=lambda item:item['created_at'],reverse=True)
     return JsonResponse({'items':items[:150],'currency':'USD','units_per_usd':100})
 
 @endpoint(['GET'])
 def receipt(request,reference):
-    history=__import__('json').loads(financial_history.__wrapped__(request).content)['items']
+    history=__import__('json').loads(financial_history.__wrapped__(request, reference).content)['items']
     found=next((row for row in history if row['id']==reference),None)
     if found is None:raise ApiError('receipt_unavailable',404)
     found['account_name']=request.actor.profile.display_name or request.actor.username

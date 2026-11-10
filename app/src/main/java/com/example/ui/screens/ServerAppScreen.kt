@@ -85,11 +85,17 @@ fun ServerAppScreen(baseUrl: String) {
     var restoring by remember { mutableStateOf(true) }
     var remembered by remember { mutableStateOf(false) }
     var resumeRevision by remember { mutableIntStateOf(0) }
+    var securityDialog by remember { mutableStateOf(false) }
+    var nextReels by remember { mutableStateOf("") }
+    var directReel by remember { mutableStateOf("") }
+    var savedReels by remember { mutableStateOf(false) }
+    var moreReels by remember { mutableStateOf(false) }
     var register by rememberSaveable { mutableStateOf(false) }
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var page by rememberSaveable { mutableStateOf("") }
     var revision by remember { mutableIntStateOf(0) }
     var loading by remember { mutableStateOf(false) }
+    var uploadProgress by remember { mutableFloatStateOf(-1f) }
     var submitting by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf("") }
     var contentError by remember { mutableStateOf("") }
@@ -178,7 +184,7 @@ fun ServerAppScreen(baseUrl: String) {
     ) { uri ->
         if (uri != null) perform {
             // Upload/approval are enforced by the backend, never client-side.
-            val uploaded = api.upload(context, uri, "reel")
+            val uploaded = try{api.upload(context, uri, "reel"){value->scope.launch{uploadProgress=value}}}finally{uploadProgress=-1f}
             val result = api.request("/api/reels", "POST", JSONObject().put("media_id", uploaded.getString("id")))
             if (result.optString("status") != "published") throw IllegalStateException("reel_publish_unconfirmed")
             page = ""; tab = 1; revision++
@@ -214,9 +220,8 @@ fun ServerAppScreen(baseUrl: String) {
         try{
             val term=query.trim().removePrefix("@")
             accountMatches=api.request("/api/accounts/search?q="+java.net.URLEncoder.encode(term,"UTF-8")).rows()
-            searchReels=api.request("/api/reels").rows().filter {
-                (it.optString("owner_name")+" "+it.optString("id")).contains(term,true)
-            }
+            searchReels=api.request("/api/reels?q="+java.net.URLEncoder.encode(term,"UTF-8")).rows()
+            services=api.request("/api/services?q="+java.net.URLEncoder.encode(term,"UTF-8")).rows()
         }catch(e:CancellationException){throw e}catch(e:Exception){accountMatches=emptyList();searchReels=emptyList()}
     }
     LaunchedEffect(api, resumeRevision) {
@@ -234,6 +239,44 @@ fun ServerAppScreen(baseUrl: String) {
         catch (e: Exception) { notice = friendlyError(e.message); remembered = api.token != null }
         finally { restoring = false }
     }
+    val pushPermission=androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { }
+    val pushRoute by com.example.notifications.NotificationRoutes.pending.collectAsState()
+    LaunchedEffect(signedIn,foreground,restoring,profile.optInt("id")) {
+        if(restoring)return@LaunchedEffect
+        com.example.notifications.NotificationRoutes.account(context,if(signedIn)profile.optInt("id")else 0)
+        if(signedIn && foreground){
+            if(android.os.Build.VERSION.SDK_INT>=33){
+                val pushPrefs=context.getSharedPreferences("relaxia_push",0)
+                if(!pushPrefs.getBoolean("asked",false)){
+                    pushPrefs.edit().putBoolean("asked",true).apply()
+                    pushPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                }
+            }
+            runCatching { com.google.firebase.messaging.FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
+                context.getSharedPreferences("relaxia_push",0).edit().putString("token",token).apply()
+                scope.launch { runCatching { api.request("/api/push/devices","POST",JSONObject().put("token",token)) } }
+            } }
+        }
+    }
+    LaunchedEffect(pushRoute,signedIn) {
+        val route=pushRoute
+        if(signedIn && route!=null){
+            if(route["account_id"]==profile.optInt("id").toString() || route["category"] in listOf("reel","profile","live_link")){
+                when(route["category"]){
+                    "reel" -> {directReel=route["target"].orEmpty();page="";tab=1;revision++}
+                    "profile" -> route["target"]?.toIntOrNull()?.let{showCreator(it)}
+                    "live_link" -> open("البث المباشر")
+                    "messages" -> route["target"]?.toIntOrNull()?.let{startChat(it,"")}
+                    "calls" -> { incomingCall=runCatching{api.request("/api/calls").optJSONObject("incoming")}.getOrNull() }
+                    "bookings" -> open("الحجوزات")
+                    "wallet" -> open("المحفظة")
+                    "live" -> open("البث المباشر")
+                }
+            }
+            com.example.notifications.NotificationRoutes.pending.value=null
+        }
+    }
+    if(securityDialog)AccountSecurityDialog(api,!signedIn,{securityDialog=false}){signedIn=false;remembered=false;profile=JSONObject();page=""}
     val screen = page.ifBlank { destinations[tab] }
     // Android back from a full-screen Reel must return home, never exit the app.
     BackHandler(enabled = signedIn && (page.isNotBlank() || tab == 1)) {
@@ -262,7 +305,7 @@ fun ServerAppScreen(baseUrl: String) {
                     if (screen == "صفحة المذيعة") creator = (creators+accountMatches).firstOrNull { it.optInt("id") == creator.optInt("id") } ?: creator
                 }
                 "حسابي" -> { profile = api.request("/api/me"); services = api.request("/api/services").rows() }
-                "ريلز" -> rows = api.request("/api/reels").rows()
+                "ريلز" -> { val result=api.request("/api/reels"+(if(directReel.isNotBlank())"?reel_id=$directReel"else if(savedReels)"?saved=1"else ""));rows=result.rows();directReel="";nextReels=result.optString("next_cursor").takeUnless{it=="null"}.orEmpty() }
                 "دردشة" -> rows = api.request("/api/conversations").rows()
                 "محادثة جديدة" -> creators = api.request("/api/creators").rows()
                 "محادثة" -> rows = api.request("/api/messages/$peerId").rows()
@@ -354,11 +397,11 @@ fun ServerAppScreen(baseUrl: String) {
                     password = ""; signedIn = true; tab = 0
                     page = if (profile.optBoolean("is_admin")) "لوحة الإدارة" else ""
                     if (!api.sessionSaved) notice = "تم الدخول. تعذّر حفظ الجلسة على هذا الجهاز، وقد تحتاج للدخول مجددًا عند إغلاق التطبيق."
-                } }, gender=gender, onGender={gender=it})
+                } }, gender=gender, onGender={gender=it},onForgot={securityDialog=true})
             return@MyApplicationTheme
         }
         if (signedIn && profile.optBoolean("account_restricted")) {
-            AccountNotices(api){perform{api.request("/api/logout","POST",JSONObject());signedIn=false;remembered=false;profile=JSONObject();page=""}}
+            AccountNotices(api){perform{api.request("/api/logout","POST",JSONObject().put("push_token",context.getSharedPreferences("relaxia_push",0).getString("token","")));signedIn=false;remembered=false;profile=JSONObject();page=""}}
             return@MyApplicationTheme
         }
         if (activeCall.isNotBlank() && signedIn) {
@@ -456,6 +499,7 @@ fun ServerAppScreen(baseUrl: String) {
                         if (contentError.isNotBlank()) TextButton(onClick={revision++}, enabled=!loading) { Text("إعادة المحاولة") }
                     }
                 }
+                if(uploadProgress>=0f)LinearProgressIndicator(progress={uploadProgress},modifier=Modifier.fillMaxWidth())
                 if (screen == "ريلز" && rows.isNotEmpty()) {
                     val pager = rememberPagerState(pageCount = { rows.size })
                     LaunchedEffect(rows, selectedReelId) {
@@ -464,15 +508,24 @@ fun ServerAppScreen(baseUrl: String) {
                             if(index >= 0){ pager.scrollToPage(index); selectedReelId = 0 }
                         }
                     }
+                    LaunchedEffect(pager.currentPage,rows.size,nextReels){
+                        if(pager.currentPage>=rows.size-3 && nextReels.isNotBlank() && !moreReels){
+                            moreReels=true
+                            try{val result=api.request("/api/reels?before="+nextReels+(if(savedReels)"&saved=1"else ""));rows=(rows+result.rows()).distinctBy{it.optInt("id")};nextReels=result.optString("next_cursor").takeUnless{it=="null"}.orEmpty()}
+                            catch(e:Exception){contentError="تعذّر تحميل المزيد من الريلز."}
+                            finally{moreReels=false}
+                        }
+                    }
                     Box(Modifier.weight(1f).fillMaxWidth().background(Color.Black)) {
                         VerticalPager(state = pager, modifier = Modifier.fillMaxSize()) { index ->
                             val row = rows[index]
                             ReelItemView(
                                 row = row,
-                                active = pager.currentPage == index,
+                                active = foreground && pager.currentPage == index,
                                 onChat = { startChat(row.optInt("owner_id"), row.optString("owner_name")) },
                                 onCreator = { showCreator(row.optInt("owner_id")) },
                                 api = api,
+                                onHidden = {rows=rows.filterNot{it.optInt("id")==row.optInt("id")}},
                                 viewerId = profile.optInt("id")
                             )
                         }
@@ -625,6 +678,10 @@ fun ServerAppScreen(baseUrl: String) {
                                 if(profile.optBoolean("is_admin"))ReferenceRow(Icons.Outlined.Settings,"لوحة الإدارة"){open("لوحة الإدارة")}
                                 ReferenceRow(Icons.Outlined.ShoppingBag,"نشاطي","الحجوزات والبث وسجل العمليات"){open("نشاطي")}
                                 ReferenceRow(Icons.Outlined.Notifications,"الإشعارات والاعتراضات"){open("التنبيهات")}
+                                ReferenceRow(Icons.Outlined.BookmarkBorder,"الريلز المحفوظة"){savedReels=true;page="";tab=1;revision++}
+                                ReferenceRow(Icons.Outlined.Lock,"أمان الحساب"){securityDialog=true}
+                                ReferenceRow(Icons.Outlined.Notifications,"إعدادات إشعارات الهاتف"){context.startActivity(android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(android.provider.Settings.EXTRA_APP_PACKAGE,context.packageName))}
+                                Text("الإصدار "+com.example.BuildConfig.VERSION_NAME,style=MaterialTheme.typography.bodySmall)
                                 ReferenceRow(Icons.Outlined.Settings,"الإعدادات والمساعدة"){open("الإعدادات")}
                             } }
                             item { Row(Modifier.padding(horizontal = 22.dp), verticalAlignment = Alignment.CenterVertically) { Text(if (own) "عروضي" else "العروض", Modifier.weight(1f), style = MaterialTheme.typography.headlineMedium); if (own) TextButton(onClick = { open("إضافة عرض") }) { Icon(Icons.Outlined.Add, null, Modifier.size(18.dp)); Text("إضافة") } } }
@@ -694,7 +751,7 @@ fun ServerAppScreen(baseUrl: String) {
                         } }
                         "إطاراتي" -> item {
                             val frameArray = profile.optJSONArray("owned_frames")
-                            val owned = if (frameArray == null) (0..10).toSet()
+                            val owned = if (frameArray == null) setOf(0)
                                 else (0 until frameArray.length()).map { frameArray.optInt(it) }.toSet()
                             RelaxiaFramePicker(profile.optInt("selected_frame"),
                                 profile.optString("display_name"), profile.optString("avatar_url"),
@@ -718,7 +775,7 @@ fun ServerAppScreen(baseUrl: String) {
                             ReferenceRow(Icons.Outlined.PersonOutline, "تعديل الملف الشخصي") { editProfile() }
                             ReferenceRow(Icons.Outlined.Shield, "الخصوصية وضوابط المحتوى") { open("سياسة الخصوصية") }
                             ReferenceRow(Icons.Outlined.Flag, "إرسال بلاغ") { open("إرسال بلاغ") }
-                            ReferenceRow(Icons.Outlined.Logout, "تسجيل الخروج") { perform { api.request("/api/logout", "POST", JSONObject()); signedIn = false; services = emptyList(); creators = emptyList(); rows = emptyList(); profile = JSONObject(); page = "" } }
+                            ReferenceRow(Icons.Outlined.Logout, "تسجيل الخروج") { perform { api.request("/api/logout", "POST", JSONObject().put("push_token",context.getSharedPreferences("relaxia_push",0).getString("token",""))); signedIn = false; services = emptyList(); creators = emptyList(); rows = emptyList(); profile = JSONObject(); page = "" } }
                         } }
                         "من نحن", "سياسة الخصوصية" -> item { FormColumn {
                             Text(if (screen == "من نحن") "Relaxia" else "خصوصيتك وحدودك أولًا", style = MaterialTheme.typography.headlineLarge)
@@ -1077,7 +1134,7 @@ internal fun ProfileHero(
 }
 
 @Composable
-internal fun ReferenceLogin(register: Boolean, busy: Boolean, notice: String, username: String, password: String, email: String, adultConfirmed: Boolean, onUsername: (String) -> Unit, onPassword: (String) -> Unit, onEmail: (String) -> Unit, onAdultConfirmed: (Boolean) -> Unit, toggle: () -> Unit, submit: () -> Unit, gender:String="", onGender:(String)->Unit={}) {
+internal fun ReferenceLogin(register: Boolean, busy: Boolean, notice: String, username: String, password: String, email: String, adultConfirmed: Boolean, onUsername: (String) -> Unit, onPassword: (String) -> Unit, onEmail: (String) -> Unit, onAdultConfirmed: (Boolean) -> Unit, toggle: () -> Unit, submit: () -> Unit, gender:String="", onGender:(String)->Unit={},onForgot:()->Unit={}) {
     var showPassword by remember { mutableStateOf(false) }
     val ready=!busy && email.trim().contains("@") && password.isNotBlank() && (!register||(username.trim().length>=2&&password.length>=8&&adultConfirmed&&gender in listOf("male","female")))
     Surface(Modifier.fillMaxSize(),color=MaterialTheme.colorScheme.background){
@@ -1101,6 +1158,7 @@ internal fun ReferenceLogin(register: Boolean, busy: Boolean, notice: String, us
                     Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){Checkbox(adultConfirmed,onAdultConfirmed);Text("أؤكد أن عمري 18 عامًا أو أكثر وأوافق على ضوابط المحتوى غير الصريح.",Modifier.weight(1f),style=MaterialTheme.typography.bodyMedium)}
                 }
                 if(busy)LinearProgressIndicator(Modifier.fillMaxWidth())
+                if(!register)TextButton(onClick=onForgot,enabled=!busy){Text("نسيت كلمة المرور؟")}
                 ReferencePrimary(if(register)"إنشاء حساب"else"دخول",ready){submit()}
                 TextButton(toggle,enabled=!busy,modifier=Modifier.align(Alignment.CenterHorizontally)){Text(if(register)"لديك حساب؟ تسجيل الدخول"else"جديد هنا؟ أنشئ حسابًا")}
             }}
@@ -1120,7 +1178,8 @@ private fun ReelItemView(
     onChat: () -> Unit,
     onCreator: () -> Unit,
     api: LayaliApi,
-    viewerId: Int
+    viewerId: Int,
+    onHidden: () -> Unit = {}
 ) {
     val url = row.optString("video_url")
     val context = LocalContext.current
@@ -1139,6 +1198,19 @@ private fun ReelItemView(
     var likeBusy by remember(row.optInt("id")) { mutableStateOf(false) }
     var likeError by remember(row.optInt("id")) { mutableStateOf("") }
     val scope = rememberCoroutineScope()
+    var actions by remember { mutableStateOf(false) }
+    var saved by remember(row.optInt("id")) { mutableStateOf(row.optBoolean("saved")) }
+    var actionBusy by remember { mutableStateOf(false) }
+    fun preference(action:String,enabled:Boolean){
+        if(actionBusy)return
+        actionBusy=true
+        scope.launch{try{api.request("/api/reels/${row.optInt("id")}/action","POST",JSONObject().put("action",action).put("enabled",enabled));if(action=="hidden")onHidden()else saved=enabled;actions=false}catch(e:Exception){likeError="تعذّر حفظ اختيارك."}finally{actionBusy=false}}
+    }
+    if(actions)AlertDialog(onDismissRequest={actions=false},title={Text("خيارات الريل")},text={Column{
+        TextButton(enabled=!actionBusy,onClick={preference("saved",!saved)}){Text(if(saved)"إزالة من المحفوظات"else"حفظ الريل")}
+        TextButton(enabled=!actionBusy,onClick={preference("hidden",true)}){Text("غير مهتم بهذا الريل")}
+    }},confirmButton={TextButton(onClick={actions=false}){Text("إغلاق")}})
+
 
     LaunchedEffect(active) { isPlaying = active }
     // A player is owned by the current page only. Swiping releases its decoder.
@@ -1188,6 +1260,14 @@ private fun ReelItemView(
         }
     }
 
+    LaunchedEffect(active,player){
+        var watched=0
+        while(active && watched<180){
+            delay(1000)
+            if(player?.isPlaying==true)watched++
+            if(watched==3 || (watched>0 && watched%15==0))runCatching{api.request("/api/reels/${row.optInt("id")}/action","POST",JSONObject().put("action","watch").put("seconds",watched))}
+        }
+    }
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         if (player != null) {
             AndroidView(
@@ -1366,6 +1446,7 @@ private fun ReelItemView(
             if (followError.isNotBlank()) Text(followError, color = Color(0xFFFFC5C5), fontSize = 11.sp)
         }
 
+        IconButton(onClick={actions=true},modifier=Modifier.align(Alignment.TopEnd).padding(top=16.dp,end=12.dp)){Icon(Icons.Outlined.MoreVert,"خيارات الريل",tint=Color.White)}
         // Floating Action Buttons (Bottom End)
         Column(
             modifier = Modifier
@@ -1430,7 +1511,7 @@ private fun ReelItemView(
                 modifier = Modifier.clickable {
                     val shareIntent = Intent(Intent.ACTION_SEND).apply {
                         type = "text/plain"
-                        putExtra(Intent.EXTRA_TEXT, "${row.optString("title")} - Relaxia\n$url")
+                        putExtra(Intent.EXTRA_TEXT, "Relaxia\n${row.optString("share_url",api.origin+"/s/reel/"+row.optInt("id"))}")
                     }
                     context.startActivity(Intent.createChooser(shareIntent, "مشاركة"))
                 }

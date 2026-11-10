@@ -12,6 +12,7 @@ from django.db.models import Q, Count
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
+from .paging import visible_owners, page_rows
 from .models import Profile, Service, Booking, Wallet, Withdrawal, Message, Reel, ReelLike, Report, SessionToken, AuthRateLimit, ServiceReaction, Follow, SupportTicket
 
 User = get_user_model()
@@ -114,7 +115,7 @@ def issue_token(user):
 def health(request):
     with connection.cursor() as cursor:
         cursor.execute('SELECT 1')
-    return JsonResponse({'status': 'ok', 'registration_version': 6, 'avatar_upload_version':1, 'identity_required': False, 'brand': 'Relaxia', 'mobile_admin_version': 2, 'commerce_version': 1, 'calls_version': 2, 'messaging_version': 3, 'paid_chat_version':1, 'shop_version': 2, 'live_version':2, 'booking_payment_version':1})
+    return JsonResponse({'status': 'ok', 'registration_version': 6, 'avatar_upload_version':1, 'identity_required': False, 'brand': 'Relaxia', 'mobile_admin_version': 2, 'commerce_version': 1, 'calls_version': 2, 'messaging_version': 3, 'paid_chat_version':1, 'shop_version': 2, 'live_version':2, 'booking_payment_version':1, 'pagination_version':1, 'upload_version':2, 'push_version':1, 'account_version':1, 'build':'11.0'})
 
 @endpoint(['POST'], authenticated=False)
 def register(request):
@@ -189,6 +190,9 @@ def login(request):
 
 @endpoint(['POST'])
 def logout(request):
+    from .models import PushDevice
+    token=request.payload.get("push_token")
+    if isinstance(token,str):PushDevice.objects.filter(user=request.actor,token=token).update(enabled=False)
     request.api_token.delete()
     return JsonResponse({'ok': True})
 
@@ -300,9 +304,11 @@ def service_json(service, viewer):
 def services(request):
     if request.method == 'GET':
         from .feed_ranking import rank_feed
-        rows = list(Service.objects.filter(
-            approved=True, active=True, owner__is_active=True
-        ).exclude(category='كورس').select_related('owner').order_by('-id')[:300])
+        queryset = Service.objects.filter(approved=True, active=True, owner__is_active=True).exclude(category='كورس').exclude(owner_id__in=visible_owners(request.actor)).select_related('owner')
+        q = request.GET.get('q', '').strip()[:100]
+        if q: queryset = queryset.filter(Q(title__icontains=q)|Q(description__icontains=q)|Q(owner__username__icontains=q)|Q(owner__profile__display_name__icontains=q))
+        if request.GET.get('following') == '1': queryset = queryset.filter(owner_id__in=Follow.objects.filter(user=request.actor).values('creator_id'))
+        rows, next_cursor = page_rows(queryset, request)
         ids = [row.pk for row in rows]
         likes = dict(ServiceReaction.objects.filter(
             service_id__in=ids, kind='like', user__is_active=True
@@ -313,7 +319,7 @@ def services(request):
         followed = Follow.objects.filter(user=request.actor).values_list('creator_id', flat=True)
         ordered = rank_feed(rows, likes=likes, bookings=completed,
                             following=followed, viewer_id=request.actor.pk)
-        return JsonResponse({'items': [service_json(row, request.actor) for row in ordered[:100]]})
+        return JsonResponse({'items': [service_json(row, request.actor) for row in ordered], 'next_cursor':next_cursor})
     if not Profile.objects.filter(user=request.actor, publishing_allowed=True).exists():
         raise ApiError('creator_account_required', 403)
     p = request.payload
@@ -407,25 +413,22 @@ def follow(request, creator_id):
 @endpoint(['GET'])
 def conversations(request):
     from .models import BenefitGrant
-    rows = Message.objects.filter(Q(sender=request.actor) | Q(recipient=request.actor)).select_related('sender', 'recipient').order_by('-id')
-    peers, result = set(), []
-    for message in rows.iterator():
-        peer = message.recipient if message.sender_id == request.actor.pk else message.sender
-        if peer.pk in peers or not peer.is_active:
-            continue
-        peers.add(peer.pk)
-        profile = Profile.objects.filter(user=peer).first()
-        if profile is None:
-            continue
-        frame = BenefitGrant.objects.filter(
-            user=peer, kind='frame', expires_at__gt=timezone.now()
-        ).order_by('-id').first()
-        result.append({'id': peer.pk,'public_id':profile.public_id,'username':peer.username,'display_name': profile.display_name or peer.username,
-                       'selected_frame': frame.value if frame else profile.selected_frame, 'avatar_url': profile.avatar_url, 'last_message': message.body,
-                       'created_at': message.created_at})
-        if len(result) == 100:
-            break
-    return JsonResponse({'items': result})
+    from django.db.models import OuterRef, Subquery, Case, When, IntegerField
+    latest = Message.objects.filter(Q(sender=OuterRef('pk'),recipient=request.actor)|Q(sender=request.actor,recipient=OuterRef('pk'))).order_by('-id')
+    peers = User.objects.filter(is_active=True, profile__isnull=False).exclude(pk=request.actor.pk).exclude(pk__in=visible_owners(request.actor)).annotate(last_id=Subquery(latest.values('id')[:1])).filter(last_id__isnull=False).select_related('profile').order_by('-last_id')
+    before=request.GET.get('before')
+    if before: peers=peers.filter(last_id__lt=int(before))
+    peers=list(peers[:101]); more=len(peers)>100; peers=peers[:100]
+    messages={m.pk:m for m in Message.objects.filter(pk__in=[u.last_id for u in peers]).select_related('attachment','call')}
+    unread=dict(Message.objects.filter(recipient=request.actor,read_at__isnull=True,deleted_at__isnull=True,sender_id__in=[u.pk for u in peers]).values('sender_id').annotate(n=Count('id')).values_list('sender_id','n'))
+    grants={}
+    for grant in BenefitGrant.objects.filter(user_id__in=[u.pk for u in peers],kind='frame',expires_at__gt=timezone.now()).order_by('id'):grants[grant.user_id]=grant.value
+    result=[]
+    for peer in peers:
+        m=messages[peer.last_id]; profile=peer.profile
+        preview='حُذفت هذه الرسالة' if m.deleted_at else ('مكالمة' if m.call_id else ('رسالة صوتية' if m.attachment_id and m.attachment.mime.startswith('audio') else 'مرفق' if m.attachment_id else m.body))
+        result.append({'id':peer.pk,'public_id':profile.public_id,'username':peer.username,'display_name':profile.display_name or peer.username,'selected_frame':grants.get(peer.pk,profile.selected_frame),'avatar_url':profile.avatar_url,'last_message':preview,'unread_count':unread.get(peer.pk,0),'created_at':m.created_at})
+    return JsonResponse({'items':result,'next_cursor':str(peers[-1].last_id) if more else None})
 
 @endpoint(['GET', 'POST'])
 def support(request):
@@ -466,9 +469,9 @@ def messages(request, peer_id):
     if not peer or peer == request.actor:
         raise ApiError('recipient_unavailable', 404)
     if request.method == 'GET':
-        rows = Message.objects.filter(Q(sender=request.actor, recipient=peer) | Q(sender=peer, recipient=request.actor)).select_related('attachment', 'call', 'sender__profile', 'recipient__profile','reply_to').order_by('-id')[:100]
+        rows, next_cursor = page_rows(Message.objects.filter(Q(sender=request.actor, recipient=peer) | Q(sender=peer, recipient=request.actor)).select_related('attachment', 'call', 'sender__profile', 'recipient__profile','reply_to'), request)
         peer_profile = Profile.objects.filter(user=peer).first()
-        return JsonResponse({'peer': {'id':peer.pk,'public_id':peer_profile.public_id if peer_profile else '', 'username':peer.username,'display_name':(peer_profile.display_name if peer_profile else '') or peer.username,'avatar_url':peer_profile.avatar_url if peer_profile else '', 'creator':bool(peer_profile and peer_profile.creator), 'chat_price_cents':peer_profile.chat_price_cents if peer_profile else 0, 'online':bool(peer_profile and peer_profile.last_active_at and peer_profile.last_active_at > timezone.now()-timedelta(seconds=25)), 'last_active_at':peer_profile.last_active_at if peer_profile else None}, 'items': [message_json(request, row) for row in rows]})
+        return JsonResponse({'peer': {'id':peer.pk,'public_id':peer_profile.public_id if peer_profile else '', 'username':peer.username,'display_name':(peer_profile.display_name if peer_profile else '') or peer.username,'avatar_url':peer_profile.avatar_url if peer_profile else '', 'creator':bool(peer_profile and peer_profile.creator), 'chat_price_cents':peer_profile.chat_price_cents if peer_profile else 0, 'online':bool(peer_profile and peer_profile.last_active_at and peer_profile.last_active_at > timezone.now()-timedelta(seconds=25)), 'last_active_at':peer_profile.last_active_at if peer_profile else None}, 'items': [message_json(request, row) for row in rows], 'next_cursor':next_cursor})
     from .platform_features import blocked
     if blocked(request.actor,peer):raise ApiError('recipient_unavailable',403)
     submitted_body=request.payload.get('body','')
@@ -538,12 +541,20 @@ def reels(request):
         media = UploadedMedia.objects.filter(pk=uuid.UUID(text(request.payload, 'media_id', 36, 36)), owner=request.actor, purpose='reel').first()
         if not media:
             raise ApiError('invalid_media')
-        reel = Reel.objects.create(owner=request.actor, media=media, video_url=request.build_absolute_uri(f'/api/media/{media.pk}'), approved=True)
+        reel,created = Reel.objects.get_or_create(media=media, defaults={'owner':request.actor,'video_url':request.build_absolute_uri(f'/api/media/{media.pk}'),'approved':True,'caption':str(request.payload.get('caption',''))[:500]})
         return JsonResponse({'id': reel.pk, 'status': 'published'}, status=201)
     from .feed_ranking import rank_feed
-    reels = list(Reel.objects.filter(approved=True, owner__is_active=True)
-        .select_related('owner', 'owner__profile').order_by('-id')[:300])
+    from .models import ReelPreference
+    queryset=Reel.objects.filter(approved=True,owner__is_active=True).exclude(owner_id__in=visible_owners(request.actor)).select_related('owner','owner__profile')
+    queryset=queryset.exclude(pk__in=ReelPreference.objects.filter(user=request.actor,hidden=True).values('reel_id'))
+    if request.GET.get('saved')=='1':queryset=queryset.filter(pk__in=ReelPreference.objects.filter(user=request.actor,saved=True).values('reel_id'))
+    if request.GET.get('reel_id'):queryset=queryset.filter(pk=int(request.GET['reel_id']))
+    q=request.GET.get('q','').strip().removeprefix('@')[:100]
+    if q:queryset=queryset.filter(Q(caption__icontains=q)|Q(owner__username__icontains=q)|Q(owner__profile__display_name__icontains=q)|Q(owner__profile__public_id=q))
+    if request.GET.get('following')=='1':queryset=queryset.filter(owner_id__in=Follow.objects.filter(user=request.actor).values('creator_id'))
+    reels,next_cursor=page_rows(queryset,request)
     reel_ids = [reel.pk for reel in reels]
+    saved_ids=set(ReelPreference.objects.filter(user=request.actor,reel_id__in=reel_ids,saved=True).values_list('reel_id',flat=True))
     likes = dict(ReelLike.objects.filter(
         reel_id__in=reel_ids, user__is_active=True
     ).values('reel_id').annotate(n=Count('id')).values_list('reel_id', 'n'))
@@ -560,7 +571,7 @@ def reels(request):
     for reel in reels:
         owner_profile = reel.owner.profile
         items.append({
-            'id': reel.pk, 'owner_id': reel.owner_id, 'video_url': reel.video_url,
+            'saved':reel.pk in saved_ids, 'share_url':request.build_absolute_uri('/s/reel/'+str(reel.pk)), 'caption':reel.caption, 'id': reel.pk, 'owner_id': reel.owner_id, 'video_url': reel.video_url,
             'owner_name': owner_profile.display_name or reel.owner.username,
             'owner_username': reel.owner.username,
             'owner_public_id': owner_profile.public_id,
@@ -572,7 +583,7 @@ def reels(request):
             'liked': reel.pk in liked_ids,
             'like_count': likes.get(reel.pk, 0)
         })
-    return JsonResponse({'items': items})
+    return JsonResponse({'items': items, 'next_cursor':next_cursor})
 
 @endpoint(['POST'])
 def reel_like(request, reel_id):

@@ -73,6 +73,9 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
     var pendingCallMode by remember{mutableStateOf("audio")}
     var retryKey by remember { mutableStateOf("") }
     var amplitude by remember { mutableFloatStateOf(0f) }
+    var nextOlder by remember { mutableStateOf("") }
+    var olderLoaded by remember { mutableStateOf(false) }
+    var loadingOlder by remember { mutableStateOf(false) }
     var rows by remember { mutableStateOf<List<JSONObject>>(cached) }
     var error by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
@@ -90,7 +93,8 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
         val acknowledged=loaded.map{it.optString("client_key")}.filter{it.isNotBlank()}.toSet()
         withContext(Dispatchers.IO){outbox.read().filter{it.optString("client_key") in acknowledged}.forEach{outbox.remove(it.optString("client_key"))}}
         withContext(Dispatchers.IO){inbox.save(loaded)}
-        rows=loaded;pending=withContext(Dispatchers.IO){outbox.read()}
+        if(!olderLoaded)nextOlder=result.optString("next_cursor").takeUnless{it=="null"}.orEmpty()
+        rows=(rows+loaded).associateBy{it.optInt("id")}.values.sortedBy{it.optInt("id")};pending=withContext(Dispatchers.IO){outbox.read()}
         val delivered=org.json.JSONArray(loaded.filter{it.optInt("sender_id")!=myId&&it.isNull("delivered_at")}.map{it.optInt("id")})
         if(delivered.length()>0)api.request("/api/messages/$peerId/delivered","POST",JSONObject().put("ids",delivered))
     }
@@ -225,6 +229,13 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
         Box(Modifier.fillMaxSize().padding(padding)) {
         if(displayed.isEmpty() && error.isBlank()) Column(Modifier.align(Alignment.Center).padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) { Text("مساحة لحديثكما", style = MaterialTheme.typography.titleLarge); Text("اكتب رسالة أو أرسل صورة أو تسجيلًا صوتيًا.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
         LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(horizontal = 16.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            if(nextOlder.isNotBlank()) item(key="older") {
+                TextButton(enabled=!loadingOlder,onClick={scope.launch{
+                    loadingOlder=true
+                    try{val result=api.request("/api/messages/$peerId?before=$nextOlder");val array=result.getJSONArray("items");val older=(0 until array.length()).map{array.getJSONObject(it)};rows=(older+rows).associateBy{it.optInt("id")}.values.sortedBy{it.optInt("id")};nextOlder=result.optString("next_cursor").takeUnless{it=="null"}.orEmpty();olderLoaded=true}
+                    catch(e:Exception){error="تعذّر تحميل الرسائل الأقدم. أعد المحاولة."}finally{loadingOlder=false}
+                }}){Text(if(loadingOlder)"تحميل…"else"عرض الرسائل الأقدم")}
+            }
             items(displayed, key = { it.optString("client_key").ifBlank { it.optInt("id").toString() } }) { message ->
                 val mine = message.optInt("sender_id") == myId
                 val index = displayed.indexOf(message)

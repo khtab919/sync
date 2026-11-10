@@ -76,6 +76,15 @@ services:
     depends_on:
       db: {condition: service_healthy}
       livekit: {condition: service_started}
+  push-worker:
+    image: layali-api
+    restart: unless-stopped
+    env_file: .env
+    command: ["python", "manage.py", "deliver_push", "--loop"]
+    volumes:
+      - ./secrets:/run/secrets:ro
+    depends_on:
+      db: {condition: service_healthy}
   proxy:
     image: caddy:2
     restart: unless-stopped

@@ -31,3 +31,13 @@ SECURE_SSL_REDIRECT = os.environ.get('LAYALI_TESTING') != '1'
 SECURE_HSTS_SECONDS = 3600
 
 MEDIA_ROOT = BASE_DIR / "media"
+
+PASSWORD_RESET_TIMEOUT=1800
+EMAIL_BACKEND='django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST=os.environ.get('EMAIL_HOST','')
+EMAIL_PORT=int(os.environ.get('EMAIL_PORT','587'))
+EMAIL_USE_TLS=os.environ.get('EMAIL_USE_TLS','1')=='1'
+EMAIL_HOST_USER=os.environ.get('EMAIL_HOST_USER','')
+EMAIL_HOST_PASSWORD=os.environ.get('EMAIL_HOST_PASSWORD','')
+EMAIL_TIMEOUT=10
+DEFAULT_FROM_EMAIL=os.environ.get('DEFAULT_FROM_EMAIL','')

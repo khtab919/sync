@@ -215,6 +215,7 @@ class ApiTests(TestCase):
         self.assertNotEqual(ranked[0].owner_id, ranked[1].owner_id)
 
     def test_real_xp_and_secure_luxury_frames_1_to_100(self):
+        Profile.objects.filter(user=self.user).update(legacy_frames=True)
         from datetime import timedelta
         from django.utils import timezone
         from .models import Reel, BenefitGrant
@@ -237,6 +238,9 @@ class ApiTests(TestCase):
                  video_url=f'https://example.com/real-{i}.mp4')
             for i in range(67)
         ])
+        self.assertEqual(self.client.get('/api/me', **auth).json()['xp_points'],0)  # Publishing alone cannot farm XP.
+        from .models import ExperienceAward
+        ExperienceAward.objects.create(user=self.user,source='legacy',points=67*30)
         raised = self.client.get('/api/me', **auth).json()
         self.assertEqual(raised['xp_points'], 67 * 30)
         self.assertEqual(raised['level'], 11)
@@ -406,6 +410,7 @@ class ReferenceInteractionTests(TestCase):
         self.assertEqual(ServiceReaction.objects.count(), 0)
 
     def test_profile_frame_and_name_are_saved_without_privilege_changes(self):
+        Profile.objects.filter(user=self.user).update(legacy_frames=True)
         response = self.client.patch('/api/me', json.dumps({'display_name': 'New display name', 'selected_frame': 2, 'bio': 'New bio'}), content_type='application/json', HTTP_AUTHORIZATION='Bearer ' + self.token)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['selected_frame'], 2)
@@ -479,6 +484,7 @@ class RelaxiaRequirementsTests(TestCase):
         self.assertEqual(self.post(f'/api/creators/{self.creator.pk}/follow', {'enabled': True}).status_code, 200)
 
     def test_eleven_frames_are_stored_and_avatar_urls_are_validated(self):
+        Profile.objects.filter(user=self.user).update(legacy_frames=True)
         for frame in range(11):
             response = self.client.patch('/api/me', json.dumps({'selected_frame': frame}), content_type='application/json', HTTP_AUTHORIZATION='Bearer ' + self.token)
             self.assertEqual(response.status_code, 200)

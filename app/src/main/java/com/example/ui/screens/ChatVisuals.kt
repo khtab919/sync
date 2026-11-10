@@ -186,6 +186,7 @@ internal fun ConversationTile(person: JSONObject, open: () -> Unit) {
             RelaxiaAvatar(person.optString("display_name"), person.optInt("selected_frame"), 54, person.optString("avatar_url"))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(person.optString("display_name"), fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                if(person.optInt("unread_count")>0)Badge{Text(person.optInt("unread_count").toString())}
                 Text(person.optString("last_message").ifBlank { "مرفق في المحادثة" }, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             }
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
