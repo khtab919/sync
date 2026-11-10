@@ -94,7 +94,8 @@ def roles(request):
                 AdminAccess.objects.filter(user=user).delete()
                 user.is_staff=False
                 user.save(update_fields=['is_staff'])
-                user.user_permissions.filter(codename='moderate_livebroadcast',content_type__app_label='core').delete()
+                live_permissions=list(user.user_permissions.filter(codename='moderate_livebroadcast',content_type__app_label='core'))
+                if live_permissions:user.user_permissions.remove(*live_permissions)
                 SessionToken.objects.filter(user=user).delete()
                 event(request.actor,'role_revoked',user.pk,why)
             else:
