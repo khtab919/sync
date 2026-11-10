@@ -32,6 +32,7 @@ def chunk(request,upload_id):
     with transaction.atomic():
         row=UploadSession.objects.select_for_update().filter(pk=upload_id,user=request.actor).first()
         if not row:raise ApiError('upload_unavailable',404)
+        authorize_purpose(request.actor,row.purpose)
         if row.created_at<timezone.now()-timedelta(days=1) and not row.media_id:raise ApiError('upload_expired',409)
         if row.media_id:return JsonResponse({'offset':row.received})
         p=request.payload;offset=p.get('offset');raw=base64.b64decode(text(p,'data',4,350000),validate=True)
@@ -71,4 +72,6 @@ def authorize_purpose(user,purpose):
         if blocked(user,'store'):raise ApiError('feature_restricted',403)
         if AdminFeature.objects.filter(key='store',enabled=False).exists():raise ApiError('feature_maintenance',503)
         if not Profile.objects.filter(user=user,publishing_allowed=True).exists():raise ApiError('creator_account_required',403)
-    if purpose.startswith('chat_') and blocked(user,'chat'):raise ApiError('feature_restricted',403)
+    if purpose.startswith('chat_'):
+        if blocked(user,'messages'):raise ApiError('feature_restricted',403)
+        if AdminFeature.objects.filter(key='messages',enabled=False).exists():raise ApiError('feature_maintenance',503)

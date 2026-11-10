@@ -116,6 +116,7 @@ fun ServerAppScreen(baseUrl: String) {
     var walletError by remember { mutableStateOf("") }
     var wallet by remember { mutableStateOf(JSONObject()) }
     var accountMatches by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var searchLoading by remember { mutableStateOf(false) }
     var searchReels by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var selectedReelId by remember { mutableIntStateOf(0) }
     var showCreationSheet by remember { mutableStateOf(false) }
@@ -217,10 +218,11 @@ fun ServerAppScreen(baseUrl: String) {
             revision++
         }
     }
-    LaunchedEffect(query,page,tab,signedIn,followingOnly){
+    LaunchedEffect(query,page,tab,signedIn,followingOnly,revision){
         val target=if(page.isBlank())destinations[tab]else page
         if(!signedIn||target !in listOf("تصفح","العرض","صنّاع المحتوى"))return@LaunchedEffect
         delay(300)
+        searchLoading=true
         try{
             val term=query.trim().removePrefix("@")
             val escaped=java.net.URLEncoder.encode(term,"UTF-8")
@@ -228,9 +230,9 @@ fun ServerAppScreen(baseUrl: String) {
                 accountMatches=api.request("/api/accounts/search?q=$escaped").rows()
                 searchReels=api.request("/api/reels?q=$escaped").rows()
             }else{accountMatches=emptyList();searchReels=emptyList()}
-            val result=api.request("/api/services?q=$escaped"+(if(followingOnly)"&following=1"else ""))
+            val result=api.request("/api/services?q=$escaped"+(if(followingOnly && target=="تصفح")"&following=1"else ""))
             services=result.rows();nextServices=result.optString("next_cursor").takeUnless{it=="null"}.orEmpty();contentError=""
-        }catch(e:CancellationException){throw e}catch(e:Exception){contentError="تعذّر البحث. تحقق من اتصالك وأعد المحاولة."}
+        }catch(e:CancellationException){throw e}catch(e:Exception){contentError="تعذّر البحث. تحقق من اتصالك وأعد المحاولة."}finally{searchLoading=false}
     }
     LaunchedEffect(api, resumeRevision) {
         restoring = true
@@ -312,7 +314,7 @@ fun ServerAppScreen(baseUrl: String) {
         try {
             when (screen) {
                 "تصفح", "العرض", "صفحة المذيعة" -> {
-                    val result=api.request("/api/services"+(if(screen=="صفحة المذيعة")"?owner="+creator.optInt("id")else ""));services=result.rows();nextServices=result.optString("next_cursor").takeUnless{it=="null"}.orEmpty()
+                    if(screen=="صفحة المذيعة"){val result=api.request("/api/services?owner="+creator.optInt("id"));services=result.rows();nextServices=result.optString("next_cursor").takeUnless{it=="null"}.orEmpty()}
                     creators = api.request("/api/creators").rows()
                     if (screen == "صفحة المذيعة") creator = (creators+accountMatches).firstOrNull { it.optInt("id") == creator.optInt("id") } ?: creator
                 }
@@ -520,6 +522,7 @@ fun ServerAppScreen(baseUrl: String) {
                         if (contentError.isNotBlank()) TextButton(onClick={revision++}, enabled=!loading) { Text("إعادة المحاولة") }
                     }
                 }
+                if(searchLoading)LinearProgressIndicator(Modifier.fillMaxWidth())
                 if(uploadProgress>=0f)LinearProgressIndicator(progress={uploadProgress},modifier=Modifier.fillMaxWidth())
                 if (screen == "ريلز" && rows.isNotEmpty()) {
                     val pager = rememberPagerState(pageCount = { rows.size })
@@ -601,11 +604,7 @@ fun ServerAppScreen(baseUrl: String) {
                                 TextButton(onClick = { followingOnly = false }) { Text("لك", fontSize = 18.sp, fontWeight = if (!followingOnly) FontWeight.Bold else FontWeight.Normal) }
                                 TextButton(onClick = { followingOnly = true }) { Text("أتابعهم", color = if (followingOnly) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }
                             } }
-                            val ids = creators.filter { it.optBoolean("following") }.map { it.optInt("id") }.toSet()
-                            val visible = if (searchCategory in listOf("الكل","العروض")) services.filter {
-                                (!followingOnly || it.optInt("owner_id") in ids) &&
-                                (it.optString("title") + it.optString("owner_name")).contains(query, true)
-                            } else emptyList()
+                            val visible = if (searchCategory in listOf("الكل","العروض")) services else emptyList()
                             if (visible.isEmpty() && !loading && contentError.isBlank() && query.isBlank() && searchCategory in listOf("الكل","العروض")) item { ReferenceEmpty(Icons.Outlined.Explore, "مساحتك لاكتشاف الجديد", "ستظهر هنا العروض التي ينشرها المستخدمون.") }
                             items(visible, key = { it.optInt("id") }) { service ->
                                 FeedCard(service, { showCreator(service.optInt("owner_id")) }, { showService(service) }, { kind -> perform {
@@ -619,7 +618,7 @@ fun ServerAppScreen(baseUrl: String) {
                             item { LazyRow(contentPadding = PaddingValues(horizontal = 18.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 items(listOf("الكل", "خدمة", "منتج", "جلسة")) { label -> FilterChip(category == label, onClick = { category = label }, label = { Text(label) }) }
                             } }
-                            val visible = (if (screen == "المحفوظات") rows else services).filter { (category == "الكل" || it.optString("category") == category) && it.optString("title").contains(query, true) }
+                            val visible = (if (screen == "المحفوظات") rows else services).filter { (category == "الكل" || it.optString("category") == category) && (screen!="المحفوظات" || (it.optString("title")+it.optString("description")).contains(query, true)) }
                             if (visible.isEmpty() && !loading && contentError.isBlank()) item { ReferenceEmpty(Icons.Outlined.Storefront, "لا توجد عروض بعد", "العروض المعتمدة تظهر هنا. يمكنك العودة لاحقًا أو تحديث الصفحة.") }
                             items(visible.chunked(2)) { pair -> Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 pair.forEach { service -> Box(Modifier.weight(1f)) { OfferCard(service) { showService(service) } } }

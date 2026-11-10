@@ -30,6 +30,12 @@ class LayaliApi internal constructor(private val baseUrl: String, private val se
                 val buffer=ByteArray(65536);var size=0
                 while(true){val n=input.read(buffer);if(n<0)break;size+=n;if(size>maximum)throw ApiException("file_too_large");output.write(buffer,0,n);digest.update(buffer,0,n)}
             }} ?: throw ApiException("invalid_file")
+            // During a staged deployment older servers still accept the original upload API.
+            if(request("/health/").optInt("upload_version")<2){
+                val legacy=request("/api/upload","POST",JSONObject().put("purpose",purpose).put("data",android.util.Base64.encodeToString(temporary.readBytes(),android.util.Base64.NO_WRAP)))
+                withContext(Dispatchers.Main){progress(1f)}
+                return@withContext legacy
+            }
             val checksum=digest.digest().joinToString(""){"%02x".format(it)}
             val preferences=context.getSharedPreferences("relaxia_uploads",android.content.Context.MODE_PRIVATE)
             val pendingKey=java.security.MessageDigest.getInstance("SHA-256").digest((origin+":"+token+":"+purpose+":"+checksum).toByteArray()).joinToString(""){"%02x".format(it)}
