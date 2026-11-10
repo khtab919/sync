@@ -319,4 +319,29 @@ class ReferenceDesignTest {
         org.junit.Assert.assertEquals(-1,chosen)
     }
 
+    @Test fun retiredFramesAreNotOfferedEvenWhenServerReturnsOwnership() {
+        compose.setContent { MyApplicationTheme { LazyColumn { item {
+            RelaxiaFramePicker(5,"نور","",1,(0..100).toSet()) {}
+        } } } }
+        compose.onNodeWithText("Lv.100").performScrollTo().assertExists()
+        compose.onNodeWithText("إطاراتك السابقة").assertDoesNotExist()
+        for (id in 1..100) org.junit.Assert.assertFalse(isMilestoneFrame(id))
+    }
+
+    @Test fun allMilestoneOpeningsHaveConsistentPortraitAlignment() {
+        compose.mainClock.autoAdvance = false
+        compose.setContent { MyApplicationTheme { Surface(color=MaterialTheme.colorScheme.background) {
+            Column {
+                (0..9).chunked(2).forEach { pair -> Row {
+                    pair.forEach { index -> Column(horizontalAlignment=androidx.compose.ui.Alignment.CenterHorizontally) {
+                        MilestoneAvatar("ن",110+index*10,128,"")
+                        androidx.compose.material3.Text("Lv.${(index+1)*10}")
+                    } }
+                } }
+            }
+        } } }
+        compose.mainClock.advanceTimeBy(100)
+        screenshot("20-all-frame-alignment")
+    }
+
 }

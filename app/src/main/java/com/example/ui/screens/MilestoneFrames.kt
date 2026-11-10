@@ -28,6 +28,15 @@ import coil.compose.AsyncImage
 import com.example.R
 
 internal val milestoneNames = listOf("الفضي", "البرونزي", "التاج الفضي", "التاج الذهبي", "البلاتيني", "الماسي", "النخبة", "التنين", "الملكي", "القمة")
+// Measured opening center and radius in each atlas cell, independent of its ornaments.
+internal data class FrameOpening(val x: Float, val y: Float, val radius: Float)
+internal val frameOpenings = listOf(
+    FrameOpening(.5488f, .4829f, .3149f), FrameOpening(.5341f, .4888f, .3054f),
+    FrameOpening(.4996f, .5180f, .2887f), FrameOpening(.4531f, .4960f, .2789f),
+    FrameOpening(.4393f, .5042f, .2920f), FrameOpening(.5358f, .4702f, .2760f),
+    FrameOpening(.5284f, .4652f, .2690f), FrameOpening(.4773f, .4833f, .2772f),
+    FrameOpening(.4539f, .4785f, .2580f), FrameOpening(.4342f, .4766f, .2601f)
+)
 private object FrameAtlas { var image: ImageBitmap? = null }
 
 @Composable
@@ -59,21 +68,28 @@ internal fun MilestoneAvatar(name: String, frame: Int, size: Int, imageUrl: Stri
         val value by transition.animateFloat(.15f, .9f, infiniteRepeatable(tween(2400 - index * 100, easing = LinearEasing), RepeatMode.Reverse), label = "gem-light")
         shimmer = value
     }
+    val opening = frameOpenings[index]
+    // Normalize the opening, not the ornament bounds: every face has the same
+    // center and diameter. A small overlap sits beneath the inner metal rim.
+    val frameScale = .23f / opening.radius
     Box(Modifier.size(size.dp), contentAlignment = Alignment.Center) {
-        // The extracted atlas keeps the photo opening separate from decoration.
-        PlainAvatar(name, (size * .59f).toInt(), imageUrl,
-            Modifier.offset(x = if(index % 5 == 0) (size * .035f).dp else 0.dp, y = (size * .015f).dp))
+        PlainAvatar(name, (size * .49f).toInt(), imageUrl,
+            Modifier.offset(y = (size * .03f).dp))
         Canvas(Modifier.fillMaxSize()) {
             val x = atlas.width * (index % 5) / 5
             val y = atlas.height * (index / 5) / 2
             val right = atlas.width * (index % 5 + 1) / 5
             val bottom = atlas.height * (index / 5 + 1) / 2
+            val w = this.size.width
+            val left = (.5f - opening.x * frameScale) * w
+            val top = (.53f - opening.y * frameScale) * w
+            val extent = (w * frameScale).toInt()
             drawImage(atlas, srcOffset = IntOffset(x, y), srcSize = IntSize(right - x, bottom - y),
-                dstSize = IntSize(this.size.width.toInt(), this.size.height.toInt()))
+                dstOffset = IntOffset(left.toInt(), top.toInt()), dstSize = IntSize(extent, extent))
             if (index >= 4 && visible && motionAllowed && size >= 48) {
                 val w = this.size.width
                 for (point in listOf(Offset(.5f,.13f), Offset(.17f,.6f), Offset(.83f,.62f)).take(if(index >= 7)3 else 1)) {
-                    val p = Offset(point.x*w, point.y*w)
+                    val p = Offset(left + point.x*w*frameScale, top + point.y*w*frameScale)
                     drawCircle(Color.White.copy(alpha=shimmer*.7f), w*.013f, p)
                     drawLine(Color.White.copy(alpha=shimmer), p-Offset(w*.025f,0f), p+Offset(w*.025f,0f), w*.006f)
                     drawLine(Color.White.copy(alpha=shimmer), p-Offset(0f,w*.025f), p+Offset(0f,w*.025f), w*.006f)
