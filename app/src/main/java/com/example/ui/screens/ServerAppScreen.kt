@@ -483,15 +483,6 @@ fun ServerAppScreen(baseUrl: String) {
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
                     actions = {
                         if (screen in listOf("العرض", "دردشة")) IconButton(onClick={buyCredits()}){Icon(Icons.Outlined.AccountBalanceWallet,"الرصيد",Modifier.size(22.dp))}
-                        if(screen in listOf("تصفح","العرض","دردشة") && (if(screen=="دردشة")nextConversations else nextServices).isNotBlank())item(key="more-content"){
-                        TextButton(enabled=!pagingBusy,onClick={scope.launch{
-                            pagingBusy=true
-                            try{
-                                if(screen=="دردشة"){val result=api.request("/api/conversations?before=$nextConversations");rows=(rows+result.rows()).distinctBy{it.optInt("id")};nextConversations=result.optString("next_cursor").takeUnless{it=="null"}.orEmpty()}
-                                else{val result=api.request("/api/services?before=$nextServices&q="+java.net.URLEncoder.encode(query,"UTF-8")+(if(followingOnly)"&following=1"else ""));services=(services+result.rows()).distinctBy{it.optInt("id")};nextServices=result.optString("next_cursor").takeUnless{it=="null"}.orEmpty()}
-                            }catch(e:Exception){contentError="تعذّر تحميل المزيد."}finally{pagingBusy=false}
-                        }}){Text(if(pagingBusy)"تحميل…"else"تحميل المزيد")}
-                    }
                     when (screen) {
                             "تصفح" -> HomeToolbarActions({open("البث المباشر")},{buyCredits()},{open("المحفوظات")},{revision++})
                             "العرض" -> {
@@ -859,6 +850,15 @@ fun ServerAppScreen(baseUrl: String) {
                             } }
                         } }
                         "ريلز" -> if (!loading && contentError.isBlank()) item { ReferenceEmpty(Icons.Outlined.SmartDisplay, "شاهد اللحظات", "الريلز المنشورة ستظهر هنا فور رفعها.") }
+                    }
+                        if(screen in listOf("تصفح","العرض","دردشة") && (if(screen=="دردشة")nextConversations else nextServices).isNotBlank())item(key="more-content"){
+                        TextButton(enabled=!pagingBusy,onClick={scope.launch{
+                            pagingBusy=true
+                            try{
+                                if(screen=="دردشة"){val result=api.request("/api/conversations?before=$nextConversations");rows=(rows+result.rows()).distinctBy{it.optInt("id")};nextConversations=result.optString("next_cursor").takeUnless{it=="null"}.orEmpty()}
+                                else{val result=api.request("/api/services?before=$nextServices&q="+java.net.URLEncoder.encode(query,"UTF-8")+(if(screen=="تصفح" && followingOnly)"&following=1"else ""));services=(services+result.rows()).distinctBy{it.optInt("id")};nextServices=result.optString("next_cursor").takeUnless{it=="null"}.orEmpty()}
+                            }catch(e:Exception){contentError="تعذّر تحميل المزيد."}finally{pagingBusy=false}
+                        }}){Text(if(pagingBusy)"تحميل…"else"تحميل المزيد")}
                     }
                 }
             }

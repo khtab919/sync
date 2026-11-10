@@ -199,7 +199,7 @@ def logout(request):
     return JsonResponse({'ok': True})
 
 def profile_json(user, viewer):
-    profile = user.profile
+    profile = Profile.objects.get(user=user)
     from .models import BenefitGrant
     from .profile_levels import profile_progress
     progress = profile_progress(user)
