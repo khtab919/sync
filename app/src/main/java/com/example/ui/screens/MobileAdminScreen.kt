@@ -141,7 +141,13 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
         catch(e: Exception) { accounts = emptyList(); content = emptyList(); error = message(e) }
         finally { loading = false }
     }
-    BackHandler(enabled = liveRoom != null) { liveRoom = null }
+    BackHandler(enabled = liveRoom != null || selected != null || exit != null) {
+        when {
+            liveRoom != null -> liveRoom = null
+            selected != null -> selected = null
+            else -> exit?.invoke()
+        }
+    }
     liveRoom?.let { room ->
         Box(Modifier.fillMaxSize()) {
             LiveRoomView(api.origin, room) { liveRoom = null }
