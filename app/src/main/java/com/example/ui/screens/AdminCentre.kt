@@ -86,47 +86,61 @@ internal fun AdminCentre(api:LayaliApi,name:String,ownerId:Int,back:()->Unit){
     return
  }
  MaterialTheme(colorScheme=AdminRoyalPalette) {
- Surface(Modifier.fillMaxSize(),color=MaterialTheme.colorScheme.background){
- LazyColumn(Modifier.fillMaxSize().safeDrawingPadding(),state=adminListState,contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
-  item {
-     Card(
-         shape=RoundedCornerShape(26.dp),
-         colors=CardDefaults.cardColors(containerColor=Color(0xFF1A3154)),
-         modifier=Modifier.fillMaxWidth()
-     ) {
-         Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) {
-             Text("RELAXIA  /  ADMIN", color=Color(0xFF9BB9E6), style=MaterialTheme.typography.labelSmall, fontWeight=FontWeight.Bold)
-             Row(Modifier.fillMaxWidth(), horizontalArrangement=Arrangement.SpaceBetween, verticalAlignment=Alignment.CenterVertically) {
-                 Column(Modifier.weight(1f)) {
-                     Text("مركز الإدارة",style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold)
-                     Text("مرحبًا، $name",color=Color(0xFFCCD9EF),style=MaterialTheme.typography.bodyMedium)
-                 }
-                 TextButton(onClick=back){Text("العودة للتطبيق")}
-             }
-             if(busy)LinearProgressIndicator(Modifier.fillMaxWidth())
-             if(error.isNotBlank())Text(error,color=MaterialTheme.colorScheme.error)
-         }
+  Surface(Modifier.fillMaxSize(),color=MaterialTheme.colorScheme.background){
+   Column(Modifier.fillMaxSize().safeDrawingPadding()){
+    Surface(color=MaterialTheme.colorScheme.surface,tonalElevation=4.dp,shadowElevation=3.dp) {
+     Column(Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=8.dp),
+        verticalArrangement=Arrangement.spacedBy(4.dp)){
+      Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,
+         horizontalArrangement=Arrangement.spacedBy(8.dp)){
+       TextButton(onClick={navigateBack()}){Text("رجوع")}
+       Column(Modifier.weight(1f)){
+        Text("RELAXIA / ADMIN",color=MaterialTheme.colorScheme.primary,
+           style=MaterialTheme.typography.labelSmall,fontWeight=FontWeight.Bold)
+        Text(if(detail!=null)"تفاصيل الحساب" else page,
+           style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold)
+       }
+       if(verified && page!="الرئيسية")
+        TextButton(onClick={page="الرئيسية";detail=null;query=""}){Text("الرئيسية")}
+       else TextButton(onClick=back){Text("التطبيق")}
+      }
+      if(busy)LinearProgressIndicator(Modifier.fillMaxWidth())
+      if(error.isNotBlank())Text(error,color=MaterialTheme.colorScheme.error,
+          style=MaterialTheme.typography.bodySmall)
+      if(success.isNotBlank())Text(success,color=MaterialTheme.colorScheme.primary,
+          style=MaterialTheme.typography.bodySmall)
      }
- }
-  if(success.isNotBlank())item{Text(success,color=MaterialTheme.colorScheme.primary)}
+    }
+    LazyColumn(Modifier.weight(1f),state=adminListState,
+       contentPadding=PaddingValues(20.dp),
+       verticalArrangement=Arrangement.spacedBy(12.dp)){
+  if(verified && page=="الرئيسية")item{
+     Text("نظرة عامة",style=MaterialTheme.typography.headlineMedium,
+         fontWeight=FontWeight.Bold)
+     Text("مرحبًا، $name · ملخص حالة المنصة والعمليات الجارية",
+         color=MaterialTheme.colorScheme.onSurfaceVariant)
+  }
  if(!verified){item{Text("التحقق الثنائي",style=MaterialTheme.typography.titleLarge);Text("استخدم تطبيق مصادقة. لا تشارك مفتاح الإعداد أو الرمز مع أحد.");if(auth?.optBoolean("enabled")==false&&secret.isBlank()){OutlinedTextField(password,{password=it},label={Text("كلمة المرور لتأكيد إعداد المصادقة")},visualTransformation=PasswordVisualTransformation(),modifier=Modifier.fillMaxWidth());Button({perform{secret=api.request("/api/admin/auth","POST",JSONObject().put("action","setup").put("password",password)).getString("secret");password=""}},enabled=!busy){Text("إعداد المصادقة")}};if(secret.isNotBlank()){Text("مفتاح الإعداد: $secret");TextButton({val clip=android.content.ClipData.newPlainText("Relaxia MFA",secret);if(android.os.Build.VERSION.SDK_INT>=33)clip.description.extras=android.os.PersistableBundle().apply{putBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE,true)};(context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(clip)}){Text("نسخ مفتاح الإعداد")}};OutlinedTextField(code,{code=it.filter{c->c.isDigit()}.take(6)},label={Text("رمز المصادقة · 6 أرقام")},modifier=Modifier.fillMaxWidth());Button({perform{api.request("/api/admin/auth","POST",JSONObject().put("action","verify").put("code",code));code="";secret="";auth=api.request("/api/admin/auth");revision++}},enabled=code.length==6&&!busy){Text("تحقق")}}}
   else{
-   item {
-    Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
-        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {
-            Text("أقسام الإدارة",fontWeight=FontWeight.SemiBold)
-            TextButton({navigation=true}){Text("عرض الكل")}
-        }
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-            sections.forEach { (title,_) ->
-                FilterChip(page==title, onClick={page=title;detail=null;query=""}, label={Text(title)})
-            }
-        }
-        if(can("finance.view")||can("store.view")||can("wheel.view"))
-            OutlinedButton({legacy=true}){Text("أدوات البث والمتجر والسحب")}
-    }
-}
-   item{Text(page,style=MaterialTheme.typography.titleLarge);if(page in listOf("الحسابات","العقوبات","سجل التدقيق"))OutlinedTextField(query,{query=it.take(100)},label={Text("بحث")},modifier=Modifier.fillMaxWidth());TextButton({revision++},enabled=!busy){Text("تحديث")}}
+   item{
+     Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
+      Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,
+          verticalAlignment=Alignment.CenterVertically){
+       Text("الأقسام الأساسية",fontWeight=FontWeight.SemiBold)
+       TextButton(onClick={navigation=true}){Text("كل الأقسام")}
+      }
+      Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+          horizontalArrangement=Arrangement.spacedBy(8.dp)){
+       listOf("الرئيسية","الحسابات","الصلاحيات","المستويات وVIP")
+           .filter{title->sections.any{it.first==title}}
+           .forEach{title->FilterChip(page==title,
+               onClick={page=title;detail=null;query=""},label={Text(title)})}
+      }
+      if(can("finance.view")||can("store.view")||can("wheel.view"))
+       TextButton(onClick={legacy=true}){Text("البث والمتجر والمدفوعات")}
+     }
+  }
+  item{Text(page,style=MaterialTheme.typography.titleLarge);if(page in listOf("الحسابات","العقوبات","سجل التدقيق"))OutlinedTextField(query,{query=it.take(100)},label={Text("بحث")},modifier=Modifier.fillMaxWidth());TextButton({revision++},enabled=!busy){Text("تحديث")}}
    when(page){
     "الرئيسية"->{item{Row{listOf("day" to "يومي","week" to "أسبوعي","month" to "شهري").forEach{(k,v)->FilterChip(period==k,{period=k},label={Text(v)})}}};val stats=data.optJSONObject("stats")?:JSONObject();items(stats.keys().asSequence().toList().chunked(2)){pair->
         Row(horizontalArrangement=Arrangement.spacedBy(10.dp)) {
@@ -263,6 +277,7 @@ internal fun AdminCentre(api:LayaliApi,name:String,ownerId:Int,back:()->Unit){
     "العمليات الحالية"->item{Button({legacy=true}){Text("فتح أدوات البث")}}
    }
   }
+ }
  }
  if(navigation)AlertDialog(onDismissRequest={navigation=false},title={Text("أقسام الإدارة")},text={Column(Modifier.verticalScroll(rememberScrollState())){sections.forEach{(title,_)->TextButton({page=title;detail=null;query="";navigation=false},modifier=Modifier.fillMaxWidth()){Text(title)}}}},confirmButton={TextButton({navigation=false}){Text("إغلاق")}})
  form?.let{f->var values by remember(f){mutableStateOf(f.fields.associate{it.first to ""})};AlertDialog(onDismissRequest={form=null},title={Text(f.title)},text={Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)){f.fields.forEach{(key,title)->if(key=="kind"){Text("نوع الإجراء");val choices=if(f.title.contains("عقوبة"))listOf("warning" to "تحذير","ban" to "حظر الحساب","messages" to "تقييد الرسائل","calls" to "تقييد المكالمات","live" to "تقييد البث","store" to "تقييد المتجر","withdrawals" to "تعليق السحب")else listOf("level" to "منح مستوى","vip" to "عضوية VIP","frame" to "إطار مميز","promotion" to "نقاط تحفيزية");choices.forEach{(value,caption)->FilterChip(values[key]==value,{values=values+(key to value)},label={Text(caption)})}}else OutlinedTextField(values[key]?:"",{values=values+(key to it.take(1000))},label={Text(title)},modifier=Modifier.fillMaxWidth())};Text("سيُسجل الإجراء باسم حسابك.")}},confirmButton={TextButton({form=null;f.submit(values)},enabled=(values["reason"]?.trim()?.length?:0)>=3&&!busy){Text("تأكيد")}},dismissButton={TextButton({form=null}){Text("إلغاء")}})}
