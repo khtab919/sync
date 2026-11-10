@@ -203,7 +203,7 @@ def profile_json(user, viewer):
     from .models import BenefitGrant
     from .profile_levels import profile_progress
     progress = profile_progress(user)
-    frame=BenefitGrant.objects.filter(user=user,kind='frame',expires_at__gt=timezone.now()).order_by('-id').first()
+    frame=BenefitGrant.objects.filter(user=user,kind='frame',expires_at__gt=timezone.now(),value__in=range(110,201,10)).order_by('-id').first()
     return {
         'account_restricted':__import__('core.admin_security',fromlist=['blocked']).blocked(user,'ban') if user==viewer else False,
         'id': user.pk,'public_id':profile.public_id,'username': user.username,
@@ -211,7 +211,7 @@ def profile_json(user, viewer):
         'gender': profile.gender, 'publishing_allowed':profile.publishing_allowed, 'bio': profile.bio, 'email': user.email if user == viewer else '', 'creator': profile.creator,
         'identity_verified': profile.identity_verified,
         'selected_frame': frame.value if frame else (profile.selected_frame if profile.selected_frame in progress['owned_frames'] else 0),
-        'level': progress['level'], 'xp_points': progress['xp_points'],
+        'level': progress['level'], 'earned_level': progress['earned_level'], 'level_color': progress['level_color'], 'vip_tier': progress['vip_tier'], 'xp_points': progress['xp_points'],
         'next_level_xp': progress['next_level_xp'],
         'owned_frames': progress['owned_frames'] if user==viewer else [],
         'avatar_url': profile.avatar_url, 'chat_price_cents': profile.chat_price_cents,
