@@ -15,7 +15,9 @@ class IdentityTests(TestCase):
         for u in [self.user,self.other]:Profile.objects.create(user=u,display_name='اسم ظاهر');Wallet.objects.create(user=u,balance_cents=1234)
         self.token=issue_token(self.user)
     def post(self,path,p):return self.client.post(path,json.dumps(p),content_type='application/json',HTTP_AUTHORIZATION='Bearer '+self.token)
-    def patch(self,p):return self.client.patch('/api/me',json.dumps(p),content_type='application/json',HTTP_AUTHORIZATION='Bearer '+self.token)
+    def patch(self,p):
+        if 'email' in p:p.setdefault('current_password','ExistingPass!875')
+        return self.client.patch('/api/me',json.dumps(p),content_type='application/json',HTTP_AUTHORIZATION='Bearer '+self.token)
     def signup(self,email='new@example.com'):return self.post('/api/register',{'gender':'female','display_name':'نور علي','email':email,'password':'UniqueAccount!875','adult_confirmed':True,'accept_non_explicit_policy':True})
     def test_signup_separates_display_name_handle_and_internal_id(self):
         r=self.signup();self.assertEqual(r.status_code,201)

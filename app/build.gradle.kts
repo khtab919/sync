@@ -24,6 +24,8 @@ android {
     buildConfigField("String", "LAYALI_API_URL", "\"$backendUrl\"")
     versionCode = 27
     versionName = "11.0"
+    val revision = providers.environmentVariable("GITHUB_SHA").orElse("local").get().take(12)
+    buildConfigField("String", "BUILD_REVISION", "\"$revision\"")
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

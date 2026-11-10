@@ -26,3 +26,7 @@ backend/livekit.generated.yaml
 backend/core/static/core/livekit-client.umd.min.js
 
 backend/secrets/
+
+backend/backups/
+
+backend/media/

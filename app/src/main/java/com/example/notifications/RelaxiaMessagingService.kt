@@ -60,7 +60,7 @@ class RelaxiaMessagingService:FirebaseMessagingService() {
         val pending=PendingIntent.getActivity(this,id,intent,PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val alert=NotificationCompat.Builder(this,channel).setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(data["title"] ?: "Relaxia").setContentText("اضغط لعرض التفاصيل")
-            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE).setAutoCancel(true).setContentIntent(pending)
+            .setOnlyAlertOnce(true).setVisibility(NotificationCompat.VISIBILITY_PRIVATE).setAutoCancel(true).setContentIntent(pending)
             .setCategory(if(channel=="calls")NotificationCompat.CATEGORY_CALL else NotificationCompat.CATEGORY_MESSAGE)
             .setPriority(NotificationCompat.PRIORITY_HIGH).setTimeoutAfter(if(channel=="calls")45000L else 86400000L).build()
         getSystemService(NotificationManager::class.java).notify(id,alert)

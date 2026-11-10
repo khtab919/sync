@@ -97,3 +97,31 @@ class ComprehensiveTests(TestCase):
         Wallet.objects.filter(user=self.user).update(balance_cents=0)
         self.assertEqual(self.post('/api/account/security',payload).status_code,200)
         self.user.refresh_from_db();self.assertFalse(self.user.is_active);self.assertTrue(Wallet.objects.filter(user=self.user).exists())
+    def test_email_change_requires_password(self):
+        response=self.client.patch('/api/me',json.dumps({'email':'changed@example.com'}),content_type='application/json',HTTP_AUTHORIZATION='Bearer '+self.token)
+        self.assertEqual(response.status_code,403)
+    def test_hidden_reel_analytics_do_not_credit_money_or_xp(self):
+        reel=Reel.objects.create(owner=self.peer,approved=True,video_url='https://example.org/v')
+        path=f'/api/reels/{reel.pk}/action'
+        self.post(path,{'action':'watch','seconds':20});self.post(path,{'action':'watch','seconds':10})
+        self.assertEqual(ReelPreference.objects.get().watch_seconds,20)
+        self.assertFalse(ExperienceAward.objects.exists());self.assertEqual(Wallet.objects.get(user=self.peer).balance_cents,0)
+    def test_profile_requests_cannot_enable_legacy_frames(self):
+        response=self.client.patch('/api/me',json.dumps({'legacy_frames':True}),content_type='application/json',HTTP_AUTHORIZATION='Bearer '+self.token)
+        self.assertEqual(response.status_code,400)
+    def test_resumable_upload_obeys_store_maintenance(self):
+        from .models import AdminFeature
+        AdminFeature.objects.create(key='store',enabled=False)
+        payload={'purpose':'reel','size':16,'sha256':'a'*64}
+        self.assertEqual(self.post('/api/uploads',payload).status_code,503)
+    def test_same_file_can_be_uploaded_for_distinct_messages(self):
+        payload={'purpose':'chat_image','size':100,'sha256':'b'*64,'request_key':str(uuid.uuid4())}
+        first=self.post('/api/uploads',payload).json()['id']
+        self.assertEqual(self.post('/api/uploads',payload).json()['id'],first)
+        payload['request_key']=str(uuid.uuid4())
+        self.assertNotEqual(self.post('/api/uploads',payload).json()['id'],first)
+    def test_resume_key_cannot_change_content(self):
+        payload={'purpose':'avatar','size':100,'sha256':'b'*64,'request_key':str(uuid.uuid4())}
+        self.post('/api/uploads',payload)
+        payload['sha256']='c'*64
+        self.assertEqual(self.post('/api/uploads',payload).status_code,409)

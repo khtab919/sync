@@ -64,6 +64,8 @@ def endpoint(methods, authenticated=True):
                     if not isinstance(request.payload, dict):
                         raise ApiError('json_object_required')
                 if authenticated:
+                    from .request_limits import enforce
+                    enforce(request)
                     from . import admin_security as security
                     if request.path.startswith('/api/admin/') and not request.path.startswith('/api/admin/control/') and request.path!='/api/admin/auth':
                         security.require(request,security.route_scope(request),request.method!='GET')
@@ -115,7 +117,7 @@ def issue_token(user):
 def health(request):
     with connection.cursor() as cursor:
         cursor.execute('SELECT 1')
-    return JsonResponse({'status': 'ok', 'registration_version': 6, 'avatar_upload_version':1, 'identity_required': False, 'brand': 'Relaxia', 'mobile_admin_version': 2, 'commerce_version': 1, 'calls_version': 2, 'messaging_version': 3, 'paid_chat_version':1, 'shop_version': 2, 'live_version':2, 'booking_payment_version':1, 'pagination_version':1, 'upload_version':2, 'push_version':1, 'account_version':1, 'build':'11.0'})
+    return JsonResponse({'status': 'ok', 'registration_version': 6, 'avatar_upload_version':1, 'identity_required': False, 'brand': 'Relaxia', 'mobile_admin_version': 2, 'commerce_version': 1, 'calls_version': 2, 'messaging_version': 3, 'paid_chat_version':1, 'shop_version': 2, 'live_version':2, 'booking_payment_version':1, 'pagination_version':1, 'upload_version':2, 'push_version':1, 'account_version':1, 'build':'11.0', 'revision':__import__('os').environ.get('RELEASE_COMMIT','development')})
 
 @endpoint(['POST'], authenticated=False)
 def register(request):
@@ -197,7 +199,7 @@ def logout(request):
     return JsonResponse({'ok': True})
 
 def profile_json(user, viewer):
-    profile = Profile.objects.get(user=user)
+    profile = user.profile
     from .models import BenefitGrant
     from .profile_levels import profile_progress
     progress = profile_progress(user)
@@ -229,8 +231,9 @@ def me(request):
     profile = Profile.objects.get(user=request.actor)
     if request.method == 'PATCH':
         p = request.payload
-        if set(p) - {'bio', 'display_name', 'selected_frame', 'chat_price_cents', 'avatar_url', 'email','username','gender','avatar_id'}:
+        if set(p) - {'bio', 'display_name', 'selected_frame', 'chat_price_cents', 'avatar_url', 'email','username','gender','avatar_id','current_password'}:
             raise ApiError('unsupported_profile_field')
+        if 'email' in p and str(p['email']).strip().lower()!=request.actor.email.strip().lower() and not request.actor.check_password(p.get('current_password','')):raise ApiError('reauthentication_required',403)
         if 'gender' in p and p['gender'] not in ('male','female'):raise ApiError('invalid_gender')
         if 'chat_price_cents' in p and (type(p['chat_price_cents']) is not int or not 0 <= p['chat_price_cents'] <= 500000 or not profile.publishing_allowed):
             raise ApiError('invalid_chat_price')
@@ -305,6 +308,7 @@ def services(request):
     if request.method == 'GET':
         from .feed_ranking import rank_feed
         queryset = Service.objects.filter(approved=True, active=True, owner__is_active=True).exclude(category='كورس').exclude(owner_id__in=visible_owners(request.actor)).select_related('owner')
+        if request.GET.get('owner'):queryset=queryset.filter(owner_id=int(request.GET['owner']))
         q = request.GET.get('q', '').strip()[:100]
         if q: queryset = queryset.filter(Q(title__icontains=q)|Q(description__icontains=q)|Q(owner__username__icontains=q)|Q(owner__profile__display_name__icontains=q))
         if request.GET.get('following') == '1': queryset = queryset.filter(owner_id__in=Follow.objects.filter(user=request.actor).values('creator_id'))
@@ -364,7 +368,7 @@ def reaction(request, service_id):
 @endpoint(['GET'])
 def saved(request):
     ids = ServiceReaction.objects.filter(user=request.actor, kind='save').values_list('service_id', flat=True)
-    rows = Service.objects.filter(pk__in=ids, active=True, approved=True, owner__is_active=True).exclude(category='كورس').select_related('owner').order_by('-id')[:100]
+    rows = Service.objects.filter(pk__in=ids, active=True, approved=True, owner__is_active=True).exclude(owner_id__in=visible_owners(request.actor)).exclude(category='كورس').select_related('owner').order_by('-id')[:100]
     return JsonResponse({'items': [service_json(row, request.actor) for row in rows]})
 
 @endpoint(['GET'])
@@ -415,7 +419,7 @@ def conversations(request):
     from .models import BenefitGrant
     from django.db.models import OuterRef, Subquery, Case, When, IntegerField
     latest = Message.objects.filter(Q(sender=OuterRef('pk'),recipient=request.actor)|Q(sender=request.actor,recipient=OuterRef('pk'))).order_by('-id')
-    peers = User.objects.filter(is_active=True, profile__isnull=False).exclude(pk=request.actor.pk).exclude(pk__in=visible_owners(request.actor)).annotate(last_id=Subquery(latest.values('id')[:1])).filter(last_id__isnull=False).select_related('profile').order_by('-last_id')
+    peers = User.objects.filter(Q(pk__in=Message.objects.filter(sender=request.actor).values('recipient_id'))|Q(pk__in=Message.objects.filter(recipient=request.actor).values('sender_id')),is_active=True, profile__isnull=False).exclude(pk=request.actor.pk).exclude(pk__in=visible_owners(request.actor)).annotate(last_id=Subquery(latest.values('id')[:1])).filter(last_id__isnull=False).select_related('profile').order_by('-last_id')
     before=request.GET.get('before')
     if before: peers=peers.filter(last_id__lt=int(before))
     peers=list(peers[:101]); more=len(peers)>100; peers=peers[:100]
@@ -590,7 +594,7 @@ def reel_like(request, reel_id):
     reel = Reel.objects.filter(
         pk=reel_id, approved=True, owner__is_active=True
     ).first()
-    if reel is None:
+    if reel is None or reel.owner_id in visible_owners(request.actor):
         raise ApiError('reel_unavailable', 404)
     enabled = request.payload.get('enabled')
     if type(enabled) is not bool:

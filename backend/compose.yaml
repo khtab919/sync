@@ -14,6 +14,8 @@ services:
   api:
     image: layali-api
     build: .
+    environment:
+      MEDIA_PROBE_ENABLED: "1"
     restart: unless-stopped
     env_file: .env
     depends_on:

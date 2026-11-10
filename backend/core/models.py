@@ -86,6 +86,7 @@ class Message(models.Model):
     media_price_cents = models.PositiveIntegerField(default=0)
     class Meta:
         constraints = [models.UniqueConstraint(fields=['sender','client_key'], name='unique_message_client_key')]
+        indexes=[models.Index(fields=['sender','recipient','-id']),models.Index(fields=['recipient','delivered_at','id'])]
 
     call = models.OneToOneField("InternalCall", null=True, blank=True, on_delete=models.PROTECT)
     attachment = models.OneToOneField("UploadedMedia", null=True, blank=True, on_delete=models.PROTECT)
@@ -533,6 +534,7 @@ class PushDelivery(models.Model):
         constraints=[models.UniqueConstraint(fields=['device','event_key'],name='unique_push_delivery')]
         indexes=[models.Index(fields=['sent_at','failed','available_at'])]
 class UploadSession(models.Model):
+    request_key=models.UUIDField(null=True,blank=True)
     id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False)
     user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.CASCADE)
     purpose=models.CharField(max_length=24)
@@ -542,7 +544,7 @@ class UploadSession(models.Model):
     created_at=models.DateTimeField(auto_now_add=True)
     media=models.ForeignKey('UploadedMedia',null=True,on_delete=models.SET_NULL)
     class Meta:
-        constraints=[models.UniqueConstraint(fields=['user','digest','purpose'],name='unique_upload_session')]
+        constraints=[models.UniqueConstraint(fields=['user','request_key'],name='unique_upload_request')]
 
 class UploadChunk(models.Model):
     session=models.ForeignKey(UploadSession,on_delete=models.CASCADE)

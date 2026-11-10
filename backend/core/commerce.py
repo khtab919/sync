@@ -152,6 +152,8 @@ def upload(request):
         # Accept ISO base media (Android M4A recordings / MP4 reels), never HTML/SVG.
         if raw[4:8] != b'ftyp' or b'mdat' not in raw or b'moov' not in raw:
             raise ApiError('invalid_media')
+        from .media_probe import validate
+        validate(raw,purpose)
         mime, suffix = ('audio/mp4', '.m4a') if purpose == 'chat_audio' else ('video/mp4', '.mp4')
     with transaction.atomic():
         User.objects.select_for_update().get(pk=request.actor.pk)

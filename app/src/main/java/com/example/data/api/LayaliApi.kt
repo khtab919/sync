@@ -31,7 +31,10 @@ class LayaliApi internal constructor(private val baseUrl: String, private val se
                 while(true){val n=input.read(buffer);if(n<0)break;size+=n;if(size>maximum)throw ApiException("file_too_large");output.write(buffer,0,n);digest.update(buffer,0,n)}
             }} ?: throw ApiException("invalid_file")
             val checksum=digest.digest().joinToString(""){"%02x".format(it)}
-            val session=request("/api/uploads","POST",JSONObject().put("purpose",purpose).put("size",temporary.length()).put("sha256",checksum))
+            val preferences=context.getSharedPreferences("relaxia_uploads",android.content.Context.MODE_PRIVATE)
+            val pendingKey=java.security.MessageDigest.getInstance("SHA-256").digest((origin+":"+token+":"+purpose+":"+checksum).toByteArray()).joinToString(""){"%02x".format(it)}
+            val requestKey=preferences.getString(pendingKey,null) ?: java.util.UUID.randomUUID().toString().also{preferences.edit().putString(pendingKey,it).commit()}
+            val session=request("/api/uploads","POST",JSONObject().put("purpose",purpose).put("size",temporary.length()).put("sha256",checksum).put("request_key",requestKey))
             val id=session.getString("id");var offset=session.getLong("offset")
             java.io.RandomAccessFile(temporary,"r").use { input ->
                 val buffer=ByteArray(262144)
@@ -44,10 +47,12 @@ class LayaliApi internal constructor(private val baseUrl: String, private val se
                         catch(e:kotlinx.coroutines.CancellationException){throw e}
                         catch(e:Exception){if(attempt==2)throw e;kotlinx.coroutines.delay((attempt+1)*1000L)}
                     }
-                    offset=result!!.getLong("offset");progress(offset.toFloat()/temporary.length())
+                    offset=result!!.getLong("offset");withContext(Dispatchers.Main){progress(offset.toFloat()/temporary.length())}
                 }
             }
-            request("/api/uploads/$id/finish","POST",JSONObject())
+            val result=request("/api/uploads/$id/finish","POST",JSONObject())
+            preferences.edit().remove(pendingKey).apply()
+            result
         }finally{temporary.delete()}
     }
 

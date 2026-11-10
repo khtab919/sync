@@ -27,7 +27,7 @@ def activity(sender,instance,raw=False,**kwargs):
     if sender==Booking and instance.status=='completed' and instance.buyer_id!=instance.service.owner_id:
         award(instance.service.owner_id,'booking:'+str(instance.pk),80)
     if sender==LiveBroadcast and instance.status=='ended' and instance.started_at and instance.ended_at and (instance.ended_at-instance.started_at).total_seconds()>=300:
-        if instance.liveadmission_set.exclude(user_id=instance.owner_id).exists() if hasattr(instance,'liveadmission_set') else False:
+        if instance.liveadmission_set.exclude(user_id=instance.owner_id).filter(watched_seconds__gte=60).exists():
             award(instance.owner_id,'live:'+str(instance.pk),40)
 
 from .models import Message, InternalCall, Withdrawal, TopUp
