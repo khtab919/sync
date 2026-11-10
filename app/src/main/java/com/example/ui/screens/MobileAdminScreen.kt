@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -140,7 +141,16 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
         catch(e: Exception) { accounts = emptyList(); content = emptyList(); error = message(e) }
         finally { loading = false }
     }
-    liveRoom?.let{room->LiveRoomView(api.origin,room){liveRoom=null};return}
+    BackHandler(enabled = liveRoom != null) { liveRoom = null }
+    liveRoom?.let { room ->
+        Box(Modifier.fillMaxSize()) {
+            LiveRoomView(api.origin, room) { liveRoom = null }
+            Surface(Modifier.safeDrawingPadding().padding(12.dp), shape = MaterialTheme.shapes.large, tonalElevation = 6.dp) {
+                TextButton(onClick = { liveRoom = null }) { Text("← العودة إلى إدارة البث") }
+            }
+        }
+        return
+    }
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         LazyColumn(Modifier.fillMaxSize().safeDrawingPadding(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             item {
