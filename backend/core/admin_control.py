@@ -80,14 +80,33 @@ def dashboard(request):
 def roles(request):
     require(request,'roles.edit',request.method=='POST')
     if request.method=='POST':
-        if not request.actor.is_superuser:raise ApiError('owner_required',403)
+        if not request.actor.is_superuser:
+            raise ApiError('owner_required',403)
         user=__import__('core.identity',fromlist=['target_user']).target_user(request.payload)
-        if user.is_superuser or user==request.actor:raise ApiError('protected_account',403)
-        role=request.payload.get('role');permissions=request.payload.get('permissions',[])
-        if role not in ROLES or role=='owner' or not isinstance(permissions,list) or any(p not in SCOPES for p in permissions):raise ApiError('invalid_role')
+        if user.is_superuser or user==request.actor:
+            raise ApiError('protected_account',403)
+        why=reason(request)
         with transaction.atomic():
-            User.objects.select_for_update().get(pk=user.pk)
-            AdminAccess.objects.update_or_create(user=user,defaults={'role':role,'permissions':permissions,'customized':True});user.is_staff=True;user.save(update_fields=['is_staff']);SessionToken.objects.filter(user=user).delete();event(request.actor,'role_changed',user.pk,reason(request),details={'role':role,'permissions':permissions})
+            user=User.objects.select_for_update().get(pk=user.pk)
+            if request.payload.get('action')=='revoke':
+                # Actual revocation: no staff access, no inherited live-moderator role,
+                # no active sessions, and no stale AdminAccess record.
+                AdminAccess.objects.filter(user=user).delete()
+                user.is_staff=False
+                user.save(update_fields=['is_staff'])
+                user.user_permissions.filter(codename='moderate_livebroadcast',content_type__app_label='core').delete()
+                SessionToken.objects.filter(user=user).delete()
+                event(request.actor,'role_revoked',user.pk,why)
+            else:
+                role=request.payload.get('role')
+                permissions=request.payload.get('permissions',[])
+                if role not in ROLES or role=='owner' or not isinstance(permissions,list) or any(p not in SCOPES for p in permissions):
+                    raise ApiError('invalid_role')
+                AdminAccess.objects.update_or_create(user=user,defaults={'role':role,'permissions':permissions,'customized':True})
+                user.is_staff=True
+                user.save(update_fields=['is_staff'])
+                SessionToken.objects.filter(user=user).delete()
+                event(request.actor,'role_changed',user.pk,why,details={'role':role,'permissions':permissions})
     return JsonResponse({'roles':ROLES,'permissions':SCOPES,'items':[{'id':u.pk,'username':u.username,'public_id':getattr(getattr(u,'profile',None),'public_id',''),'role':'owner' if u.is_superuser else getattr(getattr(u,'adminaccess',None),'role','live'),'permissions':scopes(u)} for u in User.objects.filter(is_staff=True)[:100]]})
 
 @endpoint(['POST'])
@@ -187,23 +206,42 @@ def inbox(request):return JsonResponse({'items':rows(AdminNotice.objects.filter(
 def benefits(request):
     require(request,'benefits.edit' if request.method=='POST' else 'benefits.view',request.method=='POST')
     if request.method=='POST':
-        u=__import__('core.identity',fromlist=['target_user']).target_user(request.payload);kind=request.payload.get('kind');value=request.payload.get('value');days=request.payload.get('days',30);why=reason(request)
-        if kind not in ['frame','promotion'] or type(value) is not int or type(days) is not int or not 1<=days<=365:raise ApiError('invalid_benefit')
-        with transaction.atomic():
-            User.objects.select_for_update().get(pk=request.actor.pk)
-            if kind=='frame':
-                if not (0<=value<=100 or value in range(110,201,10)):raise ApiError('invalid_frame')
-                BenefitGrant.objects.create(user=u,actor=request.actor,kind='frame',value=value,reason=why,expires_at=timezone.now()+timedelta(days=days))
-            else:
-                from .promotions import grant
-                today=timezone.now()-timedelta(days=1)
-                total=PromotionalGrant.objects.filter(actor=request.actor,created_at__gte=today).aggregate(v=Sum('points'))['v'] or 0
-                import uuid
-                key=str(uuid.UUID(text(request.payload,'request_key',36,36)))
-                existing=PromotionalGrant.objects.filter(reference='admin:'+str(request.actor.pk)+':'+key).exists()
-                if not 1<=value<=10000 or (not existing and total+value>10000):raise ApiError('promotion_limit',409)
-                grant(u,value,'admin:'+str(request.actor.pk)+':'+key,why,request.actor)
-            event(request.actor,'benefit_granted',u.pk,why)
+        why=reason(request)
+        if request.payload.get('action')=='revoke':
+            grant_id=request.payload.get('id')
+            if type(grant_id) is not int:raise ApiError('invalid_benefit')
+            with transaction.atomic():
+                g=BenefitGrant.objects.select_for_update().filter(pk=grant_id).first()
+                if not g:raise ApiError('benefit_unavailable',404)
+                if g.expires_at>timezone.now():
+                    g.expires_at=timezone.now()
+                    g.save(update_fields=['expires_at'])
+                event(request.actor,'benefit_revoked',g.user_id,why,details={'grant_id':g.pk,'kind':g.kind,'value':g.value})
+        else:
+            u=__import__('core.identity',fromlist=['target_user']).target_user(request.payload)
+            kind=request.payload.get('kind')
+            value=request.payload.get('value')
+            days=request.payload.get('days',30)
+            if kind not in ['frame','promotion','level','vip'] or type(value) is not int or type(days) is not int or not 1<=days<=365:
+                raise ApiError('invalid_benefit')
+            with transaction.atomic():
+                User.objects.select_for_update().get(pk=request.actor.pk)
+                if kind in ('frame','level','vip'):
+                    if kind=='frame' and value not in range(110,201,10):raise ApiError('invalid_frame')
+                    if kind=='level' and not 1<=value<=100:raise ApiError('invalid_level')
+                    if kind=='vip' and not 1<=value<=5:raise ApiError('invalid_vip')
+                    g=BenefitGrant.objects.create(user=u,actor=request.actor,kind=kind,value=value,reason=why,expires_at=timezone.now()+timedelta(days=days))
+                    event(request.actor,'benefit_granted',u.pk,why,details={'grant_id':g.pk,'kind':kind,'value':value,'days':days})
+                else:
+                    from .promotions import grant
+                    today=timezone.now()-timedelta(days=1)
+                    total=PromotionalGrant.objects.filter(actor=request.actor,created_at__gte=today).aggregate(v=Sum('points'))['v'] or 0
+                    import uuid
+                    key=str(uuid.UUID(text(request.payload,'request_key',36,36)))
+                    existing=PromotionalGrant.objects.filter(reference='admin:'+str(request.actor.pk)+':'+key).exists()
+                    if not 1<=value<=10000 or (not existing and total+value>10000):raise ApiError('promotion_limit',409)
+                    grant(u,value,'admin:'+str(request.actor.pk)+':'+key,why,request.actor)
+                    event(request.actor,'benefit_granted',u.pk,why,details={'kind':kind,'value':value})
     return JsonResponse({'items':rows(BenefitGrant.objects.order_by('-id'),['id','user_id','actor_id','kind','value','reason','expires_at']),'promotions':rows(PromotionalGrant.objects.order_by('-id'),['id','user_id','actor_id','points','reason','created_at'])})
 
 @endpoint(['GET','POST'])
