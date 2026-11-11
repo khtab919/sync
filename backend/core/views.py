@@ -117,7 +117,7 @@ def issue_token(user):
 def health(request):
     with connection.cursor() as cursor:
         cursor.execute('SELECT 1')
-    return JsonResponse({'status': 'ok', 'registration_version': 6, 'avatar_upload_version':1, 'identity_required': False, 'brand': 'Relaxia', 'mobile_admin_version': 2, 'commerce_version': 1, 'calls_version': 2, 'messaging_version': 3, 'paid_chat_version':1, 'shop_version': 2, 'live_version':2, 'booking_payment_version':1, 'pagination_version':1, 'upload_version':2, 'push_version':1, 'account_version':1, 'build':'11.5', 'revision':__import__('os').environ.get('RELEASE_COMMIT','development')})
+    return JsonResponse({'status': 'ok', 'registration_version': 6, 'avatar_upload_version':1, 'identity_required': False, 'brand': 'Relaxia', 'mobile_admin_version': 2, 'commerce_version': 1, 'calls_version': 2, 'messaging_version': 3, 'paid_chat_version':1, 'shop_version': 2, 'live_version':2, 'booking_payment_version':1, 'pagination_version':1, 'upload_version':2, 'push_version':1, 'account_version':1, 'build':'11.6', 'revision':__import__('os').environ.get('RELEASE_COMMIT','development')})
 
 @endpoint(['POST'], authenticated=False)
 def register(request):
