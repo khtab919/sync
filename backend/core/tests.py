@@ -159,12 +159,26 @@ class ApiTests(TestCase):
         from datetime import timedelta
         from django.utils import timezone
         from .models import BenefitGrant
-        Message.objects.create(sender=self.user, recipient=self.creator, body='hello')
+        last = Message.objects.create(sender=self.user, recipient=self.creator, body='hello')
         headers = {'HTTP_AUTHORIZATION': 'Bearer ' + self.token}
         response = self.client.get('/api/conversations', **headers)
         self.assertEqual(response.status_code, 200, response.content)
         self.assertEqual(response.json()['items'][0]['selected_frame'],
                          self.creator.profile.selected_frame)
+        preview = response.json()['items'][0]
+        self.assertTrue(preview['is_mine'])
+        self.assertEqual(preview['unread_count'], 0)
+        self.assertIsNone(preview['delivered_at'])
+        self.assertIsNone(preview['read_at'])
+        incoming = self.client.get('/api/conversations', HTTP_AUTHORIZATION='Bearer ' + self.creator_token)
+        self.assertEqual(incoming.status_code, 200)
+        self.assertFalse(incoming.json()['items'][0]['is_mine'])
+        self.assertEqual(incoming.json()['items'][0]['unread_count'], 1)
+        stamp = timezone.now()
+        Message.objects.filter(pk=last.pk).update(delivered_at=stamp, read_at=stamp)
+        updated = self.client.get('/api/conversations', **headers)
+        self.assertIsNotNone(updated.json()['items'][0]['delivered_at'])
+        self.assertIsNotNone(updated.json()['items'][0]['read_at'])
         BenefitGrant.objects.create(user=self.creator, actor=self.user,
             kind='frame', value=30, reason='temporary frame',
             expires_at=timezone.now() + timedelta(days=1))
