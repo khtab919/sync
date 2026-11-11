@@ -52,7 +52,7 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    await page.locator('.empty-seat').first().click();
    await page.getByRole('button',{name:'طلب الانضمام صوتيًا',exact:true}).click();
    assert.equal(await page.evaluate(()=>sent[0].action),'seat_request');
-   await page.locator('#closeSheet').click();await page.locator('#gift').click();
+   await page.locator('#closeSheet').click();await page.locator('#bigGiftBtn').click();
    await page.getByRole('button',{name:'فاخرة',exact:true}).click();
    assert.equal(await page.locator('.gift-card').count(),2);
    assert.equal(await page.locator('.gift-card').first().getAttribute('aria-label'),'الحوت الأزرق · 10000 كوين');
@@ -61,7 +61,7 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    page.once('dialog',d=>d.accept());await page.locator('.gift-card').first().click();
    assert.equal(await page.evaluate(()=>sent.filter(a=>a.action==='gift').length),1);
    const gift=await page.evaluate(()=>sent.find(a=>a.action==='gift'));assert.equal(gift.price_cents,10000);assert.equal(gift.recipient_id,1);assert.ok(gift.request_key);
-   if(process.env.LIVE_PREVIEW_DIR){fs.mkdirSync(process.env.LIVE_PREVIEW_DIR,{recursive:true});await page.screenshot({path:path.join(process.env.LIVE_PREVIEW_DIR,`audio-room-${width}.png`)});await page.locator('#gift').click();await page.getByRole('button',{name:'فاخرة',exact:true}).click();await page.screenshot({path:path.join(process.env.LIVE_PREVIEW_DIR,`audio-gifts-${width}.png`)});await page.locator('#closeSheet').click();}
+   if(process.env.LIVE_PREVIEW_DIR){fs.mkdirSync(process.env.LIVE_PREVIEW_DIR,{recursive:true});await page.screenshot({path:path.join(process.env.LIVE_PREVIEW_DIR,`audio-room-${width}.png`)});await page.locator('#bigGiftBtn').click();await page.getByRole('button',{name:'فاخرة',exact:true}).click();await page.screenshot({path:path.join(process.env.LIVE_PREVIEW_DIR,`audio-gifts-${width}.png`)});await page.locator('#closeSheet').click();}
    await page.evaluate(()=>{giftQueue=[{code:'whale',name:'الحوت الأزرق',symbol:'🐋',effect:'depth',sender:'داعم تجريبي',recipient:'مضيف تجريبي'}];playEffects()});
    assert.equal(await page.locator('#giftEffect').getAttribute('class'),'gift-show depth show-whale');
    if(process.env.LIVE_PREVIEW_DIR)await page.screenshot({path:path.join(process.env.LIVE_PREVIEW_DIR,`whale-effect-${width}.png`)});
