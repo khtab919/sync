@@ -72,7 +72,8 @@ private fun liveError(e:Exception)=when(e.message){
     fun enter(row:JSONObject){act{active=api.request("/api/live/${row.getString("id")}/admission","POST",JSONObject().put("confirmed",true).put("price_cents",row.optLong("price_cents")));activeId=row.getString("id");selected=null}}
     LaunchedEffect(query){while(true){try{val result=api.request("/api/live?q="+URLEncoder.encode(query,"UTF-8"));if(result.optInt("stage_version")<3)throw IllegalStateException("live_update_required");val a=result.optJSONArray("items");rows=if(a==null)emptyList()else(0 until a.length()).map{a.getJSONObject(it)};allowed=result.optBoolean("can_broadcast");available=result.optBoolean("available");maximumLimit=result.optInt("max_viewers",25);error=""}catch(e:CancellationException){throw e}catch(e:Exception){allowed=false;available=false;rows=emptyList();error=liveError(e)};delay(5000)}}
     active?.let{room->LiveRoomView(baseUrl,room,profile={id->active=null;openProfile(id)}){val ending=room.optBoolean("owner");val id=activeId;active=null;if(ending)scope.launch{runCatching{api.request("/api/live/$id","POST",JSONObject().put("action","end"))}}};return}
-    Scaffold(topBar={TopAppBar(title={Text("البث والغرف الصوتية")},navigationIcon={IconButton(back){Icon(Icons.Outlined.ArrowForward,"رجوع")}},actions={TextButton(buy){Text("الرصيد")};if(allowed)IconButton({create=true},enabled=available&&!busy){Icon(Icons.Outlined.Videocam,"بدء بث")}})}){padding->
+    val filteredRooms=rows.filter{when(roomFilter){"audio","video"->it.optString("mode")==roomFilter;"free"->!it.optBoolean("private");"paid"->it.optBoolean("private");else->true}}
+    Scaffold(topBar={TopAppBar(title={Text("الغرف والبث")},navigationIcon={IconButton(back){Icon(Icons.Outlined.ArrowForward,"رجوع")}},actions={TextButton(buy){Text("الرصيد")};if(allowed)IconButton({create=true},enabled=available&&!busy){Icon(Icons.Outlined.Videocam,"بدء بث")}})}){padding->
         LazyColumn(Modifier.fillMaxSize().padding(padding),contentPadding=PaddingValues(16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
             item{OutlinedTextField(query,{query=it.take(100)},label={Text("ابحث عن بث أو صاحب بث")},singleLine=true,modifier=Modifier.fillMaxWidth())}
             item{Row(Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(8.dp)){
@@ -88,7 +89,8 @@ private fun liveError(e:Exception)=when(e.message){
             if(error.isNotBlank())item{Text(error,color=MaterialTheme.colorScheme.error)}
             if(!available)item{Text("البث ينتظر جاهزية خادم الوسائط. لا توجد جلسات تجريبية.",style=MaterialTheme.typography.bodyMedium)}
             if(rows.isEmpty()&&error.isBlank()&&available)item{Text("لا توجد بثوث نشطة الآن.",style=MaterialTheme.typography.bodyLarge)}
-            items(rows.filter{when(roomFilter){"audio","video"->it.optString("mode")==roomFilter;"free"->!it.optBoolean("private");"paid"->it.optBoolean("private");else->true}},key={it.getString("id")}){row->LiveBroadcastCard(row){selected=row}}
+            if(filteredRooms.isEmpty()&&rows.isNotEmpty())item{Text("لا توجد غرف نشطة ضمن هذا القسم الآن.",style=MaterialTheme.typography.bodyMedium)}
+            items(filteredRooms,key={it.getString("id")}){row->LiveBroadcastCard(row){selected=row}}
             item{Text("لا يُسجَّل البث ولا تتوفر إعادة مشاهدة داخل المنصة. لا يمكن ضمان منع التسجيل بأدوات خارجية.",style=MaterialTheme.typography.bodySmall)}
         }
     }
