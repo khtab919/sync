@@ -19,7 +19,7 @@
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@drawable/relaxia_launcher_icon"
-        android:label="@string/app_name"
+        android:label="${relaxiaAppLabel}"
         android:roundIcon="@drawable/relaxia_launcher_icon"
         android:supportsRtl="true"
         android:theme="@style/Theme.MyApplication">
@@ -32,7 +32,7 @@
             android:launchMode="singleTop"
             android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize"
             android:exported="true"
-            android:label="@string/app_name"
+            android:label="${relaxiaAppLabel}"
             android:theme="@style/Theme.MyApplication">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
