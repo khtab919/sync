@@ -158,7 +158,7 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
             }
         }
         Row(horizontalArrangement=Arrangement.spacedBy(10.dp)) {
-            FilterChip(!showOrders,{showOrders=false},label={Text("شراء رصيد")})
+            FilterChip(!showOrders,{showOrders=false},label={Text("شراء كوينز")})
             FilterChip(showOrders,{showOrders=true},label={Text("طلباتي")})
         }
         if(!showOrders && submittedId.isBlank()) Text(if(quote==null)"اختر باقة الشحن"else"أكمل عملية الدفع",style=MaterialTheme.typography.titleMedium)
@@ -273,6 +273,7 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
                     }
                 }
                 Text("لن يتم الخصم عند اختيار الوسيلة. سيعرض الخادم المبلغ النهائي وبيانات التحويل قبل الدفع.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                if(methods.none{it.enabled})Text("لا توجد وسيلة دفع مفعّلة حاليًا. يرجى التواصل مع الدعم.",color=MaterialTheme.colorScheme.error,style=MaterialTheme.typography.bodySmall)
                 if(note.isNotBlank())Text(note,color=MaterialTheme.colorScheme.error,style=MaterialTheme.typography.bodySmall)
                 Button(
                     onClick={perform{
@@ -296,7 +297,7 @@ internal fun PurchaseStatusCard(id: String, amount: Long, status: String, reason
     ReferenceCard {
         Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
             Text(when(status){"approved"->"تمت إضافة الرصيد";"rejected"->"الطلب مرفوض";else->"تم تقديم الطلب، انتظر قليلًا"},style=MaterialTheme.typography.titleLarge)
-            Text("$amount رصيد",style=MaterialTheme.typography.titleMedium)
+            Text("$amount كوين",style=MaterialTheme.typography.titleMedium)
             Text("رقم الطلب: ${id.take(8)}",style=MaterialTheme.typography.bodySmall)
             Text(when(status){"approved"->"تم تأكيد الدفع وإضافة الرصيد إلى محفظتك.";"rejected"->reason.ifBlank{"راجع بيانات التحويل أو تواصل مع الدعم."};else->"طلبك قيد المراجعة. يمكنك متابعة حالته هنا؛ لا تُعد إرسال التحويل نفسه."},style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
         }
