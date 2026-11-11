@@ -566,41 +566,21 @@ fun ServerAppScreen(baseUrl: String) {
                 } else LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     when (screen) {
                         "تصفح" -> {
-                            item { SearchField(query, { query = it }, "ابحث عن حساب أو ريل أو عرض") }
                             item {
-                                LazyRow(contentPadding=PaddingValues(horizontal=18.dp), horizontalArrangement=Arrangement.spacedBy(8.dp)){
-                                    items(listOf("الكل","الحسابات","الريلز","العروض")) { label ->
-                                        FilterChip(selected=searchCategory==label, onClick={searchCategory=label}, label={Text(label)})
-                                    }
-                                }
-                            }
-                            if(searchCategory in listOf("الكل","الحسابات"))
-                            items(accountMatches,key={"account-"+it.optInt("id")}){person->OutlinedCard(onClick={showCreator(person.optInt("id"))},modifier=Modifier.padding(horizontal=20.dp).fillMaxWidth()){Column(Modifier.padding(16.dp)){Text(person.optString("display_name"),style=MaterialTheme.typography.titleMedium);Text("@"+person.optString("username")+" · #"+person.optString("public_id"),style=LocalTextStyle.current.copy(textDirection=androidx.compose.ui.text.style.TextDirection.Ltr))}}}
-                            if (query.trim().length >= 2 && searchCategory in listOf("الكل","الريلز")) {
-                                items(searchReels, key={"search-reel-"+it.optInt("id")}){ reel ->
-                                    Surface(onClick={selectedReelId=reel.optInt("id");directReel=reel.optInt("id").toString();savedReels=false;tab=1;query="";searchCategory="الكل"},
-                                        modifier=Modifier.padding(horizontal=18.dp).fillMaxWidth(),
-                                        color=MaterialTheme.colorScheme.surfaceVariant, shape=RoundedCornerShape(16.dp)){
-                                        Row(Modifier.padding(16.dp),horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=Alignment.CenterVertically){
-                                            Icon(Icons.Outlined.SmartDisplay,"ريل",tint=MaterialTheme.colorScheme.primary)
-                                            Text("ريل من "+reel.optString("owner_name"),Modifier.weight(1f))
-                                            Icon(Icons.Outlined.PlayArrow,"مشاهدة")
-                                        }
-                                    }
-                                }
-                            }
-                            if(searchCategory in listOf("الكل","الحسابات")) item {
-                                LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    item { Story("مساحتك", profile.optInt("selected_frame"), profile.optString("avatar_url")) { tab = 4 } }
-                                    items(creators.filter{it.optInt("id")!=profile.optInt("id")}) { person -> Story(person.optString("display_name"), person.optInt("selected_frame"), person.optString("avatar_url")) { creator = person; open("صفحة المذيعة") } }
-                                }
+                                RelaxiaQuickShortcuts(
+                                    onLive={open("البث المباشر")},
+                                    onAudioRooms={open("الغرف الصوتية")},
+                                    onCoinStore={buyCredits()},
+                                    onLottery={open("يا نصيب")},
+                                    onServices={open("العرض")}
+                                )
                             }
                             item { Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                                 TextButton(onClick = { followingOnly = false }) { Text("لك", fontSize = 18.sp, fontWeight = if (!followingOnly) FontWeight.Bold else FontWeight.Normal) }
                                 TextButton(onClick = { followingOnly = true }) { Text("أتابعهم", color = if (followingOnly) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }
                             } }
-                            val visible = if (searchCategory in listOf("الكل","العروض")) services else emptyList()
-                            if (visible.isEmpty() && !loading && contentError.isBlank() && query.isBlank() && searchCategory in listOf("الكل","العروض")) item { ReferenceEmpty(Icons.Outlined.Explore, "مساحتك لاكتشاف الجديد", "ستظهر هنا العروض التي ينشرها المستخدمون.") }
+                            val visible = services
+                            if (visible.isEmpty() && !loading && contentError.isBlank()) item { ReferenceEmpty(Icons.Outlined.Explore, "لا توجد عروض جديدة الآن", "يمكنك تصفح البثوث والغرف والريلز، أو العودة بعد نشر عروض جديدة.") }
                             items(visible, key = { it.optInt("id") }) { service ->
                                 FeedCard(service, { showCreator(service.optInt("owner_id")) }, { showService(service) }, { kind -> perform {
                                     val updated = api.request("/api/services/${service.optInt("id")}/reaction", "POST", JSONObject().put("kind", kind).put("enabled", !service.optBoolean(if (kind == "like") "liked" else "saved")))
