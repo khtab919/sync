@@ -107,6 +107,9 @@ jobs:
           EOF
           fi
 
+      - name: Compile Android sources before signing validation
+        run: gradle compileDebugKotlin "-PLAYALI_API_URL=${LAYALI_API_URL}" --no-daemon --stacktrace
+
       - name: Prepare Debug Keystore
         env:
           RELAXIA_KEYSTORE_BASE64: ${{ secrets.RELAXIA_KEYSTORE_BASE64 }}
