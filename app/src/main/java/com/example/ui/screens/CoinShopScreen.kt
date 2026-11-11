@@ -88,6 +88,7 @@ internal fun CoinPackage(coins:Int,bonus:Int,dollars:String,selected:Boolean,bad
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
     val context=LocalContext.current
