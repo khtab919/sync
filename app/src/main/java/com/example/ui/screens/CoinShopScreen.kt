@@ -99,6 +99,7 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
     var rows by remember{mutableStateOf<List<JSONObject>>(emptyList())}
     var selected by rememberSaveable{mutableIntStateOf(1000)}
     var method by rememberSaveable{mutableStateOf("usdt")}
+    var showPaymentSheet by rememberSaveable{mutableStateOf(false)}
     var quoteText by rememberSaveable{mutableStateOf("")}
     var submittedId by rememberSaveable { mutableStateOf("") }
     var submittedStatus by rememberSaveable { mutableStateOf("pending") }
@@ -111,21 +112,56 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
     var busy by remember{mutableStateOf(false)}
     var note by remember{mutableStateOf("")}
     val quote=remember(quoteText){if(quoteText.isBlank())null else runCatching{JSONObject(quoteText)}.getOrNull()}
-    suspend fun reload(){info=api.request("/api/payment-info");balance=api.request("/api/wallet").optLong("available_cents");val a=api.request("/api/topups").optJSONArray("items");rows=if(a==null)emptyList()else(0 until a.length()).map{a.getJSONObject(it)}}
+    val packages=remember(info){storePackages(info)}
+    val methods=remember(info){storeMethods(info)}
+    var quoteSeconds by remember{mutableLongStateOf(0L)}
+    LaunchedEffect(quoteText){
+        val quotation=quote ?: return@LaunchedEffect
+        val expiry=runCatching{Instant.parse(quotation.getString("expires_at")).toEpochMilli()}.getOrDefault(0L)
+        val clockOffset=quotation.optLong("server_now_ms",System.currentTimeMillis())-System.currentTimeMillis()
+        while(true){
+            quoteSeconds=((expiry-System.currentTimeMillis()-clockOffset+999L)/1000L).coerceAtLeast(0L)
+            if(quoteSeconds<=0L)break
+            delay(1000)
+        }
+    }
+    suspend fun reload(){
+        val updated=api.request("/api/payment-info")
+        info=updated
+        val available=storeMethods(updated).filter{it.enabled}
+        if(available.none{it.code==method})method=available.firstOrNull()?.code.orEmpty()
+        balance=api.request("/api/wallet").optLong("available_cents")
+        val a=api.request("/api/topups").optJSONArray("items")
+        rows=if(a==null)emptyList()else(0 until a.length()).map{a.getJSONObject(it)}
+    }
     fun perform(block:suspend()->Unit){if(busy)return;busy=true;note="";scope.launch{try{block()}catch(e:CancellationException){throw e}catch(e:Exception){note=commerceError(e)}finally{busy=false}}}
     val picker=rememberLauncherForActivityResult(ActivityResultContracts.GetContent()){uri->if(uri!=null)perform{val r=api.upload(context,uri,"receipt");receipt=r.getString("id");preview=r.getString("url");note="تم رفع الإيصال."}}
     LaunchedEffect(Unit){busy=true;try{reload()}catch(e:CancellationException){throw e}catch(e:Exception){note=commerceError(e)}finally{busy=false}}
     LaunchedEffect(quoteText, submittedId, showOrders) { scrollState.scrollTo(0) }
 
     Surface(Modifier.fillMaxSize(),color=MaterialTheme.colorScheme.background){Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding().verticalScroll(scrollState).padding(22.dp),verticalArrangement=Arrangement.spacedBy(18.dp)){
-        Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){TextButton(back,enabled=!busy){Text("رجوع")};Spacer(Modifier.weight(1f));Text(if(balance==null)"الرصيد —"else"${balance} رصيد",fontSize=13.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)}
-        Text("متجر الرصيد",style=MaterialTheme.typography.headlineLarge,fontWeight=FontWeight.Bold)
+        Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
+            TextButton(onClick=back,enabled=!busy){Text("رجوع")}
+            Spacer(Modifier.weight(1f))
+            Text("Relaxia",fontWeight=FontWeight.SemiBold,color=MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Text("متجر الكوينز",style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold)
+        Surface(shape=RoundedCornerShape(18.dp),color=MaterialTheme.colorScheme.primaryContainer){
+            Row(Modifier.fillMaxWidth().padding(16.dp),verticalAlignment=Alignment.CenterVertically){
+                Text("🪙",fontSize=30.sp)
+                Spacer(Modifier.width(10.dp))
+                Column{
+                    Text("رصيد الكوينز المتاح",style=MaterialTheme.typography.bodySmall)
+                    Text(if(balance==null)"—"else java.text.NumberFormat.getIntegerInstance().format(balance)+" كوين",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold)
+                }
+            }
+        }
         Row(horizontalArrangement=Arrangement.spacedBy(10.dp)) {
             FilterChip(!showOrders,{showOrders=false},label={Text("شراء رصيد")})
             FilterChip(showOrders,{showOrders=true},label={Text("طلباتي")})
         }
-        if(!showOrders && submittedId.isBlank()) Text(if(quote==null)"1 · اختر الباقة ووسيلة الدفع"else"2 · أكمل الدفع وأرسل الإثبات",style=MaterialTheme.typography.titleMedium)
-        Text("كل 100 رصيد = 1 دولار. النقاط الترويجية مكافأة منفصلة لا يمكن سحبها.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+        if(!showOrders && submittedId.isBlank()) Text(if(quote==null)"اختر باقة الشحن"else"أكمل عملية الدفع",style=MaterialTheme.typography.titleMedium)
+        Text("100 كوين = 1 USD كقيمة أساسية داخل التطبيق. يظهر المبلغ النهائي قبل الدفع. النقاط الترويجية منفصلة وغير قابلة للسحب.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
         if(note.isNotBlank())Text(note,color=MaterialTheme.colorScheme.primary)
         if(busy)LinearProgressIndicator(Modifier.fillMaxWidth())
         if(submittedId.isNotBlank()) {
