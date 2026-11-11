@@ -49,14 +49,14 @@ const base='http://127.0.0.1:8880';
  if((await api(1,'/api/live')).value.items.length)throw Error('Ended broadcast remains listed');
  // A separate audio-only stage never captures a camera track.
  for(const p of pages)await p.close();pages.length=0;
- const audioCreated=await api(0,'/api/live',{title:'Synthetic audio stage',mode:'audio',max_speakers:2,max_viewers:2,minimum_seconds:30});if(audioCreated.status!==201)throw Error('Audio create failed');
+ const audioCreated=await api(0,'/api/live',{title:'Synthetic audio stage',mode:'audio',max_speakers:15,max_viewers:25,minimum_seconds:30});if(audioCreated.status!==201)throw Error('Audio create failed');
  const audioRoom=audioCreated.value,audioHost=await open(0,audioRoom);
  for(let i=0;i<20;i++){if((await api(0,'/api/live/'+audioRoom.id)).value.status==='active')break;await new Promise(r=>setTimeout(r,500))}
  const audioGuest=await open(1,audioRoom);
  await api(1,'/api/live/'+audioRoom.id+'/events',{action:'seat_request',mode:'audio'});await api(0,'/api/live/'+audioRoom.id+'/events',{action:'seat_decision',user_id:fixture.ids[1],approve:true});await audioGuest.evaluate(async()=>{await refresh();await activateSeat()});
  await audioHost.waitForFunction(()=>room.remoteParticipants.size>0&&[...room.remoteParticipants.values()].some(p=>p.audioTrackPublications.size>0),null,{timeout:20000});
  for(const p of [audioHost,audioGuest])if(await p.evaluate(()=>room.localParticipant.videoTrackPublications.size!==0))throw Error('Audio stage captured camera');
- await audioHost.evaluate(()=>refresh());await preview(audioHost,'04-audio-stage');await audioHost.evaluate(()=>document.documentElement.dataset.theme='light');await preview(audioHost,'05-audio-light');if(await audioHost.evaluate(()=>getComputedStyle(document.getElementById('stage')).backgroundColor)!=='rgb(244, 248, 250)')throw Error('Audio day theme background incorrect');
+ await audioHost.evaluate(()=>refresh());if(await audioHost.locator('.audio-seat').count()!==15)throw Error('Audio room must show fifteen seats');await preview(audioHost,'04-audio-stage');await audioHost.evaluate(()=>document.documentElement.dataset.theme='light');await preview(audioHost,'05-audio-light');if(await audioHost.evaluate(()=>getComputedStyle(document.getElementById('stage')).backgroundColor)!=='rgb(244, 248, 250)')throw Error('Audio day theme background incorrect');
  await api(0,'/api/live/'+audioRoom.id,{action:'end'});
  // Explicit denial must produce a recoverable camera error, without joining/publishing.
  await contexts[0].addInitScript(()=>{navigator.mediaDevices.getUserMedia=async()=>{throw new DOMException('Denied by regression test','NotAllowedError')}});

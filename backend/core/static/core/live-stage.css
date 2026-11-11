@@ -762,3 +762,10 @@ html[data-theme=light] body.audio-mode header, html[data-theme=light] body.audio
 @keyframes whaleSwim{0%{transform:translateX(90%) rotate(-15deg);opacity:0}25%{transform:translateX(10%) rotate(5deg);opacity:1}65%{transform:translateX(-10%) translateY(-10px) rotate(-5deg);opacity:1}100%{transform:translateX(-100%) rotate(10deg);opacity:0}}
 @keyframes giftSpark{0%,100%{transform:translateY(8px) scale(.5);opacity:0}50%{transform:translateY(-15px) scale(1);opacity:1}}
 @media(prefers-reduced-motion:reduce){#giftEffect *, .audio-waves span {animation:none!important;}.gift-particles{display:none}}
+html[data-theme=light] body.audio-mode #stage {
+  background:radial-gradient(ellipse at 50% 65%,#fff4df99,transparent 60%),linear-gradient(155deg,#bdd6e9,#dce8ea 60%,#afccd8);
+  background-color:#f4f8fa;
+}
+html[data-theme=light] body.audio-mode header,html[data-theme=light] body.audio-mode #connection,
+html[data-theme=light] .audio-seat,html[data-theme=light] .audio-seat small {color:#183a50;}
+html[data-theme=light] .seat-plus {color:#365c73;border-color:#4c748c66;background:#ffffff30;}
