@@ -1,4 +1,4 @@
-# Relaxia 11.5 — safe integration of AI Studio changes (11 November 2026)
+# Relaxia 11.6 — safe integration and reliability improvements (11 November 2026)
 
 This branch is based on `feat/relaxia-coin-shop-payment-sheet-20261111`,
 not the unverified AI Studio claim about commit `946538c`.
@@ -16,6 +16,14 @@ commit. Do **not** copy the entire archive over this branch.
 - Audio room shortcut selects the audio room filter and preselects the
   15-seat audio creation mode. The API remains authoritative about eligibility,
   admission fees and capacity.
+- Home live activity is populated by `/api/live` and refreshed while the app is
+  foregrounded; unavailable servers are labelled honestly, without fake rooms.
+- New chats can find real accounts by name or unique five-digit public ID;
+  the public ID is resolved through the server to the internal recipient key.
+- Android no longer sets `FLAG_SECURE` during live/voice calls; screenshots are
+  permitted as requested, without modifying anyone's saved media.
+- Audio room QA checks the seat request by action type so the preceding comment
+  and like tests do not incorrectly fail based on event order.
 - Calls: scoped `WebChromeClient.onPermissionRequest` may grant an Android-
   authorized subset of microphone/camera resources *only from the trusted
   server origin*; DOM storage is enabled for the trusted WebRTC room.
@@ -41,7 +49,7 @@ commit. Do **not** copy the entire archive over this branch.
 This branch is **not deployed**. It does not itself produce a compatible APK.
 Use the existing `backend/deploy.sh` only after a DB backup, review of
 `backend/compose.yaml` (service name `api`, not `backend`), and green CI.
-The Android `applicationId` must stay
+The Android release metadata is **11.6 / versionCode 33**. The Android `applicationId` must stay
 `com.aistudio.layalilounge.x9m4kp`, and an in-place APK upgrade must use
 the **original release signing certificate**.
 
