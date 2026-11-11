@@ -38,7 +38,7 @@ class StageTests(TestCase):
         self.assertContains(page,'aria-label="البث المباشر" hidden')
         self.assertContains(page,'جارٍ تجهيز الصوت…')
         self.assertContains(page,'window.relaxiaStageLoaded')
-        self.assertContains(page,'v=media-3')
+        self.assertContains(page,'v=rooms-4')
 
     def test_audio_host_sources_and_guest_consent_permissions(self):
         row=self.stage();row.mode='audio';row.save()
@@ -105,6 +105,40 @@ class StageTests(TestCase):
     def test_creation_rejects_more_than_twelve_speakers_and_invalid_modes(self):
         for payload in [{'mode':'video','max_speakers':13},{'mode':'fake'},{'mode':'audio','max_speakers':True}]:
             r=self.request('/api/live',dict(title='اختبار البث',**payload));self.assertEqual(r.status_code,400)
+
+    def test_audio_rooms_allow_fifteen_seats_but_video_remains_capped(self):
+        payload={'title':'غرفة صوتية','mode':'audio','max_speakers':15,'max_viewers':25}
+        response=self.request('/api/live',payload)
+        self.assertEqual(response.status_code,201)
+        self.assertEqual(response.json()['max_speakers'],15)
+        live.close(LiveBroadcast.objects.get(pk=response.json()['id']))
+        for mode,seats in [('audio',16),('video',15)]:
+            self.assertEqual(self.request('/api/live',dict(payload,mode=mode,max_speakers=seats)).status_code,400)
+
+    def test_paid_audio_reentry_reserves_once_and_requires_price_confirmation(self):
+        response=self.request('/api/live',{'title':'غرفة مدفوعة','mode':'audio','max_speakers':15,'max_viewers':25,'private':True,'price_cents':100})
+        self.assertEqual(response.status_code,201)
+        row=LiveBroadcast.objects.get(pk=response.json()['id']);self.join(row,self.owner)
+        self.parts=[{'identity':'host-'+str(self.owner.pk),'tracks':[{'type':'AUDIO','muted':False}]}]
+        live.synchronize(row,True)
+        path=f'/api/live/{row.pk}/admission'
+        self.assertEqual(self.request(path,{'confirmed':False,'price_cents':100},self.viewer).status_code,409)
+        for _ in range(2):self.assertEqual(self.join(row,self.viewer).status_code,200)
+        self.assertEqual(Wallet.objects.get(user=self.viewer).balance_cents,1000)
+        self.assertEqual(Wallet.objects.get(user=self.viewer).reserved_cents,100)
+        self.assertEqual(FinancialOperation.objects.filter(buyer=self.viewer).count(),1)
+
+    def test_whale_and_lion_catalog_gifts_are_settled_once_at_server_prices(self):
+        self.assertGreaterEqual(LiveGiftDefinition.objects.filter(enabled=True).count(),24)
+        row=self.stage();Wallet.objects.filter(user=self.viewer).update(balance_cents=50000)
+        for code,price in [('whale',10000),('lion',15000)]:
+            payload={'action':'gift','gift_code':code,'price_cents':price,'confirmed':True,'request_key':str(uuid.uuid4())}
+            for _ in range(2):self.assertEqual(self.event(row,payload,self.viewer).status_code,200)
+        self.assertEqual(LiveGiftEvent.objects.count(),2)
+        self.assertEqual(Wallet.objects.get(user=self.viewer).balance_cents,25000)
+        self.assertEqual(Wallet.objects.get(user=self.owner).balance_cents,20000)
+        result=self.request(f'/api/live/{row.pk}/events').json()
+        self.assertEqual({g['code'] for g in result['gift_events']},{'lion','whale'})
 
 @override_settings(SECURE_SSL_REDIRECT=False)
 class StageConcurrencyTests(TransactionTestCase):

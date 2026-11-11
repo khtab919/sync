@@ -161,7 +161,7 @@ def broadcasts(request):
         maximum=p.get('max_viewers',25);minimum=p.get('minimum_seconds',30)
         if type(maximum) is not int or not 1<=maximum<=min(100,int(os.environ.get("LAYALI_MAX_LIVE_VIEWERS","25"))) or type(minimum) is not int or not 30<=minimum<=3600:raise ApiError('invalid_live_limits')
         mode=p.get('mode','video');speakers=p.get('max_speakers',1);goal=p.get('gift_goal_cents',0)
-        if mode not in ('audio','video') or type(speakers) is not int or not 1<=speakers<=min(12,maximum+1) or type(goal) is not int or not 0<=goal<=10000000:raise ApiError('invalid_stage_mode')
+        if mode not in ('audio','video') or type(speakers) is not int or not 1<=speakers<=min(15 if mode=='audio' else 12,maximum+1) or type(goal) is not int or not 0<=goal<=10000000:raise ApiError('invalid_stage_mode')
         names=p.get('invite_names',[])
         if not isinstance(names,list) or len(names)>100 or not all(isinstance(n,str) and 1<=len(n)<=100 for n in names):raise ApiError('invalid_invitations')
         with transaction.atomic():
@@ -193,7 +193,7 @@ def broadcasts(request):
         except ApiError:continue
         if request.GET.get('q','').strip().lower() not in (row.title+' '+row.owner.profile.display_name+' '+row.owner.username).lower():continue
         items.append(describe(row,request.actor))
-    return JsonResponse({'items':items,'stage_version':2,'available':healthy,'can_broadcast':profile.broadcast_allowed,'recording':False,'max_viewers':min(100,int(os.environ.get('LAYALI_MAX_LIVE_VIEWERS','25')))})
+    return JsonResponse({'items':items,'stage_version':3,'available':healthy,'can_broadcast':profile.broadcast_allowed,'recording':False,'max_viewers':min(100,int(os.environ.get('LAYALI_MAX_LIVE_VIEWERS','25')))})
 
 @endpoint(['GET','POST'])
 def detail(request,broadcast_id):

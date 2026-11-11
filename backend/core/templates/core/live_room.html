@@ -3,7 +3,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Relaxia · مباشر</title>
-<link rel="stylesheet" href="/static/core/live-stage.css?v=media-3">
+<link rel="stylesheet" href="/static/core/live-stage.css?v=rooms-4">
 <body{% if config.mode == "audio" %} class="audio-mode"{% endif %}>
 <main id="stage">
   <div id="video" aria-label="البث المباشر"{% if config.mode == "audio" %} hidden{% endif %}></div>
@@ -21,7 +21,7 @@
   <header>
     <button id="exit" class="round" aria-label="خروج">×</button>
     <span id="viewers" class="pill" title="المشاهدون"><svg class="pill-eye" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span id="viewerCount">—</span></span>
-    <span class="live-pill"><span class="pulse-dot"></span>بث مباشر</span>
+    <span class="live-pill"><span class="pulse-dot"></span>{% if config.mode == "audio" %}غرفة صوتية{% else %}بث مباشر{% endif %}</span>
     <button id="profile" class="identity" aria-label="ملف صاحب البث">
       <div class="identity-avatar-ring">
         <img id="ownerAvatar" hidden alt="">
@@ -107,7 +107,7 @@
 })();
 </script>
 <script src="/static/core/livekit-client.umd.min.js"></script>
-<script src="/static/core/live-media.js?v=media-3"></script>
-<script src="/static/core/live-stage.js?v=media-3"></script>
+<script src="/static/core/live-media.js?v=rooms-4"></script>
+<script src="/static/core/live-stage.js?v=rooms-4"></script>
 </body>
 </html>

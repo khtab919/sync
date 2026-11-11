@@ -702,3 +702,63 @@ dialog::backdrop { background: rgba(16, 24, 32, 0.7); backdrop-filter: blur(4px)
   font-size: 13px;
   margin-top: 8px;
 }
+
+/* Audio rooms: five seats per row, with room for chat and controls. */
+body.audio-mode #stage {
+  background: radial-gradient(ellipse at 50% 58%, #bb916e55 0, transparent 48%),
+              radial-gradient(ellipse at 20% 15%, #447ca34d 0, transparent 55%),
+              linear-gradient(165deg,#102e48,#194958 56%,#12273f);
+}
+body.audio-mode .shade { background: linear-gradient(180deg,#071b2e66,transparent 50%,#081a2dcc); }
+body.audio-mode #audioStage.seat-grid {
+  inset: 130px 12px auto; display: grid; grid-template-columns: repeat(5,minmax(0,1fr));
+  gap: 18px 8px; align-content: start; justify-items: stretch;
+  max-height: calc(100% - 295px); overflow: auto; padding: 10px 2px;
+}
+body.audio-mode #audioStage.solo-room { grid-template-columns: minmax(0,140px); justify-content:center; }
+.audio-seat { border:0; border-radius:16px; padding:0; background:transparent; color:#f4f7f9; min-width:0; gap:5px; }
+.audio-seat .audio-placeholder, .audio-seat img, .seat-plus {
+  width:clamp(40px,13vw,64px); height:clamp(40px,13vw,64px); margin:0;
+  border:1px solid #c9e4fa66; box-shadow:0 3px 15px #05182833; flex-shrink:0;
+}
+.audio-seat img { position:absolute; top:0; left:50%; transform:translateX(-50%); }
+.audio-seat .audio-placeholder { font-size:22px; }
+.audio-seat .audio-name { font-size:11px; width:100%; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; text-shadow:none; }
+.audio-seat small { font-size:10px; color:#cce3f1; }
+.audio-seat .audio-waves { width:clamp(40px,13vw,64px); height:clamp(40px,13vw,64px); top:0; }
+.seat-plus { display:grid; place-items:center; border-radius:50%; font-size:28px; background:#ffffff08; color:#d2e7f3; }
+.audio-seat:focus-visible { outline:2px solid #8fe8d0; outline-offset:4px; }
+body.audio-mode #messages { max-height:22vh; }
+body.audio-mode.has-pk #audioStage.seat-grid { top:180px; max-height:calc(100% - 345px); }
+html[data-theme=light] body.audio-mode { color:white; }
+html[data-theme=light] body.audio-mode header, html[data-theme=light] body.audio-mode #connection { color:white; }
+@media(max-height:650px){body.audio-mode #audioStage.seat-grid{top:115px;gap:8px 6px;max-height:calc(100% - 260px)}.audio-seat .audio-placeholder,.audio-seat img,.seat-plus,.audio-seat .audio-waves{width:40px;height:40px}.audio-seat .audio-name{font-size:10px}}
+
+.gift-tabs { display:flex; gap:8px; overflow:auto; padding:4px 0 10px; }
+.gift-tabs button { flex:1; white-space:nowrap; text-align:center!important; border:1px solid var(--border); border-radius:20px; }
+.gift-tabs button[aria-pressed=true] { background:var(--brand)!important; color:white; }
+.gift-grid .gift-card { display:flex; flex-direction:column; align-items:center; gap:6px; padding:14px 6px!important; border:1px solid var(--border); border-radius:18px; min-width:0; }
+.gift-card .gift-art { font-size:42px; margin:0; line-height:1.35; filter:drop-shadow(0 5px 5px #0003); }
+.gift-card strong { font-size:12px; }
+.gift-card small { font-size:11px; color:var(--muted); }
+.gift-card.depth { background:linear-gradient(140deg,#ae86451c,#496fbd18)!important; border-color:#b28c4855; }
+#giftEffect.gift-show { pointer-events:none; z-index:9; left:8%; right:8%; top:32%; text-align:center; border-radius:28px; background:#10283ee8; backdrop-filter:blur(10px); color:#fff; border:1px solid #b5d6e550; padding:20px 12px; overflow:hidden; }
+#giftEffect .gift-hero { display:block; position:relative; z-index:1; font-size:80px; animation:giftRise 1s both; filter:drop-shadow(0 8px 12px #0008); }
+#giftEffect strong, #giftEffect small { display:block; position:relative; z-index:1; font-size:14px; margin:6px 0; }
+#giftEffect small { font-size:12px; color:#d0deec; }
+#giftEffect.simple { left:15%; right:15%; top:38%; }
+#giftEffect.simple .gift-hero { font-size:50px; }
+#giftEffect.depth { background:radial-gradient(ellipse at center,#634b88dd,#142439ee 75%); border-color:#c3a05899; }
+#giftEffect.depth .gift-hero { font-size:112px; animation:giftRoyal 3.8s both; }
+#giftEffect.show-whale { background:radial-gradient(ellipse at 50% 80%,#3ba1c7ee,#092445ee 75%); }
+#giftEffect.show-whale .gift-hero { animation:whaleSwim 3.8s ease-in-out both; }
+#giftEffect.show-lion { background:radial-gradient(ellipse at center,#ae7830dd,#38213aee 75%); }
+.gift-particles { position:absolute; inset:0; pointer-events:none; }
+.gift-particles i { position:absolute; color:#ffd98a; font-size:24px; font-style:normal; animation:giftSpark 2.5s infinite; }
+.gift-particles i:nth-child(1){left:10%;top:20%}.gift-particles i:nth-child(2){left:30%;top:8%;animation-delay:.2s}.gift-particles i:nth-child(3){left:70%;top:12%;animation-delay:.4s}.gift-particles i:nth-child(4){left:85%;top:30%;animation-delay:.6s}.gift-particles i:nth-child(5){left:8%;top:65%;animation-delay:.8s}.gift-particles i:nth-child(6){left:25%;top:75%;animation-delay:1s}.gift-particles i:nth-child(7){left:75%;top:70%;animation-delay:1.2s}.gift-particles i:nth-child(8){left:90%;top:60%;animation-delay:1.4s}
+.show-whale .gift-particles i { color:#a3f0ff; }
+@keyframes giftRise{from{transform:translateY(20px) scale(.7);opacity:0}to{transform:none;opacity:1}}
+@keyframes giftRoyal{0%{transform:perspective(400px) rotateY(-35deg) scale(.4);opacity:0}25%{transform:perspective(400px) rotateY(10deg) scale(1.1);opacity:1}75%{transform:perspective(400px) rotateY(-8deg) scale(1)}100%{transform:scale(.9);opacity:0}}
+@keyframes whaleSwim{0%{transform:translateX(90%) rotate(-15deg);opacity:0}25%{transform:translateX(10%) rotate(5deg);opacity:1}65%{transform:translateX(-10%) translateY(-10px) rotate(-5deg);opacity:1}100%{transform:translateX(-100%) rotate(10deg);opacity:0}}
+@keyframes giftSpark{0%,100%{transform:translateY(8px) scale(.5);opacity:0}50%{transform:translateY(-15px) scale(1);opacity:1}}
+@media(prefers-reduced-motion:reduce){#giftEffect *, .audio-waves span {animation:none!important;}.gift-particles{display:none}}

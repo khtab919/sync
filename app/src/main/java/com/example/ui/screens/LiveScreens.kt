@@ -46,7 +46,7 @@ import org.json.JSONArray
 import java.net.URLEncoder
 
 private fun liveError(e:Exception)=when(e.message){
-    "live_update_required"->"خادمك ما زال بإصدار بث قديم. حدّث الخادم لتفعيل الضيوف وPK والبث الصوتي."
+    "live_update_required"->"حدّث الخادم لتفعيل الغرف الصوتية ذات 15 مقعدًا والهدايا الجديدة."
     "live_not_configured","live_server_unavailable"->"خادم البث غير متاح. حدّث الخادم وتحقق من إعداداته."
     "invalid_stage_mode","invalid_live_limits"->"تحقق من عدد المتحدثين والمشاهدين ومدة الخدمة."
     "already_broadcasting"->"لديك بث جارٍ بالفعل. أنهِ الجلسة السابقة أولًا."
@@ -65,26 +65,35 @@ private fun liveError(e:Exception)=when(e.message){
     val scope=rememberCoroutineScope();var rows by remember{mutableStateOf<List<JSONObject>>(emptyList())};var error by remember{mutableStateOf("")};var query by remember{mutableStateOf("")}
     var allowed by remember{mutableStateOf(false)};var available by remember{mutableStateOf(false)};var maximumLimit by remember{mutableIntStateOf(25)};var busy by remember{mutableStateOf(false)};var create by remember{mutableStateOf(false)}
     var title by remember{mutableStateOf("")};var privateLive by remember{mutableStateOf(false)};var inviteOnly by remember{mutableStateOf(false)};var invites by remember{mutableStateOf("")}
-    var price by remember{mutableStateOf("100")};var limit by remember{mutableStateOf("25")};var minimum by remember{mutableStateOf("30")};var gifts by remember{mutableStateOf(false)}
-    var audioOnly by remember{mutableStateOf(false)};var speakers by remember{mutableStateOf("1")};var giftGoal by remember{mutableStateOf("0")}
+    var price by remember{mutableStateOf("100")};var limit by remember{mutableStateOf("25")};var minimum by remember{mutableStateOf("30")};var gifts by remember{mutableStateOf(true)}
+    var roomFilter by remember{mutableStateOf("all")};var audioOnly by remember{mutableStateOf(false)};var speakers by remember{mutableStateOf("1")};var giftGoal by remember{mutableStateOf("0")}
     var selected by remember{mutableStateOf<JSONObject?>(null)};var active by remember{mutableStateOf<JSONObject?>(null)};var activeId by remember{mutableStateOf("")}
     fun act(block:suspend()->Unit){if(busy)return;busy=true;error="";scope.launch{try{block()}catch(e:CancellationException){throw e}catch(e:Exception){error=liveError(e)}finally{busy=false}}}
     fun enter(row:JSONObject){act{active=api.request("/api/live/${row.getString("id")}/admission","POST",JSONObject().put("confirmed",true).put("price_cents",row.optLong("price_cents")));activeId=row.getString("id");selected=null}}
-    LaunchedEffect(query){while(true){try{val result=api.request("/api/live?q="+URLEncoder.encode(query,"UTF-8"));if(result.optInt("stage_version")<2)throw IllegalStateException("live_update_required");val a=result.optJSONArray("items");rows=if(a==null)emptyList()else(0 until a.length()).map{a.getJSONObject(it)};allowed=result.optBoolean("can_broadcast");available=result.optBoolean("available");maximumLimit=result.optInt("max_viewers",25);error=""}catch(e:CancellationException){throw e}catch(e:Exception){allowed=false;available=false;rows=emptyList();error=liveError(e)};delay(5000)}}
+    LaunchedEffect(query){while(true){try{val result=api.request("/api/live?q="+URLEncoder.encode(query,"UTF-8"));if(result.optInt("stage_version")<3)throw IllegalStateException("live_update_required");val a=result.optJSONArray("items");rows=if(a==null)emptyList()else(0 until a.length()).map{a.getJSONObject(it)};allowed=result.optBoolean("can_broadcast");available=result.optBoolean("available");maximumLimit=result.optInt("max_viewers",25);error=""}catch(e:CancellationException){throw e}catch(e:Exception){allowed=false;available=false;rows=emptyList();error=liveError(e)};delay(5000)}}
     active?.let{room->LiveRoomView(baseUrl,room,profile={id->active=null;openProfile(id)}){val ending=room.optBoolean("owner");val id=activeId;active=null;if(ending)scope.launch{runCatching{api.request("/api/live/$id","POST",JSONObject().put("action","end"))}}};return}
-    Scaffold(topBar={TopAppBar(title={Text("البث المباشر")},navigationIcon={IconButton(back){Icon(Icons.Outlined.ArrowForward,"رجوع")}},actions={TextButton(buy){Text("الرصيد")};if(allowed)IconButton({create=true},enabled=available&&!busy){Icon(Icons.Outlined.Videocam,"بدء بث")}})}){padding->
+    Scaffold(topBar={TopAppBar(title={Text("البث والغرف الصوتية")},navigationIcon={IconButton(back){Icon(Icons.Outlined.ArrowForward,"رجوع")}},actions={TextButton(buy){Text("الرصيد")};if(allowed)IconButton({create=true},enabled=available&&!busy){Icon(Icons.Outlined.Videocam,"بدء بث")}})}){padding->
         LazyColumn(Modifier.fillMaxSize().padding(padding),contentPadding=PaddingValues(16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
             item{OutlinedTextField(query,{query=it.take(100)},label={Text("ابحث عن بث أو صاحب بث")},singleLine=true,modifier=Modifier.fillMaxWidth())}
+            item{Row(Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                listOf("all" to "الكل","audio" to "غرف صوتية","video" to "فيديو","free" to "مجانية","paid" to "مدفوعة").forEach{(key,label)->
+                    FilterChip(roomFilter==key,{roomFilter=key},label={Text(label)})
+                }
+            }}
+            if(allowed)item{Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                Button({audioOnly=true;speakers="15";create=true},enabled=available&&!busy){Text("إنشاء غرفة صوتية")}
+                OutlinedButton({audioOnly=false;speakers="1";create=true},enabled=available&&!busy){Text("بث فيديو")}
+            }}
             if(busy)item{LinearProgressIndicator(Modifier.fillMaxWidth())}
             if(error.isNotBlank())item{Text(error,color=MaterialTheme.colorScheme.error)}
             if(!available)item{Text("البث ينتظر جاهزية خادم الوسائط. لا توجد جلسات تجريبية.",style=MaterialTheme.typography.bodyMedium)}
             if(rows.isEmpty()&&error.isBlank()&&available)item{Text("لا توجد بثوث نشطة الآن.",style=MaterialTheme.typography.bodyLarge)}
-            items(rows,key={it.getString("id")}){row->LiveBroadcastCard(row){selected=row}}
+            items(rows.filter{when(roomFilter){"audio","video"->it.optString("mode")==roomFilter;"free"->!it.optBoolean("private");"paid"->it.optBoolean("private");else->true}},key={it.getString("id")}){row->LiveBroadcastCard(row){selected=row}}
             item{Text("لا يُسجَّل البث ولا تتوفر إعادة مشاهدة داخل المنصة. لا يمكن ضمان منع التسجيل بأدوات خارجية.",style=MaterialTheme.typography.bodySmall)}
         }
     }
-    selected?.let{row->AlertDialog(onDismissRequest={selected=null},title={Text(row.optString("title"))},text={Column(verticalArrangement=Arrangement.spacedBy(10.dp)){Text(row.optString("owner_name"));Text(if(row.optBoolean("private"))"سعر الدخول: ${row.optLong("price_cents")} من الرصيد"else if(row.optBoolean("invite_only"))"بث بالدعوة · مجاني"else"بث عام مجاني");Text(row.optString("refund_policy"),style=MaterialTheme.typography.bodySmall);TextButton({selected=null;openProfile(row.optInt("owner_id"))}){Text("عرض الملف الشخصي")}}},confirmButton={TextButton({enter(row)},enabled=!busy){Text(if(row.optBoolean("private"))"تأكيد الدخول وحجز المبلغ"else"مشاهدة")}},dismissButton={TextButton({selected=null}){Text("إلغاء")}})}
-    if(create){LiveHostSetupScreen(onClose={create=false},audioOnly=audioOnly,onAudioOnlyChange={audioOnly=it},title=title,onTitleChange={title=it},privateLive=privateLive,onPrivateLiveChange={privateLive=it},price=price,onPriceChange={price=it},inviteOnly=inviteOnly,onInviteOnlyChange={inviteOnly=it},invites=invites,onInvitesChange={invites=it},speakers=speakers,onSpeakersChange={speakers=it},limit=limit,onLimitChange={limit=it},minimum=minimum,onMinimumChange={minimum=it},gifts=gifts,onGiftsChange={gifts=it},giftGoal=giftGoal,onGiftGoalChange={giftGoal=it},maximumLimit=maximumLimit,busy=busy,error=error,onStartStream={act{val p=price.toIntOrNull()?:0;val n=limit.toIntOrNull()?:0;val m=minimum.toIntOrNull()?:0;val t=title.trim().ifEmpty{"بث مباشر"};if(t.length<2||n !in 1..maximumLimit||m !in 30..3600||(privateLive&&p !in 1..1000000))throw IllegalArgumentException("invalid_input");val row=api.request("/api/live","POST",JSONObject().put("title",t).put("private",privateLive).put("invite_only",inviteOnly).put("price_cents",p).put("max_viewers",n).put("minimum_seconds",m).put("gifts_enabled",gifts).put("mode",if(audioOnly)"audio"else"video").put("max_speakers",speakers.toInt()).put("gift_goal_cents",giftGoal.toIntOrNull()?:0).put("invite_names",JSONArray(invites.split(',', '،').map{it.trim().removePrefix("@")}.filter{it.isNotBlank()})));create=false;active=api.request("/api/live/${row.getString("id")}/admission","POST",JSONObject());activeId=row.getString("id")}})}
+    selected?.let{row->AlertDialog(onDismissRequest={selected=null},title={Text(row.optString("title"))},text={Column(verticalArrangement=Arrangement.spacedBy(10.dp)){Text(row.optString("owner_name"));Text(if(row.optBoolean("private"))"سعر الدخول: ${row.optLong("price_cents")} من الرصيد"else if(row.optBoolean("invite_only"))"بث بالدعوة · مجاني"else"بث عام مجاني");Text(row.optString("refund_policy"),style=MaterialTheme.typography.bodySmall);TextButton({selected=null;openProfile(row.optInt("owner_id"))}){Text("عرض الملف الشخصي")}}},confirmButton={TextButton({enter(row)},enabled=!busy){Text(if(row.optBoolean("private"))"تأكيد الدخول وحجز المبلغ"else if(row.optString("mode")=="audio")"دخول الغرفة"else"مشاهدة")}},dismissButton={TextButton({selected=null}){Text("إلغاء")}})}
+    if(create){LiveHostSetupScreen(onClose={create=false},audioOnly=audioOnly,onAudioOnlyChange={audioOnly=it;speakers=if(it)"15"else"1"},title=title,onTitleChange={title=it},privateLive=privateLive,onPrivateLiveChange={privateLive=it},price=price,onPriceChange={price=it},inviteOnly=inviteOnly,onInviteOnlyChange={inviteOnly=it},invites=invites,onInvitesChange={invites=it},speakers=speakers,onSpeakersChange={speakers=it},limit=limit,onLimitChange={limit=it},minimum=minimum,onMinimumChange={minimum=it},gifts=gifts,onGiftsChange={gifts=it},giftGoal=giftGoal,onGiftGoalChange={giftGoal=it},maximumLimit=maximumLimit,busy=busy,error=error,onStartStream={act{val p=price.toIntOrNull()?:0;val n=limit.toIntOrNull()?:0;val m=minimum.toIntOrNull()?:0;val t=title.trim().ifEmpty{"بث مباشر"};if(t.length<2||n !in 1..maximumLimit||m !in 30..3600||(privateLive&&p !in 1..1000000))throw IllegalArgumentException("invalid_input");val row=api.request("/api/live","POST",JSONObject().put("title",t).put("private",privateLive).put("invite_only",inviteOnly).put("price_cents",p).put("max_viewers",n).put("minimum_seconds",m).put("gifts_enabled",gifts).put("mode",if(audioOnly)"audio"else"video").put("max_speakers",speakers.toInt()).put("gift_goal_cents",giftGoal.toIntOrNull()?:0).put("invite_names",JSONArray(invites.split(',', '،').map{it.trim().removePrefix("@")}.filter{it.isNotBlank()})));create=false;active=api.request("/api/live/${row.getString("id")}/admission","POST",JSONObject());activeId=row.getString("id")}})}
 }
 
 @Composable internal fun LiveRoomView(baseUrl:String,bootstrap:JSONObject,profile:((Int)->Unit)?=null,finish:()->Unit){
@@ -139,7 +148,7 @@ private fun liveError(e:Exception)=when(e.message){
 @Composable internal fun LiveBroadcastCard(row:JSONObject,open:()->Unit){ElevatedCard(onClick=open,modifier=Modifier.fillMaxWidth()){
                 Row(Modifier.padding(16.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)){
                     ChatAvatar(row.optString("owner_name"),48,row.optString("avatar_url"))
-                    Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(5.dp)){Text(row.optString("title"),style=MaterialTheme.typography.titleMedium);Text(row.optString("owner_name"));Text("${row.optInt("viewers")} مشاهد · "+(if(row.optBoolean("private"))"مدفوع: ${row.optLong("price_cents")}"else if(row.optBoolean("invite_only"))"بالدعوة"else"مجاني"),style=MaterialTheme.typography.bodySmall);Text((if(row.optString("mode")=="audio")"بث صوتي"else"بث فيديو")+" · ${row.optInt("max_speakers",1)} متحدثين كحد أقصى",style=MaterialTheme.typography.bodySmall)}
+                    Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(5.dp)){Text(row.optString("title"),style=MaterialTheme.typography.titleMedium);Text(row.optString("owner_name"));Text("${row.optInt("viewers")} مشاهد · "+(if(row.optBoolean("private"))"مدفوع: ${row.optLong("price_cents")}"else if(row.optBoolean("invite_only"))"بالدعوة"else"مجاني"),style=MaterialTheme.typography.bodySmall);Text((if(row.optString("mode")=="audio")"غرفة صوتية"else"بث فيديو")+" · ${row.optInt("max_speakers",1)} متحدثين كحد أقصى",style=MaterialTheme.typography.bodySmall)}
                     Icon(Icons.Outlined.PlayCircleOutline,null)
                 }
             }
@@ -380,7 +389,7 @@ internal fun CameraPreviewSurface(
                             Icon(Icons.Filled.VolumeUp, null, tint = Color(0xFF3187A8), modifier = Modifier.size(48.dp))
                         }
                         Spacer(Modifier.height(14.dp))
-                        Text("نمط البث الصوتي", color = Color(0xFFF4F7F9), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("غرفة صوتية", color = Color(0xFFF4F7F9), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text("المايكروفون فقط سيكون مفعلًا", color = Color(0xFFA3B1BA), style = MaterialTheme.typography.bodySmall)
                     }
                 } else if(!hasCameraPermission){
@@ -455,7 +464,7 @@ internal fun CameraPreviewSurface(
                 ){
                     Icon(Icons.Filled.VolumeUp, null, tint=Color.White, modifier=Modifier.size(17.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("صوت فقط", color=Color.White, fontWeight=if(audioOnly) FontWeight.Bold else FontWeight.Normal, style=MaterialTheme.typography.bodyMedium)
+                    Text("غرفة صوتية", color=Color.White, fontWeight=if(audioOnly) FontWeight.Bold else FontWeight.Normal, style=MaterialTheme.typography.bodyMedium)
                 }
                 Row(
                     Modifier.clip(RoundedCornerShape(26.dp)).background(if(!audioOnly) Color(0x44FFFFFF) else Color.Transparent)
@@ -574,7 +583,7 @@ internal fun CameraPreviewSurface(
                 Column(Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState()), verticalArrangement=Arrangement.spacedBy(10.dp)){
                     Text("عدد المتحدثين المسموح به:")
                     Row(Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement=Arrangement.spacedBy(6.dp)){
-                        listOf("1","2","4","6","12").forEach{n->
+                        (if(audioOnly)listOf("1","5","10","15")else listOf("1","2","4","6","12")).forEach{n->
                             FilterChip(selected=speakers==n, onClick={onSpeakersChange(n)}, label={Text(n)})
                         }
                     }

@@ -44,7 +44,7 @@ def pk_json(row):
 
 
 def snapshot(row,user):
-    seats=LiveSeat.objects.filter(admission__broadcast=row).select_related('admission__user__profile')
+    seats=LiveSeat.objects.filter(admission__broadcast=row).select_related('admission__user__profile').order_by('pk')
     own=next((s for s in seats if s.admission.user_id==user.pk),None)
     manager=room_moderator(row,user)
     a=LiveAdmission.objects.select_related('broadcast','user').filter(broadcast=row,user=user).first()
@@ -62,7 +62,7 @@ def snapshot(row,user):
             'seat_requests':[dict(person(s.admission.user),mode=s.mode) for s in seats if s.status=='pending'] if manager else [],
             'moderator_ids':list(LiveRoomModerator.objects.filter(broadcast=row).values_list('user_id',flat=True)) if row.owner_id==user.pk else [],
             'gift_catalog':list(LiveGiftDefinition.objects.filter(enabled=True).order_by('price_cents').values('code','name','symbol','price_cents','effect')),
-            'gift_events':[{'id':g.pk,'sender':g.operation.buyer.profile.display_name or g.operation.buyer.username,'recipient':g.operation.creator.profile.display_name or g.operation.creator.username,'name':g.gift_name,'symbol':g.symbol,'effect':g.effect} for g in reversed(events)],
+            'gift_events':[{'id':g.pk,'code':g.gift_code,'sender':g.operation.buyer.profile.display_name or g.operation.buyer.username,'recipient':g.operation.creator.profile.display_name or g.operation.creator.username,'name':g.gift_name,'symbol':g.symbol,'effect':g.effect} for g in reversed(events)],
             'top_supporters':[{'name':t['operation__buyer__profile__display_name'] or t['operation__buyer__username'],'total':t['total']} for t in top],
             'gift_total_cents':received['total'] or 0,'gift_goal_cents':row.gift_goal_cents,
             'earned_cents':received['earnings'] or 0 if row.owner_id==user.pk else None,'pk':pk_json(row),
@@ -150,7 +150,7 @@ def action(request,row,a):
             teams=p.get('teams');duration=p.get('duration')
             if not isinstance(teams,list) or len(teams)!=2 or any(not isinstance(t,list) or not t for t in teams):raise ApiError('invalid_pk_teams')
             flat=[u for t in teams for u in t]
-            if any(type(u) is not int for u in flat) or len(flat)!=len(set(flat)) or len(flat)>12 or row.owner_id not in flat or type(duration) is not int or duration not in (60,180,300):raise ApiError('invalid_pk_teams')
+            if any(type(u) is not int for u in flat) or len(flat)!=len(set(flat)) or len(flat)>current.max_speakers or row.owner_id not in flat or type(duration) is not int or duration not in (60,180,300):raise ApiError('invalid_pk_teams')
             permitted={row.owner_id}|set(LiveSeat.objects.filter(admission__broadcast=row,status='approved',admission__connected=True).values_list('admission__user_id',flat=True))
             if not set(flat)<=permitted:raise ApiError('invalid_pk_teams')
             if LivePK.objects.filter(broadcast=row,cancelled_at__isnull=True,ends_at__gt=timezone.now()).exists():raise ApiError('pk_already_active',409)
