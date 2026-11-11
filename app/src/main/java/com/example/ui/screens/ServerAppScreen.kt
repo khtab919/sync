@@ -183,6 +183,15 @@ fun ServerAppScreen(baseUrl: String) {
         else notice = "هذه المكالمة انتهت بالفعل. يمكنك بدء مكالمة جديدة."
     } }
     fun startChat(id: Int, name: String) { peerId = id.toString(); peerName = name; message = ""; open("محادثة") }
+    fun openChatByPublicId(publicId:String){
+        if(!publicId.matches(Regex("[1-9][0-9]{4}"))){notice="اكتب رقم حساب صالحًا من خمس خانات.";return}
+        perform{
+            val results=api.request("/api/accounts/search?q="+publicId).rows()
+            val account=results.firstOrNull{it.optString("public_id")==publicId && it.optInt("id")>0}
+            if(account==null)notice="لم يُعثر على الحساب، أو لا يمكن مراسلته حاليًا."
+            else startChat(account.getInt("id"),account.optString("display_name").ifBlank{account.optString("username")})
+        }
+    }
     val avatarPicker=androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.GetContent()){uri->
         if(uri!=null)perform{
             if(api.request("/health/").optInt("avatar_upload_version")<1)throw IllegalStateException("avatar_update_required")
@@ -226,12 +235,17 @@ fun ServerAppScreen(baseUrl: String) {
     }
     LaunchedEffect(query,page,tab,signedIn,followingOnly,revision){
         val target=if(page.isBlank())destinations[tab]else page
-        if(!signedIn||target !in listOf("تصفح","العرض","صنّاع المحتوى"))return@LaunchedEffect
+        if(!signedIn||target !in listOf("تصفح","العرض","صنّاع المحتوى","محادثة جديدة"))return@LaunchedEffect
         delay(300)
         searchLoading=true
         try{
             val term=query.trim().removePrefix("@")
             val escaped=java.net.URLEncoder.encode(term,"UTF-8")
+            if(target=="محادثة جديدة"){
+                accountMatches=if(term.length>=2)api.request("/api/accounts/search?q=$escaped").rows() else emptyList()
+                contentError=""
+                return@LaunchedEffect
+            }
             if(term.length>=2){
                 accountMatches=api.request("/api/accounts/search?q=$escaped").rows()
                 searchReels=api.request("/api/reels?q=$escaped").rows()
@@ -636,20 +650,25 @@ fun ServerAppScreen(baseUrl: String) {
                             items(rows, key = { it.optInt("id") }) { person -> Box(Modifier.padding(horizontal = 20.dp)) { ConversationTile(person) { startChat(person.optInt("id"), person.optString("display_name")) } } }
                         }
                         "محادثة جديدة" -> {
-                            item { SearchField(query, { query = it }, "ابحث عن اسم المذيعة") }
-                            items(creators.filter { (it.optString("display_name")+it.optString("username")+it.optString("public_id")).contains(query.removePrefix("@"), true) }, key = { it.optInt("id") }) { person -> Box(Modifier.padding(horizontal = 20.dp)) {
-                                Surface(onClick = { startChat(person.optInt("id"), person.optString("display_name")) }, shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface) {
-                                    Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                        ReferenceAvatar(person.optString("display_name"), person.optInt("selected_frame"), 48, person.optString("avatar_url"))
-                                        Text(person.optString("display_name"), Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
-                                        Icon(Icons.Outlined.ChatBubbleOutline, "فتح المحادثة")
+                            item { SearchField(query, { query = it }, "ابحث عن اسم أو @يوزر أو ID") }
+                            if(query.trim().length>=2 && accountMatches.isEmpty() && !searchLoading)
+                                item { Text("لا توجد حسابات مطابقة، أو لا يُسمح بالتواصل معها.",Modifier.padding(horizontal=20.dp),color=MaterialTheme.colorScheme.onSurfaceVariant) }
+                            items(accountMatches,key={it.optInt("id")}){person->Box(Modifier.padding(horizontal=20.dp)){
+                                Surface(onClick={startChat(person.optInt("id"),person.optString("display_name"))},shape=RoundedCornerShape(17.dp),color=MaterialTheme.colorScheme.surface){
+                                    Row(Modifier.fillMaxWidth().padding(14.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)){
+                                        ReferenceAvatar(person.optString("display_name"),person.optInt("selected_frame"),48,person.optString("avatar_url"))
+                                        Column(Modifier.weight(1f)){
+                                            Text(person.optString("display_name"),fontWeight=FontWeight.SemiBold,maxLines=1)
+                                            Text("ID: "+person.optString("public_id"),color=MaterialTheme.colorScheme.onSurfaceVariant,fontSize=12.sp)
+                                        }
+                                        Icon(Icons.Outlined.ChatBubbleOutline,"فتح المحادثة")
                                     }
                                 }
-                            } }
+                            }}
                             item { FormColumn {
                                 Text("أو افتح محادثة برقم الحساب", style = MaterialTheme.typography.titleMedium)
                                 Field(peerId, { peerId = it.filter(Char::isDigit) }, "رقم حساب المستلم", numeric = true)
-                                ReferencePrimary("فتح المحادثة", peerId.toIntOrNull() != null) { startChat(peerId.toInt(), "حساب #$peerId") }
+                                ReferencePrimary("فتح برقم الحساب", peerId.matches(Regex("[1-9][0-9]{4}")) && !submitting) { openChatByPublicId(peerId) }
                             } }
                         }
                         "محادثة", "الدعم وخدمة العملاء" -> {
