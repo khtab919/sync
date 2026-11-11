@@ -170,17 +170,35 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
             TextButton(onClick={submittedId="";showOrders=true}){Text("عرض جميع طلباتي")}
             if(submittedStatus!="pending")TextButton(onClick={submittedId="";showOrders=false}){Text("شراء رصيد جديد")}
         } else if(!showOrders && quote==null){
-            listOf(100,300,1000,2500,5000,10000).chunked(2).forEach{pair->Row(horizontalArrangement=Arrangement.spacedBy(12.dp)){pair.forEach{amount->val bonus=amount*(if(amount>=10000)8 else if(amount>=5000)6 else if(amount>=2500)4 else 0)/100;Box(Modifier.weight(1f)){CoinPackage(amount,bonus,BigDecimal.valueOf(amount.toLong(),2).toPlainString(),selected==amount){selected=amount}}}}}
-            Text("وسيلة الدفع",style=MaterialTheme.typography.titleLarge)
-            Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(10.dp)){
-                FilterChip(method=="usdt",{method="usdt"},label={Text("USDT · BEP20")},enabled=info.optString("address").isNotBlank())
-                FilterChip(method=="shamcash",{method="shamcash"},label={Text("شام كاش")},enabled=info.optBoolean("shamcash_enabled"))
-                FilterChip(method=="nowpayments",{method="nowpayments"},label={Text("NOWPayments")},enabled=info.optBoolean("nowpayments_enabled"))
+            if(packages.isEmpty()&&!busy)Text("لا تتوفر باقات شحن حاليًا. أعد تحديث المتجر لاحقًا.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+            val maxBonus=packages.maxOfOrNull{it.bonusPoints}?:0
+            BoxWithConstraints(Modifier.fillMaxWidth()){
+                val columns=if(maxWidth>=335.dp)3 else 2
+                packages.chunked(columns).forEach{line->
+                    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(9.dp)){
+                        line.forEach{option->
+                            val badge=if(option.bonusPoints>0&&option.bonusPoints==maxBonus)"أكبر مكافأة" else null
+                            Box(Modifier.weight(1f)){
+                                CoinPackage(
+                                    coins=option.coins,bonus=option.bonusPoints,
+                                    dollars=BigDecimal.valueOf(option.coins.toLong(),2).toPlainString(),
+                                    selected=selected==option.coins,badge=badge
+                                ){selected=option.coins;showPaymentSheet=true}
+                            }
+                        }
+                        repeat(columns-line.size){Spacer(Modifier.weight(1f))}
+                    }
+                    Spacer(Modifier.height(9.dp))
+                }
             }
-            Text("الوسائل غير المفعّلة غير متاحة حاليًا. اختر وسيلة متاحة للمتابعة.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
-            Button(onClick={perform{val result=api.request("/api/topup-quotes","POST",JSONObject().put("method",method).put("amount_cents",selected));quoteText=result.toString();invoiceUrl="";receipt="";reference="";preview=""}},enabled=!busy&&when(method){"usdt"->info.optString("address").isNotBlank();"shamcash"->info.optBoolean("shamcash_enabled");else->info.optBoolean("nowpayments_enabled")},modifier=Modifier.fillMaxWidth().height(54.dp),shape=RoundedCornerShape(17.dp)){Text("متابعة الدفع",fontSize=17.sp)}
+            Text("اضغط على أي باقة لعرض وسائل الدفع المتاحة وتأكيد السعر.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
         }else if(!showOrders && quote!=null){
-            Text("${quote.optInt("amount_cents")} رصيد · ${quote.optInt("bonus_cents")} نقطة",fontSize=22.sp,fontWeight=FontWeight.Bold)
+            Text("${quote.optInt("amount_cents")} كوين · +${quote.optInt("bonus_cents")} نقطة ترويجية",fontSize=20.sp,fontWeight=FontWeight.Bold)
+            Text(
+                if(quoteSeconds>0L)"صلاحية عرض السعر: %02d:%02d".format(quoteSeconds/60,quoteSeconds%60)
+                else "انتهت صلاحية عرض السعر. إن لم تدفع، اطلب عرضًا جديدًا. إن دفعت بالفعل، أكمل إرسال الإثبات للمراجعة.",
+                style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Text("المطلوب: ${quote.optString("payment_amount")} ${quote.optString("payment_currency")}",style=MaterialTheme.typography.titleLarge)
             val rail=quote.optString("method")
             if(rail=="nowpayments") {
