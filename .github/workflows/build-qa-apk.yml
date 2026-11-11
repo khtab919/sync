@@ -1,0 +1,105 @@
+name: Relaxia 11.6 QA install APK (not an update)
+
+on:
+  push:
+    branches:
+      - preview/relaxia-116-apk-20261112
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  LAYALI_API_URL: https://165-227-128-113.sslip.io
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+
+      - name: Android SDK license setup
+        run: |
+          export ANDROID_SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          mkdir -p "$ANDROID_SDK_ROOT/licenses"
+          printf "\\n24333f8a63b6825ea9c5514f83c2829b004d1fee\\nd56f5187479451eabf01fb78af6dfcb131a6481e\\n84831b9409646a918e30573bab4c9c91346d8abd" > "$ANDROID_SDK_ROOT/licenses/android-sdk-license"
+          printf "\\n84831b9409646a918e30573bab4c9c91346d8abd\\n504667f4c0de7af1a06de9f4b1727b84351f2910" > "$ANDROID_SDK_ROOT/licenses/android-sdk-preview-license"
+
+      - name: Prepare non-production build inputs
+        run: |
+          if [ ! -f .env ]; then
+            cp .env.example .env 2>/dev/null || touch .env
+          fi
+          if [ ! -f app/google-services.json ]; then
+            cat > app/google-services.json <<'EOF'
+          {
+            "project_info": {
+              "project_number": "335825631510",
+              "project_id": "gen-lang-client-0262570811",
+              "storage_bucket": "gen-lang-client-0262570811.firebasestorage.app"
+            },
+            "client": [{
+              "client_info": {
+                "mobilesdk_app_id": "1:335825631510:android:c3c9ab3d14056ce9c17837",
+                "android_client_info": {"package_name": "com.aistudio.layalilounge.x9m4kp"}
+              },
+              "api_key": [{"current_key": "AIzaSyAdn0nUzmGACcTw__y_cuDOyLfgnDxQTSY"}]
+            }],
+            "configuration_version": "1"
+          }
+          EOF
+          fi
+
+      - name: Create temporary QA signing certificate
+        run: |
+          # One-run, non-production key. Deliberately different from the installed app.
+          keytool -genkeypair -keystore debug.keystore -storetype JKS \
+            -storepass android -keypass android -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 60 \
+            -dname "CN=Relaxia 11.6 QA Only, OU=QA, O=Relaxia, C=TR"
+          echo "::warning::This preview cannot upgrade an already installed Relaxia. Never uninstall the existing app to test it."
+
+      - name: Build latest 11.6 source APK
+        run: gradle assembleDebug "-PLAYALI_API_URL=${LAYALI_API_URL}" --no-daemon --stacktrace
+
+      - name: Verify exact app ID, version and signing
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path('app/build/outputs/apk/debug/output-metadata.json').read_text())
+          assert data['applicationId']=='com.aistudio.layalilounge.x9m4kp'
+          assert all(item['versionCode']==33 for item in data['elements'])
+          print('Relaxia 11.6 source APK validated (fresh-install-only QA signature)')
+          PY
+          test -s app/build/outputs/apk/debug/app-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk Relaxia-v11.6-FRESH-INSTALL-ONLY.apk
+          cat > READ-ME-FIRST.txt <<'EOF'
+          RELAXIA 11.6 QA BUILD ONLY
+          Package ID: com.aistudio.layalilounge.x9m4kp
+          Version: 11.6 (code 33)
+          Signed with temporary QA key, NOT the original key.
+          THIS APK WILL NOT INSTALL OVER ANY EXISTING RELAXIA APP.
+          DO NOT UNINSTALL YOUR EXISTING RELAXIA APP OR YOU MAY LOSE LOCAL DATA.
+          This build is solely for clean test devices. It is not a public update.
+          To release an upgrade, recover the original signing keystore and rerun the official protected build-apk workflow.
+          EOF
+
+      - name: Upload preview and safety instructions
+        uses: actions/upload-artifact@v4
+        with:
+          name: Relaxia-v11.6-QA-FRESH-INSTALL-ONLY
+          path: |
+            Relaxia-v11.6-FRESH-INSTALL-ONLY.apk
+            READ-ME-FIRST.txt
+          retention-days: 7
+          if-no-files-found: error
