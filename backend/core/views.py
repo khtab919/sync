@@ -117,7 +117,7 @@ def issue_token(user):
 def health(request):
     with connection.cursor() as cursor:
         cursor.execute('SELECT 1')
-    return JsonResponse({'status': 'ok', 'registration_version': 6, 'avatar_upload_version':1, 'identity_required': False, 'brand': 'Relaxia', 'mobile_admin_version': 2, 'commerce_version': 1, 'calls_version': 2, 'messaging_version': 3, 'paid_chat_version':1, 'shop_version': 2, 'live_version':2, 'booking_payment_version':1, 'pagination_version':1, 'upload_version':2, 'push_version':1, 'account_version':1, 'build':'11.5', 'revision':__import__('os').environ.get('RELEASE_COMMIT','development')})
+    return JsonResponse({'status': 'ok', 'registration_version': 6, 'avatar_upload_version':1, 'identity_required': False, 'brand': 'Relaxia', 'mobile_admin_version': 2, 'commerce_version': 1, 'calls_version': 2, 'messaging_version': 3, 'paid_chat_version':1, 'shop_version': 2, 'live_version':2, 'booking_payment_version':1, 'pagination_version':1, 'upload_version':2, 'push_version':1, 'account_version':1, 'build':'11.6', 'revision':__import__('os').environ.get('RELEASE_COMMIT','development')})
 
 @endpoint(['POST'], authenticated=False)
 def register(request):
@@ -431,7 +431,7 @@ def conversations(request):
     for peer in peers:
         m=messages[peer.last_id]; profile=peer.profile
         preview='حُذفت هذه الرسالة' if m.deleted_at else ('مكالمة' if m.call_id else ('رسالة صوتية' if m.attachment_id and m.attachment.mime.startswith('audio') else 'مرفق' if m.attachment_id else m.body))
-        result.append({'id':peer.pk,'public_id':profile.public_id,'username':peer.username,'display_name':profile.display_name or peer.username,'selected_frame':grants.get(peer.pk,profile.selected_frame),'avatar_url':profile.avatar_url,'last_message':preview,'unread_count':unread.get(peer.pk,0),'created_at':m.created_at})
+        result.append({'id':peer.pk,'public_id':profile.public_id,'username':peer.username,'display_name':profile.display_name or peer.username,'selected_frame':grants.get(peer.pk,profile.selected_frame),'avatar_url':profile.avatar_url,'last_message':preview,'unread_count':unread.get(peer.pk,0),'is_mine':m.sender_id==request.actor.pk,'delivered_at':m.delivered_at.isoformat() if m.delivered_at else None,'read_at':m.read_at.isoformat() if m.read_at else None,'created_at':m.created_at})
     return JsonResponse({'items':result,'next_cursor':str(peers[-1].last_id) if more else None})
 
 @endpoint(['GET', 'POST'])

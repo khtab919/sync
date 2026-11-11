@@ -181,17 +181,36 @@ internal fun ChatBubble(message: JSONObject, mine: Boolean, play: (String) -> Un
 @Composable
 internal fun ConversationTile(person: JSONObject, open: () -> Unit) {
     val time = runCatching { Instant.parse(person.optString("created_at")).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("HH:mm")) }.getOrDefault("")
+    val unread = person.optInt("unread_count",0)
+    val isMine = person.optBoolean("is_mine")
+    val delivered = person.optString("delivered_at").isNotBlank() && !person.isNull("delivered_at")
+    val read = person.optString("read_at").isNotBlank() && !person.isNull("read_at")
     Surface(onClick = open, modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(23.dp), shadowElevation = 1.dp) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(13.dp)) {
             RelaxiaAvatar(person.optString("display_name"), person.optInt("selected_frame"), 54, person.optString("avatar_url"))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(person.optString("display_name"), fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
-                if(person.optInt("unread_count")>0)Badge{Text(person.optInt("unread_count").toString())}
-                Text(person.optString("last_message").ifBlank { "مرفق في المحادثة" }, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(5.dp)){
+                    if(isMine) Icon(
+                        if(delivered || read) Icons.Outlined.DoneAll else Icons.Outlined.Done,
+                        if(read)"مقروءة" else if(delivered)"تم التسليم" else "مرسلة",
+                        Modifier.size(16.dp),
+                        tint=if(read) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        person.optString("last_message").ifBlank { "مرفق في المحادثة" },
+                        fontSize=14.sp,
+                        fontWeight=if(unread>0)FontWeight.SemiBold else FontWeight.Normal,
+                        color=if(unread>0)MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines=1,
+                        overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                }
             }
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(time, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Icon(Icons.Outlined.ChevronLeft, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                if(unread>0) Badge { Text(unread.coerceAtMost(99).toString() + if(unread>99)"+" else "") }
+                else Icon(Icons.Outlined.ChevronLeft, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

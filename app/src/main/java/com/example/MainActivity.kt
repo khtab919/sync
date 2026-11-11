@@ -23,6 +23,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // Allow user screenshots on all Relaxia pages; media rooms do not set FLAG_SECURE.
+        window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
         com.example.notifications.NotificationRoutes.setup(this)
         com.example.notifications.NotificationRoutes.accept(intent)
         setContent {

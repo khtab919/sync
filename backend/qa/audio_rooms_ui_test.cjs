@@ -51,7 +51,7 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    assert.ok(seats.y+seats.height<footer.y,'seat grid must not overlap controls');
    await page.locator('.empty-seat').first().click();
    await page.getByRole('button',{name:'طلب الانضمام صوتيًا',exact:true}).click();
-   assert.equal(await page.evaluate(()=>sent[0].action),'seat_request');
+   assert.equal(await page.evaluate(()=>sent.filter(a=>a.action==='seat_request').length),1);
    await page.locator('#closeSheet').click();await page.locator('#bigGiftBtn').click();
    await page.getByRole('button',{name:'فاخرة',exact:true}).click();
    assert.equal(await page.locator('.gift-card').count(),2);

@@ -108,6 +108,9 @@ fun ServerAppScreen(baseUrl: String) {
     var contentError by remember { mutableStateOf("") }
     var profile by remember { mutableStateOf(JSONObject()) }
     var services by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var livePreview by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var livePreviewLoading by remember { mutableStateOf(false) }
+    var livePreviewError by remember { mutableStateOf(false) }
     var creators by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var rows by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var selected by remember { mutableStateOf(JSONObject()) }
@@ -180,6 +183,15 @@ fun ServerAppScreen(baseUrl: String) {
         else notice = "هذه المكالمة انتهت بالفعل. يمكنك بدء مكالمة جديدة."
     } }
     fun startChat(id: Int, name: String) { peerId = id.toString(); peerName = name; message = ""; open("محادثة") }
+    fun openChatByPublicId(publicId:String){
+        if(!publicId.matches(Regex("[1-9][0-9]{4}"))){notice="اكتب رقم حساب صالحًا من خمس خانات.";return}
+        perform{
+            val results=api.request("/api/accounts/search?q="+publicId).rows()
+            val account=results.firstOrNull{it.optString("public_id")==publicId && it.optInt("id")>0}
+            if(account==null)notice="لم يُعثر على الحساب، أو لا يمكن مراسلته حاليًا."
+            else startChat(account.getInt("id"),account.optString("display_name").ifBlank{account.optString("username")})
+        }
+    }
     val avatarPicker=androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.GetContent()){uri->
         if(uri!=null)perform{
             if(api.request("/health/").optInt("avatar_upload_version")<1)throw IllegalStateException("avatar_update_required")
@@ -223,12 +235,17 @@ fun ServerAppScreen(baseUrl: String) {
     }
     LaunchedEffect(query,page,tab,signedIn,followingOnly,revision){
         val target=if(page.isBlank())destinations[tab]else page
-        if(!signedIn||target !in listOf("تصفح","العرض","صنّاع المحتوى"))return@LaunchedEffect
+        if(!signedIn||target !in listOf("تصفح","العرض","صنّاع المحتوى","محادثة جديدة"))return@LaunchedEffect
         delay(300)
         searchLoading=true
         try{
             val term=query.trim().removePrefix("@")
             val escaped=java.net.URLEncoder.encode(term,"UTF-8")
+            if(target=="محادثة جديدة"){
+                accountMatches=if(term.length>=2)api.request("/api/accounts/search?q=$escaped").rows() else emptyList()
+                contentError=""
+                return@LaunchedEffect
+            }
             if(term.length>=2){
                 accountMatches=api.request("/api/accounts/search?q=$escaped").rows()
                 searchReels=api.request("/api/reels?q=$escaped").rows()
@@ -295,6 +312,25 @@ fun ServerAppScreen(baseUrl: String) {
     }},confirmButton={TextButton(onClick={insights=null}){Text("إغلاق")}}) }
     if(securityDialog)AccountSecurityDialog(api,!signedIn,{securityDialog=false}){signedIn=false;remembered=false;profile=JSONObject();page=""}
     val screen = page.ifBlank { destinations[tab] }
+    LaunchedEffect(signedIn,screen,foreground,revision){
+        if(!signedIn || screen!="تصفح" || !foreground)return@LaunchedEffect
+        while(true){
+            livePreviewLoading=true
+            try{
+                val response=api.request("/api/live")
+                if(response.optInt("stage_version")<3 || !response.optBoolean("available")){
+                    livePreview=emptyList()
+                    livePreviewError=true
+                }else{
+                    livePreview=response.rows().take(30)
+                    livePreviewError=false
+                }
+            }catch(e:CancellationException){throw e}
+            catch(_:Exception){livePreview=emptyList();livePreviewError=true}
+            finally{livePreviewLoading=false}
+            delay(30000)
+        }
+    }
     // Android back from a full-screen Reel must return home, never exit the app.
     BackHandler(enabled = signedIn && (page.isNotBlank() || tab == 1)) {
         if (screen == "ريلز") {
@@ -443,6 +479,7 @@ fun ServerAppScreen(baseUrl: String) {
         if(screen=="سجل العمليات"){FinancialHistory(api){back()};return@MyApplicationTheme}
         if(screen=="الحجوزات"){BookingHistory(api){back();revision++};return@MyApplicationTheme}
         if(screen=="البث المباشر"){LiveLobby(api,baseUrl,{showCreator(it)},{buyCredits()}){back();revision++};return@MyApplicationTheme}
+        if(screen=="الغرف الصوتية"){LiveLobby(api,baseUrl,{showCreator(it)},{buyCredits()},initialFilter="audio"){back();revision++};return@MyApplicationTheme}
         if (screen == "إضافة عرض") {
             SellerPublishScreen(api) { back(); revision++ }
             return@MyApplicationTheme
@@ -454,40 +491,20 @@ fun ServerAppScreen(baseUrl: String) {
             return@MyApplicationTheme
         }
         Scaffold(
-            floatingActionButton = {
-                if (page.isBlank() && tab == 0) {
-                    Column(
-                        horizontalAlignment = Alignment.End,
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        FloatingActionButton(
-                            onClick = { showCreationSheet = true },
-                            containerColor = Color(0xFF277C9D),
-                            contentColor = Color.White,
-                            shape = CircleShape,
-                            modifier = Modifier.size(52.dp)
-                        ) {
-                            Icon(Icons.Outlined.Edit, "إنشاء محتوى", Modifier.size(22.dp))
-                        }
-                        SupportFloatingButton()
-                    }
-                }
-            },
+            floatingActionButton = {},
             containerColor = MaterialTheme.colorScheme.background,
             topBar = {
                 if (screen != "حسابي" && screen != "صفحة المذيعة" && (screen != "ريلز" || rows.isEmpty())) TopAppBar(
                     title = {
-                        if (screen == "تصفح") Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                            Image(painterResource(R.drawable.relaxia_logo), "شعار Relaxia", Modifier.size(30.dp).clip(RoundedCornerShape(10.dp)))
-                            Text("Relaxia", fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                        } else Text(if (screen == "محادثة") peerName.ifBlank { "محادثة" } else screen, fontWeight = FontWeight.SemiBold)
+                        if (screen == "تصفح") Text("Relaxia", fontSize = 23.sp, fontWeight = FontWeight.Bold)
+                        else Text(if (screen == "محادثة") peerName.ifBlank { "محادثة" } else screen, fontWeight = FontWeight.SemiBold)
                     },
                     navigationIcon = { if (page.isNotBlank()) IconButton(onClick = { back() }) { Icon(Icons.Outlined.ArrowForward, "رجوع") } },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
                     actions = {
                         if (screen in listOf("العرض", "دردشة")) IconButton(onClick={buyCredits()}){Icon(Icons.Outlined.AccountBalanceWallet,"الرصيد",Modifier.size(22.dp))}
                     when (screen) {
-                            "تصفح" -> HomeToolbarActions({open("البث المباشر")},{buyCredits()},{open("المحفوظات")},{revision++})
+                            "تصفح" -> HomeToolbarActions({showCreationSheet=true},{buyCredits()},{open("المحفوظات")},{revision++},{open("الدعم وخدمة العملاء")})
                             "العرض" -> {
                                 IconButton(onClick = { open("إضافة عرض") }) { Icon(Icons.Outlined.AddCircleOutline, "إضافة عرض") }
                                 IconButton(onClick = { open("الحجوزات") }) { Icon(Icons.Outlined.ShoppingBag, "حجوزاتي") }
@@ -565,41 +582,30 @@ fun ServerAppScreen(baseUrl: String) {
                 } else LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     when (screen) {
                         "تصفح" -> {
-                            item { SearchField(query, { query = it }, "ابحث عن حساب أو ريل أو عرض") }
                             item {
-                                LazyRow(contentPadding=PaddingValues(horizontal=18.dp), horizontalArrangement=Arrangement.spacedBy(8.dp)){
-                                    items(listOf("الكل","الحسابات","الريلز","العروض")) { label ->
-                                        FilterChip(selected=searchCategory==label, onClick={searchCategory=label}, label={Text(label)})
-                                    }
-                                }
+                                RelaxiaQuickShortcuts(
+                                    onLive={open("البث المباشر")},
+                                    onAudioRooms={open("الغرف الصوتية")},
+                                    onCoinStore={buyCredits()},
+                                    onLottery={open("يا نصيب")},
+                                    onServices={open("العرض")}
+                                )
                             }
-                            if(searchCategory in listOf("الكل","الحسابات"))
-                            items(accountMatches,key={"account-"+it.optInt("id")}){person->OutlinedCard(onClick={showCreator(person.optInt("id"))},modifier=Modifier.padding(horizontal=20.dp).fillMaxWidth()){Column(Modifier.padding(16.dp)){Text(person.optString("display_name"),style=MaterialTheme.typography.titleMedium);Text("@"+person.optString("username")+" · #"+person.optString("public_id"),style=LocalTextStyle.current.copy(textDirection=androidx.compose.ui.text.style.TextDirection.Ltr))}}}
-                            if (query.trim().length >= 2 && searchCategory in listOf("الكل","الريلز")) {
-                                items(searchReels, key={"search-reel-"+it.optInt("id")}){ reel ->
-                                    Surface(onClick={selectedReelId=reel.optInt("id");directReel=reel.optInt("id").toString();savedReels=false;tab=1;query="";searchCategory="الكل"},
-                                        modifier=Modifier.padding(horizontal=18.dp).fillMaxWidth(),
-                                        color=MaterialTheme.colorScheme.surfaceVariant, shape=RoundedCornerShape(16.dp)){
-                                        Row(Modifier.padding(16.dp),horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=Alignment.CenterVertically){
-                                            Icon(Icons.Outlined.SmartDisplay,"ريل",tint=MaterialTheme.colorScheme.primary)
-                                            Text("ريل من "+reel.optString("owner_name"),Modifier.weight(1f))
-                                            Icon(Icons.Outlined.PlayArrow,"مشاهدة")
-                                        }
-                                    }
-                                }
-                            }
-                            if(searchCategory in listOf("الكل","الحسابات")) item {
-                                LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    item { Story("مساحتك", profile.optInt("selected_frame"), profile.optString("avatar_url")) { tab = 4 } }
-                                    items(creators.filter{it.optInt("id")!=profile.optInt("id")}) { person -> Story(person.optString("display_name"), person.optInt("selected_frame"), person.optString("avatar_url")) { creator = person; open("صفحة المذيعة") } }
-                                }
+                            item {
+                                RelaxiaLiveNow(
+                                    rooms=livePreview,
+                                    loading=livePreviewLoading,
+                                    unavailable=livePreviewError,
+                                    openAudio={open("الغرف الصوتية")},
+                                    openVideo={open("البث المباشر")}
+                                )
                             }
                             item { Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                                 TextButton(onClick = { followingOnly = false }) { Text("لك", fontSize = 18.sp, fontWeight = if (!followingOnly) FontWeight.Bold else FontWeight.Normal) }
                                 TextButton(onClick = { followingOnly = true }) { Text("أتابعهم", color = if (followingOnly) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }
                             } }
-                            val visible = if (searchCategory in listOf("الكل","العروض")) services else emptyList()
-                            if (visible.isEmpty() && !loading && contentError.isBlank() && query.isBlank() && searchCategory in listOf("الكل","العروض")) item { ReferenceEmpty(Icons.Outlined.Explore, "مساحتك لاكتشاف الجديد", "ستظهر هنا العروض التي ينشرها المستخدمون.") }
+                            val visible = services
+                            if (visible.isEmpty() && !loading && contentError.isBlank()) item { ReferenceEmpty(Icons.Outlined.Explore, "لا توجد عروض جديدة الآن", "يمكنك تصفح البثوث والغرف والريلز، أو العودة بعد نشر عروض جديدة.") }
                             items(visible, key = { it.optInt("id") }) { service ->
                                 FeedCard(service, { showCreator(service.optInt("owner_id")) }, { showService(service) }, { kind -> perform {
                                     val updated = api.request("/api/services/${service.optInt("id")}/reaction", "POST", JSONObject().put("kind", kind).put("enabled", !service.optBoolean(if (kind == "like") "liked" else "saved")))
@@ -644,20 +650,25 @@ fun ServerAppScreen(baseUrl: String) {
                             items(rows, key = { it.optInt("id") }) { person -> Box(Modifier.padding(horizontal = 20.dp)) { ConversationTile(person) { startChat(person.optInt("id"), person.optString("display_name")) } } }
                         }
                         "محادثة جديدة" -> {
-                            item { SearchField(query, { query = it }, "ابحث عن اسم المذيعة") }
-                            items(creators.filter { (it.optString("display_name")+it.optString("username")+it.optString("public_id")).contains(query.removePrefix("@"), true) }, key = { it.optInt("id") }) { person -> Box(Modifier.padding(horizontal = 20.dp)) {
-                                Surface(onClick = { startChat(person.optInt("id"), person.optString("display_name")) }, shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface) {
-                                    Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                        ReferenceAvatar(person.optString("display_name"), person.optInt("selected_frame"), 48, person.optString("avatar_url"))
-                                        Text(person.optString("display_name"), Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
-                                        Icon(Icons.Outlined.ChatBubbleOutline, "فتح المحادثة")
+                            item { SearchField(query, { query = it }, "ابحث عن اسم أو @يوزر أو ID") }
+                            if(query.trim().length>=2 && accountMatches.isEmpty() && !searchLoading)
+                                item { Text("لا توجد حسابات مطابقة، أو لا يُسمح بالتواصل معها.",Modifier.padding(horizontal=20.dp),color=MaterialTheme.colorScheme.onSurfaceVariant) }
+                            items(accountMatches,key={it.optInt("id")}){person->Box(Modifier.padding(horizontal=20.dp)){
+                                Surface(onClick={startChat(person.optInt("id"),person.optString("display_name"))},shape=RoundedCornerShape(17.dp),color=MaterialTheme.colorScheme.surface){
+                                    Row(Modifier.fillMaxWidth().padding(14.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)){
+                                        ReferenceAvatar(person.optString("display_name"),person.optInt("selected_frame"),48,person.optString("avatar_url"))
+                                        Column(Modifier.weight(1f)){
+                                            Text(person.optString("display_name"),fontWeight=FontWeight.SemiBold,maxLines=1)
+                                            Text("ID: "+person.optString("public_id"),color=MaterialTheme.colorScheme.onSurfaceVariant,fontSize=12.sp)
+                                        }
+                                        Icon(Icons.Outlined.ChatBubbleOutline,"فتح المحادثة")
                                     }
                                 }
-                            } }
+                            }}
                             item { FormColumn {
                                 Text("أو افتح محادثة برقم الحساب", style = MaterialTheme.typography.titleMedium)
                                 Field(peerId, { peerId = it.filter(Char::isDigit) }, "رقم حساب المستلم", numeric = true)
-                                ReferencePrimary("فتح المحادثة", peerId.toIntOrNull() != null) { startChat(peerId.toInt(), "حساب #$peerId") }
+                                ReferencePrimary("فتح برقم الحساب", peerId.matches(Regex("[1-9][0-9]{4}")) && !submitting) { openChatByPublicId(peerId) }
                             } }
                         }
                         "محادثة", "الدعم وخدمة العملاء" -> {
@@ -1636,15 +1647,112 @@ internal fun GenderChoice(value: String, onChange: (String) -> Unit) {
 }
 
 @Composable
-internal fun HomeToolbarActions(live:()->Unit,wallet:()->Unit,saved:()->Unit,refresh:()->Unit){
+internal fun RelaxiaLiveNow(
+    rooms:List<JSONObject>,
+    loading:Boolean,
+    unavailable:Boolean,
+    openAudio:()->Unit,
+    openVideo:()->Unit
+){
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal=16.dp,vertical=4.dp),
+        verticalArrangement=Arrangement.spacedBy(9.dp)
+    ){
+        Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
+            Icon(Icons.Outlined.Sensors,"المباشر الآن",Modifier.size(19.dp),tint=MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.width(7.dp))
+            Text("مباشر الآن",fontWeight=FontWeight.Bold,style=MaterialTheme.typography.titleMedium,modifier=Modifier.weight(1f))
+            if(loading && rooms.isEmpty() && !unavailable) CircularProgressIndicator(Modifier.size(16.dp),strokeWidth=2.dp)
+            else if(!unavailable) Text("${rooms.size} نشط",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if(unavailable){
+            Surface(color=MaterialTheme.colorScheme.surfaceVariant,shape=RoundedCornerShape(14.dp)){
+                Row(Modifier.fillMaxWidth().padding(12.dp),verticalAlignment=Alignment.CenterVertically){
+                    Text("الغرف غير متاحة حاليًا. تحقق من اتصال خادم البث.",Modifier.weight(1f),fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                    TextButton(onClick=openAudio){Text("الفحص")}
+                }
+            }
+        }else if(!loading && rooms.isEmpty()){
+            Text("لا توجد غرف نشطة الآن. يمكنك بدء غرفة صوتية أو بث مباشر.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+        }else if(rooms.isNotEmpty()){
+            LazyRow(
+                horizontalArrangement=Arrangement.spacedBy(9.dp),
+                contentPadding=PaddingValues(end=5.dp)
+            ){
+                items(rooms.take(8),key={it.optString("id")} ){room->
+                    val audio=room.optString("mode")=="audio"
+                    Surface(
+                        onClick=if(audio)openAudio else openVideo,
+                        shape=RoundedCornerShape(15.dp),
+                        color=MaterialTheme.colorScheme.surfaceVariant,
+                        modifier=Modifier.width(185.dp)
+                    ){
+                        Column(Modifier.padding(13.dp),verticalArrangement=Arrangement.spacedBy(7.dp)){
+                            Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                                Icon(if(audio)Icons.Outlined.Mic else Icons.Outlined.Videocam,null,Modifier.size(17.dp),tint=MaterialTheme.colorScheme.primary)
+                                Text(if(audio)"غرفة صوتية" else "بث فيديو",fontSize=12.sp,fontWeight=FontWeight.SemiBold)
+                            }
+                            Text(room.optString("title").ifBlank{"غرفة مباشرة"},fontSize=14.sp,fontWeight=FontWeight.SemiBold,maxLines=1,overflow=TextOverflow.Ellipsis)
+                            Text("${room.optString("owner_name")} · ${room.optInt("viewers")} مشاهد",fontSize=11.sp,color=MaterialTheme.colorScheme.onSurfaceVariant,maxLines=1,overflow=TextOverflow.Ellipsis)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun RelaxiaQuickShortcuts(
+    onLive:()->Unit,
+    onAudioRooms:()->Unit,
+    onCoinStore:()->Unit,
+    onLottery:()->Unit,
+    onServices:()->Unit
+){
+    val actions=listOf(
+        Triple("بث مباشر",Icons.Outlined.Sensors,onLive),
+        Triple("غرف صوتية",Icons.Outlined.Mic,onAudioRooms),
+        Triple("كوينز",Icons.Outlined.AccountBalanceWallet,onCoinStore),
+        Triple("يا نصيب",Icons.Outlined.Casino,onLottery),
+        Triple("الخدمات",Icons.Outlined.ShoppingBag,onServices)
+    )
+    LazyRow(
+        contentPadding=PaddingValues(horizontal=16.dp),
+        horizontalArrangement=Arrangement.spacedBy(8.dp),
+        modifier=Modifier.fillMaxWidth().padding(vertical=4.dp)
+    ){
+        items(actions){ (title,icon,action)->
+            Surface(
+                onClick=action,
+                shape=RoundedCornerShape(15.dp),
+                color=MaterialTheme.colorScheme.surfaceVariant,
+                border=androidx.compose.foundation.BorderStroke(1.dp,MaterialTheme.colorScheme.outlineVariant)
+            ){
+                Row(
+                    Modifier.padding(horizontal=12.dp,vertical=11.dp),
+                    verticalAlignment=Alignment.CenterVertically,
+                    horizontalArrangement=Arrangement.spacedBy(7.dp)
+                ){
+                    Icon(icon,title,Modifier.size(18.dp),tint=MaterialTheme.colorScheme.primary)
+                    Text(title,fontSize=13.sp,fontWeight=FontWeight.SemiBold,maxLines=1)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun HomeToolbarActions(create:()->Unit,wallet:()->Unit,saved:()->Unit,refresh:()->Unit,support:()->Unit){
     var expanded by remember{mutableStateOf(false)}
-    TextButton(live){Icon(Icons.Outlined.Sensors,null,Modifier.size(18.dp));Spacer(Modifier.width(4.dp));Text("مباشر")}
+    IconButton(onClick=create){Icon(Icons.Outlined.AddCircleOutline,"إنشاء محتوى",Modifier.size(23.dp))}
     Box {
         IconButton({expanded=true}){Icon(Icons.Outlined.MoreVert,"خيارات التصفح")}
         DropdownMenu(expanded,{expanded=false}){
             DropdownMenuItem(text={Text("المحفظة والرصيد")},onClick={expanded=false;wallet()})
             DropdownMenuItem(text={Text("المحفوظات")},onClick={expanded=false;saved()})
             DropdownMenuItem(text={Text("تحديث المحتوى")},onClick={expanded=false;refresh()})
+            DropdownMenuItem(text={Text("الدعم والمساعدة")},onClick={expanded=false;support()})
         }
     }
 }
