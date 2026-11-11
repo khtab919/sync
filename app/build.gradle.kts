@@ -14,7 +14,8 @@ android {
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
-    applicationId = "com.aistudio.layalilounge.x9m4kp"
+    // QA preview uses a separate install identity; the production applicationId is untouched.
+    applicationId = if (providers.gradleProperty("RELAXIA_QA_SIDE_BY_SIDE").orElse("false").get() == "true") "com.aistudio.layalilounge.x9m4kp.qa116" else "com.aistudio.layalilounge.x9m4kp"
     minSdk = 24
     targetSdk = 36
     val backendUrl = providers.gradleProperty("LAYALI_API_URL").orElse("").get()
@@ -41,10 +42,20 @@ android {
       keyPassword = System.getenv("KEY_PASSWORD")
     }
     create("debugConfig") {
-      storeFile = file("${rootDir}/debug.keystore")
-      storePassword = "android"
-      keyAlias = "androiddebugkey"
-      keyPassword = "android"
+      val qaPreview = providers.gradleProperty("RELAXIA_QA_SIDE_BY_SIDE").orElse("false").get() == "true"
+      val qaPassword = System.getenv("RELAXIA_NEXT_STORE_PASSWORD")
+      if (qaPreview && !qaPassword.isNullOrBlank()) {
+        // Stable signing key stays in protected Actions secrets, never in Git.
+        storeFile = file("${rootDir}/relaxia-next.jks")
+        storePassword = qaPassword
+        keyAlias = "relaxia_next"
+        keyPassword = qaPassword
+      } else {
+        storeFile = file("${rootDir}/debug.keystore")
+        storePassword = "android"
+        keyAlias = "androiddebugkey"
+        keyPassword = "android"
+      }
     }
   }
 
