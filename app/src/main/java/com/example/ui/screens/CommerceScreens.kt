@@ -24,6 +24,13 @@ import org.json.JSONObject
 import java.math.BigDecimal
 
 internal fun commerceError(e: Exception): String = when(e.message) {
+    "recipient_unavailable" -> "هذا الحساب غير متاح للمراسلة حاليًا. قد يكون معطلًا أو محذوفًا؛ ارجع إلى المحادثات."
+    "message_request_conflict" -> "تعذّر تأكيد الرسالة بسبب تعارض في الطلب. لا تعِد دفع أي مبلغ قبل التحقق من سجل المحادثة."
+    "invalid_body" -> "اكتب رسالة صالحة ثم أعد المحاولة."
+    "server_unavailable" -> "تعذّر الاتصال بخادم Relaxia. تحقق من الإنترنت وحالة الخادم ثم حاول مجددًا."
+    "server_error_401" -> "انتهت جلسة الحساب؛ سجّل الدخول مجددًا."
+    "server_error_403" -> "لا تملك صلاحية تنفيذ هذا الإجراء."
+    "server_error_404" -> "الصفحة أو الحساب المطلوب غير متاح حاليًا."
     "file_too_large" -> "الحد الأقصى للصورة أو الصوت 8MB، وللريلز 20MB."
     "invalid_image", "invalid_file", "invalid_media" -> "الملف غير مدعوم. اختر صورة JPG/PNG/WEBP أو فيديو MP4."
     "creator_account_required" -> "صلاحية النشر موقوفة لهذا الحساب. تواصل مع الدعم."
