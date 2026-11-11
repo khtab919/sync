@@ -443,6 +443,7 @@ fun ServerAppScreen(baseUrl: String) {
         if(screen=="سجل العمليات"){FinancialHistory(api){back()};return@MyApplicationTheme}
         if(screen=="الحجوزات"){BookingHistory(api){back();revision++};return@MyApplicationTheme}
         if(screen=="البث المباشر"){LiveLobby(api,baseUrl,{showCreator(it)},{buyCredits()}){back();revision++};return@MyApplicationTheme}
+        if(screen=="الغرف الصوتية"){LiveLobby(api,baseUrl,{showCreator(it)},{buyCredits()},initialFilter="audio"){back();revision++};return@MyApplicationTheme}
         if (screen == "إضافة عرض") {
             SellerPublishScreen(api) { back(); revision++ }
             return@MyApplicationTheme
