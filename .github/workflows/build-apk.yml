@@ -152,25 +152,25 @@ jobs:
           from pathlib import Path
           metadata = json.loads(Path('app/build/outputs/apk/debug/output-metadata.json').read_text())
           assert metadata['applicationId'] == 'com.aistudio.layalilounge.x9m4kp', 'Relaxia package identity changed'
-          assert all(item['versionCode'] > 30 for item in metadata['elements']), 'Version must exceed Relaxia 11.3'
+          assert all(item['versionCode'] > 31 for item in metadata['elements']), 'Version must exceed Relaxia 11.4'
           PY
-          cp app/build/outputs/apk/debug/app-debug.apk Relaxia-v11.4.apk
+          cp app/build/outputs/apk/debug/app-debug.apk Relaxia-v11.5.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Relaxia-v11.4-APK
-          path: Relaxia-v11.4.apk
+          name: Relaxia-v11.5-APK
+          path: Relaxia-v11.5.apk
 
       - name: Publish Direct APK to GitHub Releases
         # Only main-branch builds may publish an installable release.
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && env.LAYALI_API_URL != ''
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v11.4.${{ github.run_number }}
-          name: "تطبيق Relaxia - إصدار 11.4 (APK جاهز للتثبيت)"
-          body: "اضغط على ملف **Relaxia-v11.4.apk** بالأسفل لتحميل وتثبيت التطبيق مباشرة على هاتفك."
-          files: Relaxia-v11.4.apk
+          tag_name: v11.5.${{ github.run_number }}
+          name: "تطبيق Relaxia - إصدار 11.5 (APK جاهز للتثبيت)"
+          body: "اضغط على ملف **Relaxia-v11.5.apk** بالأسفل لتحميل وتثبيت التطبيق مباشرة على هاتفك."
+          files: Relaxia-v11.5.apk
           draft: false
           prerelease: false
         env:
