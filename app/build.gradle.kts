@@ -16,6 +16,7 @@ android {
   defaultConfig {
     // QA preview uses a separate install identity; the production applicationId is untouched.
     applicationId = if (providers.gradleProperty("RELAXIA_QA_SIDE_BY_SIDE").orElse("false").get() == "true") "com.aistudio.layalilounge.x9m4kp.qa116" else "com.aistudio.layalilounge.x9m4kp"
+    manifestPlaceholders["relaxiaAppLabel"] = if (providers.gradleProperty("RELAXIA_QA_SIDE_BY_SIDE").orElse("false").get() == "true") "Relaxia 11.6 QA" else "Relaxia"
     minSdk = 24
     targetSdk = 36
     val backendUrl = providers.gradleProperty("LAYALI_API_URL").orElse("").get()
