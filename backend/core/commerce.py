@@ -376,7 +376,7 @@ def wheel_offer(config,user):
     start=timezone.now().replace(hour=0,minute=0,second=0,microsecond=0)
     today=PaidSpin.objects.filter(created_at__gte=start)
     remaining=max(0,config.daily_limit-today.filter(user=user).count())
-    affordable=bool(total and (today.aggregate(v=Sum('prize_cents'))['v'] or 0)+max(p['amount_cents'] for p in prizes)<=config.daily_budget_cents)
+    affordable=bool(total and (today.aggregate(v=Sum('prize_cents'))['v'] or 0)+max(p['amount_cents'] for p in prizes)<=config.daily_budget_cents and config.bankroll_cents+cost>=max(p['amount_cents'] for p in prizes))
     return {'daily_limit':config.daily_limit,'remaining_daily':remaining,'enabled':bool(config.enabled and valid and total and remaining and affordable), 'cost_cents':cost,'config_version':quote_version,'first_spin_guaranteed':first,'first_reward_cents':config.first_reward_cents,'spin_count':count,'spent_cents':spent,'grand_unlocked':grand,'grand_unlock_spend_cents':config.grand_unlock_spend_cents,'price_step_cents':config.price_step_cents,'maximum_cost_cents':config.maximum_cost_cents,'prizes':[dict(p,chance_percent=format(p['weight']*100/total,'.8f')) for p in prizes] if total else []}
 
 
@@ -436,7 +436,7 @@ def wheel_configuration(request):
                     if type(p[field]) is not int or not 0<=p[field]<=1000000:raise ApiError('invalid_wheel_configuration')
                     setattr(config,field,p[field])
             valid, _, _ = wheel_settings(config)
-            if not valid or (config.enabled and (config.first_reward_cents <= config.cost_cents or config.bankroll_cents < max(config.first_reward_cents,max(prize['amount_cents'] for prize in config.prizes)))):
+            if not valid or (config.enabled and ((config.first_reward_cents > 0 and config.first_reward_cents <= config.cost_cents) or config.bankroll_cents < max(config.first_reward_cents,max(prize['amount_cents'] for prize in config.prizes)))):
                 raise ApiError('invalid_wheel_configuration')
             config.save()
             import json
