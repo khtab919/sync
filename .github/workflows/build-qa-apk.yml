@@ -78,10 +78,17 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
+          if [[ -n "${RELAXIA_NEXT_KEYSTORE_BASE64}" && -z "${RELAXIA_NEXT_STORE_PASSWORD}" ]] || [[ -z "${RELAXIA_NEXT_KEYSTORE_BASE64}" && -n "${RELAXIA_NEXT_STORE_PASSWORD}" ]]; then
+            echo '::error::Both protected signing secrets are required together.'
+            exit 1
+          fi
           if [[ -n "${RELAXIA_NEXT_KEYSTORE_BASE64}" && -n "${RELAXIA_NEXT_STORE_PASSWORD}" ]]; then
             printf '%s' "${RELAXIA_NEXT_KEYSTORE_BASE64}" | base64 -d > relaxia-next.jks
             keytool -list -keystore relaxia-next.jks -storepass "${RELAXIA_NEXT_STORE_PASSWORD}" -alias relaxia_next > /dev/null
-            echo 'Stable user-owned QA signing certificate loaded.'
+            expected=a1ba52b55fe246379bed147a1de23a8e03dc7ad5d3d38b1113d3aa3bcaf0db9c
+            actual="$(keytool -exportcert -keystore relaxia-next.jks -storepass "${RELAXIA_NEXT_STORE_PASSWORD}" -alias relaxia_next | sha256sum | cut -d ' ' -f 1)"
+            [[ "${actual}" == "${expected}" ]] || { echo '::error::Unexpected QA signing certificate. Stop.'; exit 1; }
+            echo 'Verified stable user-owned QA signing certificate.'
           else
             keytool -genkeypair -keystore debug.keystore -storetype JKS \
               -storepass android -keypass android -alias androiddebugkey \
