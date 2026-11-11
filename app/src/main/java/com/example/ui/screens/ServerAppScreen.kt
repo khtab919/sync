@@ -434,7 +434,7 @@ fun ServerAppScreen(baseUrl: String) {
             AdminCentre(api,profile.optString("display_name"),profile.optInt("id")){back()}
             return@MyApplicationTheme
         }
-        if (screen in listOf("شحن الرصيد", "تفعيل البائع", "العجلة")) {
+        if (screen in listOf("شحن الرصيد", "تفعيل البائع", "يا نصيب", "العجلة")) {
             CommerceScreen(api, screen) { page = purchaseReturn; purchaseReturn = ""; notice = ""; revision++ }
             return@MyApplicationTheme
         }
@@ -781,7 +781,7 @@ fun ServerAppScreen(baseUrl: String) {
                             ReferenceRow(Icons.Outlined.ShoppingBag,"حجوزاتي"){open("الحجوزات")}
                             ReferenceRow(Icons.Outlined.ReceiptLong,"سجل العمليات"){open("سجل العمليات")}
                             ReferenceRow(Icons.Outlined.BookmarkBorder,"المحفوظات"){open("المحفوظات")}
-                            ReferenceRow(Icons.Outlined.Casino,"عجلة الحظ المدفوعة"){open("العجلة")}
+                            ReferenceRow(Icons.Outlined.Casino,"يا نصيب"){open("يا نصيب")}
                         } }
                         "الإعدادات" -> item { FormColumn {
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { Text("الوضع الليلي", Modifier.weight(1f)); Switch(dark, { dark = it; prefs.edit().putBoolean("dark", it).apply() }) }
