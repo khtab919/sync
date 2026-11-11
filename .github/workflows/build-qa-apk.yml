@@ -59,17 +59,42 @@ jobs:
           EOF
           fi
 
-      - name: Create temporary QA signing certificate
+      - name: Configure separate QA identity in Firebase test metadata
         run: |
-          # One-run, non-production key. Deliberately different from the installed app.
-          keytool -genkeypair -keystore debug.keystore -storetype JKS \
-            -storepass android -keypass android -alias androiddebugkey \
-            -keyalg RSA -keysize 2048 -validity 60 \
-            -dname "CN=Relaxia 11.6 QA Only, OU=QA, O=Relaxia, C=TR"
-          echo "::warning::This preview cannot upgrade an already installed Relaxia. Never uninstall the existing app to test it."
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          p=Path('app/google-services.json')
+          j=json.loads(p.read_text())
+          for c in j['client']:
+              c['client_info']['android_client_info']['package_name']='com.aistudio.layalilounge.x9m4kp.qa116'
+          p.write_text(json.dumps(j))
+          PY
+
+      - name: Select stable new signing certificate or disposable QA key
+        env:
+          RELAXIA_NEXT_KEYSTORE_BASE64: ${{ secrets.RELAXIA_NEXT_KEYSTORE_BASE64 }}
+          RELAXIA_NEXT_STORE_PASSWORD: ${{ secrets.RELAXIA_NEXT_STORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          if [[ -n "${RELAXIA_NEXT_KEYSTORE_BASE64}" && -n "${RELAXIA_NEXT_STORE_PASSWORD}" ]]; then
+            printf '%s' "${RELAXIA_NEXT_KEYSTORE_BASE64}" | base64 -d > relaxia-next.jks
+            keytool -list -keystore relaxia-next.jks -storepass "${RELAXIA_NEXT_STORE_PASSWORD}" -alias relaxia_next > /dev/null
+            echo 'Stable user-owned QA signing certificate loaded.'
+          else
+            keytool -genkeypair -keystore debug.keystore -storetype JKS \
+              -storepass android -keypass android -alias androiddebugkey \
+              -keyalg RSA -keysize 2048 -validity 60 \
+              -dname "CN=Relaxia 11.6 QA Only, OU=QA, O=Relaxia, C=TR"
+            echo "::warning::Temporary QA signing certificate in use."
+          fi
+          echo "::warning::This preview installs beside existing Relaxia. Keep the installed app."
 
       - name: Build latest 11.6 source APK
-        run: gradle assembleDebug "-PLAYALI_API_URL=${LAYALI_API_URL}" --no-daemon --stacktrace
+        env:
+          RELAXIA_NEXT_STORE_PASSWORD: ${{ secrets.RELAXIA_NEXT_STORE_PASSWORD }}
+        run: gradle assembleDebug "-PLAYALI_API_URL=${LAYALI_API_URL}" -PRELAXIA_QA_SIDE_BY_SIDE=true --no-daemon --stacktrace
 
       - name: Verify exact app ID, version and signing
         run: |
@@ -77,29 +102,31 @@ jobs:
           import json
           from pathlib import Path
           data=json.loads(Path('app/build/outputs/apk/debug/output-metadata.json').read_text())
-          assert data['applicationId']=='com.aistudio.layalilounge.x9m4kp'
+          assert data['applicationId']=='com.aistudio.layalilounge.x9m4kp.qa116'
           assert all(item['versionCode']==33 for item in data['elements'])
           print('Relaxia 11.6 source APK validated (fresh-install-only QA signature)')
           PY
           test -s app/build/outputs/apk/debug/app-debug.apk
-          cp app/build/outputs/apk/debug/app-debug.apk Relaxia-v11.6-FRESH-INSTALL-ONLY.apk
+          cp app/build/outputs/apk/debug/app-debug.apk Relaxia-v11.6-SIDE-BY-SIDE.apk
           cat > READ-ME-FIRST.txt <<'EOF'
           RELAXIA 11.6 QA BUILD ONLY
-          Package ID: com.aistudio.layalilounge.x9m4kp
+          Package ID: com.aistudio.layalilounge.x9m4kp.qa116
           Version: 11.6 (code 33)
-          Signed with temporary QA key, NOT the original key.
-          THIS APK WILL NOT INSTALL OVER ANY EXISTING RELAXIA APP.
+          Signed with a separate QA key, NOT the original production key.
+          THIS APK INSTALLS SIDE-BY-SIDE WITH THE EXISTING RELAXIA APP.
           DO NOT UNINSTALL YOUR EXISTING RELAXIA APP OR YOU MAY LOSE LOCAL DATA.
-          This build is solely for clean test devices. It is not a public update.
+          Without stable secrets this is an ephemeral QA signature and future QA builds cannot update it.
+          Firebase push may require registering the QA application ID.
+          This build is for QA testing, not a public update.
           To release an upgrade, recover the original signing keystore and rerun the official protected build-apk workflow.
           EOF
 
       - name: Upload preview and safety instructions
         uses: actions/upload-artifact@v4
         with:
-          name: Relaxia-v11.6-QA-FRESH-INSTALL-ONLY
+          name: Relaxia-v11.6-QA-SIDE-BY-SIDE
           path: |
-            Relaxia-v11.6-FRESH-INSTALL-ONLY.apk
+            Relaxia-v11.6-SIDE-BY-SIDE.apk
             READ-ME-FIRST.txt
           retention-days: 7
           if-no-files-found: error
