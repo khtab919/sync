@@ -5,7 +5,7 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
 const root=path.resolve(__dirname,'..');
 const html=execFileSync(process.env.TEST_PYTHON||'python',['-c',`import django;django.setup()
 from django.template.loader import render_to_string
-config={'id':'room-test','owner':False,'ownerName':'مضيف تجريبي','ownerId':1,'userId':2,'userName':'زائر تجريبي','mode':'audio','maxSpeakers':15,'title':'غرفة الأصدقاء','gifts':True,'private':False}
+config={'id':'room-test','owner':False,'ownerName':'مضيف تجريبي','ownerId':1,'ownerPublicId':'58321','userId':2,'userName':'زائر تجريبي','mode':'audio','maxSpeakers':15,'title':'غرفة الأصدقاء','gifts':True,'private':False}
 print(render_to_string('core/live_room.html',{'config':config,'nonce':'qa','theme':'dark'}))`],{cwd:root,env:{...process.env,DJANGO_SETTINGS_MODULE:'config.settings',DJANGO_SECRET_KEY:'test-only',POSTGRES_PASSWORD:'test-only',LAYALI_TESTING:'1'},encoding:'utf8'}).replace(/<script src="[^\"]+"><\/script>/g,'').replace(/<link rel="stylesheet"[^>]+>/,'');
 const css=fs.readFileSync(path.join(root,'core/static/core/live-stage.css'),'utf8');
 const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8').replace('connect().catch(e=>{message(e);if(e.name!==\'MediaFailure\')reconnect()});','');
@@ -25,6 +25,27 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
     api=async action=>{if(action)window.sent.push(action);return {...result,seat_status:action?.action==='seat_request'?'pending':''}};drawState(result);
    });
    assert.equal(await page.locator('.audio-seat').count(),15);
+   assert.equal(await page.locator('#title').innerText(),'ID: 58321');
+   assert.equal(await page.locator('#speaker').isVisible(),true);
+   assert.equal(await page.locator('#gift').isVisible(),false);
+   assert.equal(await page.locator('#bigGiftBtn').isVisible(),true);
+   await page.evaluate(()=>{
+     const audio=document.createElement('audio');audio.dataset.liveRemote='1';audio.play=()=>Promise.resolve();document.body.append(audio);
+   });
+   await page.locator('#speaker').click();
+   assert.equal(await page.locator('audio[data-live-remote]').evaluate(el=>el.muted),true);
+   assert.equal(await page.locator('#speaker').getAttribute('aria-label'),'تشغيل صوت الغرفة');
+   await page.locator('#speaker').click();
+   assert.equal(await page.locator('audio[data-live-remote]').evaluate(el=>el.muted),false);
+   await page.locator('#emojiBtn').click();
+   await page.getByRole('button',{name:'🎉',exact:true}).click();
+   assert.equal(await page.locator('#text').inputValue(),'🎉');
+   await page.locator('.composer-send').click();
+   assert.equal(await page.evaluate(()=>sent.find(a=>a.action==='comment')?.text),'🎉');
+   await page.locator('#more').click();
+   await page.getByRole('button',{name:'إعجاب بالبث',exact:true}).click();
+   assert.equal(await page.evaluate(()=>sent.filter(a=>a.action==='like').length),1);
+   await page.locator('#closeSheet').click();
    assert.equal(await page.locator('.empty-seat').count(),14);
    const seats=await page.locator('#audioStage').boundingBox(),footer=await page.locator('footer').boundingBox();
    assert.ok(seats.y+seats.height<footer.y,'seat grid must not overlap controls');
@@ -46,6 +67,6 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    if(process.env.LIVE_PREVIEW_DIR)await page.screenshot({path:path.join(process.env.LIVE_PREVIEW_DIR,`whale-effect-${width}.png`)});
    await page.close();
   }
-  console.log('PASS: 15 seats at 360/430px, guest request, gift filters, cancellation, confirmed send and whale effect. Synthetic UI only.');
+  console.log('PASS: 15 seats at 360/430px, five-digit ID, speaker mute/unmute, emoji picker, comment and like, guest request, gift confirmation/cancellation, whale effect. Synthetic UI only.');
  }finally{await browser.close()}
 })().catch(e=>{console.error(e);process.exitCode=1});
