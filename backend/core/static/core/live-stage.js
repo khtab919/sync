@@ -2,15 +2,15 @@
 if(typeof LivekitClient==='undefined'||typeof RelaxiaMedia==='undefined')throw Error('live_dependencies_unavailable');
 const config=JSON.parse(document.getElementById('config').textContent),$=id=>document.getElementById(id);
 const {Room,RoomEvent,Track,ConnectionState}=LivekitClient;
-let room,closed=false,muted=false,cameraOff=false,facing='user',commentsVisible=true,lastComments='',leaving=false,retrying=false,polling=false;
+let room,closed=false,muted=false,speakerMuted=false,cameraOff=false,facing='user',commentsVisible=true,lastComments='',leaving=false,retrying=false,polling=false;
 let activeSpeakerIds=new Set();
 let state={},speaking=false,activating=false,latestGift=0,haveGiftBaseline=false,giftQueue=[],effectBusy=false,giftKey=null,giftPending=null,quality=720,serverOffset=0;
 let preparedTracks=[],mediaFault=false,mediaReady=false;
 const path='/api/live/'+config.id+'/control';
 document.body.classList.toggle('audio-mode',config.mode==='audio');
-$('name').textContent=config.ownerName;$('title').textContent=config.title+' · '+(config.private?'مدفوع':config.inviteOnly?'بالدعوة':'عام');
+$('name').textContent=config.ownerName;$('title').textContent='ID: '+(config.ownerPublicId||'—');document.title='Relaxia · '+config.title;
 if(config.ownerAvatar&&/^https:\/\//.test(config.ownerAvatar)){$('ownerAvatar').onload=()=>$('ownerAvatar').hidden=false;$('ownerAvatar').src=config.ownerAvatar}
-$('profile').onclick=()=>{if(!config.owner&&window.LayaliLive?.canOpenProfile())window.LayaliLive.openProfile(config.ownerId)};
+$('profile').onclick=()=>{if(!config.owner&&window.LayaliLive?.canOpenProfile()){window.LayaliLive.openProfile(config.ownerId);return;}const box=sheet('ملف صاحب الغرفة');note(box,config.ownerName);note(box,'ID: '+(config.ownerPublicId||'—'));note(box,config.title)};
 async function api(action){const abort=new AbortController(),timer=setTimeout(()=>abort.abort(),8000);try{const r=await fetch(path,{method:action?'POST':'GET',headers:{'Content-Type':'application/json','X-Live-Control':config.control},body:action?JSON.stringify(action):undefined,signal:abort.signal,cache:'no-store'});const value=await r.json();if(!r.ok)throw Error(value.error||'network');return value}finally{clearTimeout(timer)}}
 function diagnostic(stage,outcome,reason=''){api({action:'media_diagnostic',stage,outcome,reason,build:'media-1'}).catch(()=>{})}
 function mediaMessage(e){
@@ -20,12 +20,30 @@ function mediaMessage(e){
 }
 function message(e){if(e.name==='MediaFailure'){mediaMessage(e);return}$('status').textContent=({'insufficient_balance':'رصيدك لا يكفي. اشحن من المحفظة قبل إرسال الهدية.','broadcast_ended':'انتهى البث','stage_full':'اكتملت مقاعد الضيوف','pending_gift_retry':'أعد محاولة الهدية السابقة أولًا لتجنب خصم غير واضح.','media_permission_required':'لم تمنح إذن الميكروفون أو الكاميرا. يمكنك الاستمرار بالمشاهدة.','stage_unavailable':'طلبات الانضمام غير متاحة في هذا البث','price_confirmation_required':'تغير السعر؛ افتح الهدايا مجددًا','invalid_pk_teams':'اختر متحدثين متصلين في فريقين مختلفين','slow_down':'انتظر قليلًا قبل إعادة الطلب','pk_already_active':'هناك منافسة جارية بالفعل'})[e.message]||'تعذّر تنفيذ الطلب. تحقق من الاتصال.'}
 function releasePrepared(){for(const track of preparedTracks){track.detach().forEach(el=>el.closest('.tile')?.remove());track.stop()}preparedTracks=[]}
-function stop(label){releasePrepared();if(closed)return;closed=true;room?.removeAllListeners();room?.disconnect();$('ended').hidden=false;$('endedTitle').textContent=label;document.querySelectorAll('footer button,footer input').forEach(el=>el.disabled=true);$('video').replaceChildren();if($('sheet').open)$('sheet').close()}
-function leave(){releasePrepared();if(window.LayaliLive){leaving=true;closed=true;room?.disconnect();window.LayaliLive.closeRoom()}else stop('غادرت البث')}
+function stop(label){releasePrepared();if(closed)return;closed=true;room?.removeAllListeners();room?.disconnect();document.querySelectorAll('audio[data-live-remote]').forEach(el=>el.remove());$('ended').hidden=false;$('endedTitle').textContent=label;document.querySelectorAll('footer button,footer input').forEach(el=>el.disabled=true);$('video').replaceChildren();if($('sheet').open)$('sheet').close()}
+function leave(){releasePrepared();document.querySelectorAll('audio[data-live-remote]').forEach(el=>el.remove());if(window.LayaliLive){leaving=true;closed=true;room?.disconnect();window.LayaliLive.closeRoom()}else stop('غادرت البث')}
 $('closeEnded').onclick=()=>window.LayaliLive?window.LayaliLive.closeRoom():history.back();
+function updateSpeakerControl(){
+ const button=$('speaker');if(!button)return;
+ button.textContent=speakerMuted?'🔇':'🔊';
+ button.setAttribute('aria-label',speakerMuted?'تشغيل صوت الغرفة':'كتم صوت الغرفة');
+ button.setAttribute('aria-pressed',String(speakerMuted));
+ button.title=speakerMuted?'تشغيل صوت الغرفة':'كتم صوت الغرفة';
+}
 function renderTrack(track,participant,local=false){
  const el=track.attach();el.controls=false;el.autoplay=true;el.playsInline=true;el.setAttribute('playsinline','');el.setAttribute('webkit-playsinline','');el.addEventListener('contextmenu',e=>e.preventDefault());
- if(track.kind===Track.Kind.Audio){if(local){track.detach(el);return}document.body.appendChild(el);el.play().catch(()=>{if(!closed){$('status').textContent='تعذر تشغيل الصوت تلقائياً. اضغط لإعادة المحاولة.';el.addEventListener('click',()=>el.play().catch(()=>{}),{once:true})}});return el;}
+ if(track.kind===Track.Kind.Audio){
+  if(local){track.detach(el);return}
+  el.dataset.liveRemote='1';el.muted=speakerMuted;document.body.appendChild(el);
+  el.play().catch(()=>{
+    if(!closed&&!speakerMuted){
+      speakerMuted=true;el.muted=true;updateSpeakerControl();
+      $('status').textContent='الصوت يحتاج إذنك. اضغط زر 🔇 لتشغيل صوت الغرفة.';
+      el.play().catch(()=>{});
+    }
+  });
+  return el;
+ }
  if(track.kind!==Track.Kind.Video)return;
  const key=participant.identity;document.querySelectorAll('.tile').forEach(t=>{if(t.dataset.identity===key)t.remove()});
  const tile=document.createElement('div');tile.className='tile';tile.dataset.identity=key;el.muted=local;if(local)el.setAttribute('muted','');
@@ -75,7 +93,7 @@ async function connect(token=config.token){
  room.on(RoomEvent.ActiveSpeakersChanged,participants=>{activeSpeakerIds=new Set(participants.map(p=>p.identity));document.querySelectorAll('.audio-person').forEach(el=>el.classList.toggle('speaking',activeSpeakerIds.has(el.dataset.identity)))});
  room.on(RoomEvent.Disconnected,()=>{if(!closed&&!leaving)reconnect()});
  await room.connect(config.url,token);for(const participant of room.remoteParticipants.values()){for(const publication of participant.trackPublications.values()){if(publication.isSubscribed&&publication.track)renderTrack(publication.track,participant);}}if(closed||leaving){room.removeAllListeners();await room.disconnect();releasePrepared();return}if(config.owner||speaking)await enableTracks();$('status').textContent='مباشر';
- $('follow').hidden=config.owner;$('gift').hidden=!config.gifts;
+ $('follow').hidden=config.owner;$('gift').hidden=!config.gifts||config.mode==='audio';$('speaker').hidden=config.mode!=='audio';updateSpeakerControl();
  layout();if(!polling){polling=true;poll()}
  }catch(e){room?.removeAllListeners();try{await room?.disconnect()}finally{releasePrepared();mediaReady=false}throw e}
 }
@@ -201,6 +219,13 @@ $('mute').onclick=async()=>{try{await room.localParticipant.setMicrophoneEnabled
 $('camera').onclick=async()=>{try{await room.localParticipant.setCameraEnabled(cameraOff);cameraOff=!cameraOff;$('camera').textContent=cameraOff?'تشغيل الفيديو':'إيقاف الفيديو';if(!cameraOff){const track=room.localParticipant.getTrackPublication(Track.Source.Camera)?.track;if(track)renderTrack(track,room.localParticipant,true)}else document.querySelectorAll('.tile').forEach(t=>{if(t.dataset.identity===room.localParticipant.identity)t.remove()});layout()}catch(e){message(e)}};
 $('switch').onclick=async()=>{try{const next=facing==='user'?'environment':'user';await room.localParticipant.getTrackPublication(Track.Source.Camera)?.track?.restartTrack({facingMode:next});facing=next;document.querySelectorAll('.tile').forEach(t=>{if(t.dataset.identity===room.localParticipant.identity)t.querySelector('video').style.transform=facing==='user'?'scaleX(-1)':''})}catch(e){$('status').textContent='الكاميرا الأخرى غير متاحة'}};
 $('exit').onclick=()=>{if(config.owner){if(confirm('مغادرتك تنهي البث. هل تريد الإنهاء؟'))api({action:'end'}).then(leave).catch(message)}else leave()};
+$('speaker').onclick=async()=>{
+ speakerMuted=!speakerMuted;updateSpeakerControl();
+ for(const el of document.querySelectorAll('audio[data-live-remote]')){
+  el.muted=speakerMuted;
+  if(!speakerMuted)try{await el.play()}catch(e){speakerMuted=true;el.muted=true;updateSpeakerControl();$('status').textContent='تعذر تشغيل الصوت. تحقق من صوت الجهاز وأذونات الوسائط.';break}
+ }
+};
 $('follow').onclick=()=>api({action:'follow'}).then(refresh).catch(message);$('gift').onclick=giftSheet;$('guests').onclick=guestSheet;$('more').onclick=moreSheet;
 $('share').onclick=async()=>{const text='انضم إلى بث '+config.ownerName+' «'+config.title+'» على Relaxia. افتح قسم البث المباشر وابحث عن عنوان البث. الدخول الخاص يتطلب تصريحًا.';try{if(window.LayaliLive?.shareLive){window.LayaliLive.shareLive(text);$('status').textContent='نُسخت دعوة البث؛ يمكنك إرسالها إلى أصدقائك.';}else if(navigator.share)await navigator.share({title:'Relaxia · مباشر',text});else if(navigator.clipboard){await navigator.clipboard.writeText(text);$('status').textContent='نُسخت دعوة البث'}else prompt('انسخ دعوة البث',text)}catch(e){if(e.name!=='AbortError')message(e)}};
 $('retryMedia').onclick=async()=>{if(activating)return;activating=true;try{if(!await consent(config.mode))throw new RelaxiaMedia.MediaFailure('camera_capture',{name:'NotAllowedError'});room?.removeAllListeners();await room?.disconnect();const fresh=await api({action:'token'});state.can_publish=fresh.can_publish;state.publish_sources=fresh.publish_sources;await connect(fresh.token)}catch(e){message(e)}finally{activating=false}};
@@ -221,7 +246,12 @@ $('stage')?.addEventListener('click',e=>{
   spawnHeart();
 });
 if($('bigGiftBtn')){if(!config.gifts)$('bigGiftBtn').hidden=true;$('bigGiftBtn').onclick=()=>{if(config.gifts)giftSheet();};}
-if($('emojiBtn'))$('emojiBtn').onclick=()=>{const inp=$('text');if(inp){inp.value+='😊';inp.focus();}};
+if($('emojiBtn'))$('emojiBtn').onclick=()=>{
+ const box=sheet('الرموز التعبيرية');
+ for(const emoji of ['😀','😂','🥰','😍','👏','❤️','🌹','🔥','🎉','💙','👍','✨']){
+  button(box,emoji,()=>{const input=$('text');if(!input)return;input.value=(input.value+emoji).slice(0,300);$('sheet').close();input.focus()});
+ }
+};
 layout();window.relaxiaStageLoaded=true;
 window.addEventListener('pagehide',()=>{leaving=true;releasePrepared();room?.disconnect()});connect().catch(e=>{message(e);if(e.name!=='MediaFailure')reconnect()});
 
