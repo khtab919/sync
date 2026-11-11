@@ -93,6 +93,87 @@ class StageTests(TestCase):
         row=self.stage();admitted=self.join(row,self.viewer).json()
         page=self.client.post(f'/api/live/{row.pk}/room',{'ticket':admitted['ticket']})
         config=json.loads(re.search(r'<script id="config" type="application/json">(.*?)</script>',page.content.decode(),re.S).group(1))
+        self.assertEqual(config['ownerPublicId'], self.owner.profile.public_id)
+        self.assertRegex(config['ownerPublicId'], r'^[1-9][0-9]{4}
+        path=f'/api/live/{row.pk}/control'
+        headers={'HTTP_X_LIVE_CONTROL':config['control']}
+        self.assertEqual(self.client.get(path,**headers).status_code,200)
+        r=self.client.post(path,json.dumps({'action':'seat_request','mode':'audio'}),content_type='application/json',**headers)
+        self.assertEqual(r.status_code,200);self.assertEqual(r.json()['seat_status'],'pending')
+        self.assertEqual(self.client.get(path,HTTP_X_LIVE_CONTROL='forged').status_code,403)
+        self.assertEqual(self.client.post(path,json.dumps({'action':'end'}),content_type='application/json',**headers).status_code,403)
+
+    def test_creation_rejects_more_than_twelve_speakers_and_invalid_modes(self):
+        for payload in [{'mode':'video','max_speakers':13},{'mode':'fake'},{'mode':'audio','max_speakers':True}]:
+            r=self.request('/api/live',dict(title='اختبار البث',**payload));self.assertEqual(r.status_code,400)
+
+    def test_audio_rooms_allow_fifteen_seats_but_video_remains_capped(self):
+        payload={'title':'غرفة صوتية','mode':'audio','max_speakers':15,'max_viewers':25}
+        response=self.request('/api/live',payload)
+        self.assertEqual(response.status_code,201)
+        self.assertEqual(response.json()['max_speakers'],15)
+        live.close(LiveBroadcast.objects.get(pk=response.json()['id']))
+        for mode,seats in [('audio',16),('video',15)]:
+            self.assertEqual(self.request('/api/live',dict(payload,mode=mode,max_speakers=seats)).status_code,400)
+
+    def test_paid_audio_reentry_reserves_once_and_requires_price_confirmation(self):
+        response=self.request('/api/live',{'title':'غرفة مدفوعة','mode':'audio','max_speakers':15,'max_viewers':25,'private':True,'price_cents':100})
+        self.assertEqual(response.status_code,201)
+        row=LiveBroadcast.objects.get(pk=response.json()['id']);self.join(row,self.owner)
+        self.parts=[{'identity':'host-'+str(self.owner.pk),'tracks':[{'type':'AUDIO','muted':False}]}]
+        live.synchronize(row,True)
+        path=f'/api/live/{row.pk}/admission'
+        self.assertEqual(self.request(path,{'confirmed':False,'price_cents':100},self.viewer).status_code,409)
+        for _ in range(2):self.assertEqual(self.join(row,self.viewer).status_code,200)
+        self.assertEqual(Wallet.objects.get(user=self.viewer).balance_cents,1000)
+        self.assertEqual(Wallet.objects.get(user=self.viewer).reserved_cents,100)
+        self.assertEqual(FinancialOperation.objects.filter(buyer=self.viewer).count(),1)
+
+    def test_whale_and_lion_catalog_gifts_are_settled_once_at_server_prices(self):
+        self.assertGreaterEqual(LiveGiftDefinition.objects.filter(enabled=True).count(),24)
+        row=self.stage();Wallet.objects.filter(user=self.viewer).update(balance_cents=50000)
+        for code,price in [('whale',10000),('lion',15000)]:
+            payload={'action':'gift','gift_code':code,'price_cents':price,'confirmed':True,'request_key':str(uuid.uuid4())}
+            for _ in range(2):self.assertEqual(self.event(row,payload,self.viewer).status_code,200)
+        self.assertEqual(LiveGiftEvent.objects.count(),2)
+        self.assertEqual(Wallet.objects.get(user=self.viewer).balance_cents,25000)
+        self.assertEqual(Wallet.objects.get(user=self.owner).balance_cents,20000)
+        result=self.request(f'/api/live/{row.pk}/events').json()
+        self.assertEqual({g['code'] for g in result['gift_events']},{'lion','whale'})
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+class StageConcurrencyTests(TransactionTestCase):
+    setUp=fixtures.LiveBroadcastTests.setUp
+    request=fixtures.LiveBroadcastTests.request
+    create=fixtures.LiveBroadcastTests.create
+    join=fixtures.LiveBroadcastTests.join
+    stage=StageTests.stage
+    event=StageTests.event
+    def race(self,callback):
+        from django.db import connection,connections,close_old_connections
+        if connection.vendor!='postgresql':self.skipTest('Requires PostgreSQL row locking')
+        from concurrent.futures import ThreadPoolExecutor
+        from threading import Barrier
+        barrier=Barrier(2)
+        def run(i):
+            close_old_connections()
+            try:barrier.wait(timeout=10);return callback(i)
+            finally:connections.close_all()
+        with ThreadPoolExecutor(max_workers=2) as pool:return list(pool.map(run,[0,1]))
+    def test_two_approvals_cannot_overfill_one_guest_seat(self):
+        row=self.stage()
+        for u in (self.viewer,self.other):self.event(row,{'action':'seat_request','mode':'audio'},u)
+        from django.test import Client
+        def approve(i):return Client().post(f'/api/live/{row.pk}/events',json.dumps({'action':'seat_decision','user_id':[self.viewer.pk,self.other.pk][i],'approve':True}),content_type='application/json',HTTP_AUTHORIZATION='Bearer '+self.tokens[self.owner.pk]).status_code
+        self.assertEqual(sorted(self.race(approve)),[200,409]);self.assertEqual(LiveSeat.objects.filter(status='approved').count(),1)
+    def test_retried_gift_is_one_debit_and_one_pk_event(self):
+        # TransactionTestCase flush removes migration-seeded catalog rows.
+        LiveGiftDefinition.objects.get_or_create(code='rose',defaults={'name':'وردة','symbol':'🌹','price_cents':100,'effect':'simple'})
+        row=self.stage();data={'action':'gift','gift_code':'rose','price_cents':100,'confirmed':True,'request_key':str(uuid.uuid4())}
+        from django.test import Client
+        def send(_):return Client().post(f'/api/live/{row.pk}/events',json.dumps(data),content_type='application/json',HTTP_AUTHORIZATION='Bearer '+self.tokens[self.viewer.pk]).status_code
+        self.assertEqual(self.race(send),[200,200]);self.assertEqual(LiveGiftEvent.objects.count(),1);self.assertEqual(Wallet.objects.get(user=self.viewer).balance_cents,900);self.assertEqual(Wallet.objects.get(user=self.owner).balance_cents,80)
+)
         self.assertIn("style-src 'self'",page['Content-Security-Policy'])
         path=f'/api/live/{row.pk}/control'
         headers={'HTTP_X_LIVE_CONTROL':config['control']}
