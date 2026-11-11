@@ -101,7 +101,7 @@ internal fun InternalCallScreen(api: LayaliApi, baseUrl: String, callId: String,
     DisposableEffect(Unit) { onDispose { webView?.stopLoading(); webView?.loadUrl("about:blank"); webView?.destroy(); webView = null } }
     Surface(Modifier.fillMaxSize(),color=MaterialTheme.colorScheme.background,contentColor=MaterialTheme.colorScheme.onBackground) { Column(Modifier.fillMaxSize().safeDrawingPadding()) {
         if(bootstrap==null || error.isNotBlank()) Row(Modifier.fillMaxWidth().padding(12.dp),verticalAlignment=Alignment.CenterVertically) {
-            Text("اتصال ليالي",Modifier.weight(1f),color=MaterialTheme.colorScheme.onBackground)
+            Text("اتصال Relaxia",Modifier.weight(1f),color=MaterialTheme.colorScheme.onBackground)
             TextButton(finish){Text("إنهاء",color=Color(0xFFE7A2A8))}
         }
         if(error.isNotBlank()) Text(error, Modifier.padding(20.dp), color = MaterialTheme.colorScheme.error)
@@ -125,7 +125,7 @@ internal fun InternalCallScreen(api: LayaliApi, baseUrl: String, callId: String,
                     settings.javaScriptEnabled = true
                     settings.allowFileAccess = false
                     settings.allowContentAccess = false
-                    settings.domStorageEnabled = false
+                    settings.domStorageEnabled = true
                     settings.cacheMode = WebSettings.LOAD_NO_CACHE
                     settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
                     settings.mediaPlaybackRequiresUserGesture = false
@@ -147,7 +147,8 @@ internal fun InternalCallScreen(api: LayaliApi, baseUrl: String, callId: String,
                                 (resource == PermissionRequest.RESOURCE_AUDIO_CAPTURE && ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) ||
                                     (resource == PermissionRequest.RESOURCE_VIDEO_CAPTURE && call.optString("mode") == "video" && ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
                             }
-                            if(allowed.size == request.resources.size && allowed.isNotEmpty()) request.grant(allowed.toTypedArray()) else request.deny()
+                            // Only grant known audio/video captures permitted by Android and this call mode.
+                            if(allowed.isNotEmpty()) request.grant(allowed.toTypedArray()) else request.deny()
                         }
                     }
                     val roomUrl = room.getString("url")
