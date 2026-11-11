@@ -63,6 +63,7 @@ internal fun commerceError(e: Exception): String = when(e.message) {
 @Composable
 internal fun CommerceScreen(api: LayaliApi, kind: String, back: () -> Unit) {
     if(kind == "شحن الرصيد") { CoinShopScreen(api, back); return }
+    val isWheel = kind == "العجلة" || kind == "يا نصيب"
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var info by remember { mutableStateOf(JSONObject()) }
@@ -93,7 +94,7 @@ internal fun CommerceScreen(api: LayaliApi, kind: String, back: () -> Unit) {
     }
     LaunchedEffect(kind) {
         busy = true
-        try { info = api.request(if(kind == "العجلة") "/api/promotion/wheel" else "/api/payment-info"); if(kind != "العجلة") refresh() }
+        try { info = api.request(if(isWheel) "/api/promotion/wheel" else "/api/payment-info"); if(!isWheel) refresh() }
         catch(e: CancellationException) { throw e }
         catch(e: Exception) { note = commerceError(e) }
         finally { busy = false }
@@ -101,7 +102,7 @@ internal fun CommerceScreen(api: LayaliApi, kind: String, back: () -> Unit) {
     Surface(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding().verticalScroll(rememberScrollState()).padding(22.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             TextButton(back, enabled = !busy) { Text("رجوع") }
-            Text(kind, style = MaterialTheme.typography.headlineLarge)
+            Text(if(isWheel) "يا نصيب" else kind, style = MaterialTheme.typography.headlineLarge)
             if(busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             if(note.isNotBlank()) Text(note, color = MaterialTheme.colorScheme.primary)
             if(kind == "شحن الرصيد") {
@@ -129,17 +130,18 @@ internal fun CommerceScreen(api: LayaliApi, kind: String, back: () -> Unit) {
                 RewardWheel(info.optJSONArray("prizes"), wheelRotation)
                 Text("لفة مدفوعة من الرصيد. راجع السعر واحتمالات الجوائز قبل التأكيد.")
                 if(info.optBoolean("enabled")) {
-                    Text("سعر اللفة: ${BigDecimal.valueOf(info.optLong("cost_cents"), 2)} USD")
-                    if(info.optBoolean("first_spin_guaranteed")) Text("أول لفة: جائزة ${BigDecimal.valueOf(info.optLong("first_reward_cents"),2)} دولار مضمونة.")
-                    Text("يزيد سعر اللفة ${BigDecimal.valueOf(info.optLong("price_step_cents"),2)} دولار، حتى ${BigDecimal.valueOf(info.optLong("maximum_cost_cents"),2)} دولار.",style=MaterialTheme.typography.bodySmall)
-                    if(!info.optBoolean("grand_unlocked")) Text("جائزة 100 دولار تُفتح بعد إنفاق ${BigDecimal.valueOf(info.optLong("grand_unlock_spend_cents"),2)} دولار تراكميًا. إنفاقك: ${BigDecimal.valueOf(info.optLong("spent_cents"),2)} دولار.",style=MaterialTheme.typography.bodySmall)
+                    Text("سعر اللفة: ${info.optLong("cost_cents")} كوين")
+                    if(info.optBoolean("first_spin_guaranteed")) Text("أول لفة: جائزة ${info.optLong("first_reward_cents")} كوين مضمونة.")
+                    if(info.optLong("price_step_cents") > 0L) Text("يزيد سعر اللفة ${info.optLong("price_step_cents")} كوين حتى ${info.optLong("maximum_cost_cents")} كوين.",style=MaterialTheme.typography.bodySmall)
+                    else Text("سعر اللفة ثابت: ${info.optLong("cost_cents")} كوين.",style=MaterialTheme.typography.bodySmall)
+                    if(info.optLong("grand_unlock_spend_cents") > 0L && !info.optBoolean("grand_unlocked")) Text("بعض الجوائز تُفتح بعد إنفاق ${info.optLong("grand_unlock_spend_cents")} كوين. إنفاقك: ${info.optLong("spent_cents")} كوين.",style=MaterialTheme.typography.bodySmall)
                     TextButton({ showRules = !showRules }) { Text("القواعد والاحتمالات") }
                     val prizes = info.optJSONArray("prizes")
-                    if(showRules && prizes != null) for(i in 0 until prizes.length()) { val p = prizes.getJSONObject(i); Text("${if(p.optLong("amount_cents")==0L) "حظ أوفر · جرّب مرة أخرى" else BigDecimal.valueOf(p.optLong("amount_cents"),2).toPlainString()+" دولار"} · احتمال ${p.optString("chance_percent")}%") }
+                    if(showRules && prizes != null) for(i in 0 until prizes.length()) { val p = prizes.getJSONObject(i); Text("${if(p.optLong("amount_cents")==0L) "بدون جائزة · حاول مجددًا" else "${p.optLong("amount_cents")} كوين"} · احتمال ${p.optString("chance_percent")}%") }
                     Button(onClick = { confirmSpin = true }, enabled = !busy) { Text("لف العجلة — خصم من الرصيد") }
                 } else Text("العجلة غير مفعّلة حتى تحدد الإدارة سعر اللفة والجوائز واحتمالاتها.")
             }
-            if(kind != "العجلة") {
+            if(!isWheel) {
                 Text("طلباتي", style = MaterialTheme.typography.titleLarge)
                 rows.forEach { r -> Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp)) {
                     Text(when(r.optString("status")) { "pending" -> "قيد المراجعة"; "approved" -> "معتمد"; "rejected" -> "مرفوض"; else -> r.optString("status") })
@@ -148,7 +150,7 @@ internal fun CommerceScreen(api: LayaliApi, kind: String, back: () -> Unit) {
                 } } }
             }
         }
-        if(confirmSpin) AlertDialog(onDismissRequest = { confirmSpin = false }, title = { Text("تأكيد اللفة المدفوعة") }, text = { Text(if(info.optBoolean("first_spin_guaranteed")) "سعر هذه اللفة ${BigDecimal.valueOf(info.optLong("cost_cents"),2)} دولار وجائزتها المضمونة ${BigDecimal.valueOf(info.optLong("first_reward_cents"),2)} دولار." else "سيُخصم ${BigDecimal.valueOf(info.optLong("cost_cents"),2)} دولار. قد تكون الجائزة صفرًا. قواعد فتح الجائزة الكبرى والأسعار المتزايدة معروضة قبل الدفع.") }, confirmButton = { TextButton(onClick = { confirmSpin = false; perform {
+        if(confirmSpin) AlertDialog(onDismissRequest = { confirmSpin = false }, title = { Text("تأكيد اللفة المدفوعة") }, text = { Text(if(info.optBoolean("first_spin_guaranteed")) "سعر هذه اللفة ${info.optLong("cost_cents")} كوين وجائزتها المضمونة ${info.optLong("first_reward_cents")} كوين." else "سيُخصم ${info.optLong("cost_cents")} كوين من رصيدك. قد لا تحصل على جائزة؛ راجع احتمالات الجوائز قبل التأكيد.") }, confirmButton = { TextButton(onClick = { confirmSpin = false; perform {
             val result = api.request("/api/promotion/wheel", "POST", JSONObject().put("request_key", wheelKey).put("rules_version",2).put("config_version", info.optString("config_version")))
             val prizes = info.optJSONArray("prizes")
             var accumulated = 0f
@@ -162,7 +164,7 @@ internal fun CommerceScreen(api: LayaliApi, kind: String, back: () -> Unit) {
             wheelRotation += 1800f + ((360f - center - wheelRotation % 360f + 360f) % 360f)
             wheelKey = java.util.UUID.randomUUID().toString()
             info = api.request("/api/promotion/wheel")
-            note = if(result.optLong("prize_cents")==0L) "حظ أوفر · جرّب مرة أخرى" else "الجائزة: ${BigDecimal.valueOf(result.optLong("prize_cents"),2)} USD · الرصيد: ${BigDecimal.valueOf(result.optLong("balance_cents"),2)} USD"
+            note = if(result.optLong("prize_cents")==0L) "بدون جائزة · حاول مجددًا" else "الجائزة: ${result.optLong("prize_cents")} كوين · الرصيد: ${result.optLong("balance_cents")} كوين"
         } }) { Text("تأكيد الخصم واللفة") } }, dismissButton = { TextButton({ confirmSpin = false }) { Text("إلغاء") } })
     }
 }
@@ -239,7 +241,7 @@ private fun RewardWheel(prizes: org.json.JSONArray?, rotation: Float) {
                 drawArc(palette[i % palette.size], start, sweep, true, topLeft = androidx.compose.ui.geometry.Offset(ring,ring), size = androidx.compose.ui.geometry.Size(size.width - ring*2, size.height - ring*2))
                 if(sweep >= 15f) {
                     val angle = Math.toRadians((start + sweep / 2).toDouble())
-                    val text = if(prizes != null && prizes.length() > 0) { val amount=prizes.getJSONObject(i).optLong("amount_cents");if(amount==0L)"حظ أوفر"else BigDecimal.valueOf(amount,2).toPlainString() } else "✦"
+                    val text = if(prizes != null && prizes.length() > 0) { val amount=prizes.getJSONObject(i).optLong("amount_cents");if(amount==0L)"بدون جائزة"else amount.toString() } else "✦"
                     drawContext.canvas.nativeCanvas.drawText(text, center.x + kotlin.math.cos(angle).toFloat() * size.width * .32f, center.y + kotlin.math.sin(angle).toFloat() * size.height * .32f + 5.dp.toPx(), paint)
                 }
                 start += sweep
