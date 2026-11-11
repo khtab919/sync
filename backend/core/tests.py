@@ -918,6 +918,26 @@ class ReliableChatTests(TestCase):
 
 @override_settings(SECURE_SSL_REDIRECT=False)
 class NewFundingAndWheelTests(CommerceTests):
+    def test_coin_shop_public_packages_match_real_quote_and_promo_points(self):
+        from .commerce import bonus_for
+        listing = self.call('/api/payment-info')
+        self.assertEqual(listing.status_code, 200)
+        data = listing.json()
+        self.assertEqual(data['packages_cents'], [100, 300, 1000, 2500, 5000, 10000])
+        self.assertEqual(
+            [(p['coins'], p['bonus_points']) for p in data['packages']],
+            [(amount, bonus_for(amount)) for amount in data['packages_cents']]
+        )
+        self.assertFalse(data.get('google_play_enabled', False))
+        for pack in data['packages']:
+            response = self.call('/api/topup-quotes', {'method': 'usdt', 'amount_cents': pack['coins']})
+            self.assertEqual(response.status_code, 201)
+            quote = response.json()
+            self.assertEqual(quote['amount_cents'], pack['coins'])
+            self.assertEqual(quote['bonus_cents'], pack['bonus_points'])
+            self.assertEqual(quote['payment_currency'], 'USDT')
+            self.assertEqual(quote['duration_seconds'], 1800)
+
     def test_quote_has_real_thirty_minute_expiration_and_snapshot_destination(self):
         from .models import PaymentSettings,TopUpQuote
         from django.utils import timezone
