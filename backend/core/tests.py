@@ -727,7 +727,7 @@ class CommerceTests(TestCase):
         self.assertFalse(self.call('/api/promotion/wheel').json()['enabled'])
         self.assertEqual(self.call('/api/promotion/wheel', {'request_key': str(uuid.uuid4())}).status_code, 409)
         config = PaidWheelConfiguration.objects.get(pk=1)
-        config.enabled = True; config.first_reward_cents = 0; config.price_step_cents = 0; config.cost_cents = 100; config.prizes = [{'amount_cents': 50, 'weight': 1}]; config.bankroll_cents = 10000; config.save()
+        config.enabled = True; config.first_reward_cents = 0; config.price_step_cents = 0; config.cost_cents = 100; config.maximum_cost_cents = 100; config.prizes = [{'amount_cents': 50, 'weight': 1}]; config.bankroll_cents = 10000; config.save()
         info = self.call('/api/promotion/wheel').json()
         data = {'rules_version':2,'request_key': str(uuid.uuid4()), 'config_version': info['config_version']}
         self.assertEqual(self.call('/api/promotion/wheel', data).status_code, 409)
@@ -773,7 +773,7 @@ class CommerceConcurrencyTests(TransactionTestCase):
     def test_concurrent_spin_retry_charges_once(self):
         from .models import PaidWheelConfiguration, PaidSpin
         from .commerce import wheel_offer
-        config = PaidWheelConfiguration.objects.update_or_create(pk=1, defaults=dict(enabled=True, cost_cents=100, first_reward_cents=0, price_step_cents=0, bankroll_cents=10000, prizes=[{'amount_cents':50,'weight':1}]))[0]
+        config = PaidWheelConfiguration.objects.update_or_create(pk=1, defaults=dict(enabled=True, cost_cents=100, first_reward_cents=0, price_step_cents=0, maximum_cost_cents=100, bankroll_cents=10000, prizes=[{'amount_cents':50,'weight':1}]))[0]
         wallet = Wallet.objects.get(user=self.user); wallet.balance_cents=500; wallet.save()
         codes = self.parallel_post('/api/promotion/wheel', {'rules_version':2,'request_key':str(uuid.uuid4()),'config_version':wheel_offer(config,self.user)['config_version']}, self.token)
         self.assertEqual(sorted(codes), [200,201])
@@ -940,20 +940,54 @@ class NewFundingAndWheelTests(CommerceTests):
         self.assertEqual(TopUp.objects.get(pk=paid.json()['id']).method,'shamcash')
         self.assertEqual(Wallet.objects.get(user=self.user).balance_cents,0)
 
-    def test_first_win_increasing_cost_and_explicit_grand_prize_gate(self):
-        from .models import PaidWheelConfiguration,PaidSpin
-        config=PaidWheelConfiguration.objects.get(pk=1);config.enabled=True;config.bankroll_cents=100000;config.save()
-        wallet=Wallet.objects.get(user=self.user);wallet.balance_cents=10000;wallet.save()
-        offer=self.call('/api/promotion/wheel').json()
-        self.assertTrue(offer['first_spin_guaranteed']);self.assertEqual(offer['cost_cents'],350)
-        paid=self.call('/api/promotion/wheel',{'rules_version':2,'request_key':str(uuid.uuid4()),'config_version':offer['config_version']})
-        self.assertEqual(paid.status_code,201);self.assertEqual(paid.json()['prize_cents'],500)
-        wallet.refresh_from_db();self.assertEqual(wallet.balance_cents,10150)
-        second=self.call('/api/promotion/wheel').json();self.assertEqual(second['cost_cents'],400);self.assertFalse(second['first_spin_guaranteed']);self.assertFalse(second['grand_unlocked'])
-        self.assertNotIn(10000,[p['amount_cents'] for p in second['prizes']])
-        PaidSpin.objects.create(user=self.user,request_key=uuid.uuid4(),cost_cents=19650,prize_cents=0,prizes_snapshot=[])
-        unlocked=self.call('/api/promotion/wheel').json();self.assertTrue(unlocked['grand_unlocked']);self.assertIn(10000,[p['amount_cents'] for p in unlocked['prizes']])
-        self.assertEqual(self.call('/api/promotion/wheel',{'request_key':str(uuid.uuid4()),'config_version':unlocked['config_version']}).status_code,409)
+    def test_wheel_65_coins_fixed_cost_and_published_probabilities(self):
+        from .models import PaidWheelConfiguration, PaidSpin
+        config = PaidWheelConfiguration.objects.get(pk=1)
+        config.enabled = True
+        config.bankroll_cents = 100000
+        config.save(update_fields=['enabled', 'bankroll_cents'])
+        wallet = Wallet.objects.get(user=self.user)
+        wallet.balance_cents = 10000
+        wallet.save(update_fields=['balance_cents'])
+
+        offer = self.call('/api/promotion/wheel').json()
+        self.assertTrue(offer['enabled'])
+        self.assertEqual(offer['cost_cents'], 65)
+        self.assertEqual(offer['price_step_cents'], 0)
+        self.assertEqual(offer['maximum_cost_cents'], 65)
+        self.assertFalse(offer['first_spin_guaranteed'])
+        self.assertTrue(offer['grand_unlocked'])
+        prizes = [(p['amount_cents'], p['weight'], p['chance_percent']) for p in offer['prizes']]
+        self.assertEqual(prizes, [
+            (0, 500, '50.00000000'),
+            (13, 250, '25.00000000'),
+            (39, 150, '15.00000000'),
+            (130, 80, '8.00000000'),
+            (650, 18, '1.80000000'),
+            (1300, 2, '0.20000000'),
+        ])
+        weighted_payout = sum(amount * weight for amount, weight, _ in prizes) / 1000
+        self.assertAlmostEqual(weighted_payout, 33.8)
+        self.assertAlmostEqual((65 - weighted_payout) / 65, 0.48)
+
+        key = str(uuid.uuid4())
+        body = {'rules_version': 2, 'request_key': key, 'config_version': offer['config_version']}
+        paid = self.call('/api/promotion/wheel', body)
+        self.assertEqual(paid.status_code, 201)
+        outcome = paid.json()['prize_cents']
+        self.assertIn(outcome, [p[0] for p in prizes])
+        wallet.refresh_from_db()
+        self.assertEqual(wallet.balance_cents, 10000 + outcome - 65)
+        self.assertEqual(self.call('/api/promotion/wheel', body).status_code, 200)
+        self.assertEqual(PaidSpin.objects.filter(user=self.user, request_key=key).count(), 1)
+
+        again = self.call('/api/promotion/wheel').json()
+        self.assertEqual(again['cost_cents'], 65)
+        self.assertEqual(again['prizes'], offer['prizes'])
+        self.assertEqual(self.call('/api/promotion/wheel', {
+            'request_key': str(uuid.uuid4()),
+            'config_version': again['config_version'],
+        }).status_code, 409)
 
 @override_settings(SECURE_SSL_REDIRECT=False)
 class NOWPaymentsTests(TestCase):
