@@ -1597,15 +1597,56 @@ internal fun GenderChoice(value: String, onChange: (String) -> Unit) {
 }
 
 @Composable
-internal fun HomeToolbarActions(live:()->Unit,wallet:()->Unit,saved:()->Unit,refresh:()->Unit){
+internal fun RelaxiaQuickShortcuts(
+    onLive:()->Unit,
+    onAudioRooms:()->Unit,
+    onCoinStore:()->Unit,
+    onLottery:()->Unit,
+    onServices:()->Unit
+){
+    val actions=listOf(
+        Triple("بث مباشر",Icons.Outlined.Sensors,onLive),
+        Triple("غرف صوتية",Icons.Outlined.Mic,onAudioRooms),
+        Triple("كوينز",Icons.Outlined.AccountBalanceWallet,onCoinStore),
+        Triple("يا نصيب",Icons.Outlined.Casino,onLottery),
+        Triple("الخدمات",Icons.Outlined.ShoppingBag,onServices)
+    )
+    LazyRow(
+        contentPadding=PaddingValues(horizontal=16.dp),
+        horizontalArrangement=Arrangement.spacedBy(8.dp),
+        modifier=Modifier.fillMaxWidth().padding(vertical=4.dp)
+    ){
+        items(actions){ (title,icon,action)->
+            Surface(
+                onClick=action,
+                shape=RoundedCornerShape(15.dp),
+                color=MaterialTheme.colorScheme.surfaceVariant,
+                border=androidx.compose.foundation.BorderStroke(1.dp,MaterialTheme.colorScheme.outlineVariant)
+            ){
+                Row(
+                    Modifier.padding(horizontal=12.dp,vertical=11.dp),
+                    verticalAlignment=Alignment.CenterVertically,
+                    horizontalArrangement=Arrangement.spacedBy(7.dp)
+                ){
+                    Icon(icon,title,Modifier.size(18.dp),tint=MaterialTheme.colorScheme.primary)
+                    Text(title,fontSize=13.sp,fontWeight=FontWeight.SemiBold,maxLines=1)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun HomeToolbarActions(create:()->Unit,wallet:()->Unit,saved:()->Unit,refresh:()->Unit,support:()->Unit){
     var expanded by remember{mutableStateOf(false)}
-    TextButton(live){Icon(Icons.Outlined.Sensors,null,Modifier.size(18.dp));Spacer(Modifier.width(4.dp));Text("مباشر")}
+    IconButton(onClick=create){Icon(Icons.Outlined.AddCircleOutline,"إنشاء محتوى",Modifier.size(23.dp))}
     Box {
         IconButton({expanded=true}){Icon(Icons.Outlined.MoreVert,"خيارات التصفح")}
         DropdownMenu(expanded,{expanded=false}){
             DropdownMenuItem(text={Text("المحفظة والرصيد")},onClick={expanded=false;wallet()})
             DropdownMenuItem(text={Text("المحفوظات")},onClick={expanded=false;saved()})
             DropdownMenuItem(text={Text("تحديث المحتوى")},onClick={expanded=false;refresh()})
+            DropdownMenuItem(text={Text("الدعم والمساعدة")},onClick={expanded=false;support()})
         }
     }
 }
