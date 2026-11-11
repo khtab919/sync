@@ -1628,6 +1628,62 @@ internal fun GenderChoice(value: String, onChange: (String) -> Unit) {
 }
 
 @Composable
+internal fun RelaxiaLiveNow(
+    rooms:List<JSONObject>,
+    loading:Boolean,
+    unavailable:Boolean,
+    openAudio:()->Unit,
+    openVideo:()->Unit
+){
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal=16.dp,vertical=4.dp),
+        verticalArrangement=Arrangement.spacedBy(9.dp)
+    ){
+        Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
+            Icon(Icons.Outlined.Sensors,"المباشر الآن",Modifier.size(19.dp),tint=MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.width(7.dp))
+            Text("مباشر الآن",fontWeight=FontWeight.Bold,style=MaterialTheme.typography.titleMedium,modifier=Modifier.weight(1f))
+            if(loading && rooms.isEmpty() && !unavailable) CircularProgressIndicator(Modifier.size(16.dp),strokeWidth=2.dp)
+            else if(!unavailable) Text("${rooms.size} نشط",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if(unavailable){
+            Surface(color=MaterialTheme.colorScheme.surfaceVariant,shape=RoundedCornerShape(14.dp)){
+                Row(Modifier.fillMaxWidth().padding(12.dp),verticalAlignment=Alignment.CenterVertically){
+                    Text("الغرف غير متاحة حاليًا. تحقق من اتصال خادم البث.",Modifier.weight(1f),fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                    TextButton(onClick=openAudio){Text("الفحص")}
+                }
+            }
+        }else if(!loading && rooms.isEmpty()){
+            Text("لا توجد غرف نشطة الآن. يمكنك بدء غرفة صوتية أو بث مباشر.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+        }else if(rooms.isNotEmpty()){
+            LazyRow(
+                horizontalArrangement=Arrangement.spacedBy(9.dp),
+                contentPadding=PaddingValues(end=5.dp)
+            ){
+                items(rooms.take(8),key={it.optString("id")} ){room->
+                    val audio=room.optString("mode")=="audio"
+                    Surface(
+                        onClick=if(audio)openAudio else openVideo,
+                        shape=RoundedCornerShape(15.dp),
+                        color=MaterialTheme.colorScheme.surfaceVariant,
+                        modifier=Modifier.width(185.dp)
+                    ){
+                        Column(Modifier.padding(13.dp),verticalArrangement=Arrangement.spacedBy(7.dp)){
+                            Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                                Icon(if(audio)Icons.Outlined.Mic else Icons.Outlined.Videocam,null,Modifier.size(17.dp),tint=MaterialTheme.colorScheme.primary)
+                                Text(if(audio)"غرفة صوتية" else "بث فيديو",fontSize=12.sp,fontWeight=FontWeight.SemiBold)
+                            }
+                            Text(room.optString("title").ifBlank{"غرفة مباشرة"},fontSize=14.sp,fontWeight=FontWeight.SemiBold,maxLines=1,overflow=TextOverflow.Ellipsis)
+                            Text("${room.optString("owner_name")} · ${room.optInt("viewers")} مشاهد",fontSize=11.sp,color=MaterialTheme.colorScheme.onSurfaceVariant,maxLines=1,overflow=TextOverflow.Ellipsis)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 internal fun RelaxiaQuickShortcuts(
     onLive:()->Unit,
     onAudioRooms:()->Unit,
