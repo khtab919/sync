@@ -108,11 +108,24 @@ jobs:
           fi
 
       - name: Prepare Debug Keystore
+        env:
+          RELAXIA_KEYSTORE_BASE64: ${{ secrets.RELAXIA_KEYSTORE_BASE64 }}
         run: |
-          if [ -f debug.keystore.base64 ]; then
+          set -euo pipefail
+          umask 077
+          if [ -n "$RELAXIA_KEYSTORE_BASE64" ]; then
+            printf '%s' "$RELAXIA_KEYSTORE_BASE64" | base64 -d > debug.keystore
+          elif [ -f debug.keystore.base64 ]; then
             base64 -d debug.keystore.base64 > debug.keystore
           elif [ ! -f debug.keystore ]; then
-            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+            echo '::error::Original Relaxia signing key missing. Configure RELAXIA_KEYSTORE_BASE64; never generate a replacement key for an update.'
+            exit 1
+          fi
+          expected=eadf736b5beaa7fa9395c633b83ab9a0892126219ef3f05ae59eb511465c501f
+          actual=$(keytool -exportcert -keystore debug.keystore -storepass android -alias androiddebugkey | sha256sum | cut -d ' ' -f 1)
+          if [ "$actual" != "$expected" ]; then
+            echo '::error::Signing certificate differs from the delivered Relaxia 11.3 APK. Update cancelled to prevent package conflicts.'
+            exit 1
           fi
 
       - name: Test adult access age boundaries
@@ -130,7 +143,15 @@ jobs:
         run: gradle assembleDebug "-PLAYALI_API_URL=${LAYALI_API_URL}" --no-daemon --stacktrace
 
       - name: Copy APK with Friendly Name
-        run: cp app/build/outputs/apk/debug/app-debug.apk Relaxia-v11.4.apk
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          metadata = json.loads(Path('app/build/outputs/apk/debug/output-metadata.json').read_text())
+          assert metadata['applicationId'] == 'com.aistudio.layalilounge.x9m4kp', 'Relaxia package identity changed'
+          assert all(item['versionCode'] > 30 for item in metadata['elements']), 'Version must exceed Relaxia 11.3'
+          PY
+          cp app/build/outputs/apk/debug/app-debug.apk Relaxia-v11.4.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
