@@ -108,6 +108,9 @@ fun ServerAppScreen(baseUrl: String) {
     var contentError by remember { mutableStateOf("") }
     var profile by remember { mutableStateOf(JSONObject()) }
     var services by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var livePreview by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var livePreviewLoading by remember { mutableStateOf(false) }
+    var livePreviewError by remember { mutableStateOf(false) }
     var creators by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var rows by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var selected by remember { mutableStateOf(JSONObject()) }
@@ -295,6 +298,25 @@ fun ServerAppScreen(baseUrl: String) {
     }},confirmButton={TextButton(onClick={insights=null}){Text("إغلاق")}}) }
     if(securityDialog)AccountSecurityDialog(api,!signedIn,{securityDialog=false}){signedIn=false;remembered=false;profile=JSONObject();page=""}
     val screen = page.ifBlank { destinations[tab] }
+    LaunchedEffect(signedIn,screen,foreground,revision){
+        if(!signedIn || screen!="تصفح" || !foreground)return@LaunchedEffect
+        while(true){
+            livePreviewLoading=true
+            try{
+                val response=api.request("/api/live")
+                if(response.optInt("stage_version")<3 || !response.optBoolean("available")){
+                    livePreview=emptyList()
+                    livePreviewError=true
+                }else{
+                    livePreview=response.rows().take(30)
+                    livePreviewError=false
+                }
+            }catch(e:CancellationException){throw e}
+            catch(_:Exception){livePreview=emptyList();livePreviewError=true}
+            finally{livePreviewLoading=false}
+            delay(30000)
+        }
+    }
     // Android back from a full-screen Reel must return home, never exit the app.
     BackHandler(enabled = signedIn && (page.isNotBlank() || tab == 1)) {
         if (screen == "ريلز") {
@@ -553,6 +575,15 @@ fun ServerAppScreen(baseUrl: String) {
                                     onCoinStore={buyCredits()},
                                     onLottery={open("يا نصيب")},
                                     onServices={open("العرض")}
+                                )
+                            }
+                            item {
+                                RelaxiaLiveNow(
+                                    rooms=livePreview,
+                                    loading=livePreviewLoading,
+                                    unavailable=livePreviewError,
+                                    openAudio={open("الغرف الصوتية")},
+                                    openVideo={open("البث المباشر")}
                                 )
                             }
                             item { Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
