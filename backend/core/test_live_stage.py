@@ -38,7 +38,7 @@ class StageTests(TestCase):
         self.assertContains(page,'aria-label="البث المباشر" hidden')
         self.assertContains(page,'جارٍ تجهيز الصوت…')
         self.assertContains(page,'window.relaxiaStageLoaded')
-        self.assertContains(page,'v=rooms-4')
+        self.assertContains(page,'v=rooms-5')
 
     def test_audio_host_sources_and_guest_consent_permissions(self):
         row=self.stage();row.mode='audio';row.save()
