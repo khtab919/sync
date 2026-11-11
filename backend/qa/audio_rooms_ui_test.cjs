@@ -55,7 +55,7 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    await page.locator('#closeSheet').click();await page.locator('#gift').click();
    await page.getByRole('button',{name:'فاخرة',exact:true}).click();
    assert.equal(await page.locator('.gift-card').count(),2);
-   assert.equal(await page.locator('.gift-card').first().getAttribute('aria-label'),'الحوت الأزرق · 10000 رصيد');
+   assert.equal(await page.locator('.gift-card').first().getAttribute('aria-label'),'الحوت الأزرق · 10000 كوين');
    page.once('dialog',d=>d.dismiss());await page.locator('.gift-card').first().click();
    assert.equal(await page.evaluate(()=>sent.filter(a=>a.action==='gift').length),0);
    page.once('dialog',d=>d.accept());await page.locator('.gift-card').first().click();
