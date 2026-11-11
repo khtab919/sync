@@ -238,6 +238,51 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
             }
         }
     }}
+    if(showPaymentSheet && !showOrders && quote==null && submittedId.isBlank()){
+        ModalBottomSheet(onDismissRequest={showPaymentSheet=false}){
+            Column(
+                Modifier.fillMaxWidth().padding(horizontal=22.dp).padding(bottom=28.dp),
+                verticalArrangement=Arrangement.spacedBy(13.dp)
+            ){
+                Text("اختر طريقة الدفع",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.Bold)
+                val chosen=packages.firstOrNull{it.coins==selected}
+                Surface(color=MaterialTheme.colorScheme.primaryContainer,shape=RoundedCornerShape(16.dp)){
+                    Column(Modifier.fillMaxWidth().padding(16.dp),verticalArrangement=Arrangement.spacedBy(5.dp)){
+                        Text("🪙 ${java.text.NumberFormat.getIntegerInstance().format(selected)} كوين",fontSize=21.sp,fontWeight=FontWeight.Bold)
+                        Text("القيمة الأساسية: ${BigDecimal.valueOf(selected.toLong(),2).toPlainString()} USD",style=MaterialTheme.typography.bodyMedium)
+                        if((chosen?.bonusPoints?:0)>0)Text("+${chosen?.bonusPoints} نقطة ترويجية إضافية",color=MaterialTheme.colorScheme.primary)
+                    }
+                }
+                methods.forEach{option->
+                    Surface(
+                        onClick={method=option.code},enabled=option.enabled,
+                        color=if(method==option.code&&option.enabled)MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
+                        border=BorderStroke(1.dp,if(method==option.code&&option.enabled)MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
+                        shape=RoundedCornerShape(14.dp)
+                    ){
+                        Row(Modifier.fillMaxWidth().padding(12.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)){
+                            Text(option.symbol,fontSize=23.sp,color=MaterialTheme.colorScheme.primary)
+                            Column(Modifier.weight(1f)){
+                                Text(option.name,fontWeight=FontWeight.SemiBold)
+                                Text(if(option.enabled)option.description else "غير مفعّل حاليًا",fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            RadioButton(selected=method==option.code&&option.enabled,onClick=null,enabled=option.enabled)
+                        }
+                    }
+                }
+                Text("لن يتم الخصم عند اختيار الوسيلة. سيعرض الخادم المبلغ النهائي وبيانات التحويل قبل الدفع.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                if(note.isNotBlank())Text(note,color=MaterialTheme.colorScheme.error,style=MaterialTheme.typography.bodySmall)
+                Button(
+                    onClick={perform{
+                        val result=api.request("/api/topup-quotes","POST",JSONObject().put("method",method).put("amount_cents",selected))
+                        quoteText=result.toString();invoiceUrl="";receipt="";reference="";preview="";showPaymentSheet=false
+                    }},
+                    enabled=!busy&&methods.any{it.code==method&&it.enabled},
+                    modifier=Modifier.fillMaxWidth().height(52.dp),shape=RoundedCornerShape(15.dp)
+                ){Text(if(busy)"جارٍ تجهيز الطلب…" else "متابعة الدفع",fontSize=16.sp)}
+            }
+        }
+    }
 }
 
 internal fun validPaymentReference(method: String, value: String): Boolean =
