@@ -136,17 +136,17 @@ function giftSheet(){
   for(const g of catalog){
    const b=button(grid,'',async()=>{
     if(!select.value)return;
-    if(!confirm('إرسال '+g.name+' إلى '+select.selectedOptions[0].text+' مقابل '+g.price_cents+' رصيد؟'))return;
+    if(!confirm('إرسال '+g.name+' إلى '+select.selectedOptions[0].text+' مقابل '+g.price_cents+' كوين؟'))return;
     const fingerprint=g.code+':'+select.value+':'+g.price_cents;
     if(giftPending&&giftPending!==fingerprint)throw Error('pending_gift_retry');
     giftPending=fingerprint;giftKey=giftKey||crypto.randomUUID();
     try{const result=await api({action:'gift',gift_code:g.code,recipient_id:Number(select.value),price_cents:g.price_cents,confirmed:true,request_key:giftKey});giftKey=null;giftPending=null;drawState(result);$('sheet').close()}
     catch(e){if(['insufficient_balance','price_confirmation_required','gift_unavailable'].includes(e.message)){giftKey=null;giftPending=null}throw e}
    });
-   b.disabled=!select.options.length;b.className='gift-card '+g.effect;b.setAttribute('aria-label',g.name+' · '+g.price_cents+' رصيد');
+   b.disabled=!select.options.length;b.className='gift-card '+g.effect;b.setAttribute('aria-label',g.name+' · '+g.price_cents+' كوين');
    const icon=document.createElement('span');icon.className='gift-art';icon.textContent=g.symbol;
    const name=document.createElement('strong');name.textContent=g.name;
-   const price=document.createElement('small');price.textContent=g.price_cents.toLocaleString('ar')+' رصيد';
+   const price=document.createElement('small');price.textContent=g.price_cents.toLocaleString('ar')+' كوين';
    b.append(icon,name,price);
   }
   if(!catalog.length)note(grid,'لا توجد هدايا متاحة في هذا القسم.');
@@ -154,7 +154,7 @@ function giftSheet(){
  for(const [key,label] of [['all','الكل'],['simple','بسيطة'],['animated','متحركة'],['depth','فاخرة']]){
   const tab=button(tabs,label,()=>render(key));tab.dataset.category=key;
  }
- render('all');note(box,'أكبر الداعمين');for(const supporter of state.top_supporters||[])note(box,supporter.name+' · '+supporter.total+' رصيد');
+ render('all');note(box,'أكبر الداعمين');for(const supporter of state.top_supporters||[])note(box,supporter.name+' · '+supporter.total+' كوين');
 }
 function drawAudioSeats(result){
  const box=$('audioStage');box.replaceChildren();box.classList.add('seat-grid');
