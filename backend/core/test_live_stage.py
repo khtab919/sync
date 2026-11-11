@@ -38,7 +38,7 @@ class StageTests(TestCase):
         self.assertContains(page,'aria-label="البث المباشر" hidden')
         self.assertContains(page,'جارٍ تجهيز الصوت…')
         self.assertContains(page,'window.relaxiaStageLoaded')
-        self.assertContains(page,'v=rooms-4')
+        self.assertContains(page,'v=rooms-5')
 
     def test_audio_host_sources_and_guest_consent_permissions(self):
         row=self.stage();row.mode='audio';row.save()
@@ -93,6 +93,8 @@ class StageTests(TestCase):
         row=self.stage();admitted=self.join(row,self.viewer).json()
         page=self.client.post(f'/api/live/{row.pk}/room',{'ticket':admitted['ticket']})
         config=json.loads(re.search(r'<script id="config" type="application/json">(.*?)</script>',page.content.decode(),re.S).group(1))
+        self.assertEqual(config['ownerPublicId'], self.owner.profile.public_id)
+        self.assertRegex(config['ownerPublicId'], r'^[1-9][0-9]{4}$')
         self.assertIn("style-src 'self'",page['Content-Security-Policy'])
         path=f'/api/live/{row.pk}/control'
         headers={'HTTP_X_LIVE_CONTROL':config['control']}
