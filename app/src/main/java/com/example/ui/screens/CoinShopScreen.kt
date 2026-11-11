@@ -31,15 +31,59 @@ import org.json.JSONObject
 import java.math.BigDecimal
 import java.time.Instant
 
+private data class StorePackage(val coins:Int,val bonusPoints:Int)
+private data class StorePaymentMethod(val code:String,val name:String,val description:String,val symbol:String,val enabled:Boolean)
+
+private fun storeMethods(info:JSONObject):List<StorePaymentMethod> = listOf(
+    StorePaymentMethod("usdt","USDT · BEP20","تحويل USDT على شبكة BNB Smart Chain","₮",info.optString("address").isNotBlank()),
+    StorePaymentMethod("shamcash","شام كاش","تحويل محلي مع إثبات الدفع","◈",info.optBoolean("shamcash_enabled")),
+    StorePaymentMethod("nowpayments","NOWPayments","فاتورة إلكترونية تؤكدها بوابة الدفع","✦",info.optBoolean("nowpayments_enabled"))
+)
+
+private fun storePackages(info:JSONObject):List<StorePackage>{
+    val detailed=info.optJSONArray("packages")
+    if(detailed!=null)return (0 until detailed.length()).mapNotNull{ i ->
+        val row=detailed.optJSONObject(i)?:return@mapNotNull null
+        val coins=row.optInt("coins")
+        if(coins>=100)StorePackage(coins,row.optInt("bonus_points").coerceAtLeast(0))else null
+    }
+    val legacy=info.optJSONArray("packages_cents")?:return emptyList()
+    return (0 until legacy.length()).mapNotNull{i->
+        legacy.optInt(i).takeIf{it>=100}?.let{StorePackage(it,0)}
+    }
+}
+
 @Composable
-internal fun CoinPackage(coins:Int,bonus:Int,dollars:String,selected:Boolean,choose:()->Unit) {
-    Surface(onClick=choose,shape=RoundedCornerShape(22.dp),color=if(selected)MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,border=BorderStroke(if(selected)2.dp else 1.dp,if(selected)MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant)) {
-        Column(Modifier.fillMaxWidth().padding(18.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(6.dp)) {
-            Text("◉",fontSize=28.sp,color=Color(0xFFD7AD72))
-            Text("$coins",fontSize=27.sp,fontWeight=FontWeight.Bold)
-            Text("رصيد",fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
-            if(bonus>0) Text("+$bonus نقطة ترويجية",color=MaterialTheme.colorScheme.primary,fontSize=12.sp)
-            Text("$$dollars",fontSize=17.sp,fontWeight=FontWeight.SemiBold)
+internal fun CoinPackage(coins:Int,bonus:Int,dollars:String,selected:Boolean,badge:String?,choose:()->Unit){
+    val colors=MaterialTheme.colorScheme
+    Surface(
+        onClick=choose,
+        shape=RoundedCornerShape(18.dp),
+        color=if(selected)colors.primaryContainer else colors.surface,
+        shadowElevation=if(selected)4.dp else 1.dp,
+        border=BorderStroke(if(selected)2.dp else 1.dp,if(selected)colors.primary else colors.outlineVariant)
+    ){
+        Column(
+            Modifier.fillMaxWidth().heightIn(min=174.dp).padding(horizontal=6.dp,vertical=10.dp),
+            horizontalAlignment=Alignment.CenterHorizontally,
+            verticalArrangement=Arrangement.spacedBy(5.dp)
+        ){
+            if(badge!=null){
+                Surface(color=colors.primary,shape=RoundedCornerShape(10.dp)){
+                    Text(badge,Modifier.padding(horizontal=6.dp,vertical=3.dp),fontSize=10.sp,color=colors.onPrimary,fontWeight=FontWeight.SemiBold,maxLines=1)
+                }
+            }else Spacer(Modifier.height(19.dp))
+            Text("🪙",fontSize=33.sp)
+            Text(java.text.NumberFormat.getIntegerInstance().format(coins),fontSize=20.sp,fontWeight=FontWeight.Bold,maxLines=1)
+            Text("كوين",fontSize=12.sp,color=colors.onSurfaceVariant)
+            Text(
+                if(bonus>0)"+${java.text.NumberFormat.getIntegerInstance().format(bonus)} نقطة ترويجية" else "دون مكافأة إضافية",
+                fontSize=10.sp,color=if(bonus>0)colors.primary else colors.onSurfaceVariant,maxLines=2,lineHeight=13.sp
+            )
+            Spacer(Modifier.weight(1f))
+            Surface(color=colors.surfaceVariant,shape=RoundedCornerShape(10.dp)){
+                Text("$dollars USD",Modifier.padding(horizontal=7.dp,vertical=6.dp),fontSize=11.sp,fontWeight=FontWeight.SemiBold,maxLines=1)
+            }
         }
     }
 }
