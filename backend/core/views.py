@@ -431,7 +431,7 @@ def conversations(request):
     for peer in peers:
         m=messages[peer.last_id]; profile=peer.profile
         preview='حُذفت هذه الرسالة' if m.deleted_at else ('مكالمة' if m.call_id else ('رسالة صوتية' if m.attachment_id and m.attachment.mime.startswith('audio') else 'مرفق' if m.attachment_id else m.body))
-        result.append({'id':peer.pk,'public_id':profile.public_id,'username':peer.username,'display_name':profile.display_name or peer.username,'selected_frame':grants.get(peer.pk,profile.selected_frame),'avatar_url':profile.avatar_url,'last_message':preview,'unread_count':unread.get(peer.pk,0),'created_at':m.created_at})
+        result.append({'id':peer.pk,'public_id':profile.public_id,'username':peer.username,'display_name':profile.display_name or peer.username,'selected_frame':grants.get(peer.pk,profile.selected_frame),'avatar_url':profile.avatar_url,'last_message':preview,'unread_count':unread.get(peer.pk,0),'is_mine':m.sender_id==request.actor.pk,'delivered_at':m.delivered_at.isoformat() if m.delivered_at else None,'read_at':m.read_at.isoformat() if m.read_at else None,'created_at':m.created_at})
     return JsonResponse({'items':result,'next_cursor':str(peers[-1].last_id) if more else None})
 
 @endpoint(['GET', 'POST'])
