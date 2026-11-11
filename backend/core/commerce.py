@@ -179,7 +179,7 @@ def bonus_for(cents):
 def payment_info(request):
     from .nowpayments import configured
     settings = funding_settings()
-    return JsonResponse({'network':'BNB Smart Chain (BEP20)', 'currency':'USDT', 'address':ADDRESS, 'qr_url':request.build_absolute_uri('/api/payment-qr'), 'packages_cents':[100,1000,2500,5000,10000], 'coin_rate':100, 'credit_rate':'100 coins = 1 USD internal balance', 'manual_review':True, 'nowpayments_enabled':configured(), 'shamcash_enabled':bool(settings.shamcash_enabled and settings.shamcash_account and settings.shamcash_rate>0), 'shamcash_account':settings.shamcash_account if settings.shamcash_enabled else '', 'shamcash_currency':settings.shamcash_currency, 'shamcash_instructions':settings.shamcash_instructions})
+    return JsonResponse({'network':'BNB Smart Chain (BEP20)', 'currency':'USDT', 'address':ADDRESS, 'qr_url':request.build_absolute_uri('/api/payment-qr'), 'packages_cents':[100,300,1000,2500,5000,10000], 'packages':[{'coins':coins,'bonus_points':bonus_for(coins)} for coins in (100,300,1000,2500,5000,10000)], 'coin_rate':100, 'credit_rate':'100 coins = 1 USD internal balance', 'manual_review':True, 'nowpayments_enabled':configured(), 'shamcash_enabled':bool(settings.shamcash_enabled and settings.shamcash_account and settings.shamcash_rate>0), 'shamcash_account':settings.shamcash_account if settings.shamcash_enabled else '', 'shamcash_currency':settings.shamcash_currency, 'shamcash_instructions':settings.shamcash_instructions})
 
 
 def payment_qr(request):
