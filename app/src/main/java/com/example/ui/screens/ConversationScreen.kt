@@ -78,6 +78,7 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
     var loadingOlder by remember { mutableStateOf(false) }
     var rows by remember { mutableStateOf<List<JSONObject>>(cached) }
     var error by remember { mutableStateOf("") }
+    var loadError by remember(peerId) { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var recording by remember { mutableStateOf(false) }
     var seconds by remember { mutableIntStateOf(0) }
@@ -86,6 +87,7 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
     val voice = remember { VoicePlayback(context) }
     suspend fun refresh() {
         val result=api.request("/api/messages/$peerId")
+        loadError=""
         result.optJSONObject("peer")?.let { actualPeer=it.optString("display_name",it.optString("username"));peerHandle=it.optString("username");peerAvatar=it.optString("avatar_url");peerVerified=it.optBoolean("creator");peerPrice=it.optLong("chat_price_cents");peerOnline=it.optBoolean("online");presenceKnown=it.has("online") }
         val a=result.optJSONArray("items")
         val loaded=if(a==null)emptyList()else(0 until a.length()).map{a.getJSONObject(it)}.reversed()
@@ -95,7 +97,7 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
         if(!olderLoaded)nextOlder=result.optString("next_cursor").takeUnless{it=="null"}.orEmpty()
         rows=(rows+loaded).associateBy{it.optInt("id")}.values.sortedBy{it.optInt("id")};pending=withContext(Dispatchers.IO){outbox.read()}
         val delivered=org.json.JSONArray(loaded.filter{it.optInt("sender_id")!=myId&&it.isNull("delivered_at")}.map{it.optInt("id")})
-        if(delivered.length()>0)api.request("/api/messages/$peerId/delivered","POST",JSONObject().put("ids",delivered))
+        if(delivered.length()>0)try { api.request("/api/messages/$peerId/delivered","POST",JSONObject().put("ids",delivered)) } catch(e:CancellationException) { throw e } catch(_:Exception) { /* Delivery acknowledgements can be retried later; already-fetched messages stay visible. */ }
     }
     fun clearTemporary(source:Uri?) { if(source?.scheme=="file")source.path?.let{File(it)}?.takeIf{it.parentFile==context.cacheDir && it.name.startsWith("relaxia-voice-")}?.delete() }
     fun queueActual(source:Uri?,kind:String,text:String,cost:Long,mediaPrice:Long) {
@@ -111,7 +113,7 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
     fun perform(block: suspend () -> Unit) {
         if(busy) return
         busy = true; error = ""
-        scope.launch { try { block(); refresh() } catch(e: CancellationException) { throw e } catch(e: Exception) { error = if(e.message == "calls_setup_required" || e.message == "server_unavailable") "خادم الاتصال غير جاهز بعد. حدّث الخادم لتفعيل الاتصال الداخلي." else if(e.message == "call_busy") "أحد الطرفين مشغول بمكالمة أخرى." else if(e.message == "paid_chat_requires_verified_payment") "هذه المحادثة مدفوعة؛ لم تُرسل الرسالة ولم يُخصم رصيد." else commerceError(e) } finally { busy = false } }
+        scope.launch { try { block(); refresh() } catch(e: CancellationException) { throw e } catch(e: Exception) { error = if(e.message == "calls_setup_required") "خادم الاتصال غير جاهز بعد. حدّث الخادم لتفعيل الاتصال الداخلي." else if(e.message == "call_busy") "أحد الطرفين مشغول بمكالمة أخرى." else if(e.message == "paid_chat_requires_verified_payment") "هذه المحادثة مدفوعة؛ لم تُرسل الرسالة ولم يُخصم رصيد." else commerceError(e) } finally { busy = false } }
     }
     fun beginCall(mode:String){
         if(peerPrice>0)perform{
@@ -175,7 +177,7 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
                     pending=withContext(Dispatchers.IO){outbox.read()}
                 } else if(first!=null&&!reliable) error=if(versionKnown)"حدّث الخادم لتفعيل الإرسال الموثوق وحالات تسليم الرسائل."else"بانتظار الاتصال لإرسال الرسائل…"
             }catch(e:CancellationException){throw e}catch(e:Exception){error="بانتظار الاتصال لإرسال الرسائل…"}
-            try { refresh() }catch(e:CancellationException){throw e}catch(e:Exception){peerOnline=false;presenceKnown=false;if(pending.isEmpty())error=commerceError(e)}
+            try { refresh() }catch(e:CancellationException){throw e}catch(e:Exception){peerOnline=false;presenceKnown=false;loadError=commerceError(e)}
             delay(if(pending.isEmpty())1500 else 900)
         }
     }
@@ -210,7 +212,8 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
         topBar = { ChatHeader(actualPeer.ifBlank { "المحادثة" }, { if(recording) finishRecording(false); back() }, { beginCall("audio") }, buy, !busy && !recording, peerHandle, peerAvatar, video = { beginCall("video") }, verified = peerVerified, priceCoins = peerPrice, online = peerOnline, presenceKnown = presenceKnown, block={blockConfirm=true}) },
         bottomBar = { Surface(color = conversationColors().background) { Column(Modifier.navigationBarsPadding().imePadding()) {
             if(replyTarget!=null)Row(Modifier.fillMaxWidth().padding(horizontal=16.dp),verticalAlignment=Alignment.CenterVertically){Text("رد: "+replyTarget!!.optString("body").ifBlank{"مرفق"},Modifier.weight(1f),maxLines=1,style=MaterialTheme.typography.bodySmall);TextButton({replyTarget=null}){Text("إلغاء")}}
-            if(error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
+            if(error.isNotBlank()) Text(error, modifier=Modifier.fillMaxWidth().padding(horizontal=16.dp,vertical=4.dp), color = MaterialTheme.colorScheme.error)
+            if(loadError.isNotBlank() && displayed.isNotEmpty()) Text(loadError, modifier=Modifier.fillMaxWidth().padding(horizontal=16.dp,vertical=4.dp), color=MaterialTheme.colorScheme.error)
             if(recording) {
                 RecordingIndicator(seconds, amplitude, amplitudeHistory, recordingPaused)
                 Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceEvenly) {
@@ -226,7 +229,28 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
         } } }
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
-        if(displayed.isEmpty() && error.isBlank()) Column(Modifier.align(Alignment.Center).padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) { Text("مساحة لحديثكما", style = MaterialTheme.typography.titleLarge); Text("اكتب رسالة أو أرسل صورة أو تسجيلًا صوتيًا.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        if(displayed.isEmpty()) Column(
+            Modifier.align(Alignment.Center).padding(28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            if(loadError.isNotBlank()){
+                Text("تعذّر تحميل المحادثة", style=MaterialTheme.typography.titleLarge)
+                Text(loadError, color=MaterialTheme.colorScheme.onSurfaceVariant)
+                OutlinedButton(onClick={
+                    scope.launch {
+                        try { refresh() }
+                        catch(e:CancellationException){throw e}
+                        catch(e:Exception){loadError=commerceError(e)}
+                    }
+                }) { Text("إعادة المحاولة") }
+                TextButton(onClick=back) { Text("العودة إلى المحادثات") }
+            } else {
+                Text("مساحة لحديثكما", style=MaterialTheme.typography.titleLarge)
+                Text("اكتب رسالة أو أرسل صورة أو تسجيلًا صوتيًا.",
+                    color=MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
         LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(horizontal = 16.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             if(nextOlder.isNotBlank()) item(key="older") {
                 TextButton(enabled=!loadingOlder,onClick={scope.launch{
