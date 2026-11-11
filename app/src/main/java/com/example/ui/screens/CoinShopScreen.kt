@@ -175,21 +175,22 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
             val maxBonus=packages.maxOfOrNull{it.bonusPoints}?:0
             BoxWithConstraints(Modifier.fillMaxWidth()){
                 val columns=if(maxWidth>=335.dp)3 else 2
-                packages.chunked(columns).forEach{line->
-                    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(9.dp)){
-                        line.forEach{option->
-                            val badge=if(option.bonusPoints>0&&option.bonusPoints==maxBonus)"أكبر مكافأة" else null
-                            Box(Modifier.weight(1f)){
-                                CoinPackage(
-                                    coins=option.coins,bonus=option.bonusPoints,
-                                    dollars=BigDecimal.valueOf(option.coins.toLong(),2).toPlainString(),
-                                    selected=selected==option.coins,badge=badge
-                                ){selected=option.coins;showPaymentSheet=true}
+                Column(verticalArrangement=Arrangement.spacedBy(9.dp)){
+                    packages.chunked(columns).forEach{line->
+                        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(9.dp)){
+                            line.forEach{option->
+                                val badge=if(option.bonusPoints>0&&option.bonusPoints==maxBonus)"أكبر مكافأة" else null
+                                Box(Modifier.weight(1f)){
+                                    CoinPackage(
+                                        coins=option.coins,bonus=option.bonusPoints,
+                                        dollars=BigDecimal.valueOf(option.coins.toLong(),2).toPlainString(),
+                                        selected=selected==option.coins,badge=badge
+                                    ){selected=option.coins;showPaymentSheet=true}
+                                }
                             }
+                            repeat(columns-line.size){Spacer(Modifier.weight(1f))}
                         }
-                        repeat(columns-line.size){Spacer(Modifier.weight(1f))}
                     }
-                    Spacer(Modifier.height(9.dp))
                 }
             }
             Text("اضغط على أي باقة لعرض وسائل الدفع المتاحة وتأكيد السعر.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
