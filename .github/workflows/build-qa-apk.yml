@@ -3,7 +3,7 @@ name: Relaxia 11.6 QA install APK (not an update)
 on:
   push:
     branches:
-      - preview/relaxia-116-apk-20261112
+      - fix/relaxia-116-live-white-screen-20261112
   workflow_dispatch:
 
 permissions:
