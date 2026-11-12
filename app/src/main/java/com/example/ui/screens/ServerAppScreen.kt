@@ -1242,128 +1242,147 @@ internal fun ProfileHero(
 ) {
     val context = LocalContext.current
     val colors = MaterialTheme.colorScheme
-    val navy = colors.primary
-    Column(Modifier.fillMaxWidth()
-        .background(colors.surface,
-            RoundedCornerShape(bottomStart = 30.dp, bottomEnd = 30.dp))
-        .padding(horizontal = 22.dp, vertical = 18.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    val name = person.optString("display_name").ifBlank {
+        person.optString("username").ifBlank { "المستخدم" }
+    }
+    val username = person.optString("username").removePrefix("@")
+    val publicId = person.optString("public_id").ifBlank { "—" }
+
+    Column(
+        Modifier.fillMaxWidth()
+            .background(colors.surface, RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp))
+            .padding(horizontal = 18.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(11.dp)
+    ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(if (own) "حسابي" else "الملف الشخصي",
-                modifier = Modifier.weight(1f), fontSize = 20.sp,
-                fontWeight = FontWeight.Bold, color = colors.onSurface)
+            Text(
+                if (own) "الملف الشخصي" else "حساب المستخدم",
+                Modifier.weight(1f),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
             IconButton(onClick = settings) {
                 Icon(if (own) Icons.Rounded.Settings else Icons.Rounded.ArrowForward,
-                    if (own) "الإعدادات" else "رجوع", tint = colors.primary)
+                    if (own) "الإعدادات" else "رجوع")
             }
         }
-        ReferenceAvatar(person.optString("display_name", person.optString("username")),
-            person.optInt("selected_frame"), 104, person.optString("avatar_url"))
-        Row(verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(person.optString("display_name", "المستخدم"),
-                fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = colors.onSurface,
-                maxLines = 1, overflow = TextOverflow.Ellipsis)
-            val genderMark = when(person.optString("gender")) {
-                "male" -> "♂"
-                "female" -> "♀"
-                else -> ""
+        Row(
+            Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            ReferenceAvatar(name, person.optInt("selected_frame"), 84, person.optString("avatar_url"))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Text(name, Modifier.weight(1f, fill = false), fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    val genderMark = when(person.optString("gender")) {
+                        "male" -> "♂"; "female" -> "♀"; else -> ""
+                    }
+                    if (genderMark.isNotBlank()) Text(genderMark, color = colors.primary, fontSize = 15.sp)
+                }
+                if (username.isNotBlank()) Text("@" + username,
+                    color = colors.onSurfaceVariant, fontSize = 12.sp)
+                Row(verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    RelaxiaLevelBadge(person.optInt("level", 1))
+                    val vip = person.optInt("vip_tier")
+                    if (vip > 0) Text("VIP " + vip,
+                        color = colors.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
             }
-            if(genderMark.isNotBlank()) Text(genderMark, fontSize = 23.sp, color = colors.primary)
         }
-        Row(verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            val id = person.optString("public_id", "—")
-            Text("ID: $id", color = colors.onSurfaceVariant, fontSize = 15.sp)
-            if(id != "—") IconButton(
-                onClick = {
-                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
-                        as android.content.ClipboardManager
-                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Relaxia ID", id))
-                }, modifier = Modifier.size(48.dp)) {
+        if (publicId != "—") Surface(
+            onClick = {
+                val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                    as android.content.ClipboardManager
+                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Relaxia ID", publicId))
+            },
+            modifier = Modifier.fillMaxWidth(),
+            color = colors.surfaceContainerLow,
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Row(
+                Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(9.dp)
+            ) {
+                Icon(Icons.Rounded.Badge, null, Modifier.size(18.dp), tint = colors.primary)
+                Text("رقم الحساب: " + publicId, Modifier.weight(1f),
+                    fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                 Icon(Icons.Rounded.ContentCopy, "نسخ رقم الحساب",
-                    tint = colors.primary, modifier = Modifier.size(19.dp))
+                    Modifier.size(18.dp), tint = colors.primary)
             }
         }
-        if(person.has("level")) {
-            Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                RelaxiaLevelBadge(person.optInt("level",1))
-                val vip=person.optInt("vip_tier")
-                if(vip in 1..5) {
-                    Surface(
-                        color=Color(0xFF7862B4).copy(alpha=.18f),
-                        shape=RoundedCornerShape(18.dp),
-                        border=androidx.compose.foundation.BorderStroke(1.dp,Color(0xFFAD98E1).copy(alpha=.55f))
+        if (person.optBoolean("identity_verified")) {
+            Text("✓ حساب موثق", color = colors.primary, fontSize = 12.sp)
+        }
+        val bio = person.optString("bio")
+        if (bio.isNotBlank()) {
+            Text(bio, color = colors.onSurfaceVariant, maxLines = 2,
+                overflow = TextOverflow.Ellipsis, fontSize = 13.sp)
+        }
+        Surface(
+            color = colors.surfaceContainerLow,
+            shape = RoundedCornerShape(18.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 5.dp, vertical = 11.dp)) {
+                listOf(
+                    "الريلز" to "reel_count",
+                    "العروض" to "service_count",
+                    "المتابعون" to "followers_count",
+                    "أتابع" to "following_count"
+                ).forEach { (label, field) ->
+                    Column(
+                        Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
-                        Row(Modifier.padding(horizontal=10.dp,vertical=6.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(5.dp)) {
-                            Icon(Icons.Rounded.WorkspacePremium,null,modifier=Modifier.size(16.dp),tint=Color(0xFFAD98E1))
-                            Text("VIP $vip",color=Color(0xFFAD98E1),style=MaterialTheme.typography.labelLarge,fontWeight=FontWeight.Bold)
-                        }
+                        Text(if (person.has(field)) person.optInt(field).toString() else "—",
+                            fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Text(label, color = colors.onSurfaceVariant, fontSize = 10.sp)
                     }
                 }
             }
         }
-        if(person.optBoolean("identity_verified")) Text("✓ حساب موثق",
-            color = colors.primary, fontSize = 12.sp)
-        if(person.optString("bio").isNotBlank()) Text(person.optString("bio"),
-            color = colors.onSurfaceVariant, maxLines = 2,
-            overflow = TextOverflow.Ellipsis, fontSize = 13.sp)
-        Surface(color = colors.surfaceContainerLow, shape = RoundedCornerShape(20.dp),
-            modifier = Modifier.fillMaxWidth()) {
-            Row(Modifier.padding(vertical = 14.dp, horizontal = 7.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly) {
-                listOf("الريلز" to person.optInt("reel_count"),
-                    "العروض" to person.optInt("service_count"),
-                    "المتابعون" to person.optInt("followers_count"),
-                    "أتابع" to person.optInt("following_count")).forEach { (label, count) ->
-                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(count.toString(), color = colors.onSurface, fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold)
-                        Text(label, color = colors.onSurfaceVariant, fontSize = 11.sp)
-                    }
-                }
-            }
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-            Button(onClick = editOrChat, modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = navy,
-                    contentColor = colors.onPrimary)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Button(
+                onClick = editOrChat,
+                modifier = Modifier.weight(1f).heightIn(min = 46.dp),
+                shape = RoundedCornerShape(18.dp)
+            ) {
                 Icon(if (own) Icons.Rounded.Edit else Icons.Rounded.ChatBubbleOutline,
-                    null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(5.dp))
-                Text(if(own) "تعديل الملف" else "محادثة", maxLines = 1, fontSize = 13.sp)
+                    null, Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(if (own) "تعديل الملف" else "مراسلة", fontSize = 13.sp, maxLines = 1)
             }
-            OutlinedButton(onClick = frameOrFollow,
-                modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.primary),
-                border = androidx.compose.foundation.BorderStroke(1.dp, colors.outlineVariant)) {
-                Icon(if(own) Icons.Rounded.WorkspacePremium else Icons.Rounded.PersonAdd,
-                    null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(5.dp))
-                Text(if(own) "إطاراتي" else if(person.optBoolean("following"))
+            OutlinedButton(
+                onClick = frameOrFollow,
+                modifier = Modifier.weight(1f).heightIn(min = 46.dp),
+                shape = RoundedCornerShape(18.dp)
+            ) {
+                Icon(if (own) Icons.Rounded.WorkspacePremium else Icons.Rounded.PersonAdd,
+                    null, Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(if (own) "إطاراتي" else if (person.optBoolean("following"))
                     "إلغاء المتابعة" else "متابعة", fontSize = 13.sp, maxLines = 1)
             }
         }
-        if (own && person.has("level")) {
+        if (own && person.has("xp_points")) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.WorkspacePremium, null, tint = colors.primary)
-                Spacer(Modifier.width(8.dp))
-                Text("التقدم المكتسب",color=colors.onSurfaceVariant,fontSize=12.sp)
+                Text("تقدم المستوى", color = colors.onSurfaceVariant, fontSize = 12.sp)
                 Spacer(Modifier.weight(1f))
-                Text("${person.optLong("xp_points")} XP", color = colors.onSurfaceVariant,
-                    fontSize = 12.sp)
+                Text(person.optLong("xp_points").toString() + " XP",
+                    color = colors.primary, fontSize = 12.sp)
             }
-            LinearProgressIndicator(
-                progress = {
-                    val current = person.optLong("xp_points")
-                    val cap = person.optLong("next_level_xp", 200L)
-                    if(person.optInt("earned_level",person.optInt("level")) >= 100) 1f
-                    else ((current - (cap - 200)).toFloat() / 200f).coerceIn(0f, 1f)
-                },
-                modifier = Modifier.fillMaxWidth().height(5.dp),
-                color = colors.primary, trackColor = colors.primaryContainer
-            )
+            val nextLevelXp = person.optLong("next_level_xp")
+            if (nextLevelXp > 0) {
+                LinearProgressIndicator(
+                    progress = { (person.optLong("xp_points").toFloat() / nextLevelXp.toFloat()).coerceIn(0f, 1f) },
+                    modifier = Modifier.fillMaxWidth().height(5.dp)
+                )
+            }
         }
     }
 }
