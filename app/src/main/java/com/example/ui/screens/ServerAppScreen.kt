@@ -939,7 +939,7 @@ fun ServerAppScreen(baseUrl: String) {
                                 modifier = Modifier.size(44.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
-                                    Icon(Icons.Rounded.SmartDisplay, null, tint = Color(0xFF792D45), modifier = Modifier.size(22.dp))
+                                    Icon(Icons.Rounded.SmartDisplay, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
                                 }
                             }
                             Column(Modifier.weight(1f)) {

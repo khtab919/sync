@@ -84,7 +84,7 @@ internal fun ChatHeader(name: String, back: () -> Unit, call: () -> Unit, buy: (
         else Row(Modifier.fillMaxWidth().padding(horizontal=16.dp),verticalAlignment=Alignment.CenterVertically) {
             TextButton(block,contentPadding=PaddingValues(0.dp)){Text("خيارات الخصوصية",fontSize=11.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)}
             Spacer(Modifier.weight(1f))
-            TextButton(buy,enabled=enabled,contentPadding=PaddingValues(horizontal=8.dp,vertical=0.dp)){Text("شراء رصيد",fontSize=12.sp,color=colors.accent)}
+            TextButton(buy,enabled=enabled,contentPadding=PaddingValues(horizontal=8.dp,vertical=0.dp)){Text("شراء رصيد",fontSize=12.sp,color=MaterialTheme.colorScheme.primary)}
         }
     }
 }

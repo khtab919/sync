@@ -794,7 +794,7 @@ internal fun CameraPreviewSurface(
             ){
                 Box(
                     Modifier.fillMaxSize().background(
-                        Brush.horizontalGradient(listOf(Color(0xFF792D45), Color(0xFF1E5B74)))
+                        Brush.horizontalGradient(listOf(Color(0xFF792D45), Color(0xFF4C2037)))
                     ),
                     contentAlignment=Alignment.Center
                 ){
