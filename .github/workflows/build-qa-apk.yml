@@ -1,9 +1,9 @@
-name: Relaxia 11.6.1 QA install APK (not an update)
+name: Relaxia 11.6.2 QA install APK (not an update)
 
 on:
   push:
     branches:
-      - fix/relaxia-116-live-white-screen-20261112
+      - fix/relaxia-1162-live-webview-session-20261112
   workflow_dispatch:
 
 permissions:
@@ -94,7 +94,7 @@ jobs:
             keytool -genkeypair -keystore debug.keystore -storetype JKS \
               -storepass android -keypass android -alias androiddebugkey \
               -keyalg RSA -keysize 2048 -validity 60 \
-              -dname "CN=Relaxia 11.6.1 QA Only, OU=QA, O=Relaxia, C=TR"
+              -dname "CN=Relaxia 11.6.2 QA Only, OU=QA, O=Relaxia, C=TR"
             echo "::warning::Temporary QA signing certificate in use."
           fi
           echo "::warning::This preview installs beside existing Relaxia. Keep the installed app."
@@ -111,15 +111,15 @@ jobs:
           from pathlib import Path
           data=json.loads(Path('app/build/outputs/apk/debug/output-metadata.json').read_text())
           assert data['applicationId']=='com.aistudio.layalilounge.x9m4kp.qa116'
-          assert all(item['versionCode']==34 for item in data['elements'])
-          print('Relaxia 11.6.1 source APK validated (fresh-install-only QA signature)')
+          assert all(item['versionCode']==35 for item in data['elements'])
+          print('Relaxia 11.6.2 source APK validated (fresh-install-only QA signature)')
           PY
           test -s app/build/outputs/apk/debug/app-debug.apk
-          cp app/build/outputs/apk/debug/app-debug.apk Relaxia-v11.6.1-SIDE-BY-SIDE.apk
+          cp app/build/outputs/apk/debug/app-debug.apk Relaxia-v11.6.2-SIDE-BY-SIDE.apk
           cat > READ-ME-FIRST.txt <<'EOF'
           RELAXIA 11.6 QA BUILD ONLY
           Package ID: com.aistudio.layalilounge.x9m4kp.qa116
-          Version: 11.6.1 (code 34)
+          Version: 11.6.2 (code 34)
           Signed with a separate QA key, NOT the original production key.
           THIS APK INSTALLS SIDE-BY-SIDE WITH THE EXISTING RELAXIA APP.
           DO NOT UNINSTALL YOUR EXISTING RELAXIA APP OR YOU MAY LOSE LOCAL DATA.
@@ -132,9 +132,9 @@ jobs:
       - name: Upload preview and safety instructions
         uses: actions/upload-artifact@v4
         with:
-          name: Relaxia-v11.6.1-QA-SIDE-BY-SIDE
+          name: Relaxia-v11.6.2-QA-SIDE-BY-SIDE
           path: |
-            Relaxia-v11.6.1-SIDE-BY-SIDE.apk
+            Relaxia-v11.6.2-SIDE-BY-SIDE.apk
             READ-ME-FIRST.txt
           retention-days: 7
           if-no-files-found: error

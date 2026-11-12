@@ -71,7 +71,36 @@ private fun liveError(e:Exception)=when(e.message){
     fun act(block:suspend()->Unit){if(busy)return;busy=true;error="";scope.launch{try{block()}catch(e:CancellationException){throw e}catch(e:Exception){error=liveError(e)}finally{busy=false}}}
     fun enter(row:JSONObject){act{active=api.request("/api/live/${row.getString("id")}/admission","POST",JSONObject().put("confirmed",true).put("price_cents",row.optLong("price_cents")));activeId=row.getString("id");selected=null}}
     LaunchedEffect(query){while(true){try{val result=api.request("/api/live?q="+URLEncoder.encode(query,"UTF-8"));if(result.optInt("stage_version")<3)throw IllegalStateException("live_update_required");val a=result.optJSONArray("items");rows=if(a==null)emptyList()else(0 until a.length()).map{a.getJSONObject(it)};allowed=result.optBoolean("can_broadcast");available=result.optBoolean("available");maximumLimit=result.optInt("max_viewers",25);error=""}catch(e:CancellationException){throw e}catch(e:Exception){allowed=false;available=false;rows=emptyList();error=liveError(e)};delay(5000)}}
-    active?.let{room->LiveRoomView(baseUrl,room,profile={id->active=null;openProfile(id)}){val ending=room.optBoolean("owner");val id=activeId;active=null;if(ending)scope.launch{runCatching{api.request("/api/live/$id","POST",JSONObject().put("action","end"))}}};return}
+    active?.let{room->
+        val broadcastId=activeId
+        // A WebView failure must not silently end an owner's live room or charge a paid guest again.
+        key(room.optString("ticket")){
+            LiveRoomView(
+                baseUrl=baseUrl,
+                bootstrap=room,
+                profile={id->active=null;openProfile(id)},
+                retry={
+                    if(broadcastId.isNotBlank() && !busy){
+                        // Unmount the existing WebView before opening a new one so its
+                        // media captures cannot race the next live-room instance.
+                        active=null
+                        act{
+                            val fresh=api.request("/api/live/$broadcastId/admission","POST",JSONObject())
+                            active=fresh
+                        }
+                    }
+                },
+                finish={
+                    val ending=room.optBoolean("owner")
+                    active=null
+                    if(ending)scope.launch{
+                        runCatching{api.request("/api/live/$broadcastId","POST",JSONObject().put("action","end"))}
+                    }
+                }
+            )
+        }
+        return
+    }
     val filteredRooms=rows.filter{when(roomFilter){"audio","video"->it.optString("mode")==roomFilter;"free"->!it.optBoolean("private");"paid"->it.optBoolean("private");else->true}}
     Scaffold(topBar={TopAppBar(title={Text("الغرف والبث")},navigationIcon={IconButton(back){Icon(Icons.Outlined.ArrowForward,"رجوع")}},actions={TextButton(buy){Text("الرصيد")};if(allowed)IconButton({create=true},enabled=available&&!busy){Icon(Icons.Outlined.Videocam,"بدء بث")}})}){padding->
         LazyColumn(Modifier.fillMaxSize().padding(padding),contentPadding=PaddingValues(16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
@@ -98,25 +127,56 @@ private fun liveError(e:Exception)=when(e.message){
     if(create){LiveHostSetupScreen(onClose={create=false},audioOnly=audioOnly,onAudioOnlyChange={audioOnly=it;speakers=if(it)"15"else"1"},title=title,onTitleChange={title=it},privateLive=privateLive,onPrivateLiveChange={privateLive=it},price=price,onPriceChange={price=it},inviteOnly=inviteOnly,onInviteOnlyChange={inviteOnly=it},invites=invites,onInvitesChange={invites=it},speakers=speakers,onSpeakersChange={speakers=it},limit=limit,onLimitChange={limit=it},minimum=minimum,onMinimumChange={minimum=it},gifts=gifts,onGiftsChange={gifts=it},giftGoal=giftGoal,onGiftGoalChange={giftGoal=it},maximumLimit=maximumLimit,busy=busy,error=error,onStartStream={act{val p=price.toIntOrNull()?:0;val n=limit.toIntOrNull()?:0;val m=minimum.toIntOrNull()?:0;val t=title.trim().ifEmpty{"بث مباشر"};if(t.length<2||n !in 1..maximumLimit||m !in 30..3600||(privateLive&&p !in 1..1000000))throw IllegalArgumentException("invalid_input");val row=api.request("/api/live","POST",JSONObject().put("title",t).put("private",privateLive).put("invite_only",inviteOnly).put("price_cents",p).put("max_viewers",n).put("minimum_seconds",m).put("gifts_enabled",gifts).put("mode",if(audioOnly)"audio"else"video").put("max_speakers",speakers.toInt()).put("gift_goal_cents",giftGoal.toIntOrNull()?:0).put("invite_names",JSONArray(invites.split(',', '،').map{it.trim().removePrefix("@")}.filter{it.isNotBlank()})));create=false;active=api.request("/api/live/${row.getString("id")}/admission","POST",JSONObject());activeId=row.getString("id")}})}
 }
 
-@Composable internal fun LiveRoomView(baseUrl:String,bootstrap:JSONObject,profile:((Int)->Unit)?=null,finish:()->Unit){
+@Composable internal fun LiveRoomView(baseUrl:String,bootstrap:JSONObject,profile:((Int)->Unit)?=null,retry:()->Unit,finish:()->Unit){
     val transportTheme=if(MaterialTheme.colorScheme.background.luminance()<.25f)"dark"else"light"
     val context=LocalContext.current;val lifecycle=LocalLifecycleOwner.current.lifecycle;val owner=bootstrap.optBoolean("owner");val audioOnly=bootstrap.optString("mode")=="audio"
     var granted by remember{mutableStateOf(!owner)};var error by remember{mutableStateOf("")};var view by remember{mutableStateOf<WebView?>(null)}
     var requestingGuest by remember{mutableStateOf(false)}
     var requestedMode by remember{mutableStateOf(if(audioOnly)"audio"else"video")}
     // Keep native progress visible until both the room DOM and its media scripts have loaded.
-    var pageReady by remember(bootstrap.optString("id")){mutableStateOf(false)}
+    val roomTicket=bootstrap.optString("ticket")
+    var pageReady by remember(roomTicket){mutableStateOf(false)}
+    var pageFinished by remember(roomTicket){mutableStateOf(false)}
+    var nativeStageStatus by remember(roomTicket){mutableStateOf("جارٍ تحميل واجهة الغرفة")}
     val permission=rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()){result->
         val accepted=result[Manifest.permission.RECORD_AUDIO]==true&&(requestedMode=="audio"||result[Manifest.permission.CAMERA]==true)
         if(requestingGuest){if(accepted)runCatching{com.example.notifications.MediaSessionService.start(context,true)};view?.evaluateJavascript("window.dispatchEvent(new CustomEvent('publishpermissions',{detail:"+accepted+"}));",null);requestingGuest=false}
         else{granted=accepted;error="";if(!accepted)error=if(audioOnly)"اسمح بالميكروفون لبدء البث الصوتي."else"اسمح بالميكروفون والكاميرا لبدء البث."}
     }
     LaunchedEffect(Unit){if(owner){val list=if(audioOnly)arrayOf(Manifest.permission.RECORD_AUDIO)else arrayOf(Manifest.permission.RECORD_AUDIO,Manifest.permission.CAMERA);if(list.all{ContextCompat.checkSelfPermission(context,it)==PackageManager.PERMISSION_GRANTED})granted=true else permission.launch(list)}}
-    LaunchedEffect(granted,bootstrap.optString("id")){
-        if(granted){
-            delay(18000)
-            if(!pageReady && error.isBlank())
-                error="استغرق تحميل غرفة البث وقتًا أطول من اللازم. قد تكون ملفات البث على الخادم غير متاحة. ارجع للغرف للحصول على تذكرة جديدة."
+    // WebView.onPageFinished can precede deferred script execution and GPU compositing.
+    // Wait for actual stage DOM readiness, then a visual frame, before removing the native loader.
+    LaunchedEffect(granted,pageFinished,roomTicket){
+        if(!granted || !pageFinished)return@LaunchedEffect
+        repeat(14){
+            if(pageReady || error.isNotBlank())return@LaunchedEffect
+            view?.evaluateJavascript(
+                "(function(){var e=document.getElementById('stage');return !!(e&&e.getBoundingClientRect().height>1&&document.getElementById('exit')&&window.relaxiaStageLoaded===true&&typeof LivekitClient!=='undefined'&&typeof RelaxiaMedia!=='undefined');})()"
+            ){ready->
+                if(ready=="true" && !pageReady){
+                    val current=view
+                    current?.postVisualStateCallback(42L,object:WebView.VisualStateCallback(){
+                        override fun onComplete(requestId:Long){pageReady=true}
+                    })
+                }
+            }
+            delay(800)
+        }
+        if(!pageReady && error.isBlank())error="تعذر إظهار واجهة الغرفة رغم تحميل الصفحة. ارجع للحصول على تذكرة جديدة، أو استخدم فحص الاتصال."
+    }
+    LaunchedEffect(granted,roomTicket){
+        if(!granted)return@LaunchedEffect
+        delay(22000)
+        if(!pageReady && error.isBlank())error="انتهت مهلة تحميل البث. لم تُؤكّد واجهة الغرفة جاهزيتها على الهاتف."
+    }
+    LaunchedEffect(pageReady,roomTicket){
+        if(!pageReady)return@LaunchedEffect
+        while(true){
+            delay(3000)
+            view?.evaluateJavascript("(function(){var s=document.getElementById('status');return (s&&s.textContent||'').slice(0,100)})()"){raw->
+                val text=runCatching{JSONArray("[$raw]").optString(0)}.getOrDefault("")
+                if(text.isNotBlank())nativeStageStatus=text
+            }
         }
     }
     BackHandler{finish()}
@@ -136,7 +196,8 @@ private fun liveError(e:Exception)=when(e.message){
                 Icon(Icons.Outlined.ErrorOutline,"تعذر تحميل البث",Modifier.size(32.dp),tint=Color(0xFFF4BC97))
                 Text(error,color=Color.White,style=MaterialTheme.typography.bodyLarge)
                 if(owner&&!granted)TextButton({requestedMode=if(audioOnly)"audio"else"video";permission.launch(if(audioOnly)arrayOf(Manifest.permission.RECORD_AUDIO)else arrayOf(Manifest.permission.RECORD_AUDIO,Manifest.permission.CAMERA))}){Text("إعادة طلب الأذونات")}
-                Button(onClick=finish){Text("رجوع إلى الغرف وتجديد الدخول")}
+                Button(onClick=retry){Text("إعادة الدخول بتذكرة جديدة")}
+                OutlinedButton(onClick=finish){Text("إنهاء والعودة إلى الغرف",color=Color.White)}
             }
         }
         if(granted&&error.isBlank())Box(Modifier.fillMaxSize()){
@@ -173,10 +234,7 @@ private fun liveError(e:Exception)=when(e.message){
                         error="انتقلت صفحة البث إلى عنوان غير متوقع. ارجع للغرف وحاول مجددًا."
                         return
                     }
-                    v?.evaluateJavascript("(function(){var el=document.getElementById('stage');return !!(el && window.relaxiaStageLoaded===true && typeof LivekitClient!=='undefined' && typeof RelaxiaMedia!=='undefined' && getComputedStyle(el).backgroundColor!=='rgba(0, 0, 0, 0)');})()"){ready->
-                        if(ready=="true")pageReady=true
-                        else error="لم تجهز واجهة البث أو ملفاتها على الخادم. ارجع إلى الغرف واطلب جلسة جديدة."
-                    }
+                    pageFinished=true
                 }
                 override fun onRenderProcessGone(v:WebView?,detail:RenderProcessGoneDetail?):Boolean{
                     view=null
@@ -202,7 +260,31 @@ private fun liveError(e:Exception)=when(e.message){
                     Spacer(Modifier.height(12.dp))
                     Text("يتم التحقق من واجهة الغرفة واتصالها بالخادم.",color=Color(0xFFB7C6CF),style=MaterialTheme.typography.bodySmall)
                     Spacer(Modifier.height(16.dp))
-                    TextButton(onClick=finish){Text("رجوع إلى الغرف",color=Color.White)}
+                    TextButton(onClick=retry){Text("إعادة الدخول بتذكرة جديدة",color=Color.White)}
+                    TextButton(onClick=finish){Text("إنهاء البث والرجوع",color=Color.White)}
+                }
+            }
+            // Native recovery strip remains visible even when the embedded WebView renderer goes blank.
+            if(pageReady){
+                Row(
+                    Modifier.align(Alignment.TopCenter).fillMaxWidth()
+                        .background(Color(0xD0101820)).padding(horizontal=8.dp,vertical=6.dp),
+                    verticalAlignment=Alignment.CenterVertically,
+                    horizontalArrangement=Arrangement.spacedBy(6.dp)
+                ){
+                    Text(
+                        if(audioOnly)"غرفة صوتية" else "بث فيديو",
+                        fontWeight=FontWeight.SemiBold,
+                        color=Color.White
+                    )
+                    Text(
+                        nativeStageStatus,
+                        modifier=Modifier.weight(1f),
+                        color=Color(0xFFBED5DD),
+                        maxLines=1
+                    )
+                    IconButton(onClick=retry){Icon(Icons.Outlined.Refresh,"إعادة الدخول",tint=Color.White)}
+                    IconButton(onClick=finish){Icon(Icons.Outlined.Close,"إنهاء والعودة",tint=Color.White)}
                 }
             }
         }else if(error.isBlank())Text("جارٍ تجهيز البث…",Modifier.padding(24.dp))
