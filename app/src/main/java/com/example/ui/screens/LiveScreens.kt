@@ -138,6 +138,21 @@ private fun liveError(e:Exception)=when(e.message){
     var pageReady by remember(roomTicket){mutableStateOf(false)}
     var pageFinished by remember(roomTicket){mutableStateOf(false)}
     var nativeStageStatus by remember(roomTicket){mutableStateOf("جارٍ تحميل واجهة الغرفة")}
+    var bootFlags by remember(roomTicket){mutableIntStateOf(-1)}
+    var scriptFailure by remember(roomTicket){mutableStateOf("")}
+    fun bootFailureReason(flags:Int):String {
+        val hint=if(scriptFailure.isBlank())"" else " · $scriptFailure"
+        return when {
+            flags<0->"D00: تعذر فحص JavaScript في WebView$hint"
+            (flags and 1)==0->"D01: استجابة الخادم لا تتضمن عناصر واجهة الغرفة$hint"
+            (flags and 2)==0->"D02: استجابة الغرفة لا تتضمن إعدادات جلسة البث$hint"
+            (flags and 4)==0->"D03: مكتبة LiveKit غير متاحة داخل صفحة الغرفة$hint"
+            (flags and 8)==0->"D04: ملفات تجهيز الصوت والفيديو لم تكتمل داخل WebView$hint"
+            (flags and 16)==0->"D05: تعطل JavaScript قبل اكتمال تهيئة واجهة البث$hint"
+            (flags and 32)==0->"D06: عناصر الغرفة موجودة لكن مساحة عرضها صفر$hint"
+            else->"D07: الصفحة مهيأة لكن WebView لم يؤكد رسمها$hint"
+        }
+    }
     val permission=rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()){result->
         val accepted=result[Manifest.permission.RECORD_AUDIO]==true&&(requestedMode=="audio"||result[Manifest.permission.CAMERA]==true)
         if(requestingGuest){if(accepted)runCatching{com.example.notifications.MediaSessionService.start(context,true)};view?.evaluateJavascript("window.dispatchEvent(new CustomEvent('publishpermissions',{detail:"+accepted+"}));",null);requestingGuest=false}
@@ -148,26 +163,39 @@ private fun liveError(e:Exception)=when(e.message){
     // Wait for actual stage DOM readiness, then a visual frame, before removing the native loader.
     LaunchedEffect(granted,pageFinished,roomTicket){
         if(!granted || !pageFinished)return@LaunchedEffect
-        repeat(14){
+        var fullyInitializedChecks=0
+        repeat(25){
             if(pageReady || error.isNotBlank())return@LaunchedEffect
+            // Only return bit flags; never read tokens, chat content or customer data.
             view?.evaluateJavascript(
-                "(function(){var e=document.getElementById('stage');return !!(e&&e.getBoundingClientRect().height>1&&document.getElementById('exit')&&window.relaxiaStageLoaded===true&&typeof LivekitClient!=='undefined'&&typeof RelaxiaMedia!=='undefined');})()"
-            ){ready->
-                if(ready=="true" && !pageReady){
+                "(function(){var e=document.getElementById('stage');return (e?1:0)|(document.getElementById('config')?2:0)|(typeof LivekitClient!=='undefined'?4:0)|(typeof RelaxiaMedia!=='undefined'?8:0)|(window.relaxiaStageLoaded===true?16:0)|(e&&e.getBoundingClientRect().height>1?32:0);})()"
+            ){raw->
+                val flags=raw?.toIntOrNull() ?: -1
+                bootFlags=flags
+                if(flags==63 && !pageReady){
+                    fullyInitializedChecks++
                     val current=view
                     current?.postVisualStateCallback(42L,object:WebView.VisualStateCallback(){
                         override fun onComplete(requestId:Long){pageReady=true}
                     })
+                    // A native loading overlay can occasionally suppress a visual
+                    // callback on certain Android WebView/GPU combinations.
+                    // The DOM, assets, geometry and JS boot flag are already ready.
+                    // Reveal the WebView after three successful probes, keeping
+                    // the native recovery controls visible if rendering fails.
+                    if(fullyInitializedChecks>=3)pageReady=true
+                }else if(flags!=63){
+                    fullyInitializedChecks=0
                 }
             }
-            delay(800)
+            delay(950)
         }
-        if(!pageReady && error.isBlank())error="تعذر إظهار واجهة الغرفة رغم تحميل الصفحة. ارجع للحصول على تذكرة جديدة، أو استخدم فحص الاتصال."
+        if(!pageReady && error.isBlank())error=bootFailureReason(bootFlags)
     }
     LaunchedEffect(granted,roomTicket){
         if(!granted)return@LaunchedEffect
-        delay(22000)
-        if(!pageReady && error.isBlank())error="انتهت مهلة تحميل البث. لم تُؤكّد واجهة الغرفة جاهزيتها على الهاتف."
+        delay(32000)
+        if(!pageReady && error.isBlank())error=bootFailureReason(bootFlags)
     }
     LaunchedEffect(pageReady,roomTicket){
         if(!pageReady)return@LaunchedEffect
@@ -245,7 +273,33 @@ private fun liveError(e:Exception)=when(e.message){
                 override fun shouldOverrideUrlLoading(v:WebView?,r:WebResourceRequest?)=r?.url?.let{!trustedCallOrigin(it.toString(),baseUrl)||it.path!=allowedPath}?:true
                 override fun onReceivedSslError(v:WebView?,h:SslErrorHandler?,e:android.net.http.SslError?){h?.cancel();error="شهادة أمان الخادم غير صالحة."}
             }
-            webChromeClient=object:WebChromeClient(){override fun onPermissionRequest(r:PermissionRequest?){if(r==null)return;if(!trustedCallOrigin(r.origin.toString(),baseUrl)){r.deny();return};val accepted=r.resources.filter{(it==PermissionRequest.RESOURCE_AUDIO_CAPTURE&&ContextCompat.checkSelfPermission(context,Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED)||(it==PermissionRequest.RESOURCE_VIDEO_CAPTURE&&requestedMode=="video"&&ContextCompat.checkSelfPermission(context,Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED)};if(accepted.isNotEmpty())r.grant(accepted.toTypedArray())else r.deny()}}
+            webChromeClient=object:WebChromeClient(){
+                override fun onConsoleMessage(msg:ConsoleMessage?):Boolean{
+                    if(msg?.messageLevel()==ConsoleMessage.MessageLevel.ERROR){
+                        // Console strings can include room tokens: classify only,
+                        // never persist or expose the original JS error message.
+                        val m=msg.message().orEmpty()
+                        scriptFailure=when{
+                            m.contains("Content Security Policy",true)||m.contains("Refused to load",true)->"CSP"
+                            m.contains("SyntaxError",true)->"JavaScript syntax"
+                            m.contains("ReferenceError",true)->"JavaScript reference"
+                            m.contains("TypeError",true)->"JavaScript runtime"
+                            m.contains("net::ERR",true)->"network resource"
+                            else->"JavaScript runtime"
+                        }
+                    }
+                    return false
+                }
+                override fun onPermissionRequest(r:PermissionRequest?){
+                    if(r==null)return
+                    if(!trustedCallOrigin(r.origin.toString(),baseUrl)){r.deny();return}
+                    val accepted=r.resources.filter{
+                        (it==PermissionRequest.RESOURCE_AUDIO_CAPTURE&&ContextCompat.checkSelfPermission(context,Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED)||
+                        (it==PermissionRequest.RESOURCE_VIDEO_CAPTURE&&requestedMode=="video"&&ContextCompat.checkSelfPermission(context,Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED)
+                    }
+                    if(accepted.isNotEmpty())r.grant(accepted.toTypedArray())else r.deny()
+                }
+            }
             val target=bootstrap.getString("url");if(trustedCallOrigin(target,baseUrl)&&allowedPath?.startsWith("/api/live/")==true&&allowedPath.endsWith("/room"))postUrl(target,("theme="+transportTheme+"&ticket="+URLEncoder.encode(bootstrap.getString("ticket"),"UTF-8")).toByteArray())else error="عنوان بث غير صالح."
             }})
             if(!pageReady){
@@ -258,7 +312,7 @@ private fun liveError(e:Exception)=when(e.message){
                     Spacer(Modifier.height(18.dp))
                     Text("جارٍ تحميل غرفة البث…",color=Color.White)
                     Spacer(Modifier.height(12.dp))
-                    Text("يتم التحقق من واجهة الغرفة واتصالها بالخادم.",color=Color(0xFFB7C6CF),style=MaterialTheme.typography.bodySmall)
+                    Text("يتم التحقق من ملفات واجهة الغرفة قبل الاتصال بوسائط البث.",color=Color(0xFFB7C6CF),style=MaterialTheme.typography.bodySmall)
                     Spacer(Modifier.height(16.dp))
                     TextButton(onClick=retry){Text("إعادة الدخول بتذكرة جديدة",color=Color.White)}
                     TextButton(onClick=finish){Text("إنهاء البث والرجوع",color=Color.White)}
