@@ -60,7 +60,7 @@ function layout(){const n=document.querySelectorAll('.tile').length;$('video').c
 async function configurePublishing(){
  const allowed=!!(config.owner||state.can_publish),sources=state.publish_sources||(config.mode==='audio'?['microphone']:['microphone','camera']);
  $('publisherControls').hidden=!speaking;$('camera').hidden=!sources.includes('camera');$('switch').hidden=!sources.includes('camera');
- if(!allowed&&speaking){await room.localParticipant.setMicrophoneEnabled(false);await room.localParticipant.setCameraEnabled(false);speaking=false;$('publisherControls').hidden=true}
+ if(!allowed&&speaking){await room.localParticipant.setMicrophoneEnabled(false);await room.localParticipant.setCameraEnabled(false);speaking=false;$('publisherControls').hidden=true;updateQuickMic()}
 }
 async function prepareTracks(){
  releasePrepared();mediaFault=false;mediaReady=false;$('connection').classList.remove('media-fault');$('retryMedia').hidden=true;$('status').textContent='جارٍ تجهيز الكاميرا والميكروفون…';
@@ -85,7 +85,7 @@ async function enableTracks(){
    try{await RelaxiaMedia.frameReady(roomVideo,10000)}
    catch(e){throw new RelaxiaMedia.MediaFailure('room_video',e)}
   }
-  mediaReady=true;speaking=true;diagnostic('media_publish','ready');await configurePublishing();
+  mediaReady=true;speaking=true;diagnostic('media_publish','ready');await configurePublishing();updateQuickMic();
  }catch(e){room?.removeAllListeners();await room?.disconnect();releasePrepared();throw e.name==='MediaFailure'?e:new RelaxiaMedia.MediaFailure('media_publish',e)}
 }
 async function connect(token=config.token){
