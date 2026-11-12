@@ -72,7 +72,7 @@ android {
     debug {
       // Do not remove or modify this signingConfig assignment. It is necessary for Android apps in
       // AI Studio.
-      signingConfig = signingConfigs.getByName("debugConfig")
+      signingConfig = if (providers.gradleProperty("RELAXIA_UNSIGNED_BUILD").orElse("false").get() == "true") null else signingConfigs.getByName("debugConfig")
     }
   }
   compileOptions {

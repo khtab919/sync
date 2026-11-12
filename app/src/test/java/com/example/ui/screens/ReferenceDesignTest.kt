@@ -77,15 +77,14 @@ class ReferenceDesignTest {
     }
 
     @Test fun homeOverflowKeepsSecondaryActionsReachable() {
-        var live=0;var wallet=0;var saved=0;var refresh=0
-        compose.setContent { MyApplicationTheme { Surface { Row { HomeToolbarActions({live++},{wallet++},{saved++},{refresh++}) } } } }
+        var support=0;var wallet=0;var saved=0;var refresh=0
+        compose.setContent { MyApplicationTheme { Surface { Row { HomeToolbarActions({},{wallet++},{saved++},{refresh++},{support++}) } } } }
         compose.onNodeWithText("المحفظة والرصيد").assertDoesNotExist()
-        compose.onNodeWithText("مباشر").performClick()
-        for(title in listOf("المحفظة والرصيد","المحفوظات","تحديث المحتوى")) {
+        for(title in listOf("المحفظة والرصيد","المحفوظات","تحديث المحتوى","الدعم والمساعدة")) {
             compose.onNodeWithContentDescription("خيارات التصفح").performClick()
             compose.onNodeWithText(title).performClick()
         }
-        org.junit.Assert.assertEquals(listOf(1,1,1,1),listOf(live,wallet,saved,refresh))
+        org.junit.Assert.assertEquals(listOf(1,1,1,1),listOf(support,wallet,saved,refresh))
         compose.onNodeWithText("المحفظة والرصيد").assertDoesNotExist()
     }
 
@@ -207,8 +206,8 @@ class ReferenceDesignTest {
 
     @Test fun coinPackageShowsPriceAndActualBonus() {
         var chosen=false
-        compose.setContent { MyApplicationTheme { Surface(Modifier.fillMaxSize(),color=MaterialTheme.colorScheme.background) { Column(Modifier.padding(22.dp)) { CoinPackage(2500,100,"25.00",true){chosen=true} } } } }
-        compose.onNodeWithText("2500").assertExists()
+        compose.setContent { MyApplicationTheme { Surface(Modifier.fillMaxSize(),color=MaterialTheme.colorScheme.background) { Column(Modifier.padding(22.dp)) { CoinPackage(2500,100,"25.00",true,null){chosen=true} } } } }
+        compose.onNodeWithText(java.text.NumberFormat.getIntegerInstance().format(2500)).assertExists()
         compose.onNodeWithText("+100 نقطة ترويجية").performClick()
         org.junit.Assert.assertTrue(chosen)
         screenshot("12-coin-package")
