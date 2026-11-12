@@ -22,12 +22,27 @@ print(render_to_string('core/live_room.html',{'config':config,'nonce':'test-only
    res.end(fs.readFileSync(path.join(root,'core/static/core',name)));return;
   }
   if(url.pathname.startsWith('/api/')){res.writeHead(503,{'Content-Type':'application/json'}).end('{"error":"live_server_unavailable"}');return}
+  // Match the actual Django live_room Content-Security-Policy, which earlier
+  // browser tests omitted even though it can suppress bootstrap scripts.
+  res.setHeader('Content-Security-Policy',"default-src 'none'; script-src 'self' 'nonce-test-only'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://127.0.0.1:1; media-src 'self' blob:; img-src 'self' data: https:; frame-ancestors 'none'; base-uri 'none'");
   res.setHeader('Content-Type','text/html');res.end(pages[url.pathname==='/audio'?'audio':'video']);
  });
  await new Promise(r=>server.listen(0,'127.0.0.1',r));let browser;
  try{
   browser=await chromium.launch({headless:true,...(process.env.CAPTURE_CHROMIUM?{executablePath:process.env.CAPTURE_CHROMIUM}:{}),args:['--no-sandbox','--disable-dev-shm-usage','--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream']});
   const origin='http://127.0.0.1:'+server.address().port;
+  // Both kinds of rooms must finish the JS bootstrap even when the SFU
+  // itself is deliberately unreachable. Catch CSP and parser failures.
+  for(const mode of ['audio','video']){
+   const room=await browser.newPage();
+   const errors=[];
+   room.on('pageerror',e=>errors.push(e.message));
+   await room.goto(origin+'/'+mode);
+   try{await room.waitForFunction(()=>window.relaxiaStageLoaded===true,{timeout:7000});}
+   catch(e){throw new Error(mode+' live bootstrap failed: '+errors.slice(0,3).join(' | '));}
+   assert.equal(await room.locator('#stage').isVisible(),true);
+   await room.close();
+  }
   const noJS=await browser.newPage({javaScriptEnabled:false});await noJS.goto(origin+'/audio');
   assert.equal(await noJS.locator('#audioStage').isVisible(),true);
   assert.equal(await noJS.locator('#video').isVisible(),false);
