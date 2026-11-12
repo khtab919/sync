@@ -1245,7 +1245,6 @@ internal fun ProfileHero(
     val name = person.optString("display_name").ifBlank {
         person.optString("username").ifBlank { "المستخدم" }
     }
-    val username = person.optString("username").removePrefix("@")
     val publicId = person.optString("public_id").ifBlank { "—" }
 
     Column(
@@ -1281,8 +1280,6 @@ internal fun ProfileHero(
                     }
                     if (genderMark.isNotBlank()) Text(genderMark, color = colors.primary, fontSize = 15.sp)
                 }
-                if (username.isNotBlank()) Text("@" + username,
-                    color = colors.onSurfaceVariant, fontSize = 12.sp)
                 Row(verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     RelaxiaLevelBadge(person.optInt("level", 1))
@@ -1308,7 +1305,7 @@ internal fun ProfileHero(
                 horizontalArrangement = Arrangement.spacedBy(9.dp)
             ) {
                 Icon(Icons.Rounded.Badge, null, Modifier.size(18.dp), tint = colors.primary)
-                Text("رقم الحساب: " + publicId, Modifier.weight(1f),
+                Text("ID: " + publicId, Modifier.weight(1f),
                     fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                 Icon(Icons.Rounded.ContentCopy, "نسخ رقم الحساب",
                     Modifier.size(18.dp), tint = colors.primary)
