@@ -285,13 +285,13 @@ class ReferenceDesignTest {
         screenshot("16-petroleum-email-login-320")
     }
 
-    @Test fun bothThemesUseTheRequestedRoyalBluePalette() {
+    @Test fun bothThemesUseTheRequestedBurgundyPalette() {
         var dark by mutableStateOf(false)
         var background=androidx.compose.ui.graphics.Color.Unspecified
         var primary=androidx.compose.ui.graphics.Color.Unspecified
         compose.setContent {MyApplicationTheme(darkTheme=dark){val colors=MaterialTheme.colorScheme;SideEffect{background=colors.background;primary=colors.primary};Surface{androidx.compose.material3.Text("Relaxia")}}}
-        compose.runOnIdle{org.junit.Assert.assertEquals(androidx.compose.ui.graphics.Color(0xFFF2F6FD),background);org.junit.Assert.assertEquals(androidx.compose.ui.graphics.Color(0xFF1458C3),primary);dark=true}
-        compose.runOnIdle{org.junit.Assert.assertEquals(androidx.compose.ui.graphics.Color(0xFF101820),background);org.junit.Assert.assertEquals(androidx.compose.ui.graphics.Color(0xFF91BCFF),primary)}
+        compose.runOnIdle{org.junit.Assert.assertEquals(androidx.compose.ui.graphics.Color(0xFFFAF6F2),background);org.junit.Assert.assertEquals(androidx.compose.ui.graphics.Color(0xFF792D45),primary);dark=true}
+        compose.runOnIdle{org.junit.Assert.assertEquals(androidx.compose.ui.graphics.Color(0xFF1B1418),background);org.junit.Assert.assertEquals(androidx.compose.ui.graphics.Color(0xFFE9A8BA),primary)}
     }
 
     @Test fun profileDisplaysPublicNumberAndIndependentHandle() {
