@@ -1810,9 +1810,9 @@ private fun LuxuryCategoryCard(
     Surface(
         onClick = onClick,
         color = if (isSelected) {
-            CoralPinkPrimary // Deep Teal #0D9488
+            CoralPinkPrimary // Relaxia burgundy
         } else {
-            MaterialTheme.colorScheme.surface // Royal Navy Card #111D30
+            MaterialTheme.colorScheme.surface // Theme-aware card surface
         },
         shape = RoundedCornerShape(50),
         border = BorderStroke(
@@ -2367,8 +2367,8 @@ private fun PublishedServiceOfferCard(
             ) {
                 SmartServiceMediaView(
                     imageUrl = service.imageUrl,
-                    accentHex = 0xFF0D9488L,
-                    secondaryHex = 0xFF09111EL,
+                    accentHex = 0xFF792D45L,
+                    secondaryHex = 0xFF4C2037L,
                     category = service.category,
                     modifier = Modifier.fillMaxSize()
                 )
@@ -2481,7 +2481,7 @@ private fun PublishedServiceOfferCard(
                         onClick = onBookOffer,
                         shape = RoundedCornerShape(50),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = CoralPinkPrimary, // Deep Teal #0D9488
+                            containerColor = CoralPinkPrimary, // Relaxia burgundy
                             contentColor = PureWhite
                         ),
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),

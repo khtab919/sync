@@ -238,8 +238,8 @@ fun ProfileScreen(
                 category = pub.category,
                 singlePriceUsd = pub.priceUsd.toInt().coerceAtLeast(15),
                 isExclusiveLocked = false,
-                accentHex = 0xFF0D9488L,
-                secondaryHex = 0xFF09111EL,
+                accentHex = 0xFF792D45L,
+                secondaryHex = 0xFF4C2037L,
                 sourcePublished = pub
             )
         }
@@ -256,8 +256,8 @@ fun ProfileScreen(
                 category = pub.category,
                 singlePriceUsd = pub.priceUsd.toInt(),
                 isExclusiveLocked = true,
-                accentHex = 0xFFB9A477L,
-                secondaryHex = 0xFF151A23L,
+                accentHex = 0xFFD7AD72L,
+                secondaryHex = 0xFF4C2037L,
                 sourcePublished = pub
             )
         }
@@ -274,8 +274,8 @@ fun ProfileScreen(
                 category = "سهرات فنية",
                 singlePriceUsd = 0,
                 isExclusiveLocked = false,
-                accentHex = 0xFF0D9488L,
-                secondaryHex = 0xFF09111EL
+                accentHex = 0xFF792D45L,
+                secondaryHex = 0xFF4C2037L
             )
         }
 
@@ -375,8 +375,8 @@ fun ProfileScreen(
                     ) {
                         SmartServiceMediaView(
                             imageUrl = coverImageUri,
-                            accentHex = 0xFF0D9488L,
-                            secondaryHex = 0xFF09111EL,
+                            accentHex = 0xFF792D45L,
+                            secondaryHex = 0xFF4C2037L,
                             category = "سهرات فنية",
                             modifier = Modifier.fillMaxSize()
                         )

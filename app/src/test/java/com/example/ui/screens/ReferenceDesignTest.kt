@@ -285,6 +285,24 @@ class ReferenceDesignTest {
         screenshot("16-petroleum-email-login-320")
     }
 
+    @Test fun coinPackageIsLegibleInLightAndDarkMode() {
+        var dark by mutableStateOf(false)
+        compose.setContent {
+            MyApplicationTheme(darkTheme = dark) {
+                Surface(Modifier.width(138.dp)) {
+                    CoinPackage(coins = 1000, bonus = 150, dollars = "10.00", selected = true, badge = "أكبر مكافأة") {}
+                }
+            }
+        }
+        compose.onNodeWithText("1,000").assertExists()
+        compose.onNodeWithText("10.00 USD").assertExists()
+        screenshot("18-coin-package-light")
+        compose.runOnIdle { dark = true }
+        compose.onNodeWithText("1,000").assertExists()
+        compose.onNodeWithText("10.00 USD").assertExists()
+        screenshot("19-coin-package-dark")
+    }
+
     @Test fun bothThemesUseTheRequestedBurgundyPalette() {
         var dark by mutableStateOf(false)
         var background=androidx.compose.ui.graphics.Color.Unspecified

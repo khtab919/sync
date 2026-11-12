@@ -169,7 +169,7 @@ internal fun ChatBubble(message: JSONObject, mine: Boolean, play: (String) -> Un
                         }
                         Row(Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(time, fontSize = 11.sp, color = if(mine) Color.White.copy(alpha=.65f) else MaterialTheme.colorScheme.onSurfaceVariant)
-                            if(mine) Icon(when {message.optBoolean("failed")->Icons.Rounded.ErrorOutline;message.optBoolean("pending")->Icons.Rounded.Schedule;!message.isNull("read_at")->Icons.Rounded.DoneAll;!message.isNull("delivered_at")->Icons.Rounded.DoneAll;else->Icons.Rounded.Check},when{message.optBoolean("failed")->"تعذّر الإرسال";message.optBoolean("pending")->"بانتظار الإرسال";!message.isNull("read_at")->"قرأها المستلم";!message.isNull("delivered_at")->"وصلت إلى جهاز المستلم";else->"تم إرسال الرسالة"},Modifier.size(14.dp),tint=if(!message.isNull("read_at"))Color(0xFFAED0D7)else Color.White.copy(alpha=.7f))
+                            if(mine) Icon(when {message.optBoolean("failed")->Icons.Rounded.ErrorOutline;message.optBoolean("pending")->Icons.Rounded.Schedule;!message.isNull("read_at")->Icons.Rounded.DoneAll;!message.isNull("delivered_at")->Icons.Rounded.DoneAll;else->Icons.Rounded.Check},when{message.optBoolean("failed")->"تعذّر الإرسال";message.optBoolean("pending")->"بانتظار الإرسال";!message.isNull("read_at")->"قرأها المستلم";!message.isNull("delivered_at")->"وصلت إلى جهاز المستلم";else->"تم إرسال الرسالة"},Modifier.size(14.dp),tint=if(!message.isNull("read_at"))Color(0xFFD7AD72)else Color.White.copy(alpha=.7f))
                         }
                     }
                 }

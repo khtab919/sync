@@ -157,7 +157,7 @@ fun WalletScreen(
         colors = listOf(
             CharcoalNight,
             DarkCardSurface,
-            Color(0xFF0F293A)
+            Color(0xFF4C2037)
         ),
         start = Offset(0f, 0f),
         end = Offset(900f, 500f)
@@ -632,8 +632,8 @@ fun WalletScreen(
                             ) {
                                 SmartServiceMediaView(
                                     imageUrl = receipt.receiptImageUri,
-                                    accentHex = 0xFF10B981,
-                                    secondaryHex = 0xFF09111E,
+                                    accentHex = 0xFF397F6B,
+                                    secondaryHex = 0xFF4C2037,
                                     category = "إيصال",
                                     modifier = Modifier.fillMaxSize()
                                 )

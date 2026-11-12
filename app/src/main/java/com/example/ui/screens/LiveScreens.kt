@@ -343,11 +343,11 @@ private fun liveError(e:Exception)=when(e.message){
                     verticalArrangement=Arrangement.Center,
                     horizontalAlignment=Alignment.CenterHorizontally
                 ){
-                    CircularProgressIndicator(color=Color(0xFF7DA5B8))
+                    CircularProgressIndicator(color=Color(0xFFE9A8BA))
                     Spacer(Modifier.height(18.dp))
                     Text("جارٍ تحميل غرفة البث…",color=Color.White)
                     Spacer(Modifier.height(12.dp))
-                    Text("يتم التحقق من ملفات واجهة الغرفة قبل الاتصال بوسائط البث.",color=Color(0xFFB7C6CF),style=MaterialTheme.typography.bodySmall)
+                    Text("يتم التحقق من ملفات واجهة الغرفة قبل الاتصال بوسائط البث.",color=Color(0xFFC4AEB7),style=MaterialTheme.typography.bodySmall)
                     Spacer(Modifier.height(16.dp))
                     TextButton(onClick=retry){Text("إعادة الدخول بتذكرة جديدة",color=Color.White)}
                     TextButton(onClick=finish){Text("إنهاء البث والرجوع",color=Color.White)}
@@ -369,7 +369,7 @@ private fun liveError(e:Exception)=when(e.message){
                     Text(
                         nativeStageStatus,
                         modifier=Modifier.weight(1f),
-                        color=Color(0xFFBED5DD),
+                        color=Color(0xFFC4AEB7),
                         maxLines=1
                     )
                     IconButton(onClick=retry){Icon(Icons.Rounded.Refresh,"إعادة الدخول",tint=Color.White)}
@@ -612,9 +612,9 @@ internal fun CameraPreviewSurface(
                 )
             ))
         } else {
-            // Calm, refined Relaxia obsidian/ocean stage
+            // Calm, refined Relaxia plum stage
             Box(Modifier.fillMaxSize().background(
-                Brush.verticalGradient(listOf(Color(0xFF131D26), Color(0xFF0F171F), Color(0xFF1B1418)))
+                Brush.verticalGradient(listOf(Color(0xFF281E24), Color(0xFF23191F), Color(0xFF1B1418)))
             )){
                 Box(Modifier.size(320.dp).align(Alignment.TopEnd).background(Brush.radialGradient(listOf(Color(0x2EA04B63), Color.Transparent)), CircleShape))
                 Box(Modifier.size(260.dp).align(Alignment.BottomStart).background(Brush.radialGradient(listOf(Color(0x1AD7AD72), Color.Transparent)), CircleShape))

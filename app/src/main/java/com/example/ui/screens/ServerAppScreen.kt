@@ -742,7 +742,7 @@ fun ServerAppScreen(baseUrl: String) {
                                     onClick = { avatarPicker.launch("image/*") },
                                     enabled = !submitting,
                                     shape = RoundedCornerShape(24.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF104BB5))
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                                 ) { Icon(Icons.Rounded.CameraAlt, null); Spacer(Modifier.width(8.dp)); Text("تغيير الصورة") }
                                 if (avatarUrl.isNotBlank()) TextButton(
                                     onClick = { perform {
