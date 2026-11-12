@@ -1,0 +1,48 @@
+name: Diagnose deployed Relaxia live assets
+on:
+  push:
+    branches:
+      - fix/relaxia-116-live-white-screen-20261112
+    paths:
+      - .github/workflows/check-live-runtime.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnostics:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check HTTPS health and exact live asset versions (read-only)
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib, json, urllib.request, urllib.error, sys
+          base='https://165-227-128-113.sslip.io'
+          failures=[]
+          try:
+              with urllib.request.urlopen(urllib.request.Request(base+'/health/',headers={'Cache-Control':'no-cache'}),timeout=12) as response:
+                  data=json.load(response)
+                  print('API health: status=%r build=%r' % (data.get('status'),data.get('build')))
+                  if data.get('status')!='ok':failures.append('unhealthy API')
+          except Exception as exc:
+              failures.append('health request failed: '+type(exc).__name__+': '+str(exc)[:160])
+          paths=['live-stage.css','live-stage.js','live-media.js','livekit-client.umd.min.js']
+          sdk_sha='fb646f2260d84f91238d0a2dc10726c456631d6a26c7cafc43cfee5959b4d31d'
+          for name in paths:
+              expected=sdk_sha if name.startswith('livekit-client') else hashlib.sha256((Path('backend/core/static/core')/name).read_bytes()).hexdigest()
+              try:
+                  url=base+'/static/core/'+name+'?qa=white-screen-20261112'
+                  with urllib.request.urlopen(urllib.request.Request(url,headers={'Cache-Control':'no-cache'}),timeout=15) as response:
+                      data=response.read(4*1024*1024)
+                      actual=hashlib.sha256(data).hexdigest()
+                      print(name,'HTTP',response.status,'bytes',len(data),'SHA256 correct:',actual==expected)
+                      if actual!=expected:failures.append(name+': server file differs from source')
+              except Exception as exc:
+                  failures.append(name+': '+type(exc).__name__+': '+str(exc)[:160])
+          if failures:
+              print('REQUIRES SERVER ATTENTION:')
+              for problem in failures:print(' -',problem)
+              raise SystemExit(1)
+          print('All live assets match source; investigate Android WebView and room admission.')
+          PY
