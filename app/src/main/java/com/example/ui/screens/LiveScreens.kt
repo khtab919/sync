@@ -163,6 +163,7 @@ private fun liveError(e:Exception)=when(e.message){
     // Wait for actual stage DOM readiness, then a visual frame, before removing the native loader.
     LaunchedEffect(granted,pageFinished,roomTicket){
         if(!granted || !pageFinished)return@LaunchedEffect
+        var fullyInitializedChecks=0
         repeat(25){
             if(pageReady || error.isNotBlank())return@LaunchedEffect
             // Only return bit flags; never read tokens, chat content or customer data.
@@ -172,10 +173,19 @@ private fun liveError(e:Exception)=when(e.message){
                 val flags=raw?.toIntOrNull() ?: -1
                 bootFlags=flags
                 if(flags==63 && !pageReady){
+                    fullyInitializedChecks++
                     val current=view
                     current?.postVisualStateCallback(42L,object:WebView.VisualStateCallback(){
                         override fun onComplete(requestId:Long){pageReady=true}
                     })
+                    // A native loading overlay can occasionally suppress a visual
+                    // callback on certain Android WebView/GPU combinations.
+                    // The DOM, assets, geometry and JS boot flag are already ready.
+                    // Reveal the WebView after three successful probes, keeping
+                    // the native recovery controls visible if rendering fails.
+                    if(fullyInitializedChecks>=3)pageReady=true
+                }else if(flags!=63){
+                    fullyInitializedChecks=0
                 }
             }
             delay(950)
