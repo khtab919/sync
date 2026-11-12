@@ -3,7 +3,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Relaxia · مباشر</title>
-<link rel="stylesheet" href="/static/core/live-stage.css?v=rooms-5">
+<link rel="stylesheet" href="/static/core/live-stage.css?v=rooms-layout-6">
 <body{% if config.mode == "audio" %} class="audio-mode"{% endif %}>
 <main id="stage">
   <div id="video" aria-label="البث المباشر"{% if config.mode == "audio" %} hidden{% endif %}></div>
@@ -49,7 +49,7 @@
 
   <div id="giftEffect" aria-live="polite" hidden></div>
   <div id="pinned" hidden></div>
-  <section id="messages" aria-label="التعليقات"></section>
+  <section id="messages" role="log" aria-live="polite" aria-relevant="additions" aria-label="التعليقات"></section>
 
   <footer>
     <div id="publisherControls" hidden>
@@ -58,13 +58,14 @@
       <button id="switch">تبديل الكاميرا</button>
     </div>
     <div class="bottom">
-      <button id="more" class="tool-circle" aria-label="المزيد">•••</button>
-      <button id="gift" class="tool-circle" aria-label="هدية"{% if config.mode == "audio" or not config.gifts %} hidden{% endif %}>🎁</button>
-      <button id="speaker" class="tool-circle" type="button" aria-label="كتم صوت الغرفة"{% if config.mode != "audio" %} hidden{% endif %}>🔊</button>
-      <button id="guests" class="tool-circle" aria-label="الضيوف">👥</button>
-      <button id="share" class="tool-circle" aria-label="مشاركة">↗</button>
+      <button id="more" class="tool-circle" type="button" aria-label="المزيد من خيارات الغرفة">•••</button>
+      <button id="gift" class="tool-circle" type="button" aria-label="هدية" hidden>🎁</button>
+      <button id="speaker" class="tool-circle" type="button" aria-label="كتم صوت الغرفة" hidden>🔊</button>
+      <button id="guests" class="tool-circle" type="button" aria-label="المقاعد والضيوف">👥</button>
+      <button id="micQuick" class="tool-circle" type="button" aria-label="المقاعد وطلب التحدث">🎙</button>
+      <button id="share" class="tool-circle" type="button" aria-label="مشاركة" hidden>↗</button>
       <form id="composer">
-        <input id="text" maxlength="300" placeholder="اكتب رسالة…" aria-label="اكتب تعليقًا" autocomplete="off">
+        <input id="text" maxlength="300" placeholder="اكتب تعليقًا…" aria-label="اكتب تعليقًا" autocomplete="off">
         <button id="emojiBtn" type="button" class="composer-emoji" aria-label="رمز تعبيري">😊</button>
         <button class="composer-send" aria-label="إرسال التعليق">↑</button>
       </form>
@@ -108,7 +109,7 @@
 })();
 </script>
 <script src="/static/core/livekit-client.umd.min.js"></script>
-<script src="/static/core/live-media.js?v=rooms-5"></script>
-<script src="/static/core/live-stage.js?v=rooms-5"></script>
+<script src="/static/core/live-media.js?v=rooms-layout-6"></script>
+<script src="/static/core/live-stage.js?v=rooms-layout-6"></script>
 </body>
 </html>

@@ -26,16 +26,21 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    });
    assert.equal(await page.locator('.audio-seat').count(),15);
    assert.equal(await page.locator('#title').innerText(),'ID: 58321');
-   assert.equal(await page.locator('#speaker').isVisible(),true);
+   assert.equal(await page.locator('#speaker').isVisible(),false);
+   assert.equal(await page.locator('#share').isVisible(),false);
    assert.equal(await page.locator('#gift').isVisible(),false);
+   assert.equal(await page.locator('#micQuick').isVisible(),true);
    assert.equal(await page.locator('#bigGiftBtn').isVisible(),true);
+   assert.equal(await page.locator('#viewers').isVisible(),true);
    await page.evaluate(()=>{
      const audio=document.createElement('audio');audio.dataset.liveRemote='1';audio.play=()=>Promise.resolve();document.body.append(audio);
    });
-   await page.locator('#speaker').click();
+   await page.locator('#more').click();
+   await page.getByRole('button',{name:'كتم صوت الغرفة',exact:true}).click();
    assert.equal(await page.locator('audio[data-live-remote]').evaluate(el=>el.muted),true);
    assert.equal(await page.locator('#speaker').getAttribute('aria-label'),'تشغيل صوت الغرفة');
-   await page.locator('#speaker').click();
+   await page.locator('#more').click();
+   await page.getByRole('button',{name:'تشغيل صوت الغرفة',exact:true}).click();
    assert.equal(await page.locator('audio[data-live-remote]').evaluate(el=>el.muted),false);
    await page.locator('#emojiBtn').click();
    await page.getByRole('button',{name:'🎉',exact:true}).click();
@@ -49,6 +54,18 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    assert.equal(await page.locator('.empty-seat').count(),14);
    const seats=await page.locator('#audioStage').boundingBox(),footer=await page.locator('footer').boundingBox();
    assert.ok(seats.y+seats.height<footer.y,'seat grid must not overlap controls');
+   const layout=await page.evaluate(()=>({
+    overflowX:document.documentElement.scrollWidth-innerWidth,
+    overflowY:document.getElementById('stage').scrollHeight-document.getElementById('stage').clientHeight,
+    seatsScrollable:document.getElementById('audioStage').scrollHeight-document.getElementById('audioStage').clientHeight,
+    actions:[...document.querySelectorAll('.bottom > button')].filter(x=>!x.hidden&&getComputedStyle(x).display!=='none').length
+   }));
+   assert.ok(layout.overflowX<=2,'room must fit phone width');
+   assert.ok(layout.overflowY<=2,'room must not slide vertically');
+   assert.ok(layout.seatsScrollable<=2,'audio seats must not scroll independently');
+   assert.equal(layout.actions,4,'room footer must show four primary action buttons');
+   await page.evaluate(()=>{const before=document.querySelector('.audio-seat');window.seatBefore=before;drawAudioSeats({max_speakers:15,speakers:[{identity:'host-1',name:'مضيف تجريبي',owner:true,avatar_url:''}]})});
+   assert.equal(await page.evaluate(()=>seatBefore===document.querySelector('.audio-seat')),true,'poll must not rebuild unchanged seats');
    await page.locator('.empty-seat').first().click();
    await page.getByRole('button',{name:'طلب الانضمام صوتيًا',exact:true}).click();
    assert.equal(await page.evaluate(()=>sent.filter(a=>a.action==='seat_request').length),1);
