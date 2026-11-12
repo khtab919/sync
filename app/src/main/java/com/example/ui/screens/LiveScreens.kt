@@ -80,13 +80,13 @@ private fun liveError(e:Exception)=when(e.message){
                 bootstrap=room,
                 profile={id->active=null;openProfile(id)},
                 retry={
-                    if(broadcastId.isNotBlank())act{
-                        try{
+                    if(broadcastId.isNotBlank() && !busy){
+                        // Unmount the existing WebView before opening a new one so its
+                        // media captures cannot race the next live-room instance.
+                        active=null
+                        act{
                             val fresh=api.request("/api/live/$broadcastId/admission","POST",JSONObject())
                             active=fresh
-                        }catch(e:Exception){
-                            active=null
-                            throw e
                         }
                     }
                 },
