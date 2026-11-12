@@ -144,12 +144,12 @@ private fun liveError(e:Exception)=when(e.message){
         val hint=if(scriptFailure.isBlank())"" else " · $scriptFailure"
         return when {
             flags<0->"D00: تعذر فحص JavaScript في WebView$hint"
-            flags and 1==0->"D01: استجابة الخادم لا تتضمن عناصر واجهة الغرفة$hint"
-            flags and 2==0->"D02: استجابة الغرفة لا تتضمن إعدادات جلسة البث$hint"
-            flags and 4==0->"D03: مكتبة LiveKit غير متاحة داخل صفحة الغرفة$hint"
-            flags and 8==0->"D04: ملفات تجهيز الصوت والفيديو لم تكتمل داخل WebView$hint"
-            flags and 16==0->"D05: تعطل JavaScript قبل اكتمال تهيئة واجهة البث$hint"
-            flags and 32==0->"D06: عناصر الغرفة موجودة لكن مساحة عرضها صفر$hint"
+            (flags and 1)==0->"D01: استجابة الخادم لا تتضمن عناصر واجهة الغرفة$hint"
+            (flags and 2)==0->"D02: استجابة الغرفة لا تتضمن إعدادات جلسة البث$hint"
+            (flags and 4)==0->"D03: مكتبة LiveKit غير متاحة داخل صفحة الغرفة$hint"
+            (flags and 8)==0->"D04: ملفات تجهيز الصوت والفيديو لم تكتمل داخل WebView$hint"
+            (flags and 16)==0->"D05: تعطل JavaScript قبل اكتمال تهيئة واجهة البث$hint"
+            (flags and 32)==0->"D06: عناصر الغرفة موجودة لكن مساحة عرضها صفر$hint"
             else->"D07: الصفحة مهيأة لكن WebView لم يؤكد رسمها$hint"
         }
     }
