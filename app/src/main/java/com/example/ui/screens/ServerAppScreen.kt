@@ -504,12 +504,30 @@ fun ServerAppScreen(baseUrl: String) {
         }
         Scaffold(
             floatingActionButton = {
-                if (page.isBlank() && screen in listOf("تصفح", "العرض")) Column(verticalArrangement = Arrangement.spacedBy(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    FloatingActionButton(onClick = { showCreationSheet = true }, shape = CircleShape, containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary) {
-                        Icon(Icons.Rounded.Edit, "إنشاء محتوى")
-                    }
-                    SmallFloatingActionButton(onClick = { open("الدعم وخدمة العملاء") }, shape = CircleShape, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) {
-                        Icon(Icons.Rounded.SupportAgent, "الدعم والمساعدة", tint = MaterialTheme.colorScheme.primary)
+                if (page.isBlank() && screen in listOf("تصفح", "العرض")) {
+                    Column(
+                        modifier = Modifier.padding(bottom = 5.dp, end = 3.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        SmallFloatingActionButton(
+                            onClick = { showCreationSheet = true },
+                            modifier = Modifier.size(49.dp),
+                            shape = CircleShape,
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        ) {
+                            Icon(Icons.Rounded.Edit, "إنشاء محتوى", Modifier.size(22.dp))
+                        }
+                        SmallFloatingActionButton(
+                            onClick = { open("الدعم وخدمة العملاء") },
+                            modifier = Modifier.size(41.dp),
+                            shape = CircleShape,
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                        ) {
+                            Icon(Icons.Rounded.SupportAgent, "الدعم والمساعدة",
+                                Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                        }
                     }
                 }
             },
@@ -542,7 +560,7 @@ fun ServerAppScreen(baseUrl: String) {
                     NavigationBar(
                         containerColor = MaterialTheme.colorScheme.surface,
                         tonalElevation = 2.dp,
-                        modifier = Modifier.clip(RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp)).heightIn(min = 70.dp)
+                        modifier = Modifier.clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)).height(72.dp)
                     ) {
                         destinations.forEachIndexed { index, _ ->
                             val active = tab == index
@@ -640,7 +658,7 @@ fun ServerAppScreen(baseUrl: String) {
                         ) { Icon(Icons.Rounded.ArrowForward, "العودة للتصفح", tint=Color.White) }
                     }
                 } else PullToRefreshBox(isRefreshing = loading, onRefresh = { if (!loading) revision++ }, modifier = Modifier.weight(1f)) {
-                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = if (page.isBlank() && screen in listOf("تصفح", "العرض")) 140.dp else 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = if (page.isBlank() && screen in listOf("تصفح", "العرض")) 124.dp else 24.dp), verticalArrangement = Arrangement.spacedBy(if (screen == "تصفح") 8.dp else 12.dp)) {
                     if ((loading && rows.isEmpty() && screen in listOf("دردشة", "الحجوزات", "المحفوظات", "ريلز")) || (loading && services.isEmpty() && screen in listOf("تصفح", "العرض"))) item { LuxurySkeletonCards() }
                     when (screen) {
                         "تصفح" -> {
@@ -1845,52 +1863,175 @@ internal fun GenderChoice(value: String, onChange: (String) -> Unit) {
 
 @Composable
 internal fun RelaxiaLiveNow(
-    rooms:List<JSONObject>,
-    loading:Boolean,
-    unavailable:Boolean,
-    openAudio:()->Unit,
-    openVideo:()->Unit
-){
+    rooms: List<JSONObject>,
+    loading: Boolean,
+    unavailable: Boolean,
+    openAudio: () -> Unit,
+    openVideo: () -> Unit
+) {
     Column(
-        Modifier.fillMaxWidth().padding(horizontal=16.dp,vertical=4.dp),
-        verticalArrangement=Arrangement.spacedBy(9.dp)
-    ){
-        Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
-            Icon(Icons.Rounded.Sensors,"المباشر الآن",Modifier.size(19.dp),tint=MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.width(7.dp))
-            Text("مباشر الآن",fontWeight=FontWeight.Bold,style=MaterialTheme.typography.titleMedium,modifier=Modifier.weight(1f))
-            if(loading && rooms.isEmpty() && !unavailable) CircularProgressIndicator(Modifier.size(16.dp),strokeWidth=2.dp)
-            else if(!unavailable) Text("${rooms.size} نشط",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
+        verticalArrangement = Arrangement.spacedBy(9.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(7.dp)
+        ) {
+            Icon(
+                Icons.Rounded.Sensors, contentDescription = null,
+                modifier = Modifier.size(19.dp), tint = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                "مباشر الآن",
+                modifier = Modifier.weight(1f),
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.titleMedium
+            )
+            if (loading && rooms.isEmpty() && !unavailable) {
+                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+            } else if (!unavailable) {
+                Text(
+                    if (rooms.isEmpty()) "لا توجد غرف نشطة" else "الغرف النشطة: " + rooms.size,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
         }
-        if(unavailable){
-            Surface(color=MaterialTheme.colorScheme.surfaceVariant,shape=RoundedCornerShape(18.dp)){
-                Row(Modifier.fillMaxWidth().padding(12.dp),verticalAlignment=Alignment.CenterVertically){
-                    Text("الغرف غير متاحة حاليًا. تحقق من اتصال خادم البث.",Modifier.weight(1f),fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
-                    TextButton(onClick=openAudio){Text("الفحص")}
+        if (unavailable) {
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                shape = RoundedCornerShape(18.dp),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .55f)
+                )
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Rounded.WifiOff, contentDescription = null,
+                        modifier = Modifier.size(21.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.width(9.dp))
+                    Text(
+                        "تعذّر عرض الغرف من الخادم",
+                        modifier = Modifier.weight(1f),
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    TextButton(onClick = openVideo) { Text("فتح البث") }
                 }
             }
-        }else if(!loading && rooms.isEmpty()){
-            Text("لا توجد غرف نشطة الآن. يمكنك بدء غرفة صوتية أو بث مباشر.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
-        }else if(rooms.isNotEmpty()){
+        } else if (!loading && rooms.isEmpty()) {
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                shape = RoundedCornerShape(19.dp),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .55f)
+                )
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier.size(35.dp)
+                            .background(
+                                MaterialTheme.colorScheme.primaryContainer,
+                                RoundedCornerShape(12.dp)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Rounded.Mic, contentDescription = null,
+                            modifier = Modifier.size(21.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "كن أول من يبدأ الحديث",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1
+                        )
+                        Text(
+                            "الغرف الصوتية والبث في متناولك",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1
+                        )
+                    }
+                    TextButton(onClick = openAudio) { Text("استكشف") }
+                }
+            }
+        } else if (rooms.isNotEmpty()) {
             LazyRow(
-                horizontalArrangement=Arrangement.spacedBy(9.dp),
-                contentPadding=PaddingValues(end=5.dp)
-            ){
-                items(rooms.take(8),key={it.optString("id")} ){room->
-                    val audio=room.optString("mode")=="audio"
+                horizontalArrangement = Arrangement.spacedBy(9.dp),
+                contentPadding = PaddingValues(end = 4.dp)
+            ) {
+                items(rooms.take(8), key = { it.optString("id") }) { room ->
+                    val audio = room.optString("mode") == "audio"
                     Surface(
-                        onClick=if(audio)openAudio else openVideo,
-                        shape=RoundedCornerShape(15.dp),
-                        color=MaterialTheme.colorScheme.surfaceVariant,
-                        modifier=Modifier.width(185.dp)
-                    ){
-                        Column(Modifier.padding(13.dp),verticalArrangement=Arrangement.spacedBy(7.dp)){
-                            Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(6.dp)){
-                                Icon(if(audio)Icons.Rounded.Mic else Icons.Rounded.Videocam,null,Modifier.size(17.dp),tint=MaterialTheme.colorScheme.primary)
-                                Text(if(audio)"غرفة صوتية" else "بث فيديو",fontSize=12.sp,fontWeight=FontWeight.SemiBold)
+                        onClick = if (audio) openAudio else openVideo,
+                        modifier = Modifier.width(180.dp).height(110.dp),
+                        shape = RoundedCornerShape(19.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        shadowElevation = 2.dp,
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .55f)
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    if (audio) Icons.Rounded.Mic else Icons.Rounded.Videocam,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(17.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    if (audio) "غرفة صوتية" else "بث فيديو",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
                             }
-                            Text(room.optString("title").ifBlank{"غرفة مباشرة"},fontSize=14.sp,fontWeight=FontWeight.SemiBold,maxLines=1,overflow=TextOverflow.Ellipsis)
-                            Text("${room.optString("owner_name")} · ${room.optInt("viewers")} مشاهد",fontSize=11.sp,color=MaterialTheme.colorScheme.onSurfaceVariant,maxLines=1,overflow=TextOverflow.Ellipsis)
+                            Text(
+                                room.optString("title").ifBlank { "غرفة مباشرة" },
+                                fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis
+                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    room.optString("owner_name").ifBlank { "مذيع" },
+                                    modifier = Modifier.weight(1f),
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(Modifier.width(5.dp))
+                                Icon(
+                                    Icons.Rounded.Visibility, contentDescription = "المشاهدون",
+                                    modifier = Modifier.size(14.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    room.optInt("viewers").toString(),
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                 }
