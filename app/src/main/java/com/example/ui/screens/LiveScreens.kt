@@ -248,7 +248,7 @@ private fun liveError(e:Exception)=when(e.message){
         if(event==Lifecycle.Event.ON_STOP)view?.evaluateJavascript("window.setNativeBackground?.(true)",null)
         if(event==Lifecycle.Event.ON_START)view?.evaluateJavascript("window.setNativeBackground?.(false)",null)
     };lifecycle.addObserver(observer);onDispose{lifecycle.removeObserver(observer)}}
-    Surface(Modifier.fillMaxSize(),color=Color(0xFF1B1418),contentColor=Color.White){Column(Modifier.fillMaxSize().safeDrawingPadding()){
+    Surface(Modifier.fillMaxSize(),color=Color(0xFF080F23),contentColor=Color.White){Column(Modifier.fillMaxSize().safeDrawingPadding()){
         if(error.isNotBlank()){
             Column(Modifier.fillMaxWidth().padding(22.dp),verticalArrangement=Arrangement.spacedBy(16.dp)){
                 Icon(Icons.Rounded.ErrorOutline,"تعذر تحميل البث",Modifier.size(32.dp),tint=Color(0xFFF4BC97))
@@ -265,7 +265,7 @@ private fun liveError(e:Exception)=when(e.message){
                     webHeightPx=it.height
                 },
                 factory={ctx->WebView(ctx).apply{
-            view=this;setBackgroundColor(android.graphics.Color.rgb(23,21,23));settings.javaScriptEnabled=true;settings.allowFileAccess=false;settings.allowContentAccess=false;settings.domStorageEnabled=true;settings.databaseEnabled=true;settings.cacheMode=WebSettings.LOAD_NO_CACHE;settings.mixedContentMode=WebSettings.MIXED_CONTENT_NEVER_ALLOW;settings.mediaPlaybackRequiresUserGesture=false
+            view=this;setBackgroundColor(android.graphics.Color.rgb(8,15,35));settings.javaScriptEnabled=true;settings.allowFileAccess=false;settings.allowContentAccess=false;settings.domStorageEnabled=true;settings.databaseEnabled=true;settings.cacheMode=WebSettings.LOAD_NO_CACHE;settings.mixedContentMode=WebSettings.MIXED_CONTENT_NEVER_ALLOW;settings.mediaPlaybackRequiresUserGesture=false
             val allowedPath=Uri.parse(bootstrap.getString("url")).path
             addJavascriptInterface(object{@JavascriptInterface fun canOpenProfile():Boolean=profile!=null
             @JavascriptInterface fun openProfile(id:Int){android.os.Handler(android.os.Looper.getMainLooper()).post{if(trustedCallOrigin(url.orEmpty(),baseUrl)&&Uri.parse(url).path==allowedPath)profile?.invoke(id)}}
@@ -339,25 +339,25 @@ private fun liveError(e:Exception)=when(e.message){
             }})
             if(!pageReady){
                 Column(
-                    Modifier.fillMaxSize().background(Color(0xFF1B1418)).padding(24.dp),
+                    Modifier.fillMaxSize().background(Color(0xFF080F23)).padding(24.dp),
                     verticalArrangement=Arrangement.Center,
                     horizontalAlignment=Alignment.CenterHorizontally
                 ){
-                    CircularProgressIndicator(color=Color(0xFFE9A8BA))
+                    CircularProgressIndicator(color=Color(0xFF9CC3FF))
                     Spacer(Modifier.height(18.dp))
                     Text("جارٍ تحميل غرفة البث…",color=Color.White)
                     Spacer(Modifier.height(12.dp))
-                    Text("يتم التحقق من ملفات واجهة الغرفة قبل الاتصال بوسائط البث.",color=Color(0xFFC4AEB7),style=MaterialTheme.typography.bodySmall)
+                    Text("يتم التحقق من ملفات واجهة الغرفة قبل الاتصال بوسائط البث.",color=Color(0xFFB4C6E5),style=MaterialTheme.typography.bodySmall)
                     Spacer(Modifier.height(16.dp))
                     TextButton(onClick=retry){Text("إعادة الدخول بتذكرة جديدة",color=Color.White)}
                     TextButton(onClick=finish){Text("إنهاء البث والرجوع",color=Color.White)}
                 }
             }
             // Native recovery strip remains visible even when the embedded WebView renderer goes blank.
-            if(pageReady){
+            if(pageReady && (nativeStageStatus.contains("تعذّر") || nativeStageStatus.contains("تعذر") || nativeStageStatus.contains("فشل"))){
                 Row(
                     Modifier.align(Alignment.TopCenter).fillMaxWidth()
-                        .background(Color(0xD01B1418)).padding(horizontal=8.dp,vertical=6.dp),
+                        .background(Color(0xE5102141)).padding(horizontal=8.dp,vertical=6.dp),
                     verticalAlignment=Alignment.CenterVertically,
                     horizontalArrangement=Arrangement.spacedBy(6.dp)
                 ){
@@ -369,7 +369,7 @@ private fun liveError(e:Exception)=when(e.message){
                     Text(
                         nativeStageStatus,
                         modifier=Modifier.weight(1f),
-                        color=Color(0xFFC4AEB7),
+                        color=Color(0xFFB4C6E5),
                         maxLines=1
                     )
                     IconButton(onClick=retry){Icon(Icons.Rounded.Refresh,"إعادة الدخول",tint=Color.White)}
@@ -591,7 +591,7 @@ internal fun CameraPreviewSurface(
 
     BackHandler{onClose()}
 
-    Box(Modifier.fillMaxSize().background(Color(0xFF1B1418))){
+    Box(Modifier.fillMaxSize().background(Color(0xFF080F23))){
         // Live camera preview layer (or calm visualizer for audio-only)
         if(!audioOnly && hasCameraPermission && foreground && !starting){
             CameraPreviewSurface(
@@ -614,7 +614,7 @@ internal fun CameraPreviewSurface(
         } else {
             // Calm, refined Relaxia plum stage
             Box(Modifier.fillMaxSize().background(
-                Brush.verticalGradient(listOf(Color(0xFF281E24), Color(0xFF23191F), Color(0xFF1B1418)))
+                Brush.verticalGradient(listOf(Color(0xFF281E24), Color(0xFF23191F), Color(0xFF080F23)))
             )){
                 Box(Modifier.size(320.dp).align(Alignment.TopEnd).background(Brush.radialGradient(listOf(Color(0x2EA04B63), Color.Transparent)), CircleShape))
                 Box(Modifier.size(260.dp).align(Alignment.BottomStart).background(Brush.radialGradient(listOf(Color(0x1AD7AD72), Color.Transparent)), CircleShape))
@@ -625,11 +625,11 @@ internal fun CameraPreviewSurface(
                         }
                         Spacer(Modifier.height(14.dp))
                         Text("غرفة صوتية", color = Color(0xFFFFF9F3), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text("المايكروفون فقط سيكون مفعلًا", color = Color(0xFFC4AEB7), style = MaterialTheme.typography.bodySmall)
+                        Text("المايكروفون فقط سيكون مفعلًا", color = Color(0xFFB4C6E5), style = MaterialTheme.typography.bodySmall)
                     }
                 } else if(!hasCameraPermission){
                     Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally){
-                        Icon(Icons.Filled.CameraAlt, null, tint = Color(0xFFC4AEB7), modifier = Modifier.size(44.dp))
+                        Icon(Icons.Filled.CameraAlt, null, tint = Color(0xFFB4C6E5), modifier = Modifier.size(44.dp))
                         Spacer(Modifier.height(10.dp))
                         Text("إذن الكاميرا مطلوب للمعاينة", color = Color(0xFFFFF9F3), style = MaterialTheme.typography.bodyMedium)
                         Spacer(Modifier.height(8.dp))

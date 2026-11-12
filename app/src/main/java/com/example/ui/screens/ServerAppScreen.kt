@@ -1097,7 +1097,7 @@ fun ServerAppScreen(baseUrl: String) {
                         ) {
                             Surface(
                                 shape = CircleShape,
-                                color = Color(0xFF792D45).copy(alpha = 0.15f),
+                                color = Color(0xFF194C9F).copy(alpha = 0.15f),
                                 modifier = Modifier.size(44.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
@@ -1690,7 +1690,7 @@ private fun ReelItemView(
                     overflow = TextOverflow.Ellipsis
                 )
                 if (row.optBoolean("identity_verified")) {
-                    Icon(Icons.Rounded.Verified, "حساب موثق", tint = Color(0xFFE7BCC8), modifier = Modifier.size(17.dp))
+                    Icon(Icons.Rounded.Verified, "حساب موثق", tint = Color(0xFFDCE8FD), modifier = Modifier.size(17.dp))
                 }
             }
             val handle = row.optString("owner_username")
