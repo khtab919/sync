@@ -47,7 +47,7 @@ print(render_to_string('core/live_room.html',{'config':config,'nonce':'test-only
   // a zero-height viewport makes #stage have no visible geometry.
   // Run the *same repair expression* shipped in LiveScreens.kt, not a copy.
   const kotlin=fs.readFileSync(path.resolve(root,'../app/src/main/java/com/example/ui/screens/LiveScreens.kt'),'utf8');
-  const source=kotlin.match(/val probeScript="""([\\s\\S]*?)"""\\.trimIndent\\(\\)/);
+  const source=kotlin.match(/val probeScript="""([\s\S]*?)"""\.trimIndent\(\)/);
   assert.ok(source,'Android WebView stage repair expression must exist');
   const repair=source[1].replaceAll('$heightPx','900').replaceAll('$widthPx','390');
   for(const mode of ['audio','video']){
