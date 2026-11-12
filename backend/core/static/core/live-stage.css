@@ -1,29 +1,29 @@
 :root {
   color-scheme: dark;
-  --panel: #1c2933;
-  --ink: #f4f7f9;
-  --muted: #a3b1ba;
-  --brand: #3187a8;
-  --brand-alt: #277c9d;
+  --panel: #281e24;
+  --ink: #fff9f3;
+  --muted: #c4aeb7;
+  --brand: #a04b63;
+  --brand-alt: #792d45;
   --accent-gold: #d7ad72;
   --border: rgba(163, 177, 186, 0.2);
-  --glass-bg: rgba(16, 24, 32, 0.72);
+  --glass-bg: rgba(27, 20, 24, 0.78);
 }
 * { box-sizing: border-box; }
 html[data-theme=light] {
   color-scheme: light;
-  --panel: #f4f8fa;
-  --ink: #202d36;
-  --muted: #788792;
-  --brand: #277c9d;
-  --brand-alt: #1e5b74;
+  --panel: #faf6f2;
+  --ink: #30232a;
+  --muted: #806c75;
+  --brand: #792d45;
+  --brand-alt: #61263b;
   --accent-gold: #c29555;
   --border: rgba(120, 135, 146, 0.25);
-  --glass-bg: rgba(244, 248, 250, 0.85);
+  --glass-bg: rgba(250, 246, 242, 0.90);
 }
 body {
   margin: 0;
-  background: #101820;
+  background: #1b1418;
   color: white;
   font: 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans Arabic", sans-serif;
   height: 100vh;
@@ -59,7 +59,7 @@ button[hidden], [hidden] { display: none !important; }
   isolation: isolate;
   background: radial-gradient(circle at 85% 15%, rgba(49, 135, 168, 0.25), transparent 55%),
               radial-gradient(circle at 15% 85%, rgba(215, 173, 114, 0.15), transparent 50%),
-              #101820;
+              #1b1418;
   overflow: hidden;
 }
 
@@ -85,7 +85,7 @@ button[hidden], [hidden] { display: none !important; }
   position: relative;
   min-height: 0;
   overflow: hidden;
-  background: #1c2933;
+  background: #281e24;
 }
 .tile video {
   width: 100%;
@@ -117,12 +117,12 @@ audio { display: none; }
 /* In audio-only mode the day theme is truly light, not just light panels
    over the old dark room canvas. */
 html[data-theme=light] body.audio-mode {
-  background: #f4f8fa;
-  color: #202d36;
+  background: #faf6f2;
+  color: #30232a;
 }
 html[data-theme=light] body.audio-mode #stage {
-  background: #f4f8fa;
-  color: #202d36;
+  background: #faf6f2;
+  color: #30232a;
 }
 html[data-theme=light] body.audio-mode .shade {
   background: linear-gradient(180deg, rgba(244,248,250,0.58), transparent 27%, transparent 70%, rgba(244,248,250,0.6));
@@ -179,8 +179,8 @@ html[data-theme=light] body.audio-mode .shade {
   border-radius: 50%;
   object-fit: cover;
   border: 3px solid transparent;
-  background: linear-gradient(#1c2933, #1c2933) padding-box,
-              linear-gradient(135deg, #3187a8, #d7ad72) border-box;
+  background: linear-gradient(#281e24, #281e24) padding-box,
+              linear-gradient(135deg, #a04b63, #d7ad72) border-box;
   box-shadow: 0 8px 24px rgba(49, 135, 168, 0.3);
   margin-bottom: 12px;
   position: relative;
@@ -291,7 +291,7 @@ header {
   border-radius: 50%;
   position: relative;
   flex-shrink: 0;
-  background: linear-gradient(135deg, #3187a8, #d7ad72);
+  background: linear-gradient(135deg, #a04b63, #d7ad72);
   padding: 1.5px;
 }
 .identity img, .identity-fallback {
@@ -304,7 +304,7 @@ header {
 .identity-fallback {
   display: grid;
   place-items: center;
-  background: #1c2933;
+  background: #281e24;
   font-size: 12px;
   font-weight: 700;
 }
@@ -384,7 +384,7 @@ header {
 .goal-progress-fill {
   width: 35%;
   height: 100%;
-  background: linear-gradient(90deg, #d7ad72, #3187a8);
+  background: linear-gradient(90deg, #d7ad72, #a04b63);
   border-radius: 6px;
   transition: width 0.4s ease;
 }
@@ -452,7 +452,7 @@ header {
   height: 24px;
   border-radius: 50%;
   object-fit: cover;
-  background: linear-gradient(135deg, #3187a8, #d7ad72);
+  background: linear-gradient(135deg, #a04b63, #d7ad72);
   display: grid;
   place-items: center;
   font-size: 10px;
@@ -716,7 +716,7 @@ body.audio-mode #audioStage.seat-grid {
   max-height: calc(100% - 295px); overflow: auto; padding: 10px 2px;
 }
 body.audio-mode #audioStage.solo-room { grid-template-columns: minmax(0,140px); justify-content:center; }
-.audio-seat { border:0; border-radius:16px; padding:0; background:transparent; color:#f4f7f9; min-width:0; gap:5px; }
+.audio-seat { border:0; border-radius:16px; padding:0; background:transparent; color:#fff9f3; min-width:0; gap:5px; }
 .audio-seat .audio-placeholder, .audio-seat img, .seat-plus {
   width:clamp(40px,13vw,64px); height:clamp(40px,13vw,64px); margin:0;
   border:1px solid #c9e4fa66; box-shadow:0 3px 15px #05182833; flex-shrink:0;
@@ -764,7 +764,7 @@ html[data-theme=light] body.audio-mode header, html[data-theme=light] body.audio
 @media(prefers-reduced-motion:reduce){#giftEffect *, .audio-waves span {animation:none!important;}.gift-particles{display:none}}
 html[data-theme=light] body.audio-mode #stage {
   background:radial-gradient(ellipse at 50% 65%,#fff4df99,transparent 60%),linear-gradient(155deg,#bdd6e9,#dce8ea 60%,#afccd8);
-  background-color:#f4f8fa;
+  background-color:#faf6f2;
 }
 html[data-theme=light] body.audio-mode header,html[data-theme=light] body.audio-mode #connection,
 html[data-theme=light] .audio-seat,html[data-theme=light] .audio-seat small {color:#183a50;}

@@ -3,5 +3,7 @@
 
     <style name="Theme.MyApplication" parent="android:Theme.DeviceDefault.NoActionBar">
         <item name="android:forceDarkAllowed">false</item>
+        <item name="android:colorAccent">#792D45</item>
+        <item name="android:windowLightStatusBar">true</item>
     </style>
 </resources>

@@ -115,7 +115,7 @@ private fun liveError(e:Exception)=when(e.message){
                 Button({audioOnly=true;speakers="15";create=true},enabled=available&&!busy){Text("إنشاء غرفة صوتية")}
                 OutlinedButton({audioOnly=false;speakers="1";create=true},enabled=available&&!busy){Text("بث فيديو")}
             }}
-            if(busy)item{LinearProgressIndicator(Modifier.fillMaxWidth())}
+            if(busy)item{LuxuryLoadingStatus("جارٍ التحميل")}
             if(error.isNotBlank())item{Text(error,color=MaterialTheme.colorScheme.error)}
             if(!available)item{Text("البث ينتظر جاهزية خادم الوسائط. لا توجد جلسات تجريبية.",style=MaterialTheme.typography.bodyMedium)}
             if(rows.isEmpty()&&error.isBlank()&&available)item{Text("لا توجد بثوث نشطة الآن.",style=MaterialTheme.typography.bodyLarge)}

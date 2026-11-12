@@ -103,7 +103,7 @@ internal fun CommerceScreen(api: LayaliApi, kind: String, back: () -> Unit) {
         Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding().verticalScroll(rememberScrollState()).padding(22.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             TextButton(back, enabled = !busy) { Text("رجوع") }
             Text(if(isWheel) "يا نصيب" else kind, style = MaterialTheme.typography.headlineLarge)
-            if(busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+            if(busy) LuxuryLoadingStatus("جارٍ التحميل")
             if(note.isNotBlank()) Text(note, color = MaterialTheme.colorScheme.primary)
             if(kind == "شحن الرصيد") {
                 Text("USDT · BEP20 فقط", style = MaterialTheme.typography.titleLarge)
@@ -190,7 +190,7 @@ internal fun SellerPublishScreen(api: LayaliApi, back: () -> Unit) {
         Text("مساحة النشر", style = MaterialTheme.typography.headlineLarge)
         Text("النشر متاح فوراً لجميع الحسابات النشطة · محتوى 18+ غير صريح")
         Row { FilterChip(!reel, { reel = false; media = JSONObject() }, label = { Text("خدمة أو منتج") }, enabled = !busy); Spacer(Modifier.width(8.dp)); FilterChip(reel, { reel = true; media = JSONObject() }, label = { Text("ريلز") }, enabled = !busy) }
-        if(busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+        if(busy) LuxuryLoadingStatus("جارٍ التحميل")
         if(note.isNotBlank()) Text(note)
         if(!reel) {
             OutlinedTextField(title, { title = it.take(150) }, label = { Text("عنوان العرض") }, modifier = Modifier.fillMaxWidth())

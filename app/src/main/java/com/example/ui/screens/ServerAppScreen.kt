@@ -496,7 +496,16 @@ fun ServerAppScreen(baseUrl: String) {
             return@MyApplicationTheme
         }
         Scaffold(
-            floatingActionButton = {},
+            floatingActionButton = {
+                if (page.isBlank() && screen in listOf("تصفح", "العرض")) Column(verticalArrangement = Arrangement.spacedBy(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    FloatingActionButton(onClick = { showCreationSheet = true }, shape = CircleShape, containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary) {
+                        Icon(Icons.Rounded.Edit, "إنشاء محتوى")
+                    }
+                    SmallFloatingActionButton(onClick = { open("الدعم وخدمة العملاء") }, shape = CircleShape, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                        Icon(Icons.Rounded.SupportAgent, "الدعم والمساعدة", tint = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            },
             containerColor = MaterialTheme.colorScheme.background,
             topBar = {
                 if (screen != "حسابي" && screen != "صفحة المذيعة" && (screen != "ريلز" || rows.isEmpty())) TopAppBar(
@@ -585,7 +594,7 @@ fun ServerAppScreen(baseUrl: String) {
                         ) { Icon(Icons.Rounded.ArrowForward, "العودة للتصفح", tint=Color.White) }
                     }
                 } else PullToRefreshBox(isRefreshing = loading, onRefresh = { if (!loading) revision++ }, modifier = Modifier.weight(1f)) {
-                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = if (page.isBlank() && screen in listOf("تصفح", "العرض")) 140.dp else 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     if ((loading && rows.isEmpty() && screen in listOf("دردشة", "الحجوزات", "المحفوظات", "ريلز")) || (loading && services.isEmpty() && screen in listOf("تصفح", "العرض"))) item { LuxurySkeletonCards() }
                     when (screen) {
                         "تصفح" -> {
@@ -741,7 +750,7 @@ fun ServerAppScreen(baseUrl: String) {
                                         avatarUrl = ""; notice = "تم حذف صورة الملف."
                                     } }, enabled = !submitting
                                 ) { Text("حذف الصورة") }
-                                if (submitting) LinearProgressIndicator(Modifier.fillMaxWidth())
+                                if (submitting) LuxuryLoadingStatus("جارٍ التحميل")
                             }
                             Field(displayName, { displayName = it.take(100) }, "الاسم الظاهر")
                             Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp),
@@ -1221,7 +1230,7 @@ internal fun ReferenceLogin(register: Boolean, busy: Boolean, notice: String, us
                     Text("8 خانات أو أكثر. يمكنك اختيار اسم المستخدم لاحقًا من ملفك.",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
                     Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){Checkbox(adultConfirmed,onAdultConfirmed);Text("أؤكد أن عمري 18 عامًا أو أكثر وأوافق على ضوابط المحتوى غير الصريح.",Modifier.weight(1f),style=MaterialTheme.typography.bodyMedium)}
                 }
-                if(busy)LinearProgressIndicator(Modifier.fillMaxWidth())
+                if(busy)LuxuryLoadingStatus("جارٍ التحميل")
                 if(!register)TextButton(onClick=onForgot,enabled=!busy){Text("نسيت كلمة المرور؟")}
                 ReferencePrimary(if(register)"إنشاء حساب"else"دخول",ready){submit()}
                 TextButton(toggle,enabled=!busy,modifier=Modifier.align(Alignment.CenterHorizontally)){Text(if(register)"لديك حساب؟ تسجيل الدخول"else"جديد هنا؟ أنشئ حسابًا")}
@@ -1503,7 +1512,7 @@ private fun ReelItemView(
                     overflow = TextOverflow.Ellipsis
                 )
                 if (row.optBoolean("identity_verified")) {
-                    Icon(Icons.Rounded.Verified, "حساب موثق", tint = Color(0xFF9DCDE4), modifier = Modifier.size(17.dp))
+                    Icon(Icons.Rounded.Verified, "حساب موثق", tint = Color(0xFFE7BCC8), modifier = Modifier.size(17.dp))
                 }
             }
             val handle = row.optString("owner_username")
@@ -1755,7 +1764,7 @@ internal fun RelaxiaQuickShortcuts(
 @Composable
 internal fun HomeToolbarActions(create:()->Unit,wallet:()->Unit,saved:()->Unit,refresh:()->Unit,support:()->Unit){
     var expanded by remember{mutableStateOf(false)}
-    IconButton(onClick=create){Icon(Icons.Rounded.AddCircleOutline,"إنشاء محتوى",Modifier.size(23.dp))}
+
     Box {
         IconButton({expanded=true}){Icon(Icons.Rounded.MoreVert,"خيارات التصفح")}
         DropdownMenu(expanded,{expanded=false}){

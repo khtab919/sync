@@ -59,7 +59,7 @@ internal fun CoinPackage(coins:Int,bonus:Int,dollars:String,selected:Boolean,bad
     val colors=MaterialTheme.colorScheme
     Surface(
         onClick=choose,
-        shape=RoundedCornerShape(18.dp),
+        shape=RoundedCornerShape(24.dp),
         color=if(selected)colors.primaryContainer else colors.surface,
         shadowElevation=if(selected)4.dp else 1.dp,
         border=BorderStroke(if(selected)2.dp else 1.dp,if(selected)colors.primary else colors.outlineVariant)
@@ -148,9 +148,9 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
             Text("Relaxia",fontWeight=FontWeight.SemiBold,color=MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Text("متجر الكوينز",style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold)
-        Surface(shape=RoundedCornerShape(18.dp),color=MaterialTheme.colorScheme.primaryContainer){
+        Surface(shape=RoundedCornerShape(26.dp),shadowElevation=3.dp,color=MaterialTheme.colorScheme.primaryContainer){
             Row(Modifier.fillMaxWidth().padding(16.dp),verticalAlignment=Alignment.CenterVertically){
-                Text("🪙",fontSize=30.sp)
+                Icon(androidx.compose.material.icons.Icons.Rounded.Toll, null, Modifier.size(32.dp), tint=MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.width(10.dp))
                 Column{
                     Text("رصيد الكوينز المتاح",style=MaterialTheme.typography.bodySmall)
@@ -165,7 +165,7 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
         if(!showOrders && submittedId.isBlank()) Text(if(quote==null)"اختر باقة الشحن"else"أكمل عملية الدفع",style=MaterialTheme.typography.titleMedium)
         Text("100 كوين = 1 USD كقيمة أساسية داخل التطبيق. يظهر المبلغ النهائي قبل الدفع. النقاط الترويجية منفصلة وغير قابلة للسحب.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
         if(note.isNotBlank())Text(note,color=MaterialTheme.colorScheme.primary)
-        if(busy)LinearProgressIndicator(Modifier.fillMaxWidth())
+        if(busy)LuxuryLoadingStatus("جارٍ تحديث الطلب")
         if(submittedId.isNotBlank()) {
             PurchaseStatusCard(submittedId,submittedAmount,submittedStatus)
             OutlinedButton(onClick={perform{reload();rows.firstOrNull{it.optString("id")==submittedId}?.let{submittedStatus=it.optString("status")}}},enabled=!busy,modifier=Modifier.fillMaxWidth()){Text("تحديث حالة الطلب")}
@@ -251,7 +251,7 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
                 val chosen=packages.firstOrNull{it.coins==selected}
                 Surface(color=MaterialTheme.colorScheme.primaryContainer,shape=RoundedCornerShape(16.dp)){
                     Column(Modifier.fillMaxWidth().padding(16.dp),verticalArrangement=Arrangement.spacedBy(5.dp)){
-                        Text("🪙 ${java.text.NumberFormat.getIntegerInstance().format(selected)} كوين",fontSize=21.sp,fontWeight=FontWeight.Bold)
+                        Text("${java.text.NumberFormat.getIntegerInstance().format(selected)} كوين",fontSize=21.sp,fontWeight=FontWeight.Bold)
                         Text("القيمة الأساسية: ${BigDecimal.valueOf(selected.toLong(),2).toPlainString()} USD",style=MaterialTheme.typography.bodyMedium)
                         if((chosen?.bonusPoints?:0)>0)Text("+${chosen?.bonusPoints} نقطة ترويجية إضافية",color=MaterialTheme.colorScheme.primary)
                     }
