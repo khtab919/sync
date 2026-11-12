@@ -12,8 +12,8 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
 (async()=>{
  const browser=await chromium.launch({headless:true,...(process.env.CAPTURE_CHROMIUM?{executablePath:process.env.CAPTURE_CHROMIUM}:{}),args:['--no-sandbox']});
  try{
-  for(const width of [360,430]){
-   const page=await browser.newPage({viewport:{width,height:820}});
+  for(const [width,height] of [[320,640],[360,820],[430,820]]){
+   const page=await browser.newPage({viewport:{width,height}});
    await page.addInitScript(()=>window.relaxiaStageLoaded=true);
    await page.route('https://room.test/',route=>route.fulfill({contentType:'text/html',body:html}));
    await page.goto('https://room.test/');await page.addStyleTag({content:css});
@@ -54,6 +54,9 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    assert.equal(await page.locator('.empty-seat').count(),14);
    const seats=await page.locator('#audioStage').boundingBox(),footer=await page.locator('footer').boundingBox();
    assert.ok(seats.y+seats.height<footer.y,'seat grid must not overlap controls');
+   const comments=await page.locator('#messages').boundingBox();
+   assert.ok(seats.y+seats.height<=comments.y+2,'seats must not cover comments');
+   assert.ok(comments.y+comments.height<=footer.y+2,'comments must not hide under controls');
    const layout=await page.evaluate(()=>({
     overflowX:document.documentElement.scrollWidth-innerWidth,
     overflowY:document.getElementById('stage').scrollHeight-document.getElementById('stage').clientHeight,
