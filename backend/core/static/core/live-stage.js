@@ -144,7 +144,7 @@ function giftSheet(){
     catch(e){if(['insufficient_balance','price_confirmation_required','gift_unavailable'].includes(e.message)){giftKey=null;giftPending=null}throw e}
    });
    b.disabled=!select.options.length;b.className='gift-card '+g.effect;b.setAttribute('aria-label',g.name+' · '+g.price_cents+' كوين');
-   const icon=document.createElement('span');icon.className='gift-art';icon.textContent=g.symbol;
+   const icon=window.RelaxiaGiftArt?window.RelaxiaGiftArt.create(g,false):document.createElement('span');if(!window.RelaxiaGiftArt){icon.className='gift-art';icon.textContent=g.symbol;}
    const name=document.createElement('strong');name.textContent=g.name;
    const price=document.createElement('small');price.textContent=g.price_cents.toLocaleString('ar')+' كوين';
    b.append(icon,name,price);
@@ -194,13 +194,13 @@ function playEffects(){
  const effect=['simple','animated','depth'].includes(g.effect)?g.effect:'simple';
  box.className='gift-show '+effect;
  if(g.code==='whale'||g.code==='lion')box.classList.add('show-'+g.code);
- const icon=document.createElement('span');icon.className='gift-hero';icon.textContent=g.symbol;
+ const icon=window.RelaxiaGiftArt?window.RelaxiaGiftArt.create(g,true):document.createElement('span');if(!window.RelaxiaGiftArt){icon.className='gift-hero';icon.textContent=g.symbol;}
  const label=document.createElement('strong');label.textContent=g.sender+' أرسل '+g.name;
  const recipient=document.createElement('small');recipient.textContent='إلى '+g.recipient;
  if(effect!=='simple'){const particles=document.createElement('div');particles.className='gift-particles';particles.setAttribute('aria-hidden','true');for(let i=0;i<8;i++){const star=document.createElement('i');star.textContent=g.code==='whale'?'○':'✦';particles.append(star)}box.append(particles)}
  box.append(icon,label,recipient);box.hidden=false;
  const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
- setTimeout(()=>{box.hidden=true;effectBusy=false;playEffects()},reduced?1600:effect==='simple'?1600:effect==='depth'?3800:2600);
+ setTimeout(()=>{box.hidden=true;effectBusy=false;playEffects()},reduced?1600:(window.RelaxiaGiftArt?window.RelaxiaGiftArt.duration(g.code,effect):(effect==='simple'?1600:effect==='depth'?3800:2600)));
 }
 function drawState(result){state=result;document.querySelectorAll('.tile').forEach(t=>{const speaker=result.speakers?.find(s=>s.identity===t.dataset.identity);if(speaker)t.querySelector('small').textContent=speaker.name});serverOffset=Date.parse(result.server_time)-Date.now();const vCount=result.viewers||0;if($('viewerCount'))$('viewerCount').textContent=vCount>=1000?(vCount/1000).toFixed(1)+'K':vCount;else $('viewers').textContent=vCount+' مشاهد';$('viewers').title=vCount+' مشاهد';$('follow').textContent=result.following?'تتابعه':'متابعة';const host=result.speakers?.[0];$('badge').textContent=host?('المستوى '+host.level+(host.vip?' · VIP':'')):'';
  const signature=JSON.stringify(result.comments);if(lastComments!==signature){lastComments=signature;const box=$('messages');box.replaceChildren();for(const c of result.comments||[]){const p=document.createElement('div');p.className='comment-bubble';const av=document.createElement('div');av.className='comment-avatar';av.textContent=(c.name||'U').slice(0,1);const body=document.createElement('div');body.className='comment-body';const name=document.createElement('span');name.className='comment-author';name.textContent=c.name+': ';body.append(name,document.createTextNode(c.text));p.append(av,body);if(result.manage_room){const pin=document.createElement('button');pin.textContent='تثبيت';pin.onclick=()=>api({action:'pin_comment',comment_id:c.id}).then(refresh).catch(message);const del=document.createElement('button');del.textContent='حذف';del.onclick=()=>api({action:'delete_comment',comment_id:c.id}).then(refresh).catch(message);p.append(pin,del)}box.append(p)}box.scrollTop=box.scrollHeight}
