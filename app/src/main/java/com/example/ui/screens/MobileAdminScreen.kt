@@ -150,7 +150,19 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
     }
     liveRoom?.let { room ->
         Box(Modifier.fillMaxSize()) {
-            LiveRoomView(api.origin, room) { liveRoom = null }
+            LiveRoomView(
+                baseUrl=api.origin,
+                bootstrap=room,
+                retry={
+                    val parts=android.net.Uri.parse(room.optString("url")).pathSegments
+                    val id=parts.getOrNull(parts.size-2)
+                    liveRoom=null
+                    if(!id.isNullOrBlank())perform{
+                        liveRoom=api.request("/api/live/$id/admission","POST",JSONObject())
+                    }
+                },
+                finish={liveRoom=null}
+            )
             Surface(Modifier.safeDrawingPadding().padding(12.dp), shape = MaterialTheme.shapes.large, tonalElevation = 6.dp) {
                 TextButton(onClick = { liveRoom = null }) { Text("← العودة إلى إدارة البث") }
             }
