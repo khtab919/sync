@@ -3,7 +3,7 @@ if(typeof LivekitClient==='undefined'||typeof RelaxiaMedia==='undefined')throw E
 const config=JSON.parse(document.getElementById('config').textContent),$=id=>document.getElementById(id);
 const {Room,RoomEvent,Track,ConnectionState}=LivekitClient;
 let room,closed=false,muted=false,speakerMuted=false,cameraOff=false,facing='user',commentsVisible=true,lastComments='',leaving=false,retrying=false,polling=false;
-let activeSpeakerIds=new Set(),audioSeatSignature='';
+let activeSpeakerIds=new Set(),audioSeatSignature='',reconnectSince=0,controlFailures=0;
 function updateRoomViewport(){
  const height=window.visualViewport?.height||window.innerHeight;
  // Preserve truly tiny viewports so Android's native stage-height recovery can detect and repair them.
@@ -105,7 +105,7 @@ async function connect(token=config.token){
  layout();if(!polling){polling=true;poll()}
  }catch(e){room?.removeAllListeners();try{await room?.disconnect()}finally{releasePrepared();mediaReady=false}throw e}
 }
-async function reconnect(){if(retrying||closed||leaving)return;retrying=true;try{for(let attempt=0;attempt<6&&!closed&&!leaving;attempt++){$('status').textContent='إعادة الاتصال…';await new Promise(r=>setTimeout(r,Math.min(5000,1000*(attempt+1))));try{const fresh=await api({action:'token'});state.can_publish=fresh.can_publish;state.publish_sources=fresh.publish_sources;if(closed||leaving)return;room?.removeAllListeners();await room?.disconnect();document.querySelectorAll('audio').forEach(el=>el.remove());$('video').replaceChildren();if(state.can_publish===false&&!config.owner)speaking=false;await connect(fresh.token);return}catch(e){if(e.name==='MediaFailure'){mediaMessage(e);return}if(['broadcast_forbidden','broadcast_ended','live_authorization_required','admission_refunded','feature_restricted','broadcast_permission_required'].includes(e.message)){stop('انتهت صلاحية البث');return}}}if(!closed&&!leaving)$('status').textContent='تعذّر الاتصال. أعد الدخول إلى الجلسة نفسها دون خصم جديد.'}finally{retrying=false}}
+async function reconnect(){if(retrying||closed||leaving)return;retrying=true;try{for(let attempt=0;attempt<6&&!closed&&!leaving;attempt++){$('status').textContent='إعادة الاتصال…';await new Promise(r=>setTimeout(r,Math.min(5000,1000*(attempt+1))));try{const fresh=await api({action:'token'});state.can_publish=fresh.can_publish;state.publish_sources=fresh.publish_sources;if(closed||leaving)return;room?.removeAllListeners();await room?.disconnect();document.querySelectorAll('audio').forEach(el=>el.remove());$('video').replaceChildren();if(state.can_publish===false&&!config.owner)speaking=false;await connect(fresh.token);return}catch(e){if(e.name==='MediaFailure'){mediaMessage(e);return}if(['broadcast_forbidden','broadcast_ended','live_authorization_required','admission_refunded','feature_restricted','broadcast_permission_required'].includes(e.message)){stop('انتهت صلاحية البث');return}}}if(!closed&&!leaving){$('status').textContent='تعذّر الاتصال. جرّب إعادة الاتصال دون شراء دخول جديد.';$('reconnectAction').hidden=false}}finally{retrying=false}}
 function sheet(title){$('sheetTitle').textContent=title;$('sheetBody').replaceChildren();if(!$('sheet').open)$('sheet').showModal();return $('sheetBody')}
 function button(box,label,fn,cls=''){const b=document.createElement('button');b.textContent=label;b.className=cls;b.onclick=async()=>{if(b.disabled)return;b.disabled=true;try{await fn()}catch(e){message(e)}finally{b.disabled=false}};box.appendChild(b);return b}
 function note(box,text){const p=document.createElement('p');p.textContent=text;box.appendChild(p)}
@@ -244,8 +244,32 @@ function drawState(result){state=result;updateQuickMic();document.querySelectorA
 }
 function pkClock(){if(!state.pk)return;const pk=state.pk;const seconds=Math.max(0,Math.ceil((Date.parse(pk.ends_at)-Date.now()-serverOffset)/1000));$('pkTimer').textContent=pk.cancelled?'أُلغيت المنافسة':seconds>0?Math.floor(seconds/60)+':'+String(seconds%60).padStart(2,'0'):'انتهت المنافسة · '+(pk.scores[0]===pk.scores[1]?'تعادل':pk.scores[0]>pk.scores[1]?'الفريق الأول يتقدم':'الفريق الثاني يتقدم')}
 setInterval(pkClock,1000);
-async function refresh(){const result=await api();if(!['starting','active','reconnecting'].includes(result.status)){stop('انتهى البث');return}drawState(result);if(result.status==='reconnecting')$('status').textContent='صاحب البث يعيد الاتصال…';else if(!mediaFault&&room.state===ConnectionState.Connected&&(!(config.owner||speaking)||mediaReady))$('status').textContent='مباشر';return result}
-async function poll(){while(!closed){try{await refresh()}catch(e){if(e.name==='MediaFailure'){mediaMessage(e);return}if(['broadcast_forbidden','broadcast_ended','live_authorization_required','admission_refunded'].includes(e.message)){stop('انتهت صلاحية البث');break}$('status').textContent='إعادة الاتصال…'}await new Promise(r=>setTimeout(r,3000))}}
+async function refresh(){
+ const result=await api();controlFailures=0;
+ if(!['starting','active','reconnecting'].includes(result.status)){stop('انتهى البث');return}
+ drawState(result);
+ if(result.status==='reconnecting'){
+  if(!reconnectSince)reconnectSince=Date.now();
+  $('status').textContent='صاحب البث يعيد الاتصال…';
+  $('reconnectAction').hidden=Date.now()-reconnectSince<12000;
+ }else{
+  reconnectSince=0;$('reconnectAction').hidden=true;
+  if(result.status==='starting')$('status').textContent='الغرفة تبدأ الآن…';
+  else if(!mediaFault&&room?.state===ConnectionState.Connected&&(!(config.owner||speaking)||mediaReady))$('status').textContent='مباشر';
+ }
+ return result;
+}
+async function poll(){while(!closed){
+ try{await refresh()}
+ catch(e){
+  if(e.name==='MediaFailure'){mediaMessage(e);return}
+  if(['broadcast_forbidden','broadcast_ended','live_authorization_required','admission_refunded'].includes(e.message)){stop('انتهت صلاحية البث');break}
+  controlFailures++;
+  $('status').textContent='تعذّر تحديث الغرفة. نعيد المحاولة…';
+  $('reconnectAction').hidden=controlFailures<3;
+ }
+ await new Promise(r=>setTimeout(r,3000))
+}}
 $('composer').onsubmit=async e=>{e.preventDefault();const input=$('text'),text=input.value.trim();if(!text)return;const b=e.submitter||$('composer').querySelector('button');b.disabled=true;try{await api({action:'comment',text});input.value='';await refresh()}catch(e){message(e)}finally{b.disabled=false}};
 $('mute').onclick=async()=>{try{await room.localParticipant.setMicrophoneEnabled(muted);muted=!muted;$('mute').textContent=muted?'تشغيل الميكروفون':'كتم الميكروفون';updateQuickMic()}catch(e){message(e)}};
 $('camera').onclick=async()=>{try{await room.localParticipant.setCameraEnabled(cameraOff);cameraOff=!cameraOff;$('camera').textContent=cameraOff?'تشغيل الفيديو':'إيقاف الفيديو';if(!cameraOff){const track=room.localParticipant.getTrackPublication(Track.Source.Camera)?.track;if(track)renderTrack(track,room.localParticipant,true)}else document.querySelectorAll('.tile').forEach(t=>{if(t.dataset.identity===room.localParticipant.identity)t.remove()});layout()}catch(e){message(e)}};
@@ -263,6 +287,7 @@ $('gift').onclick=giftSheet;$('guests').onclick=guestSheet;
 $('micQuick').onclick=()=>{if(speaking)$('mute').click();else guestSheet()};
 $('more').onclick=moreSheet;
 $('share').onclick=async()=>{const text='انضم إلى بث '+config.ownerName+' «'+config.title+'» على Relaxia. افتح قسم البث المباشر وابحث عن عنوان البث. الدخول الخاص يتطلب تصريحًا.';try{if(window.LayaliLive?.shareLive){window.LayaliLive.shareLive(text);$('status').textContent='نُسخت دعوة البث؛ يمكنك إرسالها إلى أصدقائك.';}else if(navigator.share)await navigator.share({title:'Relaxia · مباشر',text});else if(navigator.clipboard){await navigator.clipboard.writeText(text);$('status').textContent='نُسخت دعوة البث'}else prompt('انسخ دعوة البث',text)}catch(e){if(e.name!=='AbortError')message(e)}};
+$('reconnectAction').onclick=()=>{$('reconnectAction').hidden=true;reconnectSince=Date.now();reconnect()};
 $('retryMedia').onclick=async()=>{if(activating)return;activating=true;try{if(!await consent(config.mode))throw new RelaxiaMedia.MediaFailure('camera_capture',{name:'NotAllowedError'});room?.removeAllListeners();await room?.disconnect();const fresh=await api({action:'token'});state.can_publish=fresh.can_publish;state.publish_sources=fresh.publish_sources;await connect(fresh.token)}catch(e){message(e)}finally{activating=false}};
 
 const heartEmojis=['💜','💖','❤️','💕','✨'];
@@ -288,6 +313,8 @@ if($('emojiBtn'))$('emojiBtn').onclick=()=>{
  }
 };
 layout();window.relaxiaStageLoaded=true;
+// Load seats, audience and chat before LiveKit connects, including recovery states.
+if(!polling){polling=true;poll()}
 window.addEventListener('pagehide',()=>{leaving=true;releasePrepared();room?.disconnect()});connect().catch(e=>{message(e);if(e.name!=='MediaFailure')reconnect()});
 
 // Native lifecycle: keep audio connected, release camera while the app is hidden.
