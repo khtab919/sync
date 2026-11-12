@@ -81,7 +81,7 @@ internal fun CoinPackage(coins:Int,bonus:Int,dollars:String,selected:Boolean,bad
                 "+${java.text.NumberFormat.getIntegerInstance(java.util.Locale.US).format(bonus)} نقطة ترويجية",
                 fontSize=10.sp,color=if(bonus>0)colors.primary else colors.onSurfaceVariant,maxLines=2,lineHeight=13.sp
             )
-            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.height(4.dp))
             Surface(color=colors.surfaceVariant,shape=RoundedCornerShape(18.dp)){
                 Text("$dollars USD",Modifier.padding(horizontal=7.dp,vertical=6.dp),fontSize=11.sp,fontWeight=FontWeight.SemiBold,maxLines=1)
             }
