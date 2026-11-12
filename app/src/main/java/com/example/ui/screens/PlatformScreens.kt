@@ -5,6 +5,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowForward
+import androidx.compose.material.icons.rounded.ShoppingBag
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -28,12 +29,19 @@ internal fun operationLabel(status:String)=when(status){"held","paid_reserved"->
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable internal fun BookingHistory(api:LayaliApi,back:()->Unit){
+@Composable internal fun BookingHistory(api:LayaliApi,explore:()->Unit = {},back:()->Unit){
     val scope=rememberCoroutineScope();var rows by remember{mutableStateOf<List<JSONObject>>(emptyList())};var revision by remember{mutableIntStateOf(0)};var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf("")};var decision by remember{mutableStateOf<Pair<JSONObject,String>?>(null)}
-    LaunchedEffect(revision){try{rows=api.request("/api/bookings").platformItems()}catch(e:Exception){error=commerceError(e)}}
+    var loading by remember { mutableStateOf(true) }
+    LaunchedEffect(revision){loading=true;error="";try{rows=api.request("/api/bookings").platformItems()}catch(e:CancellationException){throw e}catch(e:Exception){error=commerceError(e)}finally{loading=false}}
     Scaffold(topBar={TopAppBar(title={Text("الحجوزات والطلبات")},navigationIcon={IconButton(back){Icon(Icons.Rounded.ArrowForward,"رجوع")}},actions={TextButton({revision++}){Text("تحديث")}})}){padding->LazyColumn(Modifier.fillMaxSize().padding(padding),contentPadding=PaddingValues(16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
         if(error.isNotBlank())item{Text(error,color=MaterialTheme.colorScheme.error)}
-        if(rows.isEmpty())item{Text("لا توجد حجوزات بعد.")}
+        if(loading && rows.isEmpty())item{LuxurySkeletonCards()}
+        if(!loading && rows.isEmpty() && error.isBlank())item{
+            ReferenceCard {
+                ReferenceEmpty(Icons.Rounded.ShoppingBag,"لا توجد حجوزات بعد","اكتشف الخدمات والجلسات والمنتجات، وتابع طلباتك هنا.")
+                Box(Modifier.padding(18.dp)){ReferencePrimary("استكشاف الخدمات",onClick=explore)}
+            }
+        }
         items(rows,key={it.getString("id")}){row->Card(Modifier.fillMaxWidth()){Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
             Text(row.optString("title",row.optString("service__title")),style=MaterialTheme.typography.titleMedium);Text(if(row.optBoolean("owner"))row.optString("buyer_name")else row.optString("owner_name"));Text(usd(row.optLong("price_cents")));Text(operationLabel(row.optString("status")));Text("${row.optInt("duration_minutes",30)} دقيقة");Text(row.optString("terms"),style=MaterialTheme.typography.bodySmall)
             Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){

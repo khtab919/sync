@@ -706,10 +706,10 @@ dialog::backdrop { background: rgba(16, 24, 32, 0.7); backdrop-filter: blur(4px)
 /* Audio rooms: five seats per row, with room for chat and controls. */
 body.audio-mode #stage {
   background: radial-gradient(ellipse at 50% 58%, #bb916e55 0, transparent 48%),
-              radial-gradient(ellipse at 20% 15%, #447ca34d 0, transparent 55%),
-              linear-gradient(165deg,#102e48,#194958 56%,#12273f);
+              radial-gradient(ellipse at 20% 15%, #a66c834d 0, transparent 55%),
+              linear-gradient(165deg,#321b2a,#593047 56%,#281b26);
 }
-body.audio-mode .shade { background: linear-gradient(180deg,#071b2e66,transparent 50%,#081a2dcc); }
+body.audio-mode .shade { background: linear-gradient(180deg,#24131d66,transparent 50%,#25151fcc); }
 body.audio-mode #audioStage.seat-grid {
   inset: 130px 12px auto; display: grid; grid-template-columns: repeat(5,minmax(0,1fr));
   gap: 18px 8px; align-content: start; justify-items: stretch;
@@ -719,14 +719,14 @@ body.audio-mode #audioStage.solo-room { grid-template-columns: minmax(0,140px); 
 .audio-seat { border:0; border-radius:16px; padding:0; background:transparent; color:#fff9f3; min-width:0; gap:5px; }
 .audio-seat .audio-placeholder, .audio-seat img, .seat-plus {
   width:clamp(40px,13vw,64px); height:clamp(40px,13vw,64px); margin:0;
-  border:1px solid #c9e4fa66; box-shadow:0 3px 15px #05182833; flex-shrink:0;
+  border:1px solid #efd1dc66; box-shadow:0 3px 15px #23121a33; flex-shrink:0;
 }
 .audio-seat img { position:absolute; top:0; left:50%; transform:translateX(-50%); }
 .audio-seat .audio-placeholder { font-size:22px; }
 .audio-seat .audio-name { font-size:11px; width:100%; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; text-shadow:none; }
-.audio-seat small { font-size:10px; color:#cce3f1; }
+.audio-seat small { font-size:10px; color:#e8cad5; }
 .audio-seat .audio-waves { width:clamp(40px,13vw,64px); height:clamp(40px,13vw,64px); top:0; }
-.seat-plus { display:grid; place-items:center; border-radius:50%; font-size:28px; background:#ffffff08; color:#d2e7f3; }
+.seat-plus { display:grid; place-items:center; border-radius:50%; font-size:28px; background:#ffffff08; color:#eed6df; }
 .audio-seat:focus-visible { outline:2px solid #8fe8d0; outline-offset:4px; }
 body.audio-mode #messages { max-height:22vh; }
 body.audio-mode.has-pk #audioStage.seat-grid { top:180px; max-height:calc(100% - 345px); }
@@ -741,11 +741,11 @@ html[data-theme=light] body.audio-mode header, html[data-theme=light] body.audio
 .gift-card .gift-art { font-size:42px; margin:0; line-height:1.35; filter:drop-shadow(0 5px 5px #0003); }
 .gift-card strong { font-size:12px; }
 .gift-card small { font-size:11px; color:var(--muted); }
-.gift-card.depth { background:linear-gradient(140deg,#ae86451c,#496fbd18)!important; border-color:#b28c4855; }
-#giftEffect.gift-show { pointer-events:none; z-index:9; left:8%; right:8%; top:32%; text-align:center; border-radius:28px; background:#10283ee8; backdrop-filter:blur(10px); color:#fff; border:1px solid #b5d6e550; padding:20px 12px; overflow:hidden; }
+.gift-card.depth { background:linear-gradient(140deg,#ae86451c,#9f607b18)!important; border-color:#b28c4855; }
+#giftEffect.gift-show { pointer-events:none; z-index:9; left:8%; right:8%; top:32%; text-align:center; border-radius:28px; background:#3a2330e8; backdrop-filter:blur(10px); color:#fff; border:1px solid #e7c6d250; padding:20px 12px; overflow:hidden; }
 #giftEffect .gift-hero { display:block; position:relative; z-index:1; font-size:80px; animation:giftRise 1s both; filter:drop-shadow(0 8px 12px #0008); }
 #giftEffect strong, #giftEffect small { display:block; position:relative; z-index:1; font-size:14px; margin:6px 0; }
-#giftEffect small { font-size:12px; color:#d0deec; }
+#giftEffect small { font-size:12px; color:#ead4dd; }
 #giftEffect.simple { left:15%; right:15%; top:38%; }
 #giftEffect.simple .gift-hero { font-size:50px; }
 #giftEffect.depth { background:radial-gradient(ellipse at center,#634b88dd,#142439ee 75%); border-color:#c3a05899; }
@@ -763,9 +763,9 @@ html[data-theme=light] body.audio-mode header, html[data-theme=light] body.audio
 @keyframes giftSpark{0%,100%{transform:translateY(8px) scale(.5);opacity:0}50%{transform:translateY(-15px) scale(1);opacity:1}}
 @media(prefers-reduced-motion:reduce){#giftEffect *, .audio-waves span {animation:none!important;}.gift-particles{display:none}}
 html[data-theme=light] body.audio-mode #stage {
-  background:radial-gradient(ellipse at 50% 65%,#fff4df99,transparent 60%),linear-gradient(155deg,#bdd6e9,#dce8ea 60%,#afccd8);
+  background:radial-gradient(ellipse at 50% 65%,#fff4df99,transparent 60%),linear-gradient(155deg,#ead2d8,#f4e8e6 60%,#dfc6cd);
   background-color:#faf6f2;
 }
 html[data-theme=light] body.audio-mode header,html[data-theme=light] body.audio-mode #connection,
-html[data-theme=light] .audio-seat,html[data-theme=light] .audio-seat small {color:#183a50;}
-html[data-theme=light] .seat-plus {color:#365c73;border-color:#4c748c66;background:#ffffff30;}
+html[data-theme=light] .audio-seat,html[data-theme=light] .audio-seat small {color:#512735;}
+html[data-theme=light] .seat-plus {color:#744656;border-color:#aa778866;background:#ffffff30;}
