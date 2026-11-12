@@ -104,12 +104,21 @@ private fun liveError(e:Exception)=when(e.message){
     var granted by remember{mutableStateOf(!owner)};var error by remember{mutableStateOf("")};var view by remember{mutableStateOf<WebView?>(null)}
     var requestingGuest by remember{mutableStateOf(false)}
     var requestedMode by remember{mutableStateOf(if(audioOnly)"audio"else"video")}
+    // Keep native progress visible until both the room DOM and its media scripts have loaded.
+    var pageReady by remember(bootstrap.optString("id")){mutableStateOf(false)}
     val permission=rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()){result->
         val accepted=result[Manifest.permission.RECORD_AUDIO]==true&&(requestedMode=="audio"||result[Manifest.permission.CAMERA]==true)
         if(requestingGuest){if(accepted)runCatching{com.example.notifications.MediaSessionService.start(context,true)};view?.evaluateJavascript("window.dispatchEvent(new CustomEvent('publishpermissions',{detail:"+accepted+"}));",null);requestingGuest=false}
         else{granted=accepted;error="";if(!accepted)error=if(audioOnly)"اسمح بالميكروفون لبدء البث الصوتي."else"اسمح بالميكروفون والكاميرا لبدء البث."}
     }
     LaunchedEffect(Unit){if(owner){val list=if(audioOnly)arrayOf(Manifest.permission.RECORD_AUDIO)else arrayOf(Manifest.permission.RECORD_AUDIO,Manifest.permission.CAMERA);if(list.all{ContextCompat.checkSelfPermission(context,it)==PackageManager.PERMISSION_GRANTED})granted=true else permission.launch(list)}}
+    LaunchedEffect(granted,bootstrap.optString("id")){
+        if(granted){
+            delay(18000)
+            if(!pageReady && error.isBlank())
+                error="استغرق تحميل غرفة البث وقتًا أطول من اللازم. قد تكون ملفات البث على الخادم غير متاحة. ارجع للغرف للحصول على تذكرة جديدة."
+        }
+    }
     BackHandler{finish()}
     // Screenshots are allowed in Relaxia live rooms. Do not set FLAG_SECURE.
     DisposableEffect(Unit){onDispose{view?.loadUrl("about:blank");view?.destroy()}}
@@ -122,8 +131,16 @@ private fun liveError(e:Exception)=when(e.message){
         if(event==Lifecycle.Event.ON_START)view?.evaluateJavascript("window.setNativeBackground?.(false)",null)
     };lifecycle.addObserver(observer);onDispose{lifecycle.removeObserver(observer)}}
     Surface(Modifier.fillMaxSize(),color=Color(0xFF101820),contentColor=Color.White){Column(Modifier.fillMaxSize().safeDrawingPadding()){
-        if(error.isNotBlank()){Text(error,Modifier.padding(20.dp));if(owner&&!granted)TextButton({requestedMode=if(audioOnly)"audio"else"video";permission.launch(if(audioOnly)arrayOf(Manifest.permission.RECORD_AUDIO)else arrayOf(Manifest.permission.RECORD_AUDIO,Manifest.permission.CAMERA))}){Text("إعادة طلب الأذونات")};TextButton(finish){Text("رجوع")}}
-        if(granted&&error.isBlank())AndroidView(modifier=Modifier.fillMaxSize(),factory={ctx->WebView(ctx).apply{
+        if(error.isNotBlank()){
+            Column(Modifier.fillMaxWidth().padding(22.dp),verticalArrangement=Arrangement.spacedBy(16.dp)){
+                Icon(Icons.Outlined.ErrorOutline,"تعذر تحميل البث",Modifier.size(32.dp),tint=Color(0xFFF4BC97))
+                Text(error,color=Color.White,style=MaterialTheme.typography.bodyLarge)
+                if(owner&&!granted)TextButton({requestedMode=if(audioOnly)"audio"else"video";permission.launch(if(audioOnly)arrayOf(Manifest.permission.RECORD_AUDIO)else arrayOf(Manifest.permission.RECORD_AUDIO,Manifest.permission.CAMERA))}){Text("إعادة طلب الأذونات")}
+                Button(onClick=finish){Text("رجوع إلى الغرف وتجديد الدخول")}
+            }
+        }
+        if(granted&&error.isBlank())Box(Modifier.fillMaxSize()){
+            AndroidView(modifier=Modifier.fillMaxSize(),factory={ctx->WebView(ctx).apply{
             view=this;setBackgroundColor(android.graphics.Color.rgb(23,21,23));settings.javaScriptEnabled=true;settings.allowFileAccess=false;settings.allowContentAccess=false;settings.domStorageEnabled=true;settings.databaseEnabled=true;settings.cacheMode=WebSettings.LOAD_NO_CACHE;settings.mixedContentMode=WebSettings.MIXED_CONTENT_NEVER_ALLOW;settings.mediaPlaybackRequiresUserGesture=false
             val allowedPath=Uri.parse(bootstrap.getString("url")).path
             addJavascriptInterface(object{@JavascriptInterface fun canOpenProfile():Boolean=profile!=null
@@ -138,13 +155,57 @@ private fun liveError(e:Exception)=when(e.message){
             @JavascriptInterface fun shareLive(text:String){android.os.Handler(android.os.Looper.getMainLooper()).post{if(trustedCallOrigin(url.orEmpty(),baseUrl)&&Uri.parse(url).path==allowedPath&&text.length<=1000){(context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("دعوة Relaxia",text))}}}
             @JavascriptInterface fun closeRoom(){android.os.Handler(android.os.Looper.getMainLooper()).post{if(trustedCallOrigin(url.orEmpty(),baseUrl)&&Uri.parse(url).path==allowedPath)finish()}}},"LayaliLive")
             webViewClient=object:WebViewClient(){
-                override fun onReceivedHttpError(v:WebView?,r:WebResourceRequest?,response:WebResourceResponse?){if(r?.isForMainFrame==true)error="تعذر فتح غرفة البث من الخادم (HTTP ${response?.statusCode}). ارجع وأعد الدخول للحصول على تذكرة جديدة."}
-                override fun onReceivedError(v:WebView?,r:WebResourceRequest?,e:WebResourceError?){if(r?.isForMainFrame==true)error="تعذر تحميل غرفة البث. تحقق من الاتصال بالخادم."}
-                override fun onPageFinished(v:WebView?,url:String?){if(url!=null&&trustedCallOrigin(url,baseUrl)&&Uri.parse(url).path==allowedPath)v?.evaluateJavascript("typeof LivekitClient !== 'undefined' && typeof RelaxiaMedia !== 'undefined' && typeof connect === 'function'"){ready->if(ready=="false")error="لم تُحمّل ملفات محرك البث. يلزم فحص ملفات الخادم؛ لم يبدأ الفيديو."}}
-                override fun shouldOverrideUrlLoading(v:WebView?,r:WebResourceRequest?)=r?.url?.let{!trustedCallOrigin(it.toString(),baseUrl)||it.path!=allowedPath}?:true;override fun onReceivedSslError(v:WebView?,h:SslErrorHandler?,e:android.net.http.SslError?){h?.cancel();error="شهادة أمان الخادم غير صالحة."}}
+                private fun missingCriticalMedia(r:WebResourceRequest?):Boolean{
+                    val path=r?.url?.path ?: return false
+                    return trustedCallOrigin(r.url.toString(),baseUrl) &&
+                        path.substringAfterLast('/') in setOf("live-stage.css","live-stage.js","live-media.js","livekit-client.umd.min.js")
+                }
+                override fun onReceivedHttpError(v:WebView?,r:WebResourceRequest?,response:WebResourceResponse?){
+                    if(r?.isForMainFrame==true)error="رفض الخادم فتح غرفة البث (HTTP ${response?.statusCode}). ارجع إلى الغرف للحصول على تذكرة جديدة."
+                    else if(missingCriticalMedia(r))error="ملفات تشغيل البث غير متاحة على الخادم (HTTP ${response?.statusCode}). يلزم تحديث خدمات البث."
+                }
+                override fun onReceivedError(v:WebView?,r:WebResourceRequest?,e:WebResourceError?){
+                    if(r?.isForMainFrame==true)error="تعذّر الاتصال بصفحة غرفة البث. تحقق من اتصال الخادم."
+                    else if(missingCriticalMedia(r))error="تعذّر تحميل ملفات محرك البث من الخادم. تحقق من نشر الملفات الثابتة."
+                }
+                override fun onPageFinished(v:WebView?,url:String?){
+                    if(url==null||!trustedCallOrigin(url,baseUrl)||Uri.parse(url).path!=allowedPath){
+                        error="انتقلت صفحة البث إلى عنوان غير متوقع. ارجع للغرف وحاول مجددًا."
+                        return
+                    }
+                    v?.evaluateJavascript("(function(){var el=document.getElementById('stage');return !!(el && window.relaxiaStageLoaded===true && typeof LivekitClient!=='undefined' && typeof RelaxiaMedia!=='undefined' && getComputedStyle(el).backgroundColor!=='rgba(0, 0, 0, 0)');})()"){ready->
+                        if(ready=="true")pageReady=true
+                        else error="لم تجهز واجهة البث أو ملفاتها على الخادم. ارجع إلى الغرف واطلب جلسة جديدة."
+                    }
+                }
+                override fun onRenderProcessGone(v:WebView?,detail:RenderProcessGoneDetail?):Boolean{
+                    view=null
+                    v?.destroy()
+                    error="توقّف محرك عرض البث على الهاتف. ارجع إلى الغرف لفتح جلسة جديدة."
+                    return true
+                }
+                override fun shouldOverrideUrlLoading(v:WebView?,r:WebResourceRequest?)=r?.url?.let{!trustedCallOrigin(it.toString(),baseUrl)||it.path!=allowedPath}?:true
+                override fun onReceivedSslError(v:WebView?,h:SslErrorHandler?,e:android.net.http.SslError?){h?.cancel();error="شهادة أمان الخادم غير صالحة."}
+            }
             webChromeClient=object:WebChromeClient(){override fun onPermissionRequest(r:PermissionRequest?){if(r==null)return;if(!trustedCallOrigin(r.origin.toString(),baseUrl)){r.deny();return};val accepted=r.resources.filter{(it==PermissionRequest.RESOURCE_AUDIO_CAPTURE&&ContextCompat.checkSelfPermission(context,Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED)||(it==PermissionRequest.RESOURCE_VIDEO_CAPTURE&&requestedMode=="video"&&ContextCompat.checkSelfPermission(context,Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED)};if(accepted.isNotEmpty())r.grant(accepted.toTypedArray())else r.deny()}}
             val target=bootstrap.getString("url");if(trustedCallOrigin(target,baseUrl)&&allowedPath?.startsWith("/api/live/")==true&&allowedPath.endsWith("/room"))postUrl(target,("theme="+transportTheme+"&ticket="+URLEncoder.encode(bootstrap.getString("ticket"),"UTF-8")).toByteArray())else error="عنوان بث غير صالح."
-        }})else if(error.isBlank())Text("جارٍ تجهيز البث…",Modifier.padding(24.dp))
+            }})
+            if(!pageReady){
+                Column(
+                    Modifier.fillMaxSize().background(Color(0xFF101820)).padding(24.dp),
+                    verticalArrangement=Arrangement.Center,
+                    horizontalAlignment=Alignment.CenterHorizontally
+                ){
+                    CircularProgressIndicator(color=Color(0xFF7DA5B8))
+                    Spacer(Modifier.height(18.dp))
+                    Text("جارٍ تحميل غرفة البث…",color=Color.White)
+                    Spacer(Modifier.height(12.dp))
+                    Text("يتم التحقق من واجهة الغرفة واتصالها بالخادم.",color=Color(0xFFB7C6CF),style=MaterialTheme.typography.bodySmall)
+                    Spacer(Modifier.height(16.dp))
+                    TextButton(onClick=finish){Text("رجوع إلى الغرف",color=Color.White)}
+                }
+            }
+        }else if(error.isBlank())Text("جارٍ تجهيز البث…",Modifier.padding(24.dp))
     }}
 }
 
