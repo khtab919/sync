@@ -1,5 +1,10 @@
 package com.example.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 
@@ -68,6 +73,7 @@ import java.math.BigDecimal
 import java.util.UUID
 
 private val destinations = listOf("تصفح", "ريلز", "العرض", "دردشة", "حسابي")
+private val destinationLabels = listOf("الرئيسية", "الريلز", "المتجر", "الرسائل", "حسابي")
 private val destinationIcons = listOf(Icons.Rounded.Home, Icons.Rounded.SmartDisplay, Icons.Rounded.Storefront, Icons.Rounded.ChatBubbleOutline, Icons.Rounded.PersonOutline)
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
@@ -129,6 +135,7 @@ fun ServerAppScreen(baseUrl: String) {
     var searchReels by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var selectedReelId by remember { mutableIntStateOf(0) }
     var showCreationSheet by remember { mutableStateOf(false) }
+    var moreAccountActions by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
     var category by rememberSaveable { mutableStateOf("الكل") }
     var searchCategory by rememberSaveable { mutableStateOf("الكل") }
@@ -531,11 +538,50 @@ fun ServerAppScreen(baseUrl: String) {
                 )
             },
             bottomBar = {
-                if (page.isBlank() && (screen != "ريلز" || rows.isEmpty())) NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp, modifier = Modifier.clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)).heightIn(min = 72.dp)) {
-                    destinations.forEachIndexed { index, name -> NavigationBarItem(selected = tab == index,
-                        onClick = { savedReels=false;directReel="";tab = index; query = ""; category = "الكل"; searchCategory = "الكل"; notice = "" },
-                        icon = { Icon(destinationIcons[index], null, Modifier.size(24.dp)) }, label = { Text(name, fontSize = 12.sp) },
-                        colors = NavigationBarItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.primaryContainer,selectedIconColor=MaterialTheme.colorScheme.primary,selectedTextColor=MaterialTheme.colorScheme.primary)) }
+                if (page.isBlank() && (screen != "ريلز" || rows.isEmpty())) {
+                    NavigationBar(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        tonalElevation = 2.dp,
+                        modifier = Modifier.clip(RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp)).heightIn(min = 70.dp)
+                    ) {
+                        destinations.forEachIndexed { index, _ ->
+                            val active = tab == index
+                            val iconScale by animateFloatAsState(
+                                targetValue = if (active) 1.13f else 1f,
+                                animationSpec = tween(durationMillis = 190),
+                                label = "nav_$index"
+                            )
+                            NavigationBarItem(
+                                selected = active,
+                                onClick = {
+                                    savedReels = false
+                                    directReel = ""
+                                    tab = index
+                                    query = ""
+                                    category = "الكل"
+                                    searchCategory = "الكل"
+                                    notice = ""
+                                },
+                                icon = {
+                                    Icon(destinationIcons[index], destinationLabels[index],
+                                        Modifier.size(23.dp).graphicsLayer {
+                                            scaleX = iconScale
+                                            scaleY = iconScale
+                                        })
+                                },
+                                label = {
+                                    Text(destinationLabels[index], fontSize = 11.sp,
+                                        fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
+                                        maxLines = 1)
+                                },
+                                colors = NavigationBarItemDefaults.colors(
+                                    indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                                    selectedTextColor = MaterialTheme.colorScheme.primary
+                                )
+                            )
+                        }
+                    }
                 }
             }
         ) { padding ->
@@ -598,28 +644,88 @@ fun ServerAppScreen(baseUrl: String) {
                     if ((loading && rows.isEmpty() && screen in listOf("دردشة", "الحجوزات", "المحفوظات", "ريلز")) || (loading && services.isEmpty() && screen in listOf("تصفح", "العرض"))) item { LuxurySkeletonCards() }
                     when (screen) {
                         "تصفح" -> {
-                            item {
-                                RelaxiaQuickShortcuts(
-                                    onLive={open("البث المباشر")},
-                                    onAudioRooms={open("الغرف الصوتية")},
-                                    onCoinStore={buyCredits()},
-                                    onLottery={open("يا نصيب")},
-                                    onServices={open("العرض")}
+                            item(key = "home_dashboard") {
+                                RelaxiaHomeDashboard(
+                                    profile = profile,
+                                    balanceCents = if (walletAccountId == profile.optInt("id") && wallet.has("available_cents"))
+                                        wallet.optLong("available_cents") else null,
+                                    query = query,
+                                    onSearch = { query = it.take(120) },
+                                    onProfile = { page = ""; tab = 4 },
+                                    onWallet = { open("المحفظة") },
+                                    onLive = { open("البث المباشر") },
+                                    onAudio = { open("الغرف الصوتية") },
+                                    onReels = { page = ""; tab = 1 },
+                                    onStore = { page = ""; tab = 2 }
                                 )
                             }
-                            item {
-                                RelaxiaLiveNow(
-                                    rooms=livePreview,
-                                    loading=livePreviewLoading,
-                                    unavailable=livePreviewError,
-                                    openAudio={open("الغرف الصوتية")},
-                                    openVideo={open("البث المباشر")}
-                                )
+                            if (query.trim().length >= 2) {
+                                item(key = "search_result_caption") {
+                                    Text("نتائج البحث", Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                                        style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                }
+                                items(accountMatches.take(5), key = { "account_" + it.optInt("id") }) { person ->
+                                    Surface(onClick = { showCreator(person.optInt("id")) },
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp),
+                                        shape = RoundedCornerShape(18.dp),
+                                        color = MaterialTheme.colorScheme.surface) {
+                                        Row(Modifier.fillMaxWidth().padding(12.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                            ReferenceAvatar(person.optString("display_name"),
+                                                person.optInt("selected_frame"), 44, person.optString("avatar_url"))
+                                            Column(Modifier.weight(1f)) {
+                                                Text(person.optString("display_name").ifBlank {
+                                                    person.optString("username") }, fontWeight = FontWeight.SemiBold)
+                                                Text("ID: " + person.optString("public_id"),
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
+                                            Icon(Icons.Rounded.ArrowBack, "فتح الحساب")
+                                        }
+                                    }
+                                }
+                                items(searchReels.take(5), key = { "reel_" + it.optInt("id") }) { reel ->
+                                    Surface(onClick = {
+                                        directReel = reel.optInt("id").toString()
+                                        page = ""; tab = 1; revision++
+                                    }, modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp),
+                                        shape = RoundedCornerShape(18.dp),
+                                        color = MaterialTheme.colorScheme.surface) {
+                                        Row(Modifier.fillMaxWidth().padding(12.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                            verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Rounded.SmartDisplay, null, tint = MaterialTheme.colorScheme.primary)
+                                            Text(reel.optString("caption").ifBlank {
+                                                reel.optString("title").ifBlank { "مشاهدة الريل" } },
+                                                Modifier.weight(1f), maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis)
+                                            Icon(Icons.Rounded.ArrowBack, "فتح الريل")
+                                        }
+                                    }
+                                }
+                            } else {
+                                item(key = "home_live_preview") {
+                                    RelaxiaLiveNow(
+                                        rooms = livePreview,
+                                        loading = livePreviewLoading,
+                                        unavailable = livePreviewError,
+                                        openAudio = { open("الغرف الصوتية") },
+                                        openVideo = { open("البث المباشر") }
+                                    )
+                                }
                             }
-                            item { Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-                                TextButton(onClick = { followingOnly = false }) { Text("لك", fontSize = 18.sp, fontWeight = if (!followingOnly) FontWeight.Bold else FontWeight.Normal) }
-                                TextButton(onClick = { followingOnly = true }) { Text("أتابعهم", color = if (followingOnly) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }
-                            } }
+                            item(key = "home_feed_heading") {
+                                Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp),
+                                    verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                                    Text(if (query.isNotBlank()) "العروض المطابقة" else "اكتشف من المجتمع",
+                                        style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        FilterChip(!followingOnly, { followingOnly = false }, label = { Text("لك") })
+                                        FilterChip(followingOnly, { followingOnly = true }, label = { Text("أتابعهم") })
+                                    }
+                                }
+                            }
                             val visible = services
                             if (visible.isEmpty() && !loading && contentError.isBlank()) item { ReferenceEmpty(Icons.Rounded.Explore, "لا توجد عروض جديدة الآن", "يمكنك تصفح البثوث والغرف والريلز، أو العودة بعد نشر عروض جديدة.") }
                             items(visible, key = { it.optInt("id") }) { service ->
@@ -715,17 +821,73 @@ fun ServerAppScreen(baseUrl: String) {
                             item { Box(Modifier.padding(horizontal = 20.dp)) { ReferenceCard {
                                 ReferenceRow(Icons.Rounded.ChatBubbleOutline, if (own) "سعر التحدث معي" else "سعر المحادثة", if (person.optInt("chat_price_cents") == 0) "محادثة مجانية" else "${usd(person.optLong("chat_price_cents"))} · تتطلب التحقق من الدفع") { if (own) editProfile() else startChat(person.optInt("id"), person.optString("display_name")) }
                             } } }
-                            if (own) item { FormColumn {
-                                if(profile.optBoolean("is_admin"))ReferenceRow(Icons.Rounded.Settings,"لوحة الإدارة"){open("لوحة الإدارة")}
-                                ReferenceRow(Icons.Rounded.ShoppingBag,"نشاطي","الحجوزات والبث وسجل العمليات"){open("نشاطي")}
-                                ReferenceRow(Icons.Rounded.Notifications,"الإشعارات والاعتراضات"){open("التنبيهات")}
-                                ReferenceRow(Icons.Rounded.BookmarkBorder,"الريلز المحفوظة"){savedReels=true;page="";tab=1;revision++}
-                                ReferenceRow(Icons.Rounded.Lock,"أمان الحساب"){securityDialog=true}
-                                ReferenceRow(Icons.Rounded.Notifications,"إعدادات إشعارات الهاتف"){context.startActivity(android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(android.provider.Settings.EXTRA_APP_PACKAGE,context.packageName))}
-                                ReferenceRow(Icons.Rounded.Insights,"إحصاءات المحتوى"){perform{insights=api.request("/api/creator/insights")}}
-                                Text("الإصدار "+com.example.BuildConfig.VERSION_NAME,style=MaterialTheme.typography.bodySmall)
-                                ReferenceRow(Icons.Rounded.Settings,"الإعدادات والمساعدة"){open("الإعدادات")}
-                            } }
+                            if (own) item(key = "profile_shortcuts") {
+                                Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 6.dp),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    Text("الوصول السريع", style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.Bold)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        RelaxiaProfileShortcut("حجوزاتي", "الطلبات والمواعيد",
+                                            Icons.Rounded.ShoppingBag, Modifier.weight(1f)) { open("الحجوزات") }
+                                        RelaxiaProfileShortcut("البث", "الغرف المباشرة",
+                                            Icons.Rounded.Sensors, Modifier.weight(1f)) { open("البث المباشر") }
+                                    }
+                                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        RelaxiaProfileShortcut("الريلز المحفوظة", "مقاطع محفوظة",
+                                            Icons.Rounded.BookmarkBorder, Modifier.weight(1f)) {
+                                            savedReels = true; page = ""; tab = 1; revision++
+                                        }
+                                        RelaxiaProfileShortcut("إطاراتي", "مظهر حسابك",
+                                            Icons.Rounded.WorkspacePremium, Modifier.weight(1f)) { open("إطاراتي") }
+                                    }
+                                }
+                            }
+                            if (own) item(key = "profile_management") {
+                                Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 6.dp),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    Text("إدارة الحساب", style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.Bold)
+                                    ReferenceCard {
+                                        Column(Modifier.padding(8.dp).animateContentSize()) {
+                                            if (profile.optBoolean("is_admin")) ReferenceRow(
+                                                Icons.Rounded.Settings, "لوحة الإدارة") { open("لوحة الإدارة") }
+                                            ReferenceRow(Icons.Rounded.Notifications,
+                                                "الإشعارات والاعتراضات") { open("التنبيهات") }
+                                            ReferenceRow(Icons.Rounded.Lock, "أمان الحساب") {
+                                                securityDialog = true
+                                            }
+                                            ReferenceRow(Icons.Rounded.Insights, "إحصاءات المحتوى") {
+                                                perform { insights = api.request("/api/creator/insights") }
+                                            }
+                                            ReferenceRow(
+                                                if (moreAccountActions) Icons.Rounded.ExpandLess
+                                                else Icons.Rounded.ExpandMore,
+                                                if (moreAccountActions) "إخفاء الخيارات" else "المزيد من الخيارات"
+                                            ) { moreAccountActions = !moreAccountActions }
+                                            AnimatedVisibility(visible = moreAccountActions) {
+                                                Column {
+                                                    ReferenceRow(Icons.Rounded.ShoppingBag, "نشاطي",
+                                                        "الحجوزات والبث وسجل العمليات") { open("نشاطي") }
+                                                    ReferenceRow(Icons.Rounded.Notifications,
+                                                        "إعدادات إشعارات الهاتف") {
+                                                        context.startActivity(
+                                                            Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                                                                .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE,
+                                                                    context.packageName)
+                                                        )
+                                                    }
+                                                    ReferenceRow(Icons.Rounded.Settings,
+                                                        "الإعدادات والمساعدة") { open("الإعدادات") }
+                                                    Text("الإصدار " + com.example.BuildConfig.VERSION_NAME,
+                                                        Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                             item { Row(Modifier.padding(horizontal = 22.dp), verticalAlignment = Alignment.CenterVertically) { Text(if (own) "عروضي" else "العروض", Modifier.weight(1f), style = MaterialTheme.typography.headlineMedium); if (own) TextButton(onClick = { open("إضافة عرض") }) { Icon(Icons.Rounded.Add, null, Modifier.size(18.dp)); Text("إضافة") } } }
                             val offers = services.filter { it.optInt("owner_id") == person.optInt("id") }
                             if (offers.isEmpty() && !loading) item { ReferenceEmpty(Icons.Rounded.Storefront, "اعرض خدمة، جلسة، أو منتجًا", "تظهر العروض المنشورة هنا مباشرة.") }
