@@ -6,7 +6,8 @@ let room,closed=false,muted=false,speakerMuted=false,cameraOff=false,facing='use
 let activeSpeakerIds=new Set(),audioSeatSignature='';
 function updateRoomViewport(){
  const height=window.visualViewport?.height||window.innerHeight;
- document.documentElement.style.setProperty('--room-viewport-height',Math.max(260,Math.round(height))+'px');
+ // Preserve truly tiny viewports so Android's native stage-height recovery can detect and repair them.
+ document.documentElement.style.setProperty('--room-viewport-height',Math.max(1,Math.round(height))+'px');
 }
 updateRoomViewport();
 window.visualViewport?.addEventListener('resize',updateRoomViewport,{passive:true});
