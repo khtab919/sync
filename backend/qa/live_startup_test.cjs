@@ -43,6 +43,25 @@ print(render_to_string('core/live_room.html',{'config':config,'nonce':'test-only
    assert.equal(await room.locator('#stage').isVisible(),true);
    await room.close();
   }
+  // Regression for Android D06: the live DOM and scripts exist, yet
+  // a zero-height viewport makes #stage have no visible geometry.
+  // Run the *same repair expression* shipped in LiveScreens.kt, not a copy.
+  const kotlin=fs.readFileSync(path.resolve(root,'../app/src/main/java/com/example/ui/screens/LiveScreens.kt'),'utf8');
+  const source=kotlin.match(/val probeScript="""([\s\S]*?)"""\.trimIndent\(\)/);
+  assert.ok(source,'Android WebView stage repair expression must exist');
+  const repair=source[1].replaceAll('$heightPx','900').replaceAll('$widthPx','390');
+  for(const mode of ['audio','video']){
+   const p=await browser.newPage({viewport:{width:390,height:1}});
+   await p.goto(origin+'/'+mode);
+   await p.waitForFunction(()=>window.relaxiaStageLoaded===true);
+   const before=await p.evaluate(()=>document.getElementById('stage').getBoundingClientRect().height);
+   assert.ok(before<2,mode+': must reproduce a zero-height live stage');
+   const flags=await p.evaluate(repair);
+   assert.equal(flags,63,mode+': Android native measured-height recovery must restore all readiness flags');
+   const after=await p.evaluate(()=>document.getElementById('stage').getBoundingClientRect().height);
+   assert.ok(after>300,mode+': live stage must become visible after native height fallback');
+   await p.close();
+  }
   const noJS=await browser.newPage({javaScriptEnabled:false});await noJS.goto(origin+'/audio');
   assert.equal(await noJS.locator('#audioStage').isVisible(),true);
   assert.equal(await noJS.locator('#video').isVisible(),false);

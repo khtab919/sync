@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -139,6 +140,8 @@ private fun liveError(e:Exception)=when(e.message){
     var pageFinished by remember(roomTicket){mutableStateOf(false)}
     var nativeStageStatus by remember(roomTicket){mutableStateOf("جارٍ تحميل واجهة الغرفة")}
     var bootFlags by remember(roomTicket){mutableIntStateOf(-1)}
+    var webWidthPx by remember(roomTicket){mutableIntStateOf(0)}
+    var webHeightPx by remember(roomTicket){mutableIntStateOf(0)}
     var scriptFailure by remember(roomTicket){mutableStateOf("")}
     fun bootFailureReason(flags:Int):String {
         val hint=if(scriptFailure.isBlank())"" else " · $scriptFailure"
@@ -149,7 +152,8 @@ private fun liveError(e:Exception)=when(e.message){
             (flags and 4)==0->"D03: مكتبة LiveKit غير متاحة داخل صفحة الغرفة$hint"
             (flags and 8)==0->"D04: ملفات تجهيز الصوت والفيديو لم تكتمل داخل WebView$hint"
             (flags and 16)==0->"D05: تعطل JavaScript قبل اكتمال تهيئة واجهة البث$hint"
-            (flags and 32)==0->"D06: عناصر الغرفة موجودة لكن مساحة عرضها صفر$hint"
+            (flags and 32)==0 && (webHeightPx<=1 || webWidthPx<=1)->"D06A: نافذة WebView نفسها بلا مساحة عرض على الهاتف$hint"
+            (flags and 32)==0->"D06B: أبعاد النافذة موجودة لكن ارتفاع واجهة الغرفة صفر$hint"
             else->"D07: الصفحة مهيأة لكن WebView لم يؤكد رسمها$hint"
         }
     }
@@ -167,9 +171,35 @@ private fun liveError(e:Exception)=when(e.message){
         repeat(25){
             if(pageReady || error.isNotBlank())return@LaunchedEffect
             // Only return bit flags; never read tokens, chat content or customer data.
-            view?.evaluateJavascript(
-                "(function(){var e=document.getElementById('stage');return (e?1:0)|(document.getElementById('config')?2:0)|(typeof LivekitClient!=='undefined'?4:0)|(typeof RelaxiaMedia!=='undefined'?8:0)|(window.relaxiaStageLoaded===true?16:0)|(e&&e.getBoundingClientRect().height>1?32:0);})()"
-            ){raw->
+            // On some Android WebViews 100vh/100dvh can resolve to zero while the
+            // native view already has size. Repair only this zero-height case using
+            // native layout pixels converted to CSS pixels. No room token is exposed.
+            val heightPx=webHeightPx.coerceAtLeast(0)
+            val widthPx=webWidthPx.coerceAtLeast(0)
+            val probeScript="""
+                (function(){
+                    var e=document.getElementById('stage');
+                    if(e && e.getBoundingClientRect().height<2 && $heightPx>100 && $widthPx>100){
+                        var ratio=Math.max(1,window.devicePixelRatio||1);
+                        var h=Math.max(window.innerHeight||0,
+                                       document.documentElement.clientHeight||0,
+                                       Math.round($heightPx/ratio));
+                        if(h>50){
+                            document.documentElement.style.minHeight=h+'px';
+                            document.body.style.minHeight=h+'px';
+                            e.style.setProperty('height',h+'px','important');
+                            e.style.setProperty('min-height',h+'px','important');
+                        }
+                    }
+                    return (e?1:0)|
+                           (document.getElementById('config')?2:0)|
+                           (typeof LivekitClient!=='undefined'?4:0)|
+                           (typeof RelaxiaMedia!=='undefined'?8:0)|
+                           (window.relaxiaStageLoaded===true?16:0)|
+                           (e&&e.getBoundingClientRect().height>1?32:0);
+                })()
+            """.trimIndent()
+            view?.evaluateJavascript(probeScript){raw->
                 val flags=raw?.toIntOrNull() ?: -1
                 bootFlags=flags
                 if(flags==63 && !pageReady){
@@ -229,7 +259,12 @@ private fun liveError(e:Exception)=when(e.message){
             }
         }
         if(granted&&error.isBlank())Box(Modifier.fillMaxSize()){
-            AndroidView(modifier=Modifier.fillMaxSize(),factory={ctx->WebView(ctx).apply{
+            AndroidView(
+                modifier=Modifier.fillMaxSize().onSizeChanged{
+                    webWidthPx=it.width
+                    webHeightPx=it.height
+                },
+                factory={ctx->WebView(ctx).apply{
             view=this;setBackgroundColor(android.graphics.Color.rgb(23,21,23));settings.javaScriptEnabled=true;settings.allowFileAccess=false;settings.allowContentAccess=false;settings.domStorageEnabled=true;settings.databaseEnabled=true;settings.cacheMode=WebSettings.LOAD_NO_CACHE;settings.mixedContentMode=WebSettings.MIXED_CONTENT_NEVER_ALLOW;settings.mediaPlaybackRequiresUserGesture=false
             val allowedPath=Uri.parse(bootstrap.getString("url")).path
             addJavascriptInterface(object{@JavascriptInterface fun canOpenProfile():Boolean=profile!=null
