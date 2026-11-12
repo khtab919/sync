@@ -4,7 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ArrowForward
+import androidx.compose.material.icons.rounded.ArrowForward
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -31,7 +31,7 @@ internal fun operationLabel(status:String)=when(status){"held","paid_reserved"->
 @Composable internal fun BookingHistory(api:LayaliApi,back:()->Unit){
     val scope=rememberCoroutineScope();var rows by remember{mutableStateOf<List<JSONObject>>(emptyList())};var revision by remember{mutableIntStateOf(0)};var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf("")};var decision by remember{mutableStateOf<Pair<JSONObject,String>?>(null)}
     LaunchedEffect(revision){try{rows=api.request("/api/bookings").platformItems()}catch(e:Exception){error=commerceError(e)}}
-    Scaffold(topBar={TopAppBar(title={Text("الحجوزات والطلبات")},navigationIcon={IconButton(back){Icon(Icons.Outlined.ArrowForward,"رجوع")}},actions={TextButton({revision++}){Text("تحديث")}})}){padding->LazyColumn(Modifier.fillMaxSize().padding(padding),contentPadding=PaddingValues(16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
+    Scaffold(topBar={TopAppBar(title={Text("الحجوزات والطلبات")},navigationIcon={IconButton(back){Icon(Icons.Rounded.ArrowForward,"رجوع")}},actions={TextButton({revision++}){Text("تحديث")}})}){padding->LazyColumn(Modifier.fillMaxSize().padding(padding),contentPadding=PaddingValues(16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
         if(error.isNotBlank())item{Text(error,color=MaterialTheme.colorScheme.error)}
         if(rows.isEmpty())item{Text("لا توجد حجوزات بعد.")}
         items(rows,key={it.getString("id")}){row->Card(Modifier.fillMaxWidth()){Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
@@ -52,7 +52,7 @@ internal fun operationLabel(status:String)=when(status){"held","paid_reserved"->
 @Composable internal fun FinancialHistory(api:LayaliApi,back:()->Unit){
     var rows by remember{mutableStateOf<List<JSONObject>>(emptyList())};var error by remember{mutableStateOf("")};var revision by remember{mutableIntStateOf(0)};var receipt by remember{mutableStateOf<JSONObject?>(null)};val scope=rememberCoroutineScope()
     LaunchedEffect(revision){try{rows=api.request("/api/financial-history").platformItems()}catch(e:Exception){error=commerceError(e)}}
-    Scaffold(topBar={TopAppBar(title={Text("سجل العمليات")},navigationIcon={IconButton(back){Icon(Icons.Outlined.ArrowForward,"رجوع")}},actions={TextButton({revision++}){Text("تحديث")}})}){padding->LazyColumn(Modifier.fillMaxSize().padding(padding),contentPadding=PaddingValues(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
+    Scaffold(topBar={TopAppBar(title={Text("سجل العمليات")},navigationIcon={IconButton(back){Icon(Icons.Rounded.ArrowForward,"رجوع")}},actions={TextButton({revision++}){Text("تحديث")}})}){padding->LazyColumn(Modifier.fillMaxSize().padding(padding),contentPadding=PaddingValues(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
         if(error.isNotBlank())item{Text(error,color=MaterialTheme.colorScheme.error)}
         if(rows.isEmpty()&&error.isBlank())item{Text("لا توجد عمليات مسجّلة.")}
         items(rows,key={it.getString("id")}){row->OutlinedCard(onClick={scope.launch{try{receipt=api.request("/api/receipts/"+java.net.URLEncoder.encode(row.getString("id"),"UTF-8"))}catch(e:Exception){error=commerceError(e)}}},modifier=Modifier.fillMaxWidth()){Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(6.dp)){
@@ -67,7 +67,7 @@ internal fun operationLabel(status:String)=when(status){"held","paid_reserved"->
 @Composable internal fun BlockedAccounts(api:LayaliApi,back:()->Unit){
     var rows by remember{mutableStateOf<List<JSONObject>>(emptyList())};var revision by remember{mutableIntStateOf(0)};var error by remember{mutableStateOf("")};val scope=rememberCoroutineScope()
     LaunchedEffect(revision){try{rows=api.request("/api/blocks").platformItems()}catch(e:Exception){error=commerceError(e)}}
-    Scaffold(topBar={TopAppBar(title={Text("الحسابات المحظورة")},navigationIcon={IconButton(back){Icon(Icons.Outlined.ArrowForward,"رجوع")}})}){padding->LazyColumn(Modifier.fillMaxSize().padding(padding),contentPadding=PaddingValues(16.dp)){
+    Scaffold(topBar={TopAppBar(title={Text("الحسابات المحظورة")},navigationIcon={IconButton(back){Icon(Icons.Rounded.ArrowForward,"رجوع")}})}){padding->LazyColumn(Modifier.fillMaxSize().padding(padding),contentPadding=PaddingValues(16.dp)){
         if(error.isNotBlank())item{Text(error,color=MaterialTheme.colorScheme.error)}
         if(rows.isEmpty()&&error.isBlank())item{Text("لا توجد حسابات محظورة.")}
         items(rows,key={it.optInt("id")}){row->Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){Text(row.optString("name"));TextButton({scope.launch{try{api.request("/api/blocks","POST",JSONObject().put("user_id",row.optInt("id")).put("blocked",false));revision++}catch(e:Exception){error=commerceError(e)}}}){Text("إلغاء الحظر")}}}

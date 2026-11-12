@@ -353,7 +353,7 @@ fun ReelsScreen(
                     (customList + sampleComments).take(4).forEach { comment ->
                         Surface(
                             color = RoyalNavyBackground.copy(alpha = 0.6f),
-                            shape = RoundedCornerShape(10.dp),
+                            shape = RoundedCornerShape(18.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(
@@ -809,7 +809,7 @@ private fun HomeReelStoryCard(
 ) {
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(18.dp),
         color = RoyalNavyCard,
         modifier = Modifier
             .width(102.dp)

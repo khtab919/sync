@@ -228,7 +228,7 @@ internal fun SupportFloatingButton() {
 @Composable
 private fun RewardWheel(prizes: org.json.JSONArray?, rotation: Float) {
     val animated by androidx.compose.animation.core.animateFloatAsState(rotation, androidx.compose.animation.core.tween(2400, easing = androidx.compose.animation.core.FastOutSlowInEasing), label = "wheel")
-    val palette = listOf(androidx.compose.ui.graphics.Color(0xFF277C9D), androidx.compose.ui.graphics.Color(0xFF3187A8), androidx.compose.ui.graphics.Color(0xFFDCECF2), androidx.compose.ui.graphics.Color(0xFF153E53))
+    val palette = listOf(androidx.compose.ui.graphics.Color(0xFF792D45), androidx.compose.ui.graphics.Color(0xFFA04B63), androidx.compose.ui.graphics.Color(0xFFF0E0E3), androidx.compose.ui.graphics.Color(0xFF4C2037))
     Box(Modifier.fillMaxWidth(), contentAlignment = androidx.compose.ui.Alignment.TopCenter) {
         androidx.compose.foundation.Canvas(Modifier.size(280.dp)) {
             val ring = 9.dp.toPx()

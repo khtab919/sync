@@ -414,7 +414,7 @@ fun AdminManagementScreen(
                     ) {
                         OutlinedButton(
                             onClick = onNavigateToPublicStore,
-                            shape = RoundedCornerShape(14.dp),
+                            shape = RoundedCornerShape(18.dp),
                             border = BorderStroke(1.dp, BrandChampagneGold),
                             modifier = Modifier.weight(1f)
                         ) {
@@ -427,7 +427,7 @@ fun AdminManagementScreen(
 
                         Button(
                             onClick = onSuperAdminSignOut,
-                            shape = RoundedCornerShape(14.dp),
+                            shape = RoundedCornerShape(18.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = ErrorCrimson,
                                 contentColor = Color.White
@@ -558,7 +558,7 @@ fun AdminManagementScreen(
                                         containerColor = BrandDustyRose,
                                         contentColor = Color.White
                                     ),
-                                    shape = RoundedCornerShape(14.dp),
+                                    shape = RoundedCornerShape(18.dp),
                                     modifier = Modifier
                                         .weight(1f)
                                         .testTag("admin_pick_photo_button")
@@ -575,7 +575,7 @@ fun AdminManagementScreen(
                                 if (customGalleryUri != null) {
                                     OutlinedButton(
                                         onClick = { customGalleryUri = null },
-                                        shape = RoundedCornerShape(14.dp)
+                                        shape = RoundedCornerShape(18.dp)
                                     ) {
                                         Text("استخدام القالب")
                                     }
@@ -776,7 +776,7 @@ fun AdminManagementScreen(
                         if (deletedCatalogCount > 0) {
                             OutlinedButton(
                                 onClick = onRestoreDeletedCatalogVenues,
-                                shape = RoundedCornerShape(12.dp),
+                                shape = RoundedCornerShape(18.dp),
                                 border = BorderStroke(1.dp, EmeraldVerified)
                             ) {
                                 Icon(
@@ -822,7 +822,7 @@ fun AdminManagementScreen(
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 OutlinedButton(
                                     onClick = { editingCatalogVenue = venue },
-                                    shape = RoundedCornerShape(10.dp),
+                                    shape = RoundedCornerShape(18.dp),
                                     border = BorderStroke(1.dp, BrandChampagneGold),
                                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
                                 ) {
@@ -1016,7 +1016,7 @@ fun AdminManagementScreen(
                                             containerColor = EmeraldVerified,
                                             contentColor = ObsidianNight
                                         ),
-                                        shape = RoundedCornerShape(12.dp),
+                                        shape = RoundedCornerShape(18.dp),
                                         modifier = Modifier.weight(1f)
                                     ) {
                                         Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -1027,7 +1027,7 @@ fun AdminManagementScreen(
                                     OutlinedButton(
                                         onClick = { onAdminUpdateBookingStatus(booking.id, "cancelled") },
                                         border = BorderStroke(1.dp, ErrorCrimson),
-                                        shape = RoundedCornerShape(12.dp),
+                                        shape = RoundedCornerShape(18.dp),
                                         modifier = Modifier.weight(1f)
                                     ) {
                                         Icon(
@@ -1131,7 +1131,7 @@ fun AdminManagementScreen(
                                         containerColor = EmeraldVerified,
                                         contentColor = ObsidianNight
                                     ),
-                                    shape = RoundedCornerShape(14.dp),
+                                    shape = RoundedCornerShape(18.dp),
                                     modifier = Modifier
                                         .weight(1f)
                                         .height(50.dp)
@@ -1146,7 +1146,7 @@ fun AdminManagementScreen(
                                         onAdminAdjustWalletBalance(-amount, walletAdjustNote)
                                     },
                                     border = BorderStroke(1.dp, ErrorCrimson),
-                                    shape = RoundedCornerShape(14.dp),
+                                    shape = RoundedCornerShape(18.dp),
                                     modifier = Modifier
                                         .weight(1f)
                                         .height(50.dp)
@@ -1306,7 +1306,7 @@ fun AdminManagementScreen(
                                     containerColor = ErrorCrimson,
                                     contentColor = Color.White
                                 ),
-                                shape = RoundedCornerShape(14.dp),
+                                shape = RoundedCornerShape(18.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(50.dp)
@@ -1322,7 +1322,7 @@ fun AdminManagementScreen(
                                     val isBlocked = blocked.status == "active"
                                     Surface(
                                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
-                                        shape = RoundedCornerShape(14.dp)
+                                        shape = RoundedCornerShape(18.dp)
                                     ) {
                                         Row(
                                             modifier = Modifier
@@ -1525,7 +1525,7 @@ fun AdminManagementScreen(
                             credentialUpdateFeedback?.let { (isSuccess, message) ->
                                 Surface(
                                     color = if (isSuccess) EmeraldVerified.copy(alpha = 0.16f) else ErrorCrimson.copy(alpha = 0.16f),
-                                    shape = RoundedCornerShape(12.dp),
+                                    shape = RoundedCornerShape(18.dp),
                                     border = BorderStroke(1.dp, if (isSuccess) EmeraldVerified else ErrorCrimson),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
@@ -1841,7 +1841,7 @@ private fun AdminPublishedServiceCard(
 
                 Surface(
                     color = BrandChampagneGold,
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(18.dp),
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(12.dp)
@@ -1877,7 +1877,7 @@ private fun AdminPublishedServiceCard(
                 ) {
                     Button(
                         onClick = onOpenFullEdit,
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(18.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = BrandChampagneGold,
                             contentColor = ObsidianNight
@@ -1895,7 +1895,7 @@ private fun AdminPublishedServiceCard(
 
                     OutlinedButton(
                         onClick = onRebroadcast,
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(18.dp),
                         border = BorderStroke(1.dp, BrandDustyRose)
                     ) {
                         Icon(

@@ -627,8 +627,8 @@ fun WalletScreen(
                             Box(
                                 modifier = Modifier
                                     .size(54.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .border(1.dp, EmeraldVerified, RoundedCornerShape(12.dp))
+                                    .clip(RoundedCornerShape(18.dp))
+                                    .border(1.dp, EmeraldVerified, RoundedCornerShape(18.dp))
                             ) {
                                 SmartServiceMediaView(
                                     imageUrl = receipt.receiptImageUri,

@@ -400,7 +400,7 @@ fun ScannableQrMatrixCanvas(
         if (centerBadgeColor != null && !centerBadgeSymbol.isNullOrBlank()) {
             Surface(
                 color = centerBadgeColor,
-                shape = RoundedCornerShape(10.dp),
+                shape = RoundedCornerShape(18.dp),
                 border = BorderStroke(2.5.dp, Color.White),
                 modifier = Modifier.size(40.dp)
             ) {
@@ -420,7 +420,7 @@ fun ScannableQrMatrixCanvas(
 @Composable
 fun UsdtLinearBarcodeCanvas(
     address: String,
-    barColor: Color = Color(0xFF0F172A),
+    barColor: Color = Color(0xFF21171E),
     backgroundColor: Color = Color.White,
     modifier: Modifier = Modifier
 ) {
@@ -469,7 +469,7 @@ fun UsdtLinearBarcodeCanvas(
             Text(
                 text = "بار كود عنوان USDT المعتمد",
                 style = MaterialTheme.typography.labelMedium,
-                color = Color(0xFF334155),
+                color = Color(0xFF59434F),
                 fontWeight = FontWeight.SemiBold
             )
         }
@@ -502,7 +502,7 @@ fun UsdtLinearBarcodeCanvas(
             text = address,
             fontFamily = FontFamily.Monospace,
             fontSize = 11.sp,
-            color = Color(0xFF0F172A),
+            color = Color(0xFF21171E),
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
             maxLines = 1,
@@ -606,7 +606,7 @@ fun ShamCashEmblemIcon(modifier: Modifier = Modifier) {
         drawPath(
             path = topRibbon,
             brush = Brush.linearGradient(
-                colors = listOf(Color(0xFF6366F1), Color(0xFF38BDF8))
+                colors = listOf(Color(0xFF6366F1), Color(0xFFD69AAA))
             )
         )
 
@@ -624,7 +624,7 @@ fun ShamCashEmblemIcon(modifier: Modifier = Modifier) {
         drawPath(
             path = bottomRibbon,
             brush = Brush.linearGradient(
-                colors = listOf(Color(0xFF2DD4BF), Color(0xFF0EA5E9))
+                colors = listOf(Color(0xFF2DD4BF), Color(0xFFA64F69))
             )
         )
     }
@@ -646,7 +646,7 @@ fun ShamCashOfficialCard(
             .testTag("sham_cash_official_card"),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFFDDE3EA) // Matches the cool silver-blue backdrop of the Sham Cash screenshot
+            containerColor = Color(0xFFEBDFE1) // Matches the cool silver-blue backdrop of the Sham Cash screenshot
         ),
         border = BorderStroke(1.5.dp, ShamCashTeal.copy(alpha = 0.55f))
     ) {
@@ -663,7 +663,7 @@ fun ShamCashOfficialCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Surface(
-                    color = Color(0xFF0F172A),
+                    color = Color(0xFF21171E),
                     shape = RoundedCornerShape(50)
                 ) {
                     Text(
@@ -679,7 +679,7 @@ fun ShamCashOfficialCard(
                     Text(
                         text = "استلام • شام كاش السوري",
                         style = MaterialTheme.typography.titleLarge,
-                        color = Color(0xFF1E293B),
+                        color = Color(0xFF36262F),
                         fontWeight = FontWeight.ExtraBold
                     )
                 }
@@ -703,7 +703,7 @@ fun ShamCashOfficialCard(
                 ) {
                     ScannableQrMatrixCanvas(
                         payload = address,
-                        moduleColor = Color(0xFF283B63), // Deep Navy Sham Cash QR color
+                        moduleColor = Color(0xFF593044), // Deep Navy Sham Cash QR color
                         backgroundColor = Color.White,
                         modifier = Modifier
                             .fillMaxSize()
@@ -732,7 +732,7 @@ fun ShamCashOfficialCard(
                 fontFamily = FontFamily.Monospace,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF334155),
+                color = Color(0xFF59434F),
                 textAlign = TextAlign.Center
             )
             Text(
@@ -740,7 +740,7 @@ fun ShamCashOfficialCard(
                 fontFamily = FontFamily.Monospace,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF334155),
+                color = Color(0xFF59434F),
                 textAlign = TextAlign.Center
             )
 
@@ -760,8 +760,8 @@ fun ShamCashOfficialCard(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Surface(
-                            color = Color(0xFF334155),
-                            shape = RoundedCornerShape(10.dp),
+                            color = Color(0xFF59434F),
+                            shape = RoundedCornerShape(18.dp),
                             modifier = Modifier.size(28.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
@@ -771,7 +771,7 @@ fun ShamCashOfficialCard(
                         Text(
                             text = "تم نسخ العنوان",
                             style = MaterialTheme.typography.labelLarge,
-                            color = Color(0xFF1E293B),
+                            color = Color(0xFF36262F),
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -791,7 +791,7 @@ fun ShamCashOfficialCard(
                     },
                     shape = RoundedCornerShape(50),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF1E293B),
+                        containerColor = Color(0xFF36262F),
                         contentColor = Color.White
                     ),
                     modifier = Modifier
@@ -817,17 +817,17 @@ fun ShamCashOfficialCard(
                         )
                     },
                     shape = RoundedCornerShape(50),
-                    border = BorderStroke(1.2.dp, Color(0xFF334155)),
+                    border = BorderStroke(1.2.dp, Color(0xFF59434F)),
                     modifier = Modifier.height(48.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Share,
                         contentDescription = "مشاركة",
-                        tint = Color(0xFF1E293B),
+                        tint = Color(0xFF36262F),
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("مشاركة", color = Color(0xFF1E293B), fontWeight = FontWeight.Bold)
+                    Text("مشاركة", color = Color(0xFF36262F), fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -900,16 +900,16 @@ fun UsdtBep20OfficialCard(
                 Text(
                     text = "حساب الإيداع",
                     style = MaterialTheme.typography.headlineSmall,
-                    color = Color(0xFF0F172A),
+                    color = Color(0xFF21171E),
                     fontWeight = FontWeight.ExtraBold
                 )
             }
 
             // QR Code + 1D Barcode Section for USDT BEP-20 (Specifically requested: "وقم بإنشاء بار كود لي usdt")
             Surface(
-                color = Color(0xFFF8FAFC),
+                color = Color(0xFFFFF9F5),
                 shape = RoundedCornerShape(20.dp),
-                border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                border = BorderStroke(1.dp, Color(0xFFEADBDD)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -925,7 +925,7 @@ fun UsdtBep20OfficialCard(
                     ) {
                         Surface(
                             onClick = { showBarcodeMode = !showBarcodeMode },
-                            color = Color(0xFF0F172A),
+                            color = Color(0xFF21171E),
                             shape = RoundedCornerShape(50)
                         ) {
                             Text(
@@ -940,7 +940,7 @@ fun UsdtBep20OfficialCard(
                         Text(
                             text = "امسح رمز QR أو الباركود للإيداع الفوري",
                             style = MaterialTheme.typography.labelMedium,
-                            color = Color(0xFF475569),
+                            color = Color(0xFF78616D),
                             fontWeight = FontWeight.SemiBold
                         )
                     }
@@ -950,7 +950,7 @@ fun UsdtBep20OfficialCard(
                     // 2D Scannable QR Code for USDT Deposit Address
                     ScannableQrMatrixCanvas(
                         payload = depositAddress,
-                        moduleColor = Color(0xFF0F172A),
+                        moduleColor = Color(0xFF21171E),
                         backgroundColor = Color.White,
                         centerBadgeColor = UsdtTetherGreen,
                         centerBadgeSymbol = "₮",
@@ -980,7 +980,7 @@ fun UsdtBep20OfficialCard(
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(18.dp))
                         .clickable {
                             copyTextToClipboard(context, "USDT Amount", "$amountUsd")
                             onCopyMessage("تم نسخ المبلغ المطلوب: USDT $amountUsd")
@@ -990,14 +990,14 @@ fun UsdtBep20OfficialCard(
                     Icon(
                         imageVector = Icons.Default.ContentCopy,
                         contentDescription = "نسخ المبلغ",
-                        tint = Color(0xFF2563EB),
+                        tint = Color(0xFF873A53),
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "USDT $amountUsd",
                         style = MaterialTheme.typography.titleLarge,
-                        color = Color(0xFF0F172A),
+                        color = Color(0xFF21171E),
                         fontWeight = FontWeight.ExtraBold
                     )
                 }
@@ -1005,11 +1005,11 @@ fun UsdtBep20OfficialCard(
                 Text(
                     text = "المبلغ المطلوب دفعه",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFF64748B)
+                    color = Color(0xFF8D7480)
                 )
             }
 
-            HorizontalDivider(color = Color(0xFFF1F5F9))
+            HorizontalDivider(color = Color(0xFFF7EFEC))
 
             // Row 2: الحساب -> MT5Standard1250311802
             Row(
@@ -1020,17 +1020,17 @@ fun UsdtBep20OfficialCard(
                 Text(
                     text = accountId,
                     style = MaterialTheme.typography.bodyLarge,
-                    color = Color(0xFF0F172A),
+                    color = Color(0xFF21171E),
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
                     text = "الحساب",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFF64748B)
+                    color = Color(0xFF8D7480)
                 )
             }
 
-            HorizontalDivider(color = Color(0xFFF1F5F9))
+            HorizontalDivider(color = Color(0xFFF7EFEC))
 
             // Row 3: الشبكة -> (BEP-20) Tether USD/USDT
             Row(
@@ -1042,25 +1042,25 @@ fun UsdtBep20OfficialCard(
                     Icon(
                         imageVector = Icons.Default.Info,
                         contentDescription = null,
-                        tint = Color(0xFF94A3B8),
+                        tint = Color(0xFFB19BA5),
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = networkName,
                         style = MaterialTheme.typography.bodyLarge,
-                        color = Color(0xFF0F172A),
+                        color = Color(0xFF21171E),
                         fontWeight = FontWeight.Bold
                     )
                 }
                 Text(
                     text = "الشبكة",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFF64748B)
+                    color = Color(0xFF8D7480)
                 )
             }
 
-            HorizontalDivider(color = Color(0xFFF1F5F9))
+            HorizontalDivider(color = Color(0xFFF7EFEC))
 
             // Row 4: عنوان الإيداع -> 0xc35797768180752b67743d791f79f812bb0972d1
             Column(
@@ -1070,13 +1070,13 @@ fun UsdtBep20OfficialCard(
                 Text(
                     text = "عنوان الإيداع",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFF64748B)
+                    color = Color(0xFF8D7480)
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Surface(
-                    color = Color(0xFFF8FAFC),
-                    shape = RoundedCornerShape(14.dp),
-                    border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                    color = Color(0xFFFFF9F5),
+                    shape = RoundedCornerShape(18.dp),
+                    border = BorderStroke(1.dp, Color(0xFFEADBDD)),
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable {
@@ -1094,7 +1094,7 @@ fun UsdtBep20OfficialCard(
                         Icon(
                             imageVector = Icons.Default.ContentCopy,
                             contentDescription = "نسخ عنوان الإيداع",
-                            tint = Color(0xFF2563EB),
+                            tint = Color(0xFF873A53),
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
@@ -1102,7 +1102,7 @@ fun UsdtBep20OfficialCard(
                             text = depositAddress,
                             fontFamily = FontFamily.Monospace,
                             fontSize = 13.sp,
-                            color = Color(0xFF0F172A),
+                            color = Color(0xFF21171E),
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.End,
                             modifier = Modifier.weight(1f)
@@ -1333,7 +1333,7 @@ fun MandatoryReceiptAttachmentCard(
                 label = { Text("رقم عملية التحويل أو الملاحظة (اختياري)") },
                 placeholder = { Text("مثال: TxID أو اسم المرسل في شام كاش...") },
                 singleLine = true,
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(18.dp),
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("payment_tx_ref_input")
@@ -1358,24 +1358,24 @@ fun LuxuryGradientButton(
 ) {
     val brush = if (!enabled) {
         Brush.horizontalGradient(
-            colors = listOf(Color(0xFF334155), Color(0xFF1E293B))
+            colors = listOf(Color(0xFF59434F), Color(0xFF36262F))
         )
     } else if (isEmeraldStyle) {
         // Electric Sapphire (#0EA5E9) interactive gradient
         Brush.horizontalGradient(
-            colors = listOf(Color(0xFF0EA5E9), Color(0xFF38BDF8))
+            colors = listOf(Color(0xFFA64F69), Color(0xFFD69AAA))
         )
     } else {
         // Royal Amethyst & Imperial Rose for exclusive VIP membership actions (No Yellow)
         Brush.horizontalGradient(
-            colors = listOf(Color(0xFFDCECF2), Color(0xFFDCECF2))
+            colors = listOf(Color(0xFFF0E0E3), Color(0xFFF0E0E3))
         )
     }
 
     val contentColor = if (!enabled) {
-        Color(0xFF94A3B8)
+        Color(0xFFB19BA5)
     } else {
-        Color(0xFFF8FAFC)
+        Color(0xFFFFF9F5)
     }
 
     Box(

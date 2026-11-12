@@ -1984,7 +1984,7 @@ private fun CompactServiceGridCard(
 
                 Button(
                     onClick = onBookNow,
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(18.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = CoralPinkPrimary,
                         contentColor = PureWhite
@@ -2245,7 +2245,7 @@ private fun VenueCard(
                         Surface(
                             onClick = onEditPrice,
                             color = MaterialTheme.colorScheme.surfaceVariant,
-                            shape = RoundedCornerShape(8.dp)
+                            shape = RoundedCornerShape(18.dp)
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -2269,7 +2269,7 @@ private fun VenueCard(
                         Surface(
                             onClick = onBlockProvider,
                             color = ErrorCrimson.copy(alpha = 0.14f),
-                            shape = RoundedCornerShape(8.dp)
+                            shape = RoundedCornerShape(18.dp)
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -2300,7 +2300,7 @@ private fun VenueCard(
                 ) {
                     OutlinedButton(
                         onClick = onClick,
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(18.dp),
                         border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.outline),
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                         modifier = Modifier
@@ -2317,7 +2317,7 @@ private fun VenueCard(
 
                     Button(
                         onClick = onQuickBook,
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(18.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = CoralPinkPrimary,
                             contentColor = PureWhite
@@ -2411,7 +2411,7 @@ private fun PublishedServiceOfferCard(
                 Surface(
                     onClick = { if (isSuperAdmin) onEditPrice() else onBookOffer() },
                     color = CharcoalNight.copy(alpha = 0.85f),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(18.dp),
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(10.dp)
@@ -2582,7 +2582,7 @@ private fun BookingsTabContent(
                                 containerColor = RoyalGold,
                                 contentColor = ObsidianNight
                             ),
-                            shape = RoundedCornerShape(14.dp)
+                            shape = RoundedCornerShape(18.dp)
                         ) {
                             Text("استكشف المدن والخدمات الآن", fontWeight = FontWeight.Bold)
                         }
@@ -2714,7 +2714,7 @@ private fun BookingItemCard(
                 if (booking.status == "confirmed") {
                     OutlinedButton(
                         onClick = onEditClick,
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(18.dp),
                         border = BorderStroke(1.dp, RoyalGold)
                     ) {
                         Icon(
@@ -2729,7 +2729,7 @@ private fun BookingItemCard(
 
                     Button(
                         onClick = onMarkCompleted,
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(18.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = EmeraldVerified,
                             contentColor = ObsidianNight
@@ -2910,7 +2910,7 @@ private fun VerifiedReviewsTabContent(
                         containerColor = RoyalGold,
                         contentColor = ObsidianNight
                     ),
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(18.dp),
                     modifier = Modifier.testTag("open_add_review_modal_button")
                 ) {
                     Icon(Icons.Default.RateReview, contentDescription = null, modifier = Modifier.size(18.dp))

@@ -465,7 +465,7 @@ fun CheckoutScreen(
                             onValueChange = { notes = it },
                             label = { Text("ملاحظات خاصة للحجز (اختياري)") },
                             singleLine = true,
-                            shape = RoundedCornerShape(14.dp),
+                            shape = RoundedCornerShape(18.dp),
                             modifier = Modifier.fillMaxWidth()
                         )
                     }

@@ -160,7 +160,7 @@ fun ProfileSettingsDialog(
                             Surface(
                                 onClick = { if (unlocked) onSelectFrame(frame.id) },
                                 enabled = unlocked,
-                                shape = RoundedCornerShape(14.dp),
+                                shape = RoundedCornerShape(18.dp),
                                 border = BorderStroke(if(selected) 1.6.dp else 0.8.dp, if(selected) Color(frame.accentHex) else MaterialTheme.colorScheme.outlineVariant),
                                 color = if (selected) MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f) else MaterialTheme.colorScheme.surface,
                                 modifier = Modifier.fillMaxWidth().testTag("select_avatar_frame_${frame.id}")
@@ -242,7 +242,7 @@ private fun SettingsEntry(
 ) {
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
         modifier = Modifier.fillMaxWidth()
     ) {

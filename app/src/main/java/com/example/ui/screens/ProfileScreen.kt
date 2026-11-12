@@ -737,7 +737,7 @@ fun ProfileScreen(
                     Surface(
                         onClick = onOpenChatTab,
                         color = RoyalNavyCard,
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(18.dp),
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                         modifier = Modifier
                             .weight(0.95f)
@@ -770,7 +770,7 @@ fun ProfileScreen(
                     Surface(
                         onClick = { showSubscribeVipModal = true },
                         color = if (isSubscribedVip) MutedLuxuryGold.copy(alpha = 0.22f) else MutedLuxuryGold,
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(18.dp),
                         border = BorderStroke(1.dp, MutedLuxuryGold),
                         modifier = Modifier
                             .weight(1.15f)
@@ -806,7 +806,7 @@ fun ProfileScreen(
                             onShowMessage(if (isFollowing) "تمت المتابعة بنجاح ✓" else "تم إلغاء المتابعة")
                         },
                         color = if (isFollowing) RoyalNavyCard else DeepTealPrimary,
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(18.dp),
                         border = BorderStroke(
                             width = 1.dp,
                             color = if (isFollowing) DeepTealPrimary else Color.Transparent
@@ -850,7 +850,7 @@ fun ProfileScreen(
 
                 Surface(
                     color = RoyalNavyCard,
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(18.dp),
                     border = BorderStroke(0.8.dp, MutedLuxuryGold.copy(alpha = 0.38f)),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -934,7 +934,7 @@ fun ProfileScreen(
                                     } else {
                                         RoyalNavyBackground.copy(alpha = 0.75f)
                                     },
-                                    shape = RoundedCornerShape(12.dp),
+                                    shape = RoundedCornerShape(18.dp),
                                     border = BorderStroke(
                                         width = if (isSelected) 1.3.dp else 0.7.dp,
                                         color = if (isSelected) {
@@ -1150,7 +1150,7 @@ fun ProfileScreen(
                 Surface(
                     onClick = { showSubscribeVipModal = true },
                     color = RoyalNavyCard,
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(18.dp),
                     border = BorderStroke(0.8.dp, MutedLuxuryGold.copy(alpha = 0.5f)),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1196,7 +1196,7 @@ fun ProfileScreen(
             item(key = "profile_paid_post_publish") {
                 Surface(
                     onClick = { showPaidPostDialog = true },
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(18.dp),
                     color = RoyalNavyCard,
                     border = BorderStroke(1.dp, MutedLuxuryGold.copy(alpha = 0.5f)),
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp).testTag("create_paid_post_button")
@@ -1270,7 +1270,7 @@ fun ProfileScreen(
                 if (rows.isEmpty()) {
                     Surface(
                         color = RoyalNavyCard,
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(18.dp),
                         border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.outline),
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -1328,7 +1328,7 @@ fun ProfileScreen(
                 Surface(
                     onClick = { showSettingsModal = true },
                     color = RoyalNavyCard,
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(18.dp),
                     border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.outline),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1367,7 +1367,7 @@ fun ProfileScreen(
                 Surface(
                     onClick = { showPasswordAndDbModal = true },
                     color = RoyalNavyCard,
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(18.dp),
                     border = BorderStroke(0.9.dp, MutedLuxuryGold.copy(alpha = 0.45f)),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1427,7 +1427,7 @@ fun ProfileScreen(
                         ) {
                             OutlinedButton(
                                 onClick = { showPasswordAndDbModal = true },
-                                shape = RoundedCornerShape(8.dp),
+                                shape = RoundedCornerShape(18.dp),
                                 border = BorderStroke(0.8.dp, MutedLuxuryGold),
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                                 modifier = Modifier
@@ -1452,7 +1452,7 @@ fun ProfileScreen(
 
                             Button(
                                 onClick = onSaveInfrastructureNow,
-                                shape = RoundedCornerShape(8.dp),
+                                shape = RoundedCornerShape(18.dp),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = DeepTealPrimary,
                                     contentColor = SoftWhiteText
@@ -1488,7 +1488,7 @@ fun ProfileScreen(
                 ) {
                     OutlinedButton(
                         onClick = onOpenGoogleSignIn,
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(18.dp),
                         border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.outline),
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                         modifier = Modifier
@@ -1513,7 +1513,7 @@ fun ProfileScreen(
                     if (isSuperAdmin) {
                         Button(
                             onClick = onOpenAdminTab,
-                            shape = RoundedCornerShape(10.dp),
+                            shape = RoundedCornerShape(18.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MutedLuxuryGold,
                                 contentColor = RoyalNavyBackground
@@ -1607,7 +1607,7 @@ fun ProfileScreen(
                             }
                         },
                         color = DeepTealPrimary,
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(18.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
@@ -1644,7 +1644,7 @@ fun ProfileScreen(
                             }
                         },
                         color = MutedLuxuryGold.copy(alpha = 0.16f),
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(18.dp),
                         border = BorderStroke(1.dp, MutedLuxuryGold),
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -1889,7 +1889,7 @@ fun ProfileScreen(
                         onValueChange = { nameInput = it },
                         label = { Text("الاسم", fontSize = 11.sp) },
                         singleLine = true,
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(18.dp),
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
@@ -1897,7 +1897,7 @@ fun ProfileScreen(
                         onValueChange = { usernameInput = it },
                         label = { Text("اسم المستخدم (@username)", fontSize = 11.sp) },
                         singleLine = true,
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(18.dp),
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("edit_profile_username_input")
@@ -1908,7 +1908,7 @@ fun ProfileScreen(
                         label = { Text("سعر الدردشة ($)", fontSize = 11.sp) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(18.dp),
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
@@ -1916,7 +1916,7 @@ fun ProfileScreen(
                         onValueChange = { cityInput = it },
                         label = { Text("المدينة", fontSize = 11.sp) },
                         singleLine = true,
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(18.dp),
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
@@ -1924,7 +1924,7 @@ fun ProfileScreen(
                         onValueChange = { bioInput = it },
                         label = { Text("النبذة التعريفية", fontSize = 11.sp) },
                         minLines = 2,
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(18.dp),
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -1988,7 +1988,7 @@ fun ProfileScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Surface(
                         color = RoyalNavyBackground,
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(18.dp),
                         border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.outline),
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -2057,7 +2057,7 @@ fun ProfileScreen(
                             label = { Text("كلمة المرور الحالية", fontSize = 11.sp) },
                             singleLine = true,
                             visualTransformation = PasswordVisualTransformation(),
-                            shape = RoundedCornerShape(10.dp),
+                            shape = RoundedCornerShape(18.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .testTag("profile_current_password_input")
@@ -2073,7 +2073,7 @@ fun ProfileScreen(
                         label = { Text("كلمة المرور الجديدة (6 خانات فأكثر)", fontSize = 11.sp) },
                         singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(18.dp),
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("profile_new_password_input")
@@ -2088,7 +2088,7 @@ fun ProfileScreen(
                         label = { Text("تأكيد كلمة المرور الجديدة", fontSize = 11.sp) },
                         singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(18.dp),
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("profile_confirm_password_input")
@@ -2182,7 +2182,7 @@ private fun PinnedClipCard(
 ) {
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(10.dp),
+        shape = RoundedCornerShape(18.dp),
         color = RoyalNavyCard,
         border = BorderStroke(0.7.dp, MutedLuxuryGold.copy(alpha = 0.45f)),
         modifier = modifier.height(132.dp)
@@ -2299,7 +2299,7 @@ private fun ProfileMediaGridTile(
 ) {
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(10.dp),
+        shape = RoundedCornerShape(18.dp),
         color = RoyalNavyCard,
         border = BorderStroke(
             width = 0.7.dp,
