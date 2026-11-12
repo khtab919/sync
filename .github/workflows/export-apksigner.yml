@@ -1,0 +1,29 @@
+name: Export Android signing verifier for local QA
+on:
+  push:
+    paths:
+      - .github/workflows/export-apksigner.yml
+    branches:
+      - fix/relaxia-116-live-white-screen-20261112
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Package the Android SDK verifier without any signing keys
+        run: |
+          set -euo pipefail
+          mkdir -p verifier
+          tool="$(find "${ANDROID_HOME}/build-tools" -type f -name apksigner.jar | sort -V | tail -1)"
+          test -s "$tool"
+          cp "$tool" verifier/apksigner.jar
+          sha256sum verifier/apksigner.jar > verifier/sha256.txt
+          echo "Bundled SDK verifier (no private keys): $(du -h verifier/apksigner.jar | cut -f1)"
+      - name: Upload verifier
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apksigner-for-qa
+          path: verifier/
+          retention-days: 1
