@@ -769,3 +769,105 @@ html[data-theme=light] body.audio-mode #stage {
 html[data-theme=light] body.audio-mode header,html[data-theme=light] body.audio-mode #connection,
 html[data-theme=light] .audio-seat,html[data-theme=light] .audio-seat small {color:#512735;}
 html[data-theme=light] .seat-plus {color:#744656;border-color:#aa778866;background:#ffffff30;}
+
+
+/* 2026-11-13: premium, lightweight layered gift artwork and per-gift motion. */
+.gift-grid .gift-card {
+  position: relative; isolation: isolate; min-height: 144px;
+  border: 1px solid rgba(239,192,211,.2);
+  background: linear-gradient(148deg,rgba(255,255,255,.09),rgba(126,64,99,.07) 74%) !important;
+  box-shadow: inset 0 1px rgba(255,255,255,.10), 0 7px 21px rgba(19,9,24,.12);
+  transition: transform .2s ease, border-color .2s ease;
+}
+.gift-grid .gift-card:active { transform: scale(.96); }
+.gift-grid .gift-card:focus-visible { outline: 2px solid #f2c387; outline-offset: 2px; }
+.gift-grid .gift-card.depth { border-color: rgba(250,212,142,.45); }
+.gift-grid .gift-card strong { font-size: 12px; line-height: 1.35; min-height: 1.4em; }
+.gift-grid .gift-card small { font-variant-numeric: tabular-nums; color: #f2c98d; font-weight: 700; }
+.gift-grid .gift-card[disabled] { opacity: .55; }
+.gift-grid .gift-figure.gift-art {
+  display: block; position: relative; width: 91px; height: 91px;
+  font-size: inherit; line-height: normal; margin: -5px 0 -2px;
+  transform-style: preserve-3d; isolation: isolate;
+}
+.gift-figure .gift-backplate {
+  display: block; position: absolute; inset: 0;
+  width: 100%; height: 100%; object-fit: contain;
+  filter: drop-shadow(0 7px 8px rgba(0,0,0,.18));
+}
+.gift-figure .gift-backplate[hidden] { display:none; }
+.gift-figure .gift-glyph {
+  position: absolute; display: grid; place-items: center; inset: 10% 8% 8%;
+  font-family: "Noto Color Emoji","Segoe UI Emoji",sans-serif;
+  font-size: 54px; line-height: 1; margin: 0; text-shadow: 0 4px 13px rgba(0,0,0,.3);
+  filter: drop-shadow(0 5px 5px rgba(24,12,35,.32));
+  animation: giftIdle 2800ms ease-in-out infinite;
+}
+.gift-figure .gift-glint {
+  position: absolute; display: block; top: 10%; right: 15%; color: #fff7d8;
+  font-size: 16px; margin: 0; text-shadow: 0 0 8px #fff3bb;
+  animation: giftTwinkle 2300ms ease-in-out infinite;
+}
+.gift-card:nth-child(3n + 2) .gift-glyph { animation-delay: -700ms; }
+.gift-card:nth-child(3n + 3) .gift-glyph { animation-delay: -1300ms; }
+.gift-card .gift-motion-heartbeat .gift-glyph { animation: giftHeartBeat 1800ms ease-in-out infinite; }
+.gift-card .gift-motion-spin .gift-glyph { animation: giftGemTilt 3500ms ease-in-out infinite; }
+.gift-card .gift-motion-float .gift-glyph { animation: giftFloat 2900ms ease-in-out infinite; }
+.gift-card .gift-motion-bloom .gift-glyph { animation: giftBloom 3200ms ease-in-out infinite; }
+.gift-card .gift-motion-drive .gift-glyph { animation: giftDriveIdle 2400ms ease-in-out infinite; }
+
+#giftEffect.gift-show {
+  top: 27%; left: 11%; right: 11%;
+  border: 1px solid rgba(246,204,161,.47);
+  background: radial-gradient(ellipse at 50% 22%,rgba(178,112,145,.52),transparent 75%),rgba(37,20,37,.87);
+  box-shadow: 0 22px 80px #11091696, inset 0 1px #fff2;
+}
+#giftEffect.gift-show.depth {
+  top: 22%; left: 5%; right: 5%;
+  background: radial-gradient(ellipse at 50% 38%,rgba(105,78,140,.70),rgba(15,18,41,.91) 73%);
+}
+#giftEffect .gift-figure.gift-hero {
+  position: relative; z-index: 1; display: block; margin: 0 auto 5px;
+  width: min(62vw,230px); height: min(62vw,230px);
+  font-size: inherit; line-height: normal;
+  animation: giftReveal 2700ms cubic-bezier(.2,.76,.35,1) both;
+}
+#giftEffect.simple .gift-figure.gift-hero { width: min(36vw,130px); height: min(36vw,130px); animation-duration:1600ms; }
+#giftEffect .gift-figure.gift-hero .gift-glyph { font-size: clamp(68px,24vw,146px); animation: giftHeroHover 2100ms ease-in-out infinite; }
+#giftEffect.simple .gift-figure.gift-hero .gift-glyph { font-size: clamp(50px,14vw,88px); }
+#giftEffect .gift-figure.gift-hero .gift-glint { font-size: 29px; }
+#giftEffect .gift-figure.gift-hero.gift-motion-swim { animation: giftWhaleJourney 4000ms ease-in-out both; }
+#giftEffect .gift-figure.gift-hero.gift-motion-drive { animation: giftCarArrival 3600ms ease-in-out both; }
+#giftEffect .gift-figure.gift-hero.gift-motion-fly { animation: giftSkyFlight 3800ms ease-in-out both; }
+#giftEffect .gift-figure.gift-hero.gift-motion-royal { animation: giftRoyalArrival 4100ms cubic-bezier(.2,.7,.2,1) both; }
+#giftEffect .gift-figure.gift-hero.gift-motion-orbit { animation: giftGalaxyOrbit 4600ms ease-in-out both; }
+#giftEffect .gift-figure.gift-hero.gift-motion-burst { animation: giftFireworkBurst 3600ms ease-out both; }
+#giftEffect .gift-figure.gift-hero.gift-motion-sail { animation: giftYachtSail 4000ms ease-in-out both; }
+#giftEffect .gift-figure.gift-hero.gift-motion-float { animation: giftFloatReveal 3500ms ease-in-out both; }
+#giftEffect .gift-figure.gift-hero.gift-motion-heartbeat .gift-glyph { animation: giftHeartBeat 1300ms infinite; }
+#giftEffect .gift-figure.gift-hero.gift-motion-spin .gift-glyph { animation: giftGemTilt 1800ms ease-in-out infinite; }
+#giftEffect.show-lion { background:radial-gradient(ellipse,#c58b4a91,#301b35ed 75%); }
+#giftEffect.show-whale { background:radial-gradient(ellipse at 50% 80%,#288bc48c,#082344ed 75%); }
+#giftEffect .gift-particles i { filter: drop-shadow(0 0 12px currentColor); }
+@keyframes giftIdle { 0%,100% {transform:translateY(0) rotate(-3deg)}50% {transform:translateY(-6px) rotate(3deg)} }
+@keyframes giftTwinkle { 0%,100% {opacity:.2;transform:scale(.65) rotate(0deg)}50% {opacity:1;transform:scale(1.25) rotate(45deg)} }
+@keyframes giftHeartBeat {0%,100%{transform:scale(1)}25%{transform:scale(1.12)}45%{transform:scale(.97)}60%{transform:scale(1.08)}}
+@keyframes giftGemTilt {0%,100%{transform:perspective(380px) rotateY(-13deg)}50%{transform:perspective(380px) rotateY(15deg) scale(1.08)}}
+@keyframes giftFloat {0%,100%{transform:translateY(5px) rotate(-5deg)}50%{transform:translateY(-8px) rotate(5deg)}}
+@keyframes giftBloom {0%,100%{transform:scale(.94) rotate(-4deg)}50%{transform:scale(1.06) rotate(4deg)}}
+@keyframes giftDriveIdle {0%,100%{transform:translateX(-2px) rotate(-3deg)}50%{transform:translateX(4px) rotate(2deg)}}
+@keyframes giftHeroHover {0%,100%{transform:translateY(1px)}50%{transform:translateY(-7px)}}
+@keyframes giftReveal {0%{opacity:0;transform:translateY(50px) scale(.4)}28%{opacity:1;transform:translateY(-5px) scale(1.08)}75%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(.85)}}
+@keyframes giftWhaleJourney {0%{opacity:0;transform:translateX(85vw) translateY(30px) rotate(-14deg) scale(.65)}25%{opacity:1;transform:translateX(10px) rotate(5deg) scale(1.13)}66%{opacity:1;transform:translateX(-15px) translateY(-22px) rotate(-5deg)}100%{opacity:0;transform:translateX(-85vw) rotate(12deg) scale(.8)}}
+@keyframes giftCarArrival {0%{opacity:0;transform:translateX(85vw) scale(.4) rotate(-8deg)}30%{opacity:1;transform:translateX(-10px) scale(1.12)}70%{opacity:1;transform:translateX(6px) scale(1)}100%{opacity:0;transform:translateX(-85vw) scale(.75)}}
+@keyframes giftSkyFlight {0%{opacity:0;transform:translate(-50vw,60px) scale(.4) rotate(-26deg)}32%{opacity:1;transform:translate(0,-16px) scale(1.12) rotate(4deg)}70%{opacity:1;transform:translate(18px,-35px) rotate(-13deg)}100%{opacity:0;transform:translate(75vw,-120px) scale(.65) rotate(-22deg)}}
+@keyframes giftRoyalArrival {0%{opacity:0;transform:perspective(400px) rotateY(-50deg) scale(.25)}22%{opacity:1;transform:rotateY(8deg) scale(1.13)}72%{opacity:1;transform:rotateY(-6deg) scale(1)}100%{opacity:0;transform:rotateY(12deg) scale(.75)}}
+@keyframes giftGalaxyOrbit {0%{opacity:0;transform:scale(.2) rotate(-140deg)}30%{opacity:1;transform:scale(1.14) rotate(0)}70%{opacity:1;transform:scale(1.05) rotate(45deg)}100%{opacity:0;transform:scale(1.7) rotate(140deg)}}
+@keyframes giftFireworkBurst {0%{opacity:0;transform:scale(.1)}30%{opacity:1;transform:scale(1.25)}65%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.65)}}
+@keyframes giftYachtSail {0%{opacity:0;transform:translateX(55vw) translateY(38px) rotate(4deg)}30%{opacity:1;transform:translateX(5px) translateY(0) rotate(-4deg)}70%{opacity:1;transform:translateX(-10px) translateY(-10px) rotate(3deg)}100%{opacity:0;transform:translateX(-60vw) rotate(-7deg)}}
+@keyframes giftFloatReveal {0%{opacity:0;transform:translateY(90px) scale(.5)}28%{opacity:1;transform:translateY(-10px) scale(1.08)}75%{opacity:1;transform:translateY(-35px)}100%{opacity:0;transform:translateY(-85px) scale(.95)}}
+@media (prefers-reduced-motion: reduce) {
+  .gift-grid .gift-figure *, #giftEffect .gift-figure, #giftEffect .gift-figure * { animation: none !important; }
+  #giftEffect .gift-particles { display: none; }
+  .gift-grid .gift-card { transition: none; }
+}
