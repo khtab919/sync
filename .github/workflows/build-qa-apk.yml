@@ -52,7 +52,8 @@ jobs:
                 "mobilesdk_app_id": "1:335825631510:android:c3c9ab3d14056ce9c17837",
                 "android_client_info": {"package_name": "com.aistudio.layalilounge.x9m4kp"}
               },
-              "api_key": [{"current_key": "AIzaSyAdn0nUzmGACcTw__y_cuDOyLfgnDxQTSY"}]
+              "api_key": [{"current_key": "AIzaSyAdn0nUzmGACcTw__y_cuDOyLfgnDxQTSY"}],
+              "oauth_client": [{"client_id": "335825631510-phs602etm4vsum7vju7gmgjic1nuh4de.apps.googleusercontent.com", "client_type": 3}]
             }],
             "configuration_version": "1"
           }
