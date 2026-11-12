@@ -877,3 +877,6 @@ html[data-theme=light] body.audio-mode #pinned{color:#fff}
 html[data-theme=light] body.audio-mode .goal-card{color:#fff}
 @media(max-width:350px){body.audio-mode header{grid-template-columns:36px minmax(0,1fr) auto auto}body.audio-mode header .live-pill{font-size:9px;padding:7px 4px}body.audio-mode header #viewers{font-size:10px;padding:6px 4px}body.audio-mode .identity-avatar-ring{width:28px;height:28px}footer .bottom{gap:3px}}
 @media(max-height:560px){body.audio-mode #stage{--room-chat-height:77px;--room-footer-height:66px}body.audio-mode #audioStage.seat-grid{top:calc(env(safe-area-inset-top,0px) + 106px);gap:4px 3px}body.audio-mode .audio-seat .audio-placeholder,body.audio-mode .audio-seat img,body.audio-mode .audio-seat .seat-plus,body.audio-mode .audio-seat .audio-waves{width:30px;height:30px}}
+
+/* Royal-blue daylight remains inspectable without image gradients. */
+html[data-theme=light] body.audio-mode #stage{background-color:#D7E8FF}
