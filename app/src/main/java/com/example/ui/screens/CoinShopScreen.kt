@@ -75,10 +75,10 @@ internal fun CoinPackage(coins:Int,bonus:Int,dollars:String,selected:Boolean,bad
                 }
             }else Spacer(Modifier.height(19.dp))
             Icon(androidx.compose.material.icons.Icons.Rounded.Toll, "كوينز", Modifier.size(36.dp), tint=colors.primary)
-            Text(java.text.NumberFormat.getIntegerInstance().format(coins),fontSize=20.sp,fontWeight=FontWeight.Bold,maxLines=1)
+            Text(java.text.NumberFormat.getIntegerInstance(java.util.Locale.US).format(coins),fontSize=20.sp,fontWeight=FontWeight.Bold,maxLines=1)
             Text("كوين",fontSize=12.sp,color=colors.onSurfaceVariant)
             if(bonus>0) Text(
-                "+${java.text.NumberFormat.getIntegerInstance().format(bonus)} نقطة ترويجية",
+                "+${java.text.NumberFormat.getIntegerInstance(java.util.Locale.US).format(bonus)} نقطة ترويجية",
                 fontSize=10.sp,color=if(bonus>0)colors.primary else colors.onSurfaceVariant,maxLines=2,lineHeight=13.sp
             )
             Spacer(Modifier.weight(1f))
@@ -154,7 +154,7 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
                 Spacer(Modifier.width(10.dp))
                 Column{
                     Text("رصيد الكوينز المتاح",style=MaterialTheme.typography.bodySmall)
-                    Text(if(balance==null)"—"else java.text.NumberFormat.getIntegerInstance().format(balance)+" كوين",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold)
+                    Text(if(balance==null)"—"else java.text.NumberFormat.getIntegerInstance(java.util.Locale.US).format(balance)+" كوين",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold)
                 }
             }
         }
@@ -251,7 +251,7 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
                 val chosen=packages.firstOrNull{it.coins==selected}
                 Surface(color=MaterialTheme.colorScheme.primaryContainer,shape=RoundedCornerShape(16.dp)){
                     Column(Modifier.fillMaxWidth().padding(16.dp),verticalArrangement=Arrangement.spacedBy(5.dp)){
-                        Text("${java.text.NumberFormat.getIntegerInstance().format(selected)} كوين",fontSize=21.sp,fontWeight=FontWeight.Bold)
+                        Text("${java.text.NumberFormat.getIntegerInstance(java.util.Locale.US).format(selected)} كوين",fontSize=21.sp,fontWeight=FontWeight.Bold)
                         Text("القيمة الأساسية: ${BigDecimal.valueOf(selected.toLong(),2).toPlainString()} USD",style=MaterialTheme.typography.bodyMedium)
                         if((chosen?.bonusPoints?:0)>0)Text("+${chosen?.bonusPoints} نقطة ترويجية إضافية",color=MaterialTheme.colorScheme.primary)
                     }

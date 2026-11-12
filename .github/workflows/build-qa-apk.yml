@@ -85,6 +85,14 @@ jobs:
           path: app/build/reference-previews/*.png
           if-no-files-found: ignore
 
+      - name: Upload UI test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Relaxia-11.7-test-reports
+          path: app/build/test-results/testDebugUnitTest/*.xml
+          if-no-files-found: ignore
+
       - name: Export Android signing tools for local verification
         run: |
           tools_dir="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1 | xargs dirname)"

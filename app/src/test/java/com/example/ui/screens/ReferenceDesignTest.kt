@@ -207,7 +207,8 @@ class ReferenceDesignTest {
     @Test fun coinPackageShowsPriceAndActualBonus() {
         var chosen=false
         compose.setContent { MyApplicationTheme { Surface(Modifier.fillMaxSize(),color=MaterialTheme.colorScheme.background) { Column(Modifier.padding(22.dp)) { CoinPackage(2500,100,"25.00",true,null){chosen=true} } } } }
-        compose.onNodeWithText(java.text.NumberFormat.getIntegerInstance().format(2500)).assertExists()
+        screenshot("12-coin-package")
+        compose.onNodeWithText(java.text.NumberFormat.getIntegerInstance(java.util.Locale.US).format(2500)).assertExists()
         compose.onNodeWithText("+100 نقطة ترويجية").performClick()
         org.junit.Assert.assertTrue(chosen)
         screenshot("12-coin-package")
