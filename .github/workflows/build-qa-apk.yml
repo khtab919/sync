@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - design/relaxia-soft-luxury-20261113
+      - design/relaxia-home-rebuild-20261113
   workflow_dispatch:
 
 permissions:
@@ -75,7 +76,7 @@ jobs:
       - name: Verify native interactions and capture design previews
         env:
           RELAXIA_NEXT_STORE_PASSWORD: ${{ secrets.RELAXIA_NEXT_STORE_PASSWORD }}
-        run: gradle testDebugUnitTest --tests com.example.ui.auth.AdultWelcomeScreenTest --tests com.example.ui.screens.ReferenceDesignTest --tests com.example.data.api.SecureSessionStoreTest -PRELAXIA_UNSIGNED_BUILD=true -PRELAXIA_QA_SIDE_BY_SIDE=true --no-daemon
+        run: gradle testDebugUnitTest --tests com.example.ui.auth.AdultWelcomeScreenTest --tests com.example.ui.screens.ReferenceDesignTest --tests com.example.ui.screens.RelaxiaHomeDashboardTest --tests com.example.data.api.SecureSessionStoreTest -PRELAXIA_UNSIGNED_BUILD=true -PRELAXIA_QA_SIDE_BY_SIDE=true --no-daemon
 
       - name: Upload native design previews
         if: always()
