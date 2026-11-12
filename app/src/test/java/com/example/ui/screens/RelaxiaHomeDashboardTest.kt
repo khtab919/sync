@@ -1,5 +1,9 @@
 package com.example.ui.screens
 
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.view.View
+import java.io.File
 import androidx.activity.ComponentActivity
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.mutableStateOf
@@ -16,11 +20,25 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "ar-rSA-w360dp-h760dp-port-mdpi")
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 class RelaxiaHomeDashboardTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+
+    private fun screenshot(name: String) {
+        val output = File("build/reference-previews/$name.png")
+        output.parentFile?.mkdirs()
+        compose.runOnIdle {
+            val view = compose.activity.findViewById<View>(android.R.id.content)
+            val image = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+            view.draw(Canvas(image))
+            output.outputStream().use { image.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            image.recycle()
+        }
+    }
 
     @Test fun compactHomeKeepsEveryRealNavigationActionReachable() {
         var profile = 0
@@ -48,6 +66,7 @@ class RelaxiaHomeDashboardTest {
                 }
             }
         }
+        screenshot("18-home-rebuild-light")
         compose.onNodeWithText("سارة").performClick()
         compose.onNodeWithText("الرصيد").performClick()
         compose.onNodeWithText("البث المباشر").performClick()
@@ -77,6 +96,7 @@ class RelaxiaHomeDashboardTest {
                 }
             }
         }
+        screenshot("19-home-rebuild-dark")
         compose.onNodeWithText("—").assertExists()
         compose.onNodeWithText("$0.00").assertDoesNotExist()
         compose.onNodeWithText("المتجر والحجز").assertExists()
