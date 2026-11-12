@@ -131,7 +131,7 @@ jobs:
           Signing certificate SHA256: a1ba52b55fe246379bed147a1de23a8e03dc7ad5d3d38b1113d3aa3bcaf0db9c
           This does not update the older production package without .qa116.
           Keep your existing app and data; do not uninstall to resolve a mismatch.
-          Includes burgundy UI, rounded controls, refresh states and full payment QR.
+          Includes royal-blue UI, rounded controls, refresh states and full payment QR.
           Server live/call style changes require a separate server deployment.
           EOF
 

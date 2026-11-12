@@ -303,13 +303,13 @@ class ReferenceDesignTest {
         screenshot("19-coin-package-dark")
     }
 
-    @Test fun bothThemesUseTheRequestedBurgundyPalette() {
+    @Test fun bothThemesUseTheRequestedRoyalBluePalette() {
         var dark by mutableStateOf(false)
         var background=androidx.compose.ui.graphics.Color.Unspecified
         var primary=androidx.compose.ui.graphics.Color.Unspecified
         compose.setContent {MyApplicationTheme(darkTheme=dark){val colors=MaterialTheme.colorScheme;SideEffect{background=colors.background;primary=colors.primary};Surface{androidx.compose.material3.Text("Relaxia")}}}
-        compose.runOnIdle{org.junit.Assert.assertEquals(androidx.compose.ui.graphics.Color(0xFFFAF6F2),background);org.junit.Assert.assertEquals(androidx.compose.ui.graphics.Color(0xFF792D45),primary);dark=true}
-        compose.runOnIdle{org.junit.Assert.assertEquals(androidx.compose.ui.graphics.Color(0xFF1B1418),background);org.junit.Assert.assertEquals(androidx.compose.ui.graphics.Color(0xFFE9A8BA),primary)}
+        compose.runOnIdle{org.junit.Assert.assertEquals(androidx.compose.ui.graphics.Color(0xFFF4F7FF),background);org.junit.Assert.assertEquals(androidx.compose.ui.graphics.Color(0xFF194C9F),primary);dark=true}
+        compose.runOnIdle{org.junit.Assert.assertEquals(androidx.compose.ui.graphics.Color(0xFF080F23),background);org.junit.Assert.assertEquals(androidx.compose.ui.graphics.Color(0xFF9CC3FF),primary)}
     }
 
     @Test fun profileDisplaysPublicNumberAndIndependentHandle() {
