@@ -32,7 +32,7 @@ internal fun RelaxiaHomeDashboard(
 ) {
     Column(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(9.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Row(
             Modifier.fillMaxWidth(),
@@ -99,17 +99,13 @@ internal fun RelaxiaHomeDashboard(
                 focusedContainerColor = MaterialTheme.colorScheme.surface
             )
         )
+        // Reels and store are already in bottom navigation. Only live entry points
+        // remain here, avoiding the four oversized duplicate dashboard cards.
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            HomeDestinationCard("البث المباشر", "فيديو وتفاعل", Icons.Rounded.Sensors,
+            HomeDestinationCard("بث مباشر", Icons.Rounded.Sensors,
                 Modifier.weight(1f), onLive)
-            HomeDestinationCard("الغرف الصوتية", "تحدث مع الآخرين", Icons.Rounded.Mic,
+            HomeDestinationCard("غرف صوتية", Icons.Rounded.Mic,
                 Modifier.weight(1f), onAudio)
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            HomeDestinationCard("مشاهدة الريلز", "مقاطع قصيرة", Icons.Rounded.SmartDisplay,
-                Modifier.weight(1f), onReels)
-            HomeDestinationCard("المتجر", "خدمات وحجوزات", Icons.Rounded.Storefront,
-                Modifier.weight(1f), onStore)
         }
     }
 }
@@ -117,11 +113,11 @@ internal fun RelaxiaHomeDashboard(
 /** Compact destination row: use the home screen for the real feed, not giant shortcuts. */
 @Composable
 private fun HomeDestinationCard(
-    title: String, subtitle: String, icon: ImageVector, modifier: Modifier, onClick: () -> Unit
+    title: String, icon: ImageVector, modifier: Modifier, onClick: () -> Unit
 ) {
     Surface(
         onClick = onClick,
-        modifier = modifier.heightIn(min = 63.dp),
+        modifier = modifier.heightIn(min = 57.dp),
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant),
@@ -133,8 +129,8 @@ private fun HomeDestinationCard(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.primaryContainer) {
-                Box(Modifier.size(39.dp), contentAlignment = Alignment.Center) {
-                    Icon(icon, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.primary)
+                Box(Modifier.size(35.dp), contentAlignment = Alignment.Center) {
+                    Icon(icon, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
                 }
             }
             Text(title, Modifier.weight(1f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
