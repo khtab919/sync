@@ -56,7 +56,7 @@ jobs:
           import json,hashlib,zipfile
           meta=json.loads(Path('app/build/outputs/apk/release/output-metadata.json').read_text())
           assert meta['applicationId']=='com.aistudio.layalilounge.x9m4kp', "Production package identity must not change"
-          assert all(x['versionCode']==38 for x in meta['elements'])
+          assert all(x['versionCode']==39 for x in meta['elements'])
           out=Path('app/build/outputs/apk/release/app-release-unsigned.apk')
           assert out.is_file() and out.stat().st_size>1000000
           with zipfile.ZipFile(out) as archive:
@@ -68,7 +68,7 @@ jobs:
           Path('SIGNING-REQUIRED.txt').write_text(
             "NOT INSTALLABLE. NOT AN APP UPDATE.\\n"
             "Production package: com.aistudio.layalilounge.x9m4kp\\n"
-            "Version: 11.7.0 (38)\\n"
+            "Version: 11.7.1 (38)\\n"
             "This unsigned APK requires the ORIGINAL production private keystore.\\n"
             "Never generate or substitute a new signing identity to update an installed app.\\n"
             "The GitHub production build workflow stops safely when its key is unavailable.\\n"
@@ -77,11 +77,11 @@ jobs:
             "SHA256 unsigned build: "+digest+"\\n"
           )
           PY
-          cp app/build/outputs/apk/release/app-release-unsigned.apk Relaxia-11.7.0-PRODUCTION-UNSIGNED-NOT-INSTALLABLE.apk
+          cp app/build/outputs/apk/release/app-release-unsigned.apk Relaxia-11.7.1-PRODUCTION-UNSIGNED-NOT-INSTALLABLE.apk
       - uses: actions/upload-artifact@v4
         with:
           name: Relaxia-11.7-Production-Signing-Required
           path: |
-            Relaxia-11.7.0-PRODUCTION-UNSIGNED-NOT-INSTALLABLE.apk
+            Relaxia-11.7.1-PRODUCTION-UNSIGNED-NOT-INSTALLABLE.apk
             SIGNING-REQUIRED.txt
           retention-days: 7

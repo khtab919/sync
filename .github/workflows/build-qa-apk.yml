@@ -119,13 +119,13 @@ jobs:
           from pathlib import Path
           data=json.loads(Path('app/build/outputs/apk/debug/output-metadata.json').read_text())
           assert data['applicationId']=='com.aistudio.layalilounge.x9m4kp.qa116'
-          assert all(item['versionCode']==38 for item in data['elements'])
+          assert all(item['versionCode']==39 for item in data['elements'])
           print('Relaxia 11.7 APK validated for existing QA package')
           PY
           test -s app/build/outputs/apk/debug/app-debug-unsigned.apk
-          cp app/build/outputs/apk/debug/app-debug-unsigned.apk Relaxia-11.7.0-unsigned.apk
+          cp app/build/outputs/apk/debug/app-debug-unsigned.apk Relaxia-11.7.1-unsigned.apk
           cat > READ-ME-FIRST.txt <<'EOF'
-          Relaxia 11.7.0 (38)
+          Relaxia 11.7.1 (39)
           UNSIGNED artifact. Must be signed locally with the verified existing QA key.
           Package: com.aistudio.layalilounge.x9m4kp.qa116
           Signing certificate SHA256: a1ba52b55fe246379bed147a1de23a8e03dc7ad5d3d38b1113d3aa3bcaf0db9c
@@ -138,9 +138,9 @@ jobs:
       - name: Upload preview and safety instructions
         uses: actions/upload-artifact@v4
         with:
-          name: Relaxia-11.7.0-QA-Update
+          name: Relaxia-11.7.1-QA-Update
           path: |
-            Relaxia-11.7.0-unsigned.apk
+            Relaxia-11.7.1-unsigned.apk
             READ-ME-FIRST.txt
           retention-days: 7
           if-no-files-found: error
