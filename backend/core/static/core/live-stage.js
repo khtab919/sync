@@ -279,7 +279,7 @@ async function refresh(){
   if(!reconnectSince)reconnectSince=Date.now();
   const late=Date.now()-reconnectSince>=12000;
   $('status').textContent=result.status==='starting'?(late?'تأخر بدء البث. يمكنك إعادة الاتصال.':'الغرفة تبدأ الآن…'):(late?'صاحب البث يعيد الاتصال. أعد المحاولة.':'صاحب البث يعيد الاتصال…');
-  $('reconnectAction').hidden=connecting||!late;
+  $('reconnectAction').hidden=connecting||retrying||!late;
  }else{
   reconnectSince=0;$('reconnectAction').hidden=true;
   if(!mediaFault&&room?.state===ConnectionState.Connected&&(!(config.owner||speaking)||mediaReady))$('status').textContent='مباشر';
