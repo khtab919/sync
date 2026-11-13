@@ -215,7 +215,19 @@ function updateQuickMic(){
  button.setAttribute('aria-label',speaking?(muted?'تشغيل الميكروفون':'كتم الميكروفون'):'المقاعد وطلب التحدث');
 }
 
-function peopleSheet(){const box=sheet('المشاهدون والمشرفون');for(const p of state.participants||[]){note(box,p.name);button(box,'حظر '+p.name,async()=>{if(confirm('حظر هذا المستخدم من البث؟')){await api({action:'ban',user_id:p.user_id});await refresh()}});if(config.owner){const isMod=state.moderator_ids?.includes(p.user_id);button(box,(isMod?'إزالة إشراف ':'تعيين مشرف ')+p.name,()=>api({action:'set_moderator',user_id:p.user_id,enabled:!isMod}).then(refresh))}}}
+function peopleSheet(){
+ const box=sheet('المشاهدون والمشرفون');
+ for(const p of state.participants||[]){
+  note(box,p.name);
+  if(state.manage_room)button(box,'حظر '+p.name,async()=>{
+   if(confirm('حظر هذا المستخدم من البث؟')){await api({action:'ban',user_id:p.user_id});await refresh()}
+  },'danger');
+  if(config.owner&&state.manage_room){
+   const isMod=state.moderator_ids?.includes(p.user_id);
+   button(box,(isMod?'إزالة إشراف ':'تعيين مشرف ')+p.name,()=>api({action:'set_moderator',user_id:p.user_id,enabled:!isMod}).then(refresh))
+  }
+ }
+}
 function moreSheet(){const box=sheet('أدوات الغرفة');
  if(window.innerWidth<=380)button(box,'الرموز التعبيرية',()=>{$('sheet').close();$('emojiBtn').click()});
  if(!config.owner)button(box,state.following?'إلغاء متابعة المضيف':'متابعة المضيف',()=>api({action:'follow'}).then(refresh));

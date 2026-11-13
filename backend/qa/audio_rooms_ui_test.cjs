@@ -58,6 +58,11 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    await page.getByRole('button',{name:'إعجاب بالبث',exact:true}).click();
    assert.equal(await page.evaluate(()=>sent.filter(a=>a.action==='like').length),1);
    await page.locator('#closeSheet').click();
+   // Even when triggered by a scripted preview, viewer-facing panels must never
+   // offer destructive administrative controls without manage_room permission.
+   await page.evaluate(()=>{state.participants=[{name:'عضو',user_id:9}];state.manage_room=false;peopleSheet()});
+   assert.equal(await page.locator('#sheetBody').getByRole('button',{name:'حظر عضو'}).count(),0);
+   await page.locator('#closeSheet').click();
    assert.equal(await page.locator('.empty-seat').count(),14);
    const seats=await page.locator('#audioStage').boundingBox(),footer=await page.locator('footer').boundingBox();
    assert.ok(seats.y+seats.height<footer.y,'seat grid must not overlap controls');

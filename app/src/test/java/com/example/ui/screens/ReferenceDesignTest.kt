@@ -77,7 +77,7 @@ class ReferenceDesignTest {
     }
 
     @Test @Config(qualifiers = "ar-rSA-w320dp-h760dp-port-mdpi")
-    fun compactRoyalHomeHasFourWorkingDestinations() {
+    fun compactRoyalHomeShowsOnlyLiveActionsWithoutDuplicateBottomTabs() {
         var live = 0
         var audio = 0
         var reels = 0
@@ -94,10 +94,13 @@ class ReferenceDesignTest {
                 }
             }
         }
-        for (title in listOf("البث المباشر", "الغرف الصوتية", "مشاهدة الريلز", "المتجر")) {
+        for (title in listOf("بث مباشر", "غرف صوتية")) {
             compose.onNodeWithText(title).assertIsDisplayed().performClick()
         }
-        compose.runOnIdle { org.junit.Assert.assertEquals(listOf(1, 1, 1, 1), listOf(live, audio, reels, shop)) }
+        // Reels and store already have dedicated bottom navigation destinations.
+        compose.onNodeWithText("مشاهدة الريلز").assertDoesNotExist()
+        compose.onNodeWithText("المتجر").assertDoesNotExist()
+        compose.runOnIdle { org.junit.Assert.assertEquals(listOf(1, 1, 0, 0), listOf(live, audio, reels, shop)) }
         screenshot("21-compact-royal-home-320")
     }
 
