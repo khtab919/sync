@@ -26,9 +26,7 @@ internal fun RelaxiaHomeDashboard(
     onProfile: () -> Unit,
     onWallet: () -> Unit,
     onLive: () -> Unit,
-    onAudio: () -> Unit,
-    onReels: () -> Unit,
-    onStore: () -> Unit
+    onAudio: () -> Unit
 ) {
     Column(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),

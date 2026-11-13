@@ -654,9 +654,7 @@ fun ServerAppScreen(baseUrl: String) {
                                     onProfile = { page = ""; tab = 4 },
                                     onWallet = { open("المحفظة") },
                                     onLive = { open("البث المباشر") },
-                                    onAudio = { open("الغرف الصوتية") },
-                                    onReels = { page = ""; tab = 1 },
-                                    onStore = { page = ""; tab = 2 }
+                                    onAudio = { open("الغرف الصوتية") }
                                 )
                             }
                             if (query.trim().length >= 2) {

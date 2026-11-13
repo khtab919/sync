@@ -3,7 +3,7 @@ if(typeof LivekitClient==='undefined'||typeof RelaxiaMedia==='undefined')throw E
 const config=JSON.parse(document.getElementById('config').textContent),$=id=>document.getElementById(id);
 const {Room,RoomEvent,Track,ConnectionState}=LivekitClient;
 let room,closed=false,muted=false,speakerMuted=false,cameraOff=false,facing='user',commentsVisible=true,lastComments='',leaving=false,retrying=false,polling=false;
-let activeSpeakerIds=new Set(),audioSeatSignature='',reconnectSince=0,controlFailures=0;
+let activeSpeakerIds=new Set(),audioSeatSignature='',reconnectSince=0,controlFailures=0,connecting=false;
 function updateRoomViewport(){
  const height=window.visualViewport?.height||window.innerHeight;
  // Preserve truly tiny viewports so Android's native stage-height recovery can detect and repair them.
@@ -96,13 +96,15 @@ async function connectWithTimeout(client,url,token){
  finally{clearTimeout(timer)}
 }
 async function connect(token=config.token){
+ if(connecting)throw Error('connection_already_pending');
+ connecting=true;
  try{
  if(config.owner||speaking){await prepareTracks();const fresh=await api({action:'token'});state.can_publish=fresh.can_publish;state.publish_sources=fresh.publish_sources;if(!fresh.can_publish){releasePrepared();throw Error('stage_unavailable')}token=fresh.token;}
  if(closed||leaving){releasePrepared();return}
  room=new Room({adaptiveStream:true,dynacast:true,audioCaptureDefaults:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},videoCaptureDefaults:{resolution:{width:1280,height:720,frameRate:30},facingMode:facing},publishDefaults:{simulcast:false,videoEncoding:{maxBitrate:1500000,maxFramerate:30}}});
  room.on(RoomEvent.TrackSubscribed,(track,pub,participant)=>renderTrack(track,participant));
  room.on(RoomEvent.TrackUnsubscribed,track=>{track.detach().forEach(el=>{const tile=el.closest('.tile');el.remove();tile?.remove()});layout()});
- room.on(RoomEvent.ConnectionStateChanged,s=>{$('status').textContent=s===ConnectionState.Connected?((config.owner||speaking)&&!mediaReady?'جارٍ نشر الصوت والصورة…':'متصل'):s===ConnectionState.Reconnecting?'إعادة الاتصال…':'جارٍ الاتصال…'});
+ room.on(RoomEvent.ConnectionStateChanged,s=>{if(mediaFault)return;$('status').textContent=s===ConnectionState.Connected?((config.owner||speaking)&&!mediaReady?'جارٍ نشر الصوت والصورة…':'متصل'):s===ConnectionState.Reconnecting?'إعادة الاتصال…':'جارٍ الاتصال…'});
  room.on(RoomEvent.ConnectionQualityChanged,(q,p)=>{if(p===room.localParticipant&&['poor','lost'].includes(String(q).toLowerCase()))$('status').textContent='الشبكة ضعيفة · يجري تكييف الجودة'});
  room.on(RoomEvent.ActiveSpeakersChanged,participants=>{activeSpeakerIds=new Set(participants.map(p=>p.identity));document.querySelectorAll('.audio-person').forEach(el=>el.classList.toggle('speaking',activeSpeakerIds.has(el.dataset.identity)))});
  room.on(RoomEvent.Disconnected,()=>{if(!closed&&!leaving)reconnect()});
@@ -110,8 +112,9 @@ async function connect(token=config.token){
  $('follow').hidden=config.owner;$('gift').hidden=true;$('speaker').hidden=true;updateSpeakerControl();updateQuickMic();
  layout();if(!polling){polling=true;poll()}
  }catch(e){room?.removeAllListeners();try{await room?.disconnect()}finally{releasePrepared();mediaReady=false}throw e}
+ finally{connecting=false}
 }
-async function reconnect(){if(retrying||closed||leaving)return;retrying=true;try{for(let attempt=0;attempt<6&&!closed&&!leaving;attempt++){$('status').textContent='إعادة الاتصال…';await new Promise(r=>setTimeout(r,Math.min(5000,1000*(attempt+1))));try{const fresh=await api({action:'token'});state.can_publish=fresh.can_publish;state.publish_sources=fresh.publish_sources;if(closed||leaving)return;room?.removeAllListeners();await room?.disconnect();document.querySelectorAll('audio').forEach(el=>el.remove());$('video').replaceChildren();if(state.can_publish===false&&!config.owner)speaking=false;await connect(fresh.token);return}catch(e){if(e.name==='MediaFailure'){mediaMessage(e);return}if(['broadcast_forbidden','broadcast_ended','live_authorization_required','admission_refunded','feature_restricted','broadcast_permission_required'].includes(e.message)){stop('انتهت صلاحية البث');return}}}if(!closed&&!leaving){$('status').textContent='تعذّر الاتصال. جرّب إعادة الاتصال دون شراء دخول جديد.';$('reconnectAction').hidden=false}}finally{retrying=false}}
+async function reconnect(){if(retrying||connecting||closed||leaving)return;retrying=true;try{for(let attempt=0;attempt<6&&!closed&&!leaving;attempt++){$('status').textContent='إعادة الاتصال…';await new Promise(r=>setTimeout(r,Math.min(5000,1000*(attempt+1))));try{const fresh=await api({action:'token'});state.can_publish=fresh.can_publish;state.publish_sources=fresh.publish_sources;if(closed||leaving)return;room?.removeAllListeners();await room?.disconnect();document.querySelectorAll('audio').forEach(el=>el.remove());$('video').replaceChildren();if(state.can_publish===false&&!config.owner)speaking=false;await connect(fresh.token);return}catch(e){if(e.name==='MediaFailure'){mediaMessage(e);return}if(['broadcast_forbidden','broadcast_ended','live_authorization_required','admission_refunded','feature_restricted','broadcast_permission_required'].includes(e.message)){stop('انتهت صلاحية البث');return}}}if(!closed&&!leaving){$('status').textContent='تعذّر الاتصال. جرّب إعادة الاتصال دون شراء دخول جديد.';$('reconnectAction').hidden=false}}finally{retrying=false}}
 function sheet(title){$('sheetTitle').textContent=title;$('sheetBody').replaceChildren();if(!$('sheet').open)$('sheet').showModal();return $('sheetBody')}
 function button(box,label,fn,cls=''){const b=document.createElement('button');b.textContent=label;b.className=cls;b.onclick=async()=>{if(b.disabled)return;b.disabled=true;try{await fn()}catch(e){message(e)}finally{b.disabled=false}};box.appendChild(b);return b}
 function note(box,text){const p=document.createElement('p');p.textContent=text;box.appendChild(p)}
@@ -275,7 +278,7 @@ async function refresh(){
   if(!reconnectSince)reconnectSince=Date.now();
   const late=Date.now()-reconnectSince>=12000;
   $('status').textContent=result.status==='starting'?(late?'تأخر بدء البث. يمكنك إعادة الاتصال.':'الغرفة تبدأ الآن…'):(late?'صاحب البث يعيد الاتصال. أعد المحاولة.':'صاحب البث يعيد الاتصال…');
-  $('reconnectAction').hidden=!late;
+  $('reconnectAction').hidden=connecting||!late;
  }else{
   reconnectSince=0;$('reconnectAction').hidden=true;
   if(!mediaFault&&room?.state===ConnectionState.Connected&&(!(config.owner||speaking)||mediaReady))$('status').textContent='مباشر';
@@ -310,7 +313,7 @@ $('gift').onclick=giftSheet;$('guests').onclick=guestSheet;
 $('micQuick').onclick=()=>{if(speaking)$('mute').click();else guestSheet()};
 $('more').onclick=moreSheet;
 $('share').onclick=async()=>{const text='انضم إلى بث '+config.ownerName+' «'+config.title+'» على Relaxia. افتح قسم البث المباشر وابحث عن عنوان البث. الدخول الخاص يتطلب تصريحًا.';try{if(window.LayaliLive?.shareLive){window.LayaliLive.shareLive(text);$('status').textContent='نُسخت دعوة البث؛ يمكنك إرسالها إلى أصدقائك.';}else if(navigator.share)await navigator.share({title:'Relaxia · مباشر',text});else if(navigator.clipboard){await navigator.clipboard.writeText(text);$('status').textContent='نُسخت دعوة البث'}else prompt('انسخ دعوة البث',text)}catch(e){if(e.name!=='AbortError')message(e)}};
-$('reconnectAction').onclick=()=>{$('reconnectAction').hidden=true;reconnectSince=Date.now();reconnect()};
+$('reconnectAction').onclick=()=>{if(connecting||retrying)return;$('reconnectAction').hidden=true;reconnectSince=Date.now();reconnect()};
 $('retryMedia').onclick=async()=>{if(activating)return;activating=true;try{if(!await consent(config.mode))throw new RelaxiaMedia.MediaFailure('camera_capture',{name:'NotAllowedError'});room?.removeAllListeners();await room?.disconnect();const fresh=await api({action:'token'});state.can_publish=fresh.can_publish;state.publish_sources=fresh.publish_sources;await connect(fresh.token)}catch(e){message(e)}finally{activating=false}};
 
 const heartEmojis=['💜','💖','❤️','💕','✨'];

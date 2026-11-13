@@ -80,16 +80,13 @@ class ReferenceDesignTest {
     fun compactRoyalHomeShowsOnlyLiveActionsWithoutDuplicateBottomTabs() {
         var live = 0
         var audio = 0
-        var reels = 0
-        var shop = 0
         val user = JSONObject().put("display_name", "خلال").put("selected_frame", 0)
         compose.setContent {
             MyApplicationTheme {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     RelaxiaHomeDashboard(
                         user, 0L, "", {}, {}, {},
-                        onLive = { live++ }, onAudio = { audio++ },
-                        onReels = { reels++ }, onStore = { shop++ }
+                        onLive = { live++ }, onAudio = { audio++ }
                     )
                 }
             }
@@ -100,7 +97,7 @@ class ReferenceDesignTest {
         // Reels and store already have dedicated bottom navigation destinations.
         compose.onNodeWithText("مشاهدة الريلز").assertDoesNotExist()
         compose.onNodeWithText("المتجر").assertDoesNotExist()
-        compose.runOnIdle { org.junit.Assert.assertEquals(listOf(1, 1, 0, 0), listOf(live, audio, reels, shop)) }
+        compose.runOnIdle { org.junit.Assert.assertEquals(listOf(1, 1), listOf(live, audio)) }
         screenshot("21-compact-royal-home-320")
     }
 
