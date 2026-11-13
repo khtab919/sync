@@ -26,6 +26,9 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
     window.qaRoom=result;api=async action=>{if(action)window.sent.push(action);return {...window.qaRoom,seat_status:action?.action==='seat_request'?'pending':''}};drawState(result);
    });
    assert.equal(await page.locator('.audio-seat').count(),15);
+   assert.equal(await page.locator('.empty-seat').count(),14);
+   assert.equal(await page.locator('.empty-seat small').count(),0,'empty places have accessible numbers, not visually crowded labels');
+   assert.equal(await page.locator('.empty-seat').first().getAttribute('aria-label'),'مقعد 2 · طلب الميكروفون');
    assert.equal(await page.locator('#title').innerText(),'ID: 58321');
    assert.ok(!(await page.locator('#badge').innerText()).includes('undefined'),'level must not expose undefined placeholders');
    await page.evaluate(async()=>{qaRoom.status='starting';reconnectSince=Date.now()-13000;await refresh()});

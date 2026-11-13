@@ -203,7 +203,8 @@ function drawAudioSeats(result){
   }else{
    item.classList.add('empty-seat');item.setAttribute('aria-label','مقعد '+(i+1)+' · طلب الميكروفون');
    const circle=document.createElement('span');circle.className='seat-plus';circle.textContent='+';
-   const label=document.createElement('small');label.textContent=String(i+1);item.append(circle,label);
+   // Empty seats show one clear action; the seat number remains in aria-label.
+   item.append(circle);
   }
   nodes.append(item);
  }

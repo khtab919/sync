@@ -902,3 +902,10 @@ body.audio-mode #sheet .sheet-head{position:sticky;top:-17px;z-index:2;backgroun
 @keyframes giftHover{0%,100%{transform:translateY(1px)}50%{transform:translateY(-3px)}}
 @keyframes giftShimmer{0%,100%{filter:brightness(1)}50%{filter:brightness(1.18)}}
 @media(max-width:350px){#sheet .gift-grid{gap:6px}#sheet .gift-card .gift-medallion{width:57px;height:57px}#sheet .gift-card .gift-art{font-size:34px}}
+
+/* v11: balanced audio stage and calmer interaction targets. */
+body.audio-mode #audioStage.seat-grid{align-content:center}
+body.audio-mode .empty-seat .seat-plus{border-radius:50%;font-weight:400;box-shadow:inset 0 1px 6px #C7E3FF22,0 6px 13px #06163347}
+body.audio-mode .empty-seat{min-height:48px}
+body.audio-mode #audioStage .audio-seat:focus-visible{outline:2px solid #8ED0FF;outline-offset:2px}
+@media(max-height:560px){body.audio-mode #audioStage.seat-grid{align-content:start}}
