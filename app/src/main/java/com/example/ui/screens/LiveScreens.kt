@@ -604,37 +604,37 @@ internal fun CameraPreviewSurface(
             Box(Modifier.fillMaxSize().background(
                 Brush.verticalGradient(
                     listOf(
-                        Color(0xB31B1418),
-                        Color(0x331B1418),
-                        Color(0x801B1418),
-                        Color(0xE61B1418)
+                        Color(0xB3080F23),
+                        Color(0x33080F23),
+                        Color(0x80080F23),
+                        Color(0xE6080F23)
                     )
                 )
             ))
         } else {
             // Calm, refined Relaxia plum stage
             Box(Modifier.fillMaxSize().background(
-                Brush.verticalGradient(listOf(Color(0xFF281E24), Color(0xFF23191F), Color(0xFF080F23)))
+                Brush.verticalGradient(listOf(Color(0xFF112342), Color(0xFF0C1931), Color(0xFF080F23)))
             )){
-                Box(Modifier.size(320.dp).align(Alignment.TopEnd).background(Brush.radialGradient(listOf(Color(0x2EA04B63), Color.Transparent)), CircleShape))
-                Box(Modifier.size(260.dp).align(Alignment.BottomStart).background(Brush.radialGradient(listOf(Color(0x1AD7AD72), Color.Transparent)), CircleShape))
+                Box(Modifier.size(320.dp).align(Alignment.TopEnd).background(Brush.radialGradient(listOf(Color(0x2E5D9AE8), Color.Transparent)), CircleShape))
+                Box(Modifier.size(260.dp).align(Alignment.BottomStart).background(Brush.radialGradient(listOf(Color(0x1A8BB8F0), Color.Transparent)), CircleShape))
                 if(audioOnly){
                     Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally){
                         Box(Modifier.size(100.dp).background(Color(0x22FFFFFF), CircleShape), contentAlignment = Alignment.Center){
-                            Icon(Icons.Filled.VolumeUp, null, tint = Color(0xFFA04B63), modifier = Modifier.size(48.dp))
+                            Icon(Icons.Filled.VolumeUp, null, tint = Color(0xFF61A4F4), modifier = Modifier.size(48.dp))
                         }
                         Spacer(Modifier.height(14.dp))
-                        Text("غرفة صوتية", color = Color(0xFFFFF9F3), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("غرفة صوتية", color = Color(0xFFF1F6FF), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text("المايكروفون فقط سيكون مفعلًا", color = Color(0xFFB4C6E5), style = MaterialTheme.typography.bodySmall)
                     }
                 } else if(!hasCameraPermission){
                     Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally){
                         Icon(Icons.Filled.CameraAlt, null, tint = Color(0xFFB4C6E5), modifier = Modifier.size(44.dp))
                         Spacer(Modifier.height(10.dp))
-                        Text("إذن الكاميرا مطلوب للمعاينة", color = Color(0xFFFFF9F3), style = MaterialTheme.typography.bodyMedium)
+                        Text("إذن الكاميرا مطلوب للمعاينة", color = Color(0xFFF1F6FF), style = MaterialTheme.typography.bodyMedium)
                         Spacer(Modifier.height(8.dp))
                         TextButton(onClick = { cameraPermissionLauncher.launch(Manifest.permission.CAMERA) }){
-                            Text("منح الإذن", color = Color(0xFFA04B63))
+                            Text("منح الإذن", color = Color(0xFF61A4F4))
                         }
                     }
                 }
@@ -647,7 +647,7 @@ internal fun CameraPreviewSurface(
             horizontalArrangement=Arrangement.SpaceBetween,
             verticalAlignment=Alignment.CenterVertically
         ){
-            IconButton(onClick=onClose, modifier=Modifier.size(40.dp).background(Color(0x551B1418), CircleShape)){
+            IconButton(onClick=onClose, modifier=Modifier.size(40.dp).background(Color(0x55080F23), CircleShape)){
                 Icon(Icons.Filled.Close, "إغلاق", tint=Color.White)
             }
         }
@@ -660,14 +660,14 @@ internal fun CameraPreviewSurface(
         ){
             if(!audioOnly && hasCameraPermission){
                 Column(horizontalAlignment=Alignment.CenterHorizontally){
-                    IconButton(onClick={ facingFront = !facingFront }, modifier=Modifier.size(44.dp).background(Color(0x551B1418), CircleShape)){
+                    IconButton(onClick={ facingFront = !facingFront }, modifier=Modifier.size(44.dp).background(Color(0x55080F23), CircleShape)){
                         Icon(Icons.Filled.CameraAlt, "تبديل الكاميرا", tint=Color.White)
                     }
                     Text(if(facingFront)"أمامية" else "خلفية", color=Color(0xDDFFFFFF), style=MaterialTheme.typography.labelSmall)
                 }
             }
             Column(horizontalAlignment=Alignment.CenterHorizontally){
-                IconButton(onClick={ showAdvancedSettings = true }, modifier=Modifier.size(44.dp).background(Color(0x551B1418), CircleShape)){
+                IconButton(onClick={ showAdvancedSettings = true }, modifier=Modifier.size(44.dp).background(Color(0x55080F23), CircleShape)){
                     Icon(Icons.Filled.Settings, "إعدادات البث", tint=Color.White)
                 }
                 Text("إعدادات", color=Color(0xDDFFFFFF), style=MaterialTheme.typography.labelSmall)
@@ -688,7 +688,7 @@ internal fun CameraPreviewSurface(
 
             // Mode Selector Capsule
             Row(
-                Modifier.align(Alignment.CenterHorizontally).background(Color(0x771B1418), RoundedCornerShape(30.dp)).padding(4.dp),
+                Modifier.align(Alignment.CenterHorizontally).background(Color(0x77080F23), RoundedCornerShape(30.dp)).padding(4.dp),
                 horizontalArrangement=Arrangement.spacedBy(4.dp),
                 verticalAlignment=Alignment.CenterVertically
             ){
@@ -720,9 +720,9 @@ internal fun CameraPreviewSurface(
                 leadingIcon={ Icon(Icons.Filled.Edit, null, tint=Color(0xAAFFFFFF)) },
                 shape=RoundedCornerShape(24.dp),
                 colors=OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor=Color(0x661B1418),
-                    unfocusedContainerColor=Color(0x4D1B1418),
-                    focusedBorderColor=Color(0xFFA04B63),
+                    focusedContainerColor=Color(0x66080F23),
+                    unfocusedContainerColor=Color(0x4D080F23),
+                    focusedBorderColor=Color(0xFF61A4F4),
                     unfocusedBorderColor=Color(0x33FFFFFF),
                     focusedTextColor=Color.White,
                     unfocusedTextColor=Color.White
@@ -745,9 +745,9 @@ internal fun CameraPreviewSurface(
                     leadingIcon={ Icon(Icons.Filled.AttachMoney, null, modifier=Modifier.size(16.dp)) },
                     shape=RoundedCornerShape(20.dp),
                     colors=FilterChipDefaults.filterChipColors(
-                        selectedContainerColor=Color(0x66792D45),
+                        selectedContainerColor=Color(0x662B66B5),
                         selectedLabelColor=Color.White,
-                        containerColor=Color(0x4D1B1418),
+                        containerColor=Color(0x4D080F23),
                         labelColor=Color(0xDDFFFFFF)
                     )
                 )
@@ -760,9 +760,9 @@ internal fun CameraPreviewSurface(
                     leadingIcon={ Icon(Icons.Filled.PersonAdd, null, modifier=Modifier.size(16.dp)) },
                     shape=RoundedCornerShape(20.dp),
                     colors=FilterChipDefaults.filterChipColors(
-                        selectedContainerColor=Color(0x66792D45),
+                        selectedContainerColor=Color(0x662B66B5),
                         selectedLabelColor=Color.White,
-                        containerColor=Color(0x4D1B1418),
+                        containerColor=Color(0x4D080F23),
                         labelColor=Color(0xDDFFFFFF)
                     )
                 )
@@ -775,9 +775,9 @@ internal fun CameraPreviewSurface(
                     leadingIcon={ Icon(Icons.Filled.Settings, null, modifier=Modifier.size(16.dp)) },
                     shape=RoundedCornerShape(20.dp),
                     colors=FilterChipDefaults.filterChipColors(
-                        selectedContainerColor=Color(0x66792D45),
+                        selectedContainerColor=Color(0x662B66B5),
                         selectedLabelColor=Color.White,
-                        containerColor=Color(0x4D1B1418),
+                        containerColor=Color(0x4D080F23),
                         labelColor=Color(0xDDFFFFFF)
                     )
                 )
@@ -794,7 +794,7 @@ internal fun CameraPreviewSurface(
             ){
                 Box(
                     Modifier.fillMaxSize().background(
-                        Brush.horizontalGradient(listOf(Color(0xFF792D45), Color(0xFF4C2037)))
+                        Brush.horizontalGradient(listOf(Color(0xFF194C9F), Color(0xFF10346A)))
                     ),
                     contentAlignment=Alignment.Center
                 ){
