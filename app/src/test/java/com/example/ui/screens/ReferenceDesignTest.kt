@@ -76,6 +76,31 @@ class ReferenceDesignTest {
         screenshot("02-register")
     }
 
+    @Test @Config(qualifiers = "ar-rSA-w320dp-h760dp-port-mdpi")
+    fun compactRoyalHomeHasFourWorkingDestinations() {
+        var live = 0
+        var audio = 0
+        var reels = 0
+        var shop = 0
+        val user = JSONObject().put("display_name", "خلال").put("selected_frame", 0)
+        compose.setContent {
+            MyApplicationTheme {
+                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    RelaxiaHomeDashboard(
+                        user, 0L, "", {}, {}, {},
+                        onLive = { live++ }, onAudio = { audio++ },
+                        onReels = { reels++ }, onStore = { shop++ }
+                    )
+                }
+            }
+        }
+        for (title in listOf("البث المباشر", "الغرف الصوتية", "مشاهدة الريلز", "المتجر")) {
+            compose.onNodeWithText(title).assertIsDisplayed().performClick()
+        }
+        compose.runOnIdle { org.junit.Assert.assertEquals(listOf(1, 1, 1, 1), listOf(live, audio, reels, shop)) }
+        screenshot("21-compact-royal-home-320")
+    }
+
     @Test fun homeOverflowKeepsSecondaryActionsReachable() {
         var support=0;var wallet=0;var saved=0;var refresh=0
         compose.setContent { MyApplicationTheme { Surface { Row { HomeToolbarActions({},{wallet++},{saved++},{refresh++},{support++}) } } } }
