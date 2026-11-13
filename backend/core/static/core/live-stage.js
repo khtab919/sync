@@ -159,9 +159,11 @@ function giftSheet(){
    });
    b.disabled=!select.options.length;b.className='gift-card '+g.effect;b.setAttribute('aria-label',g.name+' · '+g.price_cents+' كوين');
    const icon=document.createElement('span');icon.className='gift-art';icon.textContent=g.symbol;
+   const medallion=document.createElement('span');medallion.className='gift-medallion';medallion.append(icon);
+   b.classList.add('gift-'+String(g.code).replace(/[^a-z0-9_-]/g,''));
    const name=document.createElement('strong');name.textContent=g.name;
    const price=document.createElement('small');price.textContent=g.price_cents.toLocaleString('ar')+' كوين';
-   b.append(icon,name,price);
+   b.append(medallion,name,price);
   }
   if(!catalog.length)note(grid,'لا توجد هدايا متاحة في هذا القسم.');
  }
