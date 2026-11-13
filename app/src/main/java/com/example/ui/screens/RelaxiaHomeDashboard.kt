@@ -31,8 +31,8 @@ internal fun RelaxiaHomeDashboard(
     onStore: () -> Unit
 ) {
     Column(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(9.dp)
     ) {
         Row(
             Modifier.fillMaxWidth(),
@@ -52,11 +52,11 @@ internal fun RelaxiaHomeDashboard(
                     ReferenceAvatar(
                         profile.optString("display_name"),
                         profile.optInt("selected_frame"),
-                        42,
+                        40,
                         profile.optString("avatar_url")
                     )
                     Column {
-                        Text("أهلًا بك", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                        Text("أهلًا بك", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
                         Text(
                             profile.optString("display_name").ifBlank { "حسابي" },
                             fontWeight = FontWeight.Bold, fontSize = 14.sp,
@@ -114,19 +114,31 @@ internal fun RelaxiaHomeDashboard(
     }
 }
 
+/** Compact destination row: use the home screen for the real feed, not giant shortcuts. */
 @Composable
 private fun HomeDestinationCard(
     title: String, subtitle: String, icon: ImageVector, modifier: Modifier, onClick: () -> Unit
 ) {
-    ReferenceCard(modifier = modifier, onClick = onClick) {
-        Column(
-            Modifier.fillMaxWidth().padding(horizontal = 13.dp, vertical = 13.dp),
-            verticalArrangement = Arrangement.spacedBy(5.dp)
+    Surface(
+        onClick = onClick,
+        modifier = modifier.heightIn(min = 63.dp),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant),
+        tonalElevation = 1.dp
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Icon(icon, null, Modifier.size(25.dp), tint = MaterialTheme.colorScheme.primary)
-            Text(title, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-            Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 11.sp, maxLines = 1)
+            Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.primaryContainer) {
+                Box(Modifier.size(39.dp), contentAlignment = Alignment.Center) {
+                    Icon(icon, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.primary)
+                }
+            }
+            Text(title, Modifier.weight(1f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }

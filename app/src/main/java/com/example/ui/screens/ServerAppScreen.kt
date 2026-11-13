@@ -505,10 +505,10 @@ fun ServerAppScreen(baseUrl: String) {
         Scaffold(
             floatingActionButton = {
                 if (page.isBlank() && screen in listOf("تصفح", "العرض")) Column(verticalArrangement = Arrangement.spacedBy(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    FloatingActionButton(onClick = { showCreationSheet = true }, shape = CircleShape, containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary) {
+                    SmallFloatingActionButton(onClick = { showCreationSheet = true }, modifier = Modifier.size(51.dp), shape = CircleShape, containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary) {
                         Icon(Icons.Rounded.Edit, "إنشاء محتوى")
                     }
-                    SmallFloatingActionButton(onClick = { open("الدعم وخدمة العملاء") }, shape = CircleShape, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                    SmallFloatingActionButton(onClick = { open("الدعم وخدمة العملاء") }, modifier = Modifier.size(44.dp), shape = CircleShape, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) {
                         Icon(Icons.Rounded.SupportAgent, "الدعم والمساعدة", tint = MaterialTheme.colorScheme.primary)
                     }
                 }
@@ -542,7 +542,7 @@ fun ServerAppScreen(baseUrl: String) {
                     NavigationBar(
                         containerColor = MaterialTheme.colorScheme.surface,
                         tonalElevation = 2.dp,
-                        modifier = Modifier.clip(RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp)).heightIn(min = 70.dp)
+                        modifier = Modifier.clip(RoundedCornerShape(topStart = 23.dp, topEnd = 23.dp)).height(72.dp)
                     ) {
                         destinations.forEachIndexed { index, _ ->
                             val active = tab == index
@@ -564,13 +564,13 @@ fun ServerAppScreen(baseUrl: String) {
                                 },
                                 icon = {
                                     Icon(destinationIcons[index], destinationLabels[index],
-                                        Modifier.size(23.dp).graphicsLayer {
+                                        Modifier.size(21.dp).graphicsLayer {
                                             scaleX = iconScale
                                             scaleY = iconScale
                                         })
                                 },
                                 label = {
-                                    Text(destinationLabels[index], fontSize = 11.sp,
+                                    Text(destinationLabels[index], fontSize = 10.sp,
                                         fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
                                         maxLines = 1)
                                 },
@@ -640,7 +640,7 @@ fun ServerAppScreen(baseUrl: String) {
                         ) { Icon(Icons.Rounded.ArrowForward, "العودة للتصفح", tint=Color.White) }
                     }
                 } else PullToRefreshBox(isRefreshing = loading, onRefresh = { if (!loading) revision++ }, modifier = Modifier.weight(1f)) {
-                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = if (page.isBlank() && screen in listOf("تصفح", "العرض")) 140.dp else 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = if (page.isBlank() && screen in listOf("تصفح", "العرض")) 92.dp else 24.dp), verticalArrangement = Arrangement.spacedBy(if (screen == "تصفح") 8.dp else 12.dp)) {
                     if ((loading && rows.isEmpty() && screen in listOf("دردشة", "الحجوزات", "المحفوظات", "ريلز")) || (loading && services.isEmpty() && screen in listOf("تصفح", "العرض"))) item { LuxurySkeletonCards() }
                     when (screen) {
                         "تصفح" -> {
@@ -719,7 +719,7 @@ fun ServerAppScreen(baseUrl: String) {
                                 Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp),
                                     verticalArrangement = Arrangement.spacedBy(7.dp)) {
                                     Text(if (query.isNotBlank()) "العروض المطابقة" else "اكتشف من المجتمع",
-                                        style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                                        style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         FilterChip(!followingOnly, { followingOnly = false }, label = { Text("لك") })
                                         FilterChip(followingOnly, { followingOnly = true }, label = { Text("أتابعهم") })
