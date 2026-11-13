@@ -41,6 +41,9 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    assert.equal(await page.locator('#micQuick').isVisible(),false,'no duplicate quick microphone for audience');
    assert.equal(await page.locator('#bigGiftBtn').isVisible(),true);
    assert.equal(await page.locator('#viewers').isVisible(),true);
+   assert.equal(await page.locator('#exit svg').count(),1,'use the consistent vector close icon');
+   assert.equal(await page.locator('#more svg').count(),1,'use the consistent vector overflow icon');
+   assert.equal(await page.locator('#guests svg').count(),1,'use the consistent vector guest icon');
    await page.evaluate(()=>{
      const audio=document.createElement('audio');audio.dataset.liveRemote='1';audio.play=()=>Promise.resolve();document.body.append(audio);
    });
