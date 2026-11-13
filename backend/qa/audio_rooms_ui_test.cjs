@@ -19,13 +19,18 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    await page.goto('https://room.test/');await page.addStyleTag({content:css});
    await page.evaluate(()=>{window.LivekitClient={Room:{},RoomEvent:{},Track:{},ConnectionState:{Connected:'connected'}};window.RelaxiaMedia={}});
    await page.addScriptTag({content:js});
+   assert.equal(await page.locator('.audio-seat').count(),15,'placeholder seats render before network response');
    await page.evaluate(()=>{
     window.sent=[];room={state:'connected',localParticipant:{}};
     const result={status:'active',mode:'audio',max_speakers:15,server_time:new Date().toISOString(),speakers:[{identity:'host-1',user_id:1,name:'مضيف تجريبي',owner:true,mode:'audio',avatar_url:''}],comments:[],gift_events:[],gift_catalog:[{code:'flower',name:'زهرة',symbol:'🌷',price_cents:50,effect:'simple'},{code:'whale',name:'الحوت الأزرق',symbol:'🐋',price_cents:10000,effect:'depth'},{code:'lion',name:'الأسد الملكي',symbol:'🦁',price_cents:15000,effect:'depth'}]};
-    api=async action=>{if(action)window.sent.push(action);return {...result,seat_status:action?.action==='seat_request'?'pending':''}};drawState(result);
+    window.qaRoom=result;api=async action=>{if(action)window.sent.push(action);return {...window.qaRoom,seat_status:action?.action==='seat_request'?'pending':''}};drawState(result);
    });
    assert.equal(await page.locator('.audio-seat').count(),15);
    assert.equal(await page.locator('#title').innerText(),'ID: 58321');
+   await page.evaluate(async()=>{qaRoom.status='starting';reconnectSince=Date.now()-13000;await refresh()});
+   assert.equal(await page.locator('#reconnectAction').isVisible(),true,'stalled startup offers reconnect');
+   await page.evaluate(async()=>{qaRoom.status='active';await refresh()});
+   assert.equal(await page.locator('#reconnectAction').isVisible(),false,'reconnect hides after startup');
    assert.equal(await page.locator('#speaker').isVisible(),false);
    assert.equal(await page.locator('#share').isVisible(),false);
    assert.equal(await page.locator('#gift').isVisible(),false);

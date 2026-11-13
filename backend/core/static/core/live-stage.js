@@ -89,6 +89,12 @@ async function enableTracks(){
   mediaReady=true;speaking=true;diagnostic('media_publish','ready');await configurePublishing();updateQuickMic();
  }catch(e){room?.removeAllListeners();await room?.disconnect();releasePrepared();throw e.name==='MediaFailure'?e:new RelaxiaMedia.MediaFailure('media_publish',e)}
 }
+// Time out a stalled LiveKit handshake rather than locking the room forever.
+async function connectWithTimeout(client,url,token){
+ let timer;
+ try{return await Promise.race([client.connect(url,token),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('signaling_timeout')),18000)})])}
+ finally{clearTimeout(timer)}
+}
 async function connect(token=config.token){
  try{
  if(config.owner||speaking){await prepareTracks();const fresh=await api({action:'token'});state.can_publish=fresh.can_publish;state.publish_sources=fresh.publish_sources;if(!fresh.can_publish){releasePrepared();throw Error('stage_unavailable')}token=fresh.token;}
@@ -100,7 +106,7 @@ async function connect(token=config.token){
  room.on(RoomEvent.ConnectionQualityChanged,(q,p)=>{if(p===room.localParticipant&&['poor','lost'].includes(String(q).toLowerCase()))$('status').textContent='الشبكة ضعيفة · يجري تكييف الجودة'});
  room.on(RoomEvent.ActiveSpeakersChanged,participants=>{activeSpeakerIds=new Set(participants.map(p=>p.identity));document.querySelectorAll('.audio-person').forEach(el=>el.classList.toggle('speaking',activeSpeakerIds.has(el.dataset.identity)))});
  room.on(RoomEvent.Disconnected,()=>{if(!closed&&!leaving)reconnect()});
- await room.connect(config.url,token);for(const participant of room.remoteParticipants.values()){for(const publication of participant.trackPublications.values()){if(publication.isSubscribed&&publication.track)renderTrack(publication.track,participant);}}if(closed||leaving){room.removeAllListeners();await room.disconnect();releasePrepared();return}if(config.owner||speaking)await enableTracks();$('status').textContent='مباشر';
+ await connectWithTimeout(room,config.url,token);$('reconnectAction').hidden=true;for(const participant of room.remoteParticipants.values()){for(const publication of participant.trackPublications.values()){if(publication.isSubscribed&&publication.track)renderTrack(publication.track,participant);}}if(closed||leaving){room.removeAllListeners();await room.disconnect();releasePrepared();return}if(config.owner||speaking)await enableTracks();$('status').textContent='مباشر';
  $('follow').hidden=config.owner;$('gift').hidden=true;$('speaker').hidden=true;updateSpeakerControl();updateQuickMic();
  layout();if(!polling){polling=true;poll()}
  }catch(e){room?.removeAllListeners();try{await room?.disconnect()}finally{releasePrepared();mediaReady=false}throw e}
@@ -248,14 +254,14 @@ async function refresh(){
  const result=await api();controlFailures=0;
  if(!['starting','active','reconnecting'].includes(result.status)){stop('انتهى البث');return}
  drawState(result);
- if(result.status==='reconnecting'){
+ if(result.status==='reconnecting'||result.status==='starting'){
   if(!reconnectSince)reconnectSince=Date.now();
-  $('status').textContent='صاحب البث يعيد الاتصال…';
-  $('reconnectAction').hidden=Date.now()-reconnectSince<12000;
+  const late=Date.now()-reconnectSince>=12000;
+  $('status').textContent=result.status==='starting'?(late?'تأخر بدء البث. يمكنك إعادة الاتصال.':'الغرفة تبدأ الآن…'):(late?'صاحب البث يعيد الاتصال. أعد المحاولة.':'صاحب البث يعيد الاتصال…');
+  $('reconnectAction').hidden=!late;
  }else{
   reconnectSince=0;$('reconnectAction').hidden=true;
-  if(result.status==='starting')$('status').textContent='الغرفة تبدأ الآن…';
-  else if(!mediaFault&&room?.state===ConnectionState.Connected&&(!(config.owner||speaking)||mediaReady))$('status').textContent='مباشر';
+  if(!mediaFault&&room?.state===ConnectionState.Connected&&(!(config.owner||speaking)||mediaReady))$('status').textContent='مباشر';
  }
  return result;
 }
@@ -313,6 +319,11 @@ if($('emojiBtn'))$('emojiBtn').onclick=()=>{
  }
 };
 layout();window.relaxiaStageLoaded=true;
+// These seats use room metadata; they are placeholders, not fabricated online users.
+if(config.mode==='audio')drawAudioSeats({
+ max_speakers:config.maxSpeakers||15,
+ speakers:[{identity:'host-'+config.ownerId,name:config.ownerName,owner:true,avatar_url:config.ownerAvatar||''}]
+});
 // Load seats, audience and chat before LiveKit connects, including recovery states.
 if(!polling){polling=true;poll()}
 window.addEventListener('pagehide',()=>{leaving=true;releasePrepared();room?.disconnect()});connect().catch(e=>{message(e);if(e.name!=='MediaFailure')reconnect()});
