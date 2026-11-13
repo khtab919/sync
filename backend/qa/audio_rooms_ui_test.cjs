@@ -12,32 +12,50 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
 (async()=>{
  const browser=await chromium.launch({headless:true,...(process.env.CAPTURE_CHROMIUM?{executablePath:process.env.CAPTURE_CHROMIUM}:{}),args:['--no-sandbox']});
  try{
-  for(const width of [360,430]){
-   const page=await browser.newPage({viewport:{width,height:820}});
+  for(const [width,height] of [[320,640],[360,820],[430,820]]){
+   const page=await browser.newPage({viewport:{width,height}});
    await page.addInitScript(()=>window.relaxiaStageLoaded=true);
    await page.route('https://room.test/',route=>route.fulfill({contentType:'text/html',body:html}));
    await page.goto('https://room.test/');await page.addStyleTag({content:css});
    await page.evaluate(()=>{window.LivekitClient={Room:{},RoomEvent:{},Track:{},ConnectionState:{Connected:'connected'}};window.RelaxiaMedia={}});
    await page.addScriptTag({content:js});
+   assert.equal(await page.locator('.audio-seat').count(),15,'placeholder seats render before network response');
    await page.evaluate(()=>{
     window.sent=[];room={state:'connected',localParticipant:{}};
     const result={status:'active',mode:'audio',max_speakers:15,server_time:new Date().toISOString(),speakers:[{identity:'host-1',user_id:1,name:'مضيف تجريبي',owner:true,mode:'audio',avatar_url:''}],comments:[],gift_events:[],gift_catalog:[{code:'flower',name:'زهرة',symbol:'🌷',price_cents:50,effect:'simple'},{code:'whale',name:'الحوت الأزرق',symbol:'🐋',price_cents:10000,effect:'depth'},{code:'lion',name:'الأسد الملكي',symbol:'🦁',price_cents:15000,effect:'depth'}]};
-    api=async action=>{if(action)window.sent.push(action);return {...result,seat_status:action?.action==='seat_request'?'pending':''}};drawState(result);
+    window.qaRoom=result;api=async action=>{if(action)window.sent.push(action);return {...window.qaRoom,seat_status:action?.action==='seat_request'?'pending':''}};drawState(result);
    });
    assert.equal(await page.locator('.audio-seat').count(),15);
+   assert.equal(await page.locator('.empty-seat').count(),14);
+   assert.equal(await page.locator('.empty-seat small').count(),0,'empty places have accessible numbers, not visually crowded labels');
+   assert.equal(await page.locator('.empty-seat').first().getAttribute('aria-label'),'مقعد 2 · طلب الميكروفون');
    assert.equal(await page.locator('#title').innerText(),'ID: 58321');
-   assert.equal(await page.locator('#speaker').isVisible(),true);
+   assert.ok(!(await page.locator('#badge').innerText()).includes('undefined'),'level must not expose undefined placeholders');
+   await page.evaluate(async()=>{qaRoom.status='starting';reconnectSince=Date.now()-13000;await refresh()});
+   assert.equal(await page.locator('#reconnectAction').isVisible(),true,'stalled startup offers reconnect');
+   await page.evaluate(async()=>{qaRoom.status='active';await refresh()});
+   assert.equal(await page.locator('#reconnectAction').isVisible(),false,'reconnect hides after startup');
+   assert.equal(await page.locator('#speaker').isVisible(),false);
+   assert.equal(await page.locator('#share').isVisible(),false);
    assert.equal(await page.locator('#gift').isVisible(),false);
+   assert.equal(await page.locator('#micQuick').isVisible(),false,'no duplicate quick microphone for audience');
    assert.equal(await page.locator('#bigGiftBtn').isVisible(),true);
+   assert.equal(await page.locator('#viewers').isVisible(),true);
+   assert.equal(await page.locator('#exit svg').count(),1,'use the consistent vector close icon');
+   assert.equal(await page.locator('#more svg').count(),1,'use the consistent vector overflow icon');
+   assert.equal(await page.locator('#guests svg').count(),1,'use the consistent vector guest icon');
    await page.evaluate(()=>{
      const audio=document.createElement('audio');audio.dataset.liveRemote='1';audio.play=()=>Promise.resolve();document.body.append(audio);
    });
-   await page.locator('#speaker').click();
+   await page.locator('#more').click();
+   if(width<=380){await page.getByRole('button',{name:'الرموز التعبيرية',exact:true}).click();await page.locator('#closeSheet').click();await page.locator('#more').click();}
+   await page.getByRole('button',{name:'كتم صوت الغرفة',exact:true}).click();
    assert.equal(await page.locator('audio[data-live-remote]').evaluate(el=>el.muted),true);
    assert.equal(await page.locator('#speaker').getAttribute('aria-label'),'تشغيل صوت الغرفة');
-   await page.locator('#speaker').click();
+   await page.locator('#more').click();
+   await page.getByRole('button',{name:'تشغيل صوت الغرفة',exact:true}).click();
    assert.equal(await page.locator('audio[data-live-remote]').evaluate(el=>el.muted),false);
-   await page.locator('#emojiBtn').click();
+   if(width<=380){await page.locator('#more').click();await page.getByRole('button',{name:'الرموز التعبيرية',exact:true}).click();}else await page.locator('#emojiBtn').click();
    await page.getByRole('button',{name:'🎉',exact:true}).click();
    assert.equal(await page.locator('#text').inputValue(),'🎉');
    await page.locator('.composer-send').click();
@@ -46,15 +64,36 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    await page.getByRole('button',{name:'إعجاب بالبث',exact:true}).click();
    assert.equal(await page.evaluate(()=>sent.filter(a=>a.action==='like').length),1);
    await page.locator('#closeSheet').click();
+   // Even when triggered by a scripted preview, viewer-facing panels must never
+   // offer destructive administrative controls without manage_room permission.
+   await page.evaluate(()=>{state.participants=[{name:'عضو',user_id:9}];state.manage_room=false;peopleSheet()});
+   assert.equal(await page.locator('#sheetBody').getByRole('button',{name:'حظر عضو'}).count(),0);
+   await page.locator('#closeSheet').click();
    assert.equal(await page.locator('.empty-seat').count(),14);
    const seats=await page.locator('#audioStage').boundingBox(),footer=await page.locator('footer').boundingBox();
    assert.ok(seats.y+seats.height<footer.y,'seat grid must not overlap controls');
+   const comments=await page.locator('#messages').boundingBox();
+   assert.ok(seats.y+seats.height<=comments.y+2,'seats must not cover comments');
+   assert.ok(comments.y+comments.height<=footer.y+2,'comments must not hide under controls');
+   const layout=await page.evaluate(()=>({
+    overflowX:document.documentElement.scrollWidth-innerWidth,
+    overflowY:document.getElementById('stage').scrollHeight-document.getElementById('stage').clientHeight,
+    seatsScrollable:document.getElementById('audioStage').scrollHeight-document.getElementById('audioStage').clientHeight,
+    actions:[...document.querySelectorAll('.bottom > button')].filter(x=>!x.hidden&&getComputedStyle(x).display!=='none').length
+   }));
+   assert.ok(layout.overflowX<=2,'room must fit phone width');
+   assert.ok(layout.overflowY<=2,'room must not slide vertically');
+   assert.ok(layout.seatsScrollable<=2,'audio seats must not scroll independently');
+   assert.equal(layout.actions,3,'only three distinct primary viewer actions');
+   await page.evaluate(()=>{const before=document.querySelector('.audio-seat');window.seatBefore=before;drawAudioSeats({max_speakers:15,speakers:[{identity:'host-1',name:'مضيف تجريبي',owner:true,avatar_url:''}]})});
+   assert.equal(await page.evaluate(()=>seatBefore===document.querySelector('.audio-seat')),true,'poll must not rebuild unchanged seats');
    await page.locator('.empty-seat').first().click();
    await page.getByRole('button',{name:'طلب الانضمام صوتيًا',exact:true}).click();
    assert.equal(await page.evaluate(()=>sent.filter(a=>a.action==='seat_request').length),1);
    await page.locator('#closeSheet').click();await page.locator('#bigGiftBtn').click();
    await page.getByRole('button',{name:'فاخرة',exact:true}).click();
    assert.equal(await page.locator('.gift-card').count(),2);
+   assert.equal(await page.locator('.gift-medallion').count(),2,'real gifts use dimensional artwork');
    assert.equal(await page.locator('.gift-card').first().getAttribute('aria-label'),'الحوت الأزرق · 10000 كوين');
    page.once('dialog',d=>d.dismiss());await page.locator('.gift-card').first().click();
    assert.equal(await page.evaluate(()=>sent.filter(a=>a.action==='gift').length),0);

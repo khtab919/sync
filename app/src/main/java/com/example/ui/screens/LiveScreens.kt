@@ -23,7 +23,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -103,7 +103,7 @@ private fun liveError(e:Exception)=when(e.message){
         return
     }
     val filteredRooms=rows.filter{when(roomFilter){"audio","video"->it.optString("mode")==roomFilter;"free"->!it.optBoolean("private");"paid"->it.optBoolean("private");else->true}}
-    Scaffold(topBar={TopAppBar(title={Text("الغرف والبث")},navigationIcon={IconButton(back){Icon(Icons.Outlined.ArrowForward,"رجوع")}},actions={TextButton(buy){Text("الرصيد")};if(allowed)IconButton({create=true},enabled=available&&!busy){Icon(Icons.Outlined.Videocam,"بدء بث")}})}){padding->
+    Scaffold(topBar={TopAppBar(title={Text("الغرف والبث")},navigationIcon={IconButton(back){Icon(Icons.Rounded.ArrowForward,"رجوع")}},actions={TextButton(buy){Text("الرصيد")};if(allowed)IconButton({create=true},enabled=available&&!busy){Icon(Icons.Rounded.Videocam,"بدء بث")}})}){padding->
         LazyColumn(Modifier.fillMaxSize().padding(padding),contentPadding=PaddingValues(16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
             item{OutlinedTextField(query,{query=it.take(100)},label={Text("ابحث عن بث أو صاحب بث")},singleLine=true,modifier=Modifier.fillMaxWidth())}
             item{Row(Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(8.dp)){
@@ -115,7 +115,7 @@ private fun liveError(e:Exception)=when(e.message){
                 Button({audioOnly=true;speakers="15";create=true},enabled=available&&!busy){Text("إنشاء غرفة صوتية")}
                 OutlinedButton({audioOnly=false;speakers="1";create=true},enabled=available&&!busy){Text("بث فيديو")}
             }}
-            if(busy)item{LinearProgressIndicator(Modifier.fillMaxWidth())}
+            if(busy)item{LuxuryLoadingStatus("جارٍ التحميل")}
             if(error.isNotBlank())item{Text(error,color=MaterialTheme.colorScheme.error)}
             if(!available)item{Text("البث ينتظر جاهزية خادم الوسائط. لا توجد جلسات تجريبية.",style=MaterialTheme.typography.bodyMedium)}
             if(rows.isEmpty()&&error.isBlank()&&available)item{Text("لا توجد بثوث نشطة الآن.",style=MaterialTheme.typography.bodyLarge)}
@@ -248,10 +248,10 @@ private fun liveError(e:Exception)=when(e.message){
         if(event==Lifecycle.Event.ON_STOP)view?.evaluateJavascript("window.setNativeBackground?.(true)",null)
         if(event==Lifecycle.Event.ON_START)view?.evaluateJavascript("window.setNativeBackground?.(false)",null)
     };lifecycle.addObserver(observer);onDispose{lifecycle.removeObserver(observer)}}
-    Surface(Modifier.fillMaxSize(),color=Color(0xFF101820),contentColor=Color.White){Column(Modifier.fillMaxSize().safeDrawingPadding()){
+    Surface(Modifier.fillMaxSize(),color=Color(0xFF080F23),contentColor=Color.White){Column(Modifier.fillMaxSize().safeDrawingPadding()){
         if(error.isNotBlank()){
             Column(Modifier.fillMaxWidth().padding(22.dp),verticalArrangement=Arrangement.spacedBy(16.dp)){
-                Icon(Icons.Outlined.ErrorOutline,"تعذر تحميل البث",Modifier.size(32.dp),tint=Color(0xFFF4BC97))
+                Icon(Icons.Rounded.ErrorOutline,"تعذر تحميل البث",Modifier.size(32.dp),tint=Color(0xFFF4BC97))
                 Text(error,color=Color.White,style=MaterialTheme.typography.bodyLarge)
                 if(owner&&!granted)TextButton({requestedMode=if(audioOnly)"audio"else"video";permission.launch(if(audioOnly)arrayOf(Manifest.permission.RECORD_AUDIO)else arrayOf(Manifest.permission.RECORD_AUDIO,Manifest.permission.CAMERA))}){Text("إعادة طلب الأذونات")}
                 Button(onClick=retry){Text("إعادة الدخول بتذكرة جديدة")}
@@ -265,7 +265,7 @@ private fun liveError(e:Exception)=when(e.message){
                     webHeightPx=it.height
                 },
                 factory={ctx->WebView(ctx).apply{
-            view=this;setBackgroundColor(android.graphics.Color.rgb(23,21,23));settings.javaScriptEnabled=true;settings.allowFileAccess=false;settings.allowContentAccess=false;settings.domStorageEnabled=true;settings.databaseEnabled=true;settings.cacheMode=WebSettings.LOAD_NO_CACHE;settings.mixedContentMode=WebSettings.MIXED_CONTENT_NEVER_ALLOW;settings.mediaPlaybackRequiresUserGesture=false
+            view=this;setBackgroundColor(android.graphics.Color.rgb(8,15,35));settings.javaScriptEnabled=true;settings.allowFileAccess=false;settings.allowContentAccess=false;settings.domStorageEnabled=true;settings.databaseEnabled=true;settings.cacheMode=WebSettings.LOAD_NO_CACHE;settings.mixedContentMode=WebSettings.MIXED_CONTENT_NEVER_ALLOW;settings.mediaPlaybackRequiresUserGesture=false
             val allowedPath=Uri.parse(bootstrap.getString("url")).path
             addJavascriptInterface(object{@JavascriptInterface fun canOpenProfile():Boolean=profile!=null
             @JavascriptInterface fun openProfile(id:Int){android.os.Handler(android.os.Looper.getMainLooper()).post{if(trustedCallOrigin(url.orEmpty(),baseUrl)&&Uri.parse(url).path==allowedPath)profile?.invoke(id)}}
@@ -339,25 +339,25 @@ private fun liveError(e:Exception)=when(e.message){
             }})
             if(!pageReady){
                 Column(
-                    Modifier.fillMaxSize().background(Color(0xFF101820)).padding(24.dp),
+                    Modifier.fillMaxSize().background(Color(0xFF080F23)).padding(24.dp),
                     verticalArrangement=Arrangement.Center,
                     horizontalAlignment=Alignment.CenterHorizontally
                 ){
-                    CircularProgressIndicator(color=Color(0xFF7DA5B8))
+                    CircularProgressIndicator(color=Color(0xFF9CC3FF))
                     Spacer(Modifier.height(18.dp))
                     Text("جارٍ تحميل غرفة البث…",color=Color.White)
                     Spacer(Modifier.height(12.dp))
-                    Text("يتم التحقق من ملفات واجهة الغرفة قبل الاتصال بوسائط البث.",color=Color(0xFFB7C6CF),style=MaterialTheme.typography.bodySmall)
+                    Text("يتم التحقق من ملفات واجهة الغرفة قبل الاتصال بوسائط البث.",color=Color(0xFFB4C6E5),style=MaterialTheme.typography.bodySmall)
                     Spacer(Modifier.height(16.dp))
                     TextButton(onClick=retry){Text("إعادة الدخول بتذكرة جديدة",color=Color.White)}
                     TextButton(onClick=finish){Text("إنهاء البث والرجوع",color=Color.White)}
                 }
             }
             // Native recovery strip remains visible even when the embedded WebView renderer goes blank.
-            if(pageReady){
+            if(pageReady && (nativeStageStatus.contains("تعذّر") || nativeStageStatus.contains("تعذر") || nativeStageStatus.contains("فشل"))){
                 Row(
                     Modifier.align(Alignment.TopCenter).fillMaxWidth()
-                        .background(Color(0xD0101820)).padding(horizontal=8.dp,vertical=6.dp),
+                        .background(Color(0xE5102141)).padding(horizontal=8.dp,vertical=6.dp),
                     verticalAlignment=Alignment.CenterVertically,
                     horizontalArrangement=Arrangement.spacedBy(6.dp)
                 ){
@@ -369,11 +369,11 @@ private fun liveError(e:Exception)=when(e.message){
                     Text(
                         nativeStageStatus,
                         modifier=Modifier.weight(1f),
-                        color=Color(0xFFBED5DD),
+                        color=Color(0xFFB4C6E5),
                         maxLines=1
                     )
-                    IconButton(onClick=retry){Icon(Icons.Outlined.Refresh,"إعادة الدخول",tint=Color.White)}
-                    IconButton(onClick=finish){Icon(Icons.Outlined.Close,"إنهاء والعودة",tint=Color.White)}
+                    IconButton(onClick=retry){Icon(Icons.Rounded.Refresh,"إعادة الدخول",tint=Color.White)}
+                    IconButton(onClick=finish){Icon(Icons.Rounded.Close,"إنهاء والعودة",tint=Color.White)}
                 }
             }
         }else if(error.isBlank())Text("جارٍ تجهيز البث…",Modifier.padding(24.dp))
@@ -384,7 +384,7 @@ private fun liveError(e:Exception)=when(e.message){
                 Row(Modifier.padding(16.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)){
                     ChatAvatar(row.optString("owner_name"),48,row.optString("avatar_url"))
                     Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(5.dp)){Text(row.optString("title"),style=MaterialTheme.typography.titleMedium);Text(row.optString("owner_name"));Text("${row.optInt("viewers")} مشاهد · "+(if(row.optBoolean("private"))"مدفوع: ${row.optLong("price_cents")}"else if(row.optBoolean("invite_only"))"بالدعوة"else"مجاني"),style=MaterialTheme.typography.bodySmall);Text((if(row.optString("mode")=="audio")"غرفة صوتية"else"بث فيديو")+" · ${row.optInt("max_speakers",1)} متحدثين كحد أقصى",style=MaterialTheme.typography.bodySmall)}
-                    Icon(Icons.Outlined.PlayCircleOutline,null)
+                    Icon(Icons.Rounded.PlayCircleOutline,null)
                 }
             }
 }
@@ -591,7 +591,7 @@ internal fun CameraPreviewSurface(
 
     BackHandler{onClose()}
 
-    Box(Modifier.fillMaxSize().background(Color(0xFF101820))){
+    Box(Modifier.fillMaxSize().background(Color(0xFF080F23))){
         // Live camera preview layer (or calm visualizer for audio-only)
         if(!audioOnly && hasCameraPermission && foreground && !starting){
             CameraPreviewSurface(
@@ -604,37 +604,37 @@ internal fun CameraPreviewSurface(
             Box(Modifier.fillMaxSize().background(
                 Brush.verticalGradient(
                     listOf(
-                        Color(0xB3101820),
-                        Color(0x33101820),
-                        Color(0x80101820),
-                        Color(0xE6101820)
+                        Color(0xB3080F23),
+                        Color(0x33080F23),
+                        Color(0x80080F23),
+                        Color(0xE6080F23)
                     )
                 )
             ))
         } else {
-            // Calm, refined Relaxia obsidian/ocean stage
+            // Calm, refined Relaxia plum stage
             Box(Modifier.fillMaxSize().background(
-                Brush.verticalGradient(listOf(Color(0xFF131D26), Color(0xFF0F171F), Color(0xFF101820)))
+                Brush.verticalGradient(listOf(Color(0xFF112342), Color(0xFF0C1931), Color(0xFF080F23)))
             )){
-                Box(Modifier.size(320.dp).align(Alignment.TopEnd).background(Brush.radialGradient(listOf(Color(0x2E3187A8), Color.Transparent)), CircleShape))
-                Box(Modifier.size(260.dp).align(Alignment.BottomStart).background(Brush.radialGradient(listOf(Color(0x1AD7AD72), Color.Transparent)), CircleShape))
+                Box(Modifier.size(320.dp).align(Alignment.TopEnd).background(Brush.radialGradient(listOf(Color(0x2E5D9AE8), Color.Transparent)), CircleShape))
+                Box(Modifier.size(260.dp).align(Alignment.BottomStart).background(Brush.radialGradient(listOf(Color(0x1A8BB8F0), Color.Transparent)), CircleShape))
                 if(audioOnly){
                     Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally){
                         Box(Modifier.size(100.dp).background(Color(0x22FFFFFF), CircleShape), contentAlignment = Alignment.Center){
-                            Icon(Icons.Filled.VolumeUp, null, tint = Color(0xFF3187A8), modifier = Modifier.size(48.dp))
+                            Icon(Icons.Filled.VolumeUp, null, tint = Color(0xFF61A4F4), modifier = Modifier.size(48.dp))
                         }
                         Spacer(Modifier.height(14.dp))
-                        Text("غرفة صوتية", color = Color(0xFFF4F7F9), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text("المايكروفون فقط سيكون مفعلًا", color = Color(0xFFA3B1BA), style = MaterialTheme.typography.bodySmall)
+                        Text("غرفة صوتية", color = Color(0xFFF1F6FF), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("المايكروفون فقط سيكون مفعلًا", color = Color(0xFFB4C6E5), style = MaterialTheme.typography.bodySmall)
                     }
                 } else if(!hasCameraPermission){
                     Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally){
-                        Icon(Icons.Filled.CameraAlt, null, tint = Color(0xFFA3B1BA), modifier = Modifier.size(44.dp))
+                        Icon(Icons.Filled.CameraAlt, null, tint = Color(0xFFB4C6E5), modifier = Modifier.size(44.dp))
                         Spacer(Modifier.height(10.dp))
-                        Text("إذن الكاميرا مطلوب للمعاينة", color = Color(0xFFF4F7F9), style = MaterialTheme.typography.bodyMedium)
+                        Text("إذن الكاميرا مطلوب للمعاينة", color = Color(0xFFF1F6FF), style = MaterialTheme.typography.bodyMedium)
                         Spacer(Modifier.height(8.dp))
                         TextButton(onClick = { cameraPermissionLauncher.launch(Manifest.permission.CAMERA) }){
-                            Text("منح الإذن", color = Color(0xFF3187A8))
+                            Text("منح الإذن", color = Color(0xFF61A4F4))
                         }
                     }
                 }
@@ -647,7 +647,7 @@ internal fun CameraPreviewSurface(
             horizontalArrangement=Arrangement.SpaceBetween,
             verticalAlignment=Alignment.CenterVertically
         ){
-            IconButton(onClick=onClose, modifier=Modifier.size(40.dp).background(Color(0x55101820), CircleShape)){
+            IconButton(onClick=onClose, modifier=Modifier.size(40.dp).background(Color(0x55080F23), CircleShape)){
                 Icon(Icons.Filled.Close, "إغلاق", tint=Color.White)
             }
         }
@@ -660,14 +660,14 @@ internal fun CameraPreviewSurface(
         ){
             if(!audioOnly && hasCameraPermission){
                 Column(horizontalAlignment=Alignment.CenterHorizontally){
-                    IconButton(onClick={ facingFront = !facingFront }, modifier=Modifier.size(44.dp).background(Color(0x55101820), CircleShape)){
+                    IconButton(onClick={ facingFront = !facingFront }, modifier=Modifier.size(44.dp).background(Color(0x55080F23), CircleShape)){
                         Icon(Icons.Filled.CameraAlt, "تبديل الكاميرا", tint=Color.White)
                     }
                     Text(if(facingFront)"أمامية" else "خلفية", color=Color(0xDDFFFFFF), style=MaterialTheme.typography.labelSmall)
                 }
             }
             Column(horizontalAlignment=Alignment.CenterHorizontally){
-                IconButton(onClick={ showAdvancedSettings = true }, modifier=Modifier.size(44.dp).background(Color(0x55101820), CircleShape)){
+                IconButton(onClick={ showAdvancedSettings = true }, modifier=Modifier.size(44.dp).background(Color(0x55080F23), CircleShape)){
                     Icon(Icons.Filled.Settings, "إعدادات البث", tint=Color.White)
                 }
                 Text("إعدادات", color=Color(0xDDFFFFFF), style=MaterialTheme.typography.labelSmall)
@@ -688,7 +688,7 @@ internal fun CameraPreviewSurface(
 
             // Mode Selector Capsule
             Row(
-                Modifier.align(Alignment.CenterHorizontally).background(Color(0x77101820), RoundedCornerShape(30.dp)).padding(4.dp),
+                Modifier.align(Alignment.CenterHorizontally).background(Color(0x77080F23), RoundedCornerShape(30.dp)).padding(4.dp),
                 horizontalArrangement=Arrangement.spacedBy(4.dp),
                 verticalAlignment=Alignment.CenterVertically
             ){
@@ -720,9 +720,9 @@ internal fun CameraPreviewSurface(
                 leadingIcon={ Icon(Icons.Filled.Edit, null, tint=Color(0xAAFFFFFF)) },
                 shape=RoundedCornerShape(24.dp),
                 colors=OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor=Color(0x66101820),
-                    unfocusedContainerColor=Color(0x4D101820),
-                    focusedBorderColor=Color(0xFF3187A8),
+                    focusedContainerColor=Color(0x66080F23),
+                    unfocusedContainerColor=Color(0x4D080F23),
+                    focusedBorderColor=Color(0xFF61A4F4),
                     unfocusedBorderColor=Color(0x33FFFFFF),
                     focusedTextColor=Color.White,
                     unfocusedTextColor=Color.White
@@ -745,9 +745,9 @@ internal fun CameraPreviewSurface(
                     leadingIcon={ Icon(Icons.Filled.AttachMoney, null, modifier=Modifier.size(16.dp)) },
                     shape=RoundedCornerShape(20.dp),
                     colors=FilterChipDefaults.filterChipColors(
-                        selectedContainerColor=Color(0x66277C9D),
+                        selectedContainerColor=Color(0x662B66B5),
                         selectedLabelColor=Color.White,
-                        containerColor=Color(0x4D101820),
+                        containerColor=Color(0x4D080F23),
                         labelColor=Color(0xDDFFFFFF)
                     )
                 )
@@ -760,9 +760,9 @@ internal fun CameraPreviewSurface(
                     leadingIcon={ Icon(Icons.Filled.PersonAdd, null, modifier=Modifier.size(16.dp)) },
                     shape=RoundedCornerShape(20.dp),
                     colors=FilterChipDefaults.filterChipColors(
-                        selectedContainerColor=Color(0x66277C9D),
+                        selectedContainerColor=Color(0x662B66B5),
                         selectedLabelColor=Color.White,
-                        containerColor=Color(0x4D101820),
+                        containerColor=Color(0x4D080F23),
                         labelColor=Color(0xDDFFFFFF)
                     )
                 )
@@ -775,9 +775,9 @@ internal fun CameraPreviewSurface(
                     leadingIcon={ Icon(Icons.Filled.Settings, null, modifier=Modifier.size(16.dp)) },
                     shape=RoundedCornerShape(20.dp),
                     colors=FilterChipDefaults.filterChipColors(
-                        selectedContainerColor=Color(0x66277C9D),
+                        selectedContainerColor=Color(0x662B66B5),
                         selectedLabelColor=Color.White,
-                        containerColor=Color(0x4D101820),
+                        containerColor=Color(0x4D080F23),
                         labelColor=Color(0xDDFFFFFF)
                     )
                 )
@@ -794,7 +794,7 @@ internal fun CameraPreviewSurface(
             ){
                 Box(
                     Modifier.fillMaxSize().background(
-                        Brush.horizontalGradient(listOf(Color(0xFF277C9D), Color(0xFF1E5B74)))
+                        Brush.horizontalGradient(listOf(Color(0xFF194C9F), Color(0xFF10346A)))
                     ),
                     contentAlignment=Alignment.Center
                 ){

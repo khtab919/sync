@@ -125,7 +125,7 @@ internal fun RelaxiaLevelBadge(level: Int) {
     }
     Surface(
         color=tierColor.copy(alpha=.16f),
-        shape=RoundedCornerShape(12.dp),
+        shape=RoundedCornerShape(18.dp),
         border=BorderStroke(1.dp,tierColor.copy(alpha=.55f))
     ) {
         Row(

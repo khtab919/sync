@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -46,9 +46,9 @@ internal fun ReferenceCard(modifier: Modifier = Modifier, onClick: (() -> Unit)?
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) .99f else 1f, spring(stiffness = 550f), label = "card-depth")
     val layered = modifier.graphicsLayer { scaleX = scale; scaleY = scale }
-    val elevation = CardDefaults.cardElevation(defaultElevation = 1.dp, pressedElevation = 0.dp)
-    if (onClick != null) Card(onClick = onClick, interactionSource = interaction, modifier = layered.fillMaxWidth(), shape = RoundedCornerShape(22.dp), colors = colors, elevation = elevation, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .55f)), content = content)
-    else Card(modifier = layered.fillMaxWidth(), shape = RoundedCornerShape(22.dp), colors = colors, elevation = elevation, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .55f)), content = content)
+    val elevation = CardDefaults.cardElevation(defaultElevation = 3.dp, pressedElevation = 0.dp)
+    if (onClick != null) Card(onClick = onClick, interactionSource = interaction, modifier = layered.fillMaxWidth(), shape = RoundedCornerShape(24.dp), colors = colors, elevation = elevation, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .55f)), content = content)
+    else Card(modifier = layered.fillMaxWidth(), shape = RoundedCornerShape(24.dp), colors = colors, elevation = elevation, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .55f)), content = content)
 }
 
 @Composable
@@ -57,17 +57,17 @@ internal fun ReferenceAvatar(name: String, frame: Int = 0, size: Int = 52, image
 }
 
 @Composable
-internal fun ReferenceImage(url: String, modifier: Modifier = Modifier) {
-    Box(modifier.background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
-        Icon(Icons.Outlined.Image, null, Modifier.size(38.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .45f))
-        if (url.startsWith("https://")) AsyncImage(model = url, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+internal fun ReferenceImage(url: String, modifier: Modifier = Modifier, contentScale: ContentScale = ContentScale.Crop) {
+    Box(modifier.clip(RoundedCornerShape(22.dp)).background(Brush.linearGradient(listOf(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.surfaceVariant))), contentAlignment = Alignment.Center) {
+        Icon(Icons.Rounded.Image, null, Modifier.size(38.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .45f))
+        if (url.startsWith("https://")) AsyncImage(model = url, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = contentScale)
     }
 }
 
 @Composable
 internal fun ReferenceEmpty(icon: ImageVector, title: String, detail: String) {
     Column(Modifier.fillMaxWidth().padding(vertical = 22.dp, horizontal = 20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Box(Modifier.size(64.dp).background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(22.dp)), contentAlignment = Alignment.Center) { Icon(icon, null, Modifier.size(28.dp), tint = MaterialTheme.colorScheme.primary) }
+        Box(Modifier.size(64.dp).background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(24.dp)), contentAlignment = Alignment.Center) { Icon(icon, null, Modifier.size(28.dp), tint = MaterialTheme.colorScheme.primary) }
         Text(title, style = MaterialTheme.typography.titleMedium)
         Text(detail, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
     }
@@ -77,14 +77,14 @@ internal fun ReferenceEmpty(icon: ImageVector, title: String, detail: String) {
 internal fun ReferenceRow(icon: ImageVector, title: String, subtitle: String = "", onClick: () -> Unit) {
     Surface(onClick = onClick, color = Color.Transparent, shape = RoundedCornerShape(16.dp)) {
         Row(Modifier.fillMaxWidth().padding(vertical = 15.dp, horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Box(Modifier.size(42.dp).background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = .55f), RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(42.dp).background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = .55f), RoundedCornerShape(18.dp)), contentAlignment = Alignment.Center) {
                 Icon(icon, null, Modifier.size(21.dp), tint = MaterialTheme.colorScheme.primary)
             }
             Column(Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.titleMedium)
                 if (subtitle.isNotBlank()) Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
-            Icon(Icons.Outlined.ChevronLeft, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Icon(Icons.Rounded.ChevronLeft, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -94,7 +94,8 @@ internal fun ReferencePrimary(text: String, enabled: Boolean = true, onClick: ()
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) .99f else 1f, spring(stiffness = 550f), label = "button-depth")
-    Button(onClick, Modifier.fillMaxWidth().heightIn(min = 52.dp).graphicsLayer { scaleX = scale; scaleY = scale }, enabled = enabled, interactionSource = interaction,
-        shape = RoundedCornerShape(16.dp),
-        elevation = ButtonDefaults.buttonElevation(defaultElevation = 1.dp, pressedElevation = 0.dp)) { Text(text, fontWeight = FontWeight.SemiBold) }
+    Button(onClick, Modifier.fillMaxWidth().heightIn(min = 52.dp).graphicsLayer { scaleX = scale; scaleY = scale }.background(if (enabled) Brush.linearGradient(listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.primary.copy(alpha = .86f))) else Brush.linearGradient(listOf(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.surfaceVariant)), RoundedCornerShape(20.dp)), enabled = enabled, interactionSource = interaction,
+        shape = RoundedCornerShape(20.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+        elevation = ButtonDefaults.buttonElevation(defaultElevation = 3.dp, pressedElevation = 0.dp)) { Text(text, fontWeight = FontWeight.SemiBold) }
 }

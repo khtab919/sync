@@ -14,6 +14,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material.icons.rounded.Toll
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -58,7 +59,7 @@ internal fun CoinPackage(coins:Int,bonus:Int,dollars:String,selected:Boolean,bad
     val colors=MaterialTheme.colorScheme
     Surface(
         onClick=choose,
-        shape=RoundedCornerShape(18.dp),
+        shape=RoundedCornerShape(24.dp),
         color=if(selected)colors.primaryContainer else colors.surface,
         shadowElevation=if(selected)4.dp else 1.dp,
         border=BorderStroke(if(selected)2.dp else 1.dp,if(selected)colors.primary else colors.outlineVariant)
@@ -69,19 +70,19 @@ internal fun CoinPackage(coins:Int,bonus:Int,dollars:String,selected:Boolean,bad
             verticalArrangement=Arrangement.spacedBy(5.dp)
         ){
             if(badge!=null){
-                Surface(color=colors.primary,shape=RoundedCornerShape(10.dp)){
+                Surface(color=colors.primary,shape=RoundedCornerShape(18.dp)){
                     Text(badge,Modifier.padding(horizontal=6.dp,vertical=3.dp),fontSize=10.sp,color=colors.onPrimary,fontWeight=FontWeight.SemiBold,maxLines=1)
                 }
             }else Spacer(Modifier.height(19.dp))
-            Text("🪙",fontSize=33.sp)
-            Text(java.text.NumberFormat.getIntegerInstance().format(coins),fontSize=20.sp,fontWeight=FontWeight.Bold,maxLines=1)
+            Icon(androidx.compose.material.icons.Icons.Rounded.Toll, "كوينز", Modifier.size(36.dp), tint=colors.primary)
+            Text(java.text.NumberFormat.getIntegerInstance(java.util.Locale.US).format(coins),fontSize=20.sp,fontWeight=FontWeight.Bold,maxLines=1)
             Text("كوين",fontSize=12.sp,color=colors.onSurfaceVariant)
-            Text(
-                if(bonus>0)"+${java.text.NumberFormat.getIntegerInstance().format(bonus)} نقطة ترويجية" else "دون مكافأة إضافية",
+            if(bonus>0) Text(
+                "+${java.text.NumberFormat.getIntegerInstance(java.util.Locale.US).format(bonus)} نقطة ترويجية",
                 fontSize=10.sp,color=if(bonus>0)colors.primary else colors.onSurfaceVariant,maxLines=2,lineHeight=13.sp
             )
-            Spacer(Modifier.weight(1f))
-            Surface(color=colors.surfaceVariant,shape=RoundedCornerShape(10.dp)){
+            Spacer(Modifier.height(4.dp))
+            Surface(color=colors.surfaceVariant,shape=RoundedCornerShape(18.dp)){
                 Text("$dollars USD",Modifier.padding(horizontal=7.dp,vertical=6.dp),fontSize=11.sp,fontWeight=FontWeight.SemiBold,maxLines=1)
             }
         }
@@ -147,13 +148,13 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
             Text("Relaxia",fontWeight=FontWeight.SemiBold,color=MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Text("متجر الكوينز",style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold)
-        Surface(shape=RoundedCornerShape(18.dp),color=MaterialTheme.colorScheme.primaryContainer){
+        Surface(shape=RoundedCornerShape(26.dp),shadowElevation=3.dp,color=MaterialTheme.colorScheme.primaryContainer){
             Row(Modifier.fillMaxWidth().padding(16.dp),verticalAlignment=Alignment.CenterVertically){
-                Text("🪙",fontSize=30.sp)
+                Icon(androidx.compose.material.icons.Icons.Rounded.Toll, null, Modifier.size(32.dp), tint=MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.width(10.dp))
                 Column{
                     Text("رصيد الكوينز المتاح",style=MaterialTheme.typography.bodySmall)
-                    Text(if(balance==null)"—"else java.text.NumberFormat.getIntegerInstance().format(balance)+" كوين",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold)
+                    Text(if(balance==null)"—"else java.text.NumberFormat.getIntegerInstance(java.util.Locale.US).format(balance)+" كوين",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold)
                 }
             }
         }
@@ -164,7 +165,7 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
         if(!showOrders && submittedId.isBlank()) Text(if(quote==null)"اختر باقة الشحن"else"أكمل عملية الدفع",style=MaterialTheme.typography.titleMedium)
         Text("100 كوين = 1 USD كقيمة أساسية داخل التطبيق. يظهر المبلغ النهائي قبل الدفع. النقاط الترويجية منفصلة وغير قابلة للسحب.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
         if(note.isNotBlank())Text(note,color=MaterialTheme.colorScheme.primary)
-        if(busy)LinearProgressIndicator(Modifier.fillMaxWidth())
+        if(busy)LuxuryLoadingStatus("جارٍ تحديث الطلب")
         if(submittedId.isNotBlank()) {
             PurchaseStatusCard(submittedId,submittedAmount,submittedStatus)
             OutlinedButton(onClick={perform{reload();rows.firstOrNull{it.optString("id")==submittedId}?.let{submittedStatus=it.optString("status")}}},enabled=!busy,modifier=Modifier.fillMaxWidth()){Text("تحديث حالة الطلب")}
@@ -195,7 +196,7 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
             }
             Text("اضغط على أي باقة لعرض وسائل الدفع المتاحة وتأكيد السعر.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
         }else if(!showOrders && quote!=null){
-            Text("${quote.optInt("amount_cents")} كوين · +${quote.optInt("bonus_cents")} نقطة ترويجية",fontSize=20.sp,fontWeight=FontWeight.Bold)
+            Text("${quote.optInt("amount_cents")} كوين" + if(quote.optInt("bonus_cents")>0) " · +${quote.optInt("bonus_cents")} نقطة ترويجية" else "",fontSize=20.sp,fontWeight=FontWeight.Bold)
             Text(
                 if(quoteSeconds>0L)"صلاحية عرض السعر: %02d:%02d".format(quoteSeconds/60,quoteSeconds%60)
                 else "انتهت صلاحية عرض السعر. إن لم تدفع، اطلب عرضًا جديدًا. إن دفعت بالفعل، أكمل إرسال الإثبات للمراجعة.",
@@ -218,7 +219,7 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
                 }},enabled=!busy&&invoiceUrl.isNotBlank(),modifier=Modifier.fillMaxWidth()){Text("تحقق من الدفع وتحديث الرصيد")}
             } else {
             Text(if(rail=="usdt")"USDT على BEP20 فقط"else"استلام عبر شام كاش",fontWeight=FontWeight.Bold)
-            ReferenceImage(quote.optString("qr_url"),Modifier.fillMaxWidth().height(235.dp))
+            Surface(color=androidx.compose.ui.graphics.Color.White,shape=RoundedCornerShape(24.dp)) { ReferenceImage(quote.optString("qr_url"),Modifier.fillMaxWidth().height(256.dp).padding(16.dp),contentScale=androidx.compose.ui.layout.ContentScale.Fit) }
             Text(quote.optString("destination"),style=MaterialTheme.typography.bodyMedium.copy(textDirection=androidx.compose.ui.text.style.TextDirection.Ltr))
             OutlinedButton(onClick={(context.getSystemService(Context.CLIPBOARD_SERVICE)as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Relaxia payment",quote.optString("destination")));note="تم نسخ بيانات الاستلام."}){Text("نسخ بيانات الاستلام")}
             if(rail=="shamcash"&&info.optString("shamcash_instructions").isNotBlank())Text(info.optString("shamcash_instructions"))
@@ -241,16 +242,16 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
         }
     }}
     if(showPaymentSheet && !showOrders && quote==null && submittedId.isBlank()){
-        ModalBottomSheet(onDismissRequest={showPaymentSheet=false}){
+        ModalBottomSheet(onDismissRequest={showPaymentSheet=false},shape=RoundedCornerShape(topStart=32.dp,topEnd=32.dp)){
             Column(
-                Modifier.fillMaxWidth().padding(horizontal=22.dp).padding(bottom=28.dp),
+                Modifier.fillMaxWidth().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal=22.dp).padding(bottom=20.dp),
                 verticalArrangement=Arrangement.spacedBy(13.dp)
             ){
                 Text("اختر طريقة الدفع",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.Bold)
                 val chosen=packages.firstOrNull{it.coins==selected}
                 Surface(color=MaterialTheme.colorScheme.primaryContainer,shape=RoundedCornerShape(16.dp)){
                     Column(Modifier.fillMaxWidth().padding(16.dp),verticalArrangement=Arrangement.spacedBy(5.dp)){
-                        Text("🪙 ${java.text.NumberFormat.getIntegerInstance().format(selected)} كوين",fontSize=21.sp,fontWeight=FontWeight.Bold)
+                        Text("${java.text.NumberFormat.getIntegerInstance(java.util.Locale.US).format(selected)} كوين",fontSize=21.sp,fontWeight=FontWeight.Bold)
                         Text("القيمة الأساسية: ${BigDecimal.valueOf(selected.toLong(),2).toPlainString()} USD",style=MaterialTheme.typography.bodyMedium)
                         if((chosen?.bonusPoints?:0)>0)Text("+${chosen?.bonusPoints} نقطة ترويجية إضافية",color=MaterialTheme.colorScheme.primary)
                     }
@@ -260,7 +261,7 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
                         onClick={method=option.code},enabled=option.enabled,
                         color=if(method==option.code&&option.enabled)MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
                         border=BorderStroke(1.dp,if(method==option.code&&option.enabled)MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
-                        shape=RoundedCornerShape(14.dp)
+                        shape=RoundedCornerShape(18.dp)
                     ){
                         Row(Modifier.fillMaxWidth().padding(12.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)){
                             Text(option.symbol,fontSize=23.sp,color=MaterialTheme.colorScheme.primary)

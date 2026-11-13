@@ -1,9 +1,9 @@
-name: Relaxia 11.6.4 QA install APK (not an update)
+name: Relaxia 11.7 unsigned QA build and visual checks
 
 on:
   push:
     branches:
-      - fix/relaxia-1164-zero-height-live-20261113
+      - design/relaxia-soft-luxury-20261113
   workflow_dispatch:
 
 permissions:
@@ -72,37 +72,45 @@ jobs:
           p.write_text(json.dumps(j))
           PY
 
-      - name: Select stable new signing certificate or disposable QA key
+      - name: Verify native interactions and capture design previews
         env:
-          RELAXIA_NEXT_KEYSTORE_BASE64: ${{ secrets.RELAXIA_NEXT_KEYSTORE_BASE64 }}
           RELAXIA_NEXT_STORE_PASSWORD: ${{ secrets.RELAXIA_NEXT_STORE_PASSWORD }}
-        run: |
-          set -euo pipefail
-          umask 077
-          if [[ -n "${RELAXIA_NEXT_KEYSTORE_BASE64}" && -z "${RELAXIA_NEXT_STORE_PASSWORD}" ]] || [[ -z "${RELAXIA_NEXT_KEYSTORE_BASE64}" && -n "${RELAXIA_NEXT_STORE_PASSWORD}" ]]; then
-            echo '::error::Both protected signing secrets are required together.'
-            exit 1
-          fi
-          if [[ -n "${RELAXIA_NEXT_KEYSTORE_BASE64}" && -n "${RELAXIA_NEXT_STORE_PASSWORD}" ]]; then
-            printf '%s' "${RELAXIA_NEXT_KEYSTORE_BASE64}" | base64 -d > relaxia-next.jks
-            keytool -list -keystore relaxia-next.jks -storepass "${RELAXIA_NEXT_STORE_PASSWORD}" -alias relaxia_next > /dev/null
-            expected=a1ba52b55fe246379bed147a1de23a8e03dc7ad5d3d38b1113d3aa3bcaf0db9c
-            actual="$(keytool -exportcert -keystore relaxia-next.jks -storepass "${RELAXIA_NEXT_STORE_PASSWORD}" -alias relaxia_next | sha256sum | cut -d ' ' -f 1)"
-            [[ "${actual}" == "${expected}" ]] || { echo '::error::Unexpected QA signing certificate. Stop.'; exit 1; }
-            echo 'Verified stable user-owned QA signing certificate.'
-          else
-            keytool -genkeypair -keystore debug.keystore -storetype JKS \
-              -storepass android -keypass android -alias androiddebugkey \
-              -keyalg RSA -keysize 2048 -validity 60 \
-              -dname "CN=Relaxia 11.6.4 QA Only, OU=QA, O=Relaxia, C=TR"
-            echo "::warning::Temporary QA signing certificate in use."
-          fi
-          echo "::warning::This preview installs beside existing Relaxia. Keep the installed app."
+        run: gradle testDebugUnitTest --tests com.example.ui.auth.AdultWelcomeScreenTest --tests com.example.ui.screens.ReferenceDesignTest --tests com.example.data.api.SecureSessionStoreTest -PRELAXIA_UNSIGNED_BUILD=true -PRELAXIA_QA_SIDE_BY_SIDE=true --no-daemon
 
-      - name: Build latest 11.6 source APK
+      - name: Upload native design previews
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Relaxia-11.7-design-previews
+          path: app/build/reference-previews/*.png
+          if-no-files-found: ignore
+
+      - name: Upload UI test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Relaxia-11.7-test-reports
+          path: app/build/test-results/testDebugUnitTest/*.xml
+          if-no-files-found: ignore
+
+      - name: Export Android signing tools for local verification
+        run: |
+          tools_dir="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1 | xargs dirname)"
+          mkdir -p signing-tools/lib
+          cp "$tools_dir/apksigner" signing-tools/
+          cp "$tools_dir/zipalign" signing-tools/
+          cp "$tools_dir/lib/apksigner.jar" signing-tools/lib/
+
+      - name: Upload signing tools
+        uses: actions/upload-artifact@v4
+        with:
+          name: Relaxia-11.7-signing-tools
+          path: signing-tools/
+
+      - name: Build 11.7 update for existing QA app
         env:
           RELAXIA_NEXT_STORE_PASSWORD: ${{ secrets.RELAXIA_NEXT_STORE_PASSWORD }}
-        run: gradle assembleDebug "-PLAYALI_API_URL=${LAYALI_API_URL}" -PRELAXIA_QA_SIDE_BY_SIDE=true --no-daemon --stacktrace
+        run: gradle assembleDebug "-PLAYALI_API_URL=${LAYALI_API_URL}" -PRELAXIA_UNSIGNED_BUILD=true -PRELAXIA_QA_SIDE_BY_SIDE=true --no-daemon --stacktrace
 
       - name: Verify exact app ID, version and signing
         run: |
@@ -111,30 +119,28 @@ jobs:
           from pathlib import Path
           data=json.loads(Path('app/build/outputs/apk/debug/output-metadata.json').read_text())
           assert data['applicationId']=='com.aistudio.layalilounge.x9m4kp.qa116'
-          assert all(item['versionCode']==37 for item in data['elements'])
-          print('Relaxia 11.6.4 source APK validated (fresh-install-only QA signature)')
+          assert all(item['versionCode']==39 for item in data['elements'])
+          print('Relaxia 11.7 APK validated for existing QA package')
           PY
-          test -s app/build/outputs/apk/debug/app-debug.apk
-          cp app/build/outputs/apk/debug/app-debug.apk Relaxia-v11.6.4-SIDE-BY-SIDE.apk
+          test -s app/build/outputs/apk/debug/app-debug-unsigned.apk
+          cp app/build/outputs/apk/debug/app-debug-unsigned.apk Relaxia-11.7.1-unsigned.apk
           cat > READ-ME-FIRST.txt <<'EOF'
-          RELAXIA 11.6 QA BUILD ONLY
-          Package ID: com.aistudio.layalilounge.x9m4kp.qa116
-          Version: 11.6.4 (code 34)
-          Signed with a separate QA key, NOT the original production key.
-          THIS APK INSTALLS SIDE-BY-SIDE WITH THE EXISTING RELAXIA APP.
-          DO NOT UNINSTALL YOUR EXISTING RELAXIA APP OR YOU MAY LOSE LOCAL DATA.
-          Without stable secrets this is an ephemeral QA signature and future QA builds cannot update it.
-          Firebase push may require registering the QA application ID.
-          This build is for QA testing, not a public update.
-          To release an upgrade, recover the original signing keystore and rerun the official protected build-apk workflow.
+          Relaxia 11.7.1 (39)
+          UNSIGNED artifact. Must be signed locally with the verified existing QA key.
+          Package: com.aistudio.layalilounge.x9m4kp.qa116
+          Signing certificate SHA256: a1ba52b55fe246379bed147a1de23a8e03dc7ad5d3d38b1113d3aa3bcaf0db9c
+          This does not update the older production package without .qa116.
+          Keep your existing app and data; do not uninstall to resolve a mismatch.
+          Includes royal-blue UI, rounded controls, refresh states and full payment QR.
+          Server live/call style changes require a separate server deployment.
           EOF
 
       - name: Upload preview and safety instructions
         uses: actions/upload-artifact@v4
         with:
-          name: Relaxia-v11.6.4-QA-SIDE-BY-SIDE
+          name: Relaxia-11.7.1-QA-Update
           path: |
-            Relaxia-v11.6.4-SIDE-BY-SIDE.apk
+            Relaxia-11.7.1-unsigned.apk
             READ-ME-FIRST.txt
           retention-days: 7
           if-no-files-found: error

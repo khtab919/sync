@@ -3,7 +3,15 @@ if(typeof LivekitClient==='undefined'||typeof RelaxiaMedia==='undefined')throw E
 const config=JSON.parse(document.getElementById('config').textContent),$=id=>document.getElementById(id);
 const {Room,RoomEvent,Track,ConnectionState}=LivekitClient;
 let room,closed=false,muted=false,speakerMuted=false,cameraOff=false,facing='user',commentsVisible=true,lastComments='',leaving=false,retrying=false,polling=false;
-let activeSpeakerIds=new Set();
+let activeSpeakerIds=new Set(),audioSeatSignature='',reconnectSince=0,controlFailures=0,connecting=false;
+function updateRoomViewport(){
+ const height=window.visualViewport?.height||window.innerHeight;
+ // Preserve truly tiny viewports so Android's native stage-height recovery can detect and repair them.
+ document.documentElement.style.setProperty('--room-viewport-height',Math.max(1,Math.round(height))+'px');
+}
+updateRoomViewport();
+window.visualViewport?.addEventListener('resize',updateRoomViewport,{passive:true});
+window.addEventListener('resize',updateRoomViewport,{passive:true});
 let state={},speaking=false,activating=false,latestGift=0,haveGiftBaseline=false,giftQueue=[],effectBusy=false,giftKey=null,giftPending=null,quality=720,serverOffset=0;
 let preparedTracks=[],mediaFault=false,mediaReady=false;
 const path='/api/live/'+config.id+'/control';
@@ -53,7 +61,7 @@ function layout(){const n=document.querySelectorAll('.tile').length;$('video').c
 async function configurePublishing(){
  const allowed=!!(config.owner||state.can_publish),sources=state.publish_sources||(config.mode==='audio'?['microphone']:['microphone','camera']);
  $('publisherControls').hidden=!speaking;$('camera').hidden=!sources.includes('camera');$('switch').hidden=!sources.includes('camera');
- if(!allowed&&speaking){await room.localParticipant.setMicrophoneEnabled(false);await room.localParticipant.setCameraEnabled(false);speaking=false;$('publisherControls').hidden=true}
+ if(!allowed&&speaking){await room.localParticipant.setMicrophoneEnabled(false);await room.localParticipant.setCameraEnabled(false);speaking=false;$('publisherControls').hidden=true;updateQuickMic()}
 }
 async function prepareTracks(){
  releasePrepared();mediaFault=false;mediaReady=false;$('connection').classList.remove('media-fault');$('retryMedia').hidden=true;$('status').textContent='جارٍ تجهيز الكاميرا والميكروفون…';
@@ -78,26 +86,35 @@ async function enableTracks(){
    try{await RelaxiaMedia.frameReady(roomVideo,10000)}
    catch(e){throw new RelaxiaMedia.MediaFailure('room_video',e)}
   }
-  mediaReady=true;speaking=true;diagnostic('media_publish','ready');await configurePublishing();
+  mediaReady=true;speaking=true;diagnostic('media_publish','ready');await configurePublishing();updateQuickMic();
  }catch(e){room?.removeAllListeners();await room?.disconnect();releasePrepared();throw e.name==='MediaFailure'?e:new RelaxiaMedia.MediaFailure('media_publish',e)}
 }
+// Time out a stalled LiveKit handshake rather than locking the room forever.
+async function connectWithTimeout(client,url,token){
+ let timer;
+ try{return await Promise.race([client.connect(url,token),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('signaling_timeout')),18000)})])}
+ finally{clearTimeout(timer)}
+}
 async function connect(token=config.token){
+ if(connecting)throw Error('connection_already_pending');
+ connecting=true;
  try{
  if(config.owner||speaking){await prepareTracks();const fresh=await api({action:'token'});state.can_publish=fresh.can_publish;state.publish_sources=fresh.publish_sources;if(!fresh.can_publish){releasePrepared();throw Error('stage_unavailable')}token=fresh.token;}
  if(closed||leaving){releasePrepared();return}
  room=new Room({adaptiveStream:true,dynacast:true,audioCaptureDefaults:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},videoCaptureDefaults:{resolution:{width:1280,height:720,frameRate:30},facingMode:facing},publishDefaults:{simulcast:false,videoEncoding:{maxBitrate:1500000,maxFramerate:30}}});
  room.on(RoomEvent.TrackSubscribed,(track,pub,participant)=>renderTrack(track,participant));
  room.on(RoomEvent.TrackUnsubscribed,track=>{track.detach().forEach(el=>{const tile=el.closest('.tile');el.remove();tile?.remove()});layout()});
- room.on(RoomEvent.ConnectionStateChanged,s=>{$('status').textContent=s===ConnectionState.Connected?((config.owner||speaking)&&!mediaReady?'جارٍ نشر الصوت والصورة…':'متصل'):s===ConnectionState.Reconnecting?'إعادة الاتصال…':'جارٍ الاتصال…'});
+ room.on(RoomEvent.ConnectionStateChanged,s=>{if(mediaFault)return;$('status').textContent=s===ConnectionState.Connected?((config.owner||speaking)&&!mediaReady?'جارٍ نشر الصوت والصورة…':'متصل'):s===ConnectionState.Reconnecting?'إعادة الاتصال…':'جارٍ الاتصال…'});
  room.on(RoomEvent.ConnectionQualityChanged,(q,p)=>{if(p===room.localParticipant&&['poor','lost'].includes(String(q).toLowerCase()))$('status').textContent='الشبكة ضعيفة · يجري تكييف الجودة'});
  room.on(RoomEvent.ActiveSpeakersChanged,participants=>{activeSpeakerIds=new Set(participants.map(p=>p.identity));document.querySelectorAll('.audio-person').forEach(el=>el.classList.toggle('speaking',activeSpeakerIds.has(el.dataset.identity)))});
  room.on(RoomEvent.Disconnected,()=>{if(!closed&&!leaving)reconnect()});
- await room.connect(config.url,token);for(const participant of room.remoteParticipants.values()){for(const publication of participant.trackPublications.values()){if(publication.isSubscribed&&publication.track)renderTrack(publication.track,participant);}}if(closed||leaving){room.removeAllListeners();await room.disconnect();releasePrepared();return}if(config.owner||speaking)await enableTracks();$('status').textContent='مباشر';
- $('follow').hidden=config.owner;$('gift').hidden=!config.gifts||config.mode==='audio';$('speaker').hidden=config.mode!=='audio';updateSpeakerControl();
+ await connectWithTimeout(room,config.url,token);$('reconnectAction').hidden=true;for(const participant of room.remoteParticipants.values()){for(const publication of participant.trackPublications.values()){if(publication.isSubscribed&&publication.track)renderTrack(publication.track,participant);}}if(closed||leaving){room.removeAllListeners();await room.disconnect();releasePrepared();return}if(config.owner||speaking)await enableTracks();$('status').textContent='مباشر';
+ $('follow').hidden=config.owner;$('gift').hidden=true;$('speaker').hidden=true;updateSpeakerControl();updateQuickMic();
  layout();if(!polling){polling=true;poll()}
  }catch(e){room?.removeAllListeners();try{await room?.disconnect()}finally{releasePrepared();mediaReady=false}throw e}
+ finally{connecting=false}
 }
-async function reconnect(){if(retrying||closed||leaving)return;retrying=true;try{for(let attempt=0;attempt<6&&!closed&&!leaving;attempt++){$('status').textContent='إعادة الاتصال…';await new Promise(r=>setTimeout(r,Math.min(5000,1000*(attempt+1))));try{const fresh=await api({action:'token'});state.can_publish=fresh.can_publish;state.publish_sources=fresh.publish_sources;if(closed||leaving)return;room?.removeAllListeners();await room?.disconnect();document.querySelectorAll('audio').forEach(el=>el.remove());$('video').replaceChildren();if(state.can_publish===false&&!config.owner)speaking=false;await connect(fresh.token);return}catch(e){if(e.name==='MediaFailure'){mediaMessage(e);return}if(['broadcast_forbidden','broadcast_ended','live_authorization_required','admission_refunded','feature_restricted','broadcast_permission_required'].includes(e.message)){stop('انتهت صلاحية البث');return}}}if(!closed&&!leaving)$('status').textContent='تعذّر الاتصال. أعد الدخول إلى الجلسة نفسها دون خصم جديد.'}finally{retrying=false}}
+async function reconnect(){if(retrying||connecting||closed||leaving)return;retrying=true;try{for(let attempt=0;attempt<6&&!closed&&!leaving;attempt++){$('status').textContent='إعادة الاتصال…';await new Promise(r=>setTimeout(r,Math.min(5000,1000*(attempt+1))));try{const fresh=await api({action:'token'});state.can_publish=fresh.can_publish;state.publish_sources=fresh.publish_sources;if(closed||leaving)return;room?.removeAllListeners();await room?.disconnect();document.querySelectorAll('audio').forEach(el=>el.remove());$('video').replaceChildren();if(state.can_publish===false&&!config.owner)speaking=false;await connect(fresh.token);return}catch(e){if(e.name==='MediaFailure'){mediaMessage(e);return}if(['broadcast_forbidden','broadcast_ended','live_authorization_required','admission_refunded','feature_restricted','broadcast_permission_required'].includes(e.message)){stop('انتهت صلاحية البث');return}}}if(!closed&&!leaving){$('status').textContent='تعذّر الاتصال. جرّب إعادة الاتصال دون شراء دخول جديد.';$('reconnectAction').hidden=false}}finally{retrying=false}}
 function sheet(title){$('sheetTitle').textContent=title;$('sheetBody').replaceChildren();if(!$('sheet').open)$('sheet').showModal();return $('sheetBody')}
 function button(box,label,fn,cls=''){const b=document.createElement('button');b.textContent=label;b.className=cls;b.onclick=async()=>{if(b.disabled)return;b.disabled=true;try{await fn()}catch(e){message(e)}finally{b.disabled=false}};box.appendChild(b);return b}
 function note(box,text){const p=document.createElement('p');p.textContent=text;box.appendChild(p)}
@@ -145,9 +162,11 @@ function giftSheet(){
    });
    b.disabled=!select.options.length;b.className='gift-card '+g.effect;b.setAttribute('aria-label',g.name+' · '+g.price_cents+' كوين');
    const icon=document.createElement('span');icon.className='gift-art';icon.textContent=g.symbol;
+   const medallion=document.createElement('span');medallion.className='gift-medallion';medallion.append(icon);
+   b.classList.add('gift-'+String(g.code).replace(/[^a-z0-9_-]/g,''));
    const name=document.createElement('strong');name.textContent=g.name;
    const price=document.createElement('small');price.textContent=g.price_cents.toLocaleString('ar')+' كوين';
-   b.append(icon,name,price);
+   b.append(medallion,name,price);
   }
   if(!catalog.length)note(grid,'لا توجد هدايا متاحة في هذا القسم.');
  }
@@ -157,32 +176,72 @@ function giftSheet(){
  render('all');note(box,'أكبر الداعمين');for(const supporter of state.top_supporters||[])note(box,supporter.name+' · '+supporter.total+' كوين');
 }
 function drawAudioSeats(result){
- const box=$('audioStage');box.replaceChildren();box.classList.add('seat-grid');
- const capacity=Math.max(1,Math.min(15,result.max_speakers||config.maxSpeakers||1));
- box.classList.toggle('solo-room',capacity===1);
+ const box=$('audioStage'),capacity=Math.max(1,Math.min(15,result.max_speakers||config.maxSpeakers||1));
  const speakers=result.speakers||[];
+ const signature=JSON.stringify([capacity,speakers.map(s=>[s.identity,s.name,s.owner,s.avatar_url])]);
+ if(signature===audioSeatSignature&&box.querySelectorAll('.audio-seat').length===capacity){
+  box.querySelectorAll('.audio-seat[data-identity]').forEach(item=>item.classList.toggle('speaking',activeSpeakerIds.has(item.dataset.identity)));
+  return;
+ }
+ audioSeatSignature=signature;
+ box.classList.add('seat-grid');box.classList.toggle('solo-room',capacity===1);
+ const nodes=document.createDocumentFragment();
  for(let i=0;i<capacity;i++){
-  const speaker=speakers[i],item=document.createElement('button');item.type='button';item.className='audio-person audio-seat';
-  item.onclick=guestSheet;
+  const speaker=speakers[i],item=document.createElement('button');item.type='button';item.className='audio-person audio-seat';item.onclick=guestSheet;
   if(speaker){
    item.dataset.identity=speaker.identity;item.classList.toggle('speaking',activeSpeakerIds.has(speaker.identity));
    item.setAttribute('aria-label',speaker.name+(speaker.owner?' · صاحب الغرفة':''));
    const waves=document.createElement('div');waves.className='audio-waves';waves.setAttribute('aria-hidden','true');
    for(let n=0;n<3;n++)waves.append(document.createElement('span'));item.append(waves);
-   const placeholder=document.createElement('div');placeholder.className='audio-placeholder';placeholder.textContent=speaker.name.slice(0,1);item.append(placeholder);
-   if(/^https:\/\//.test(speaker.avatar_url)){const img=document.createElement('img');img.src=speaker.avatar_url;img.alt='';img.onload=()=>placeholder.style.visibility='hidden';img.onerror=()=>img.remove();item.append(img)}
+   const placeholder=document.createElement('div');placeholder.className='audio-placeholder';placeholder.textContent=(speaker.name||'م').slice(0,1);item.append(placeholder);
+   if(/^https:\/\//.test(speaker.avatar_url)){
+    const img=document.createElement('img');img.src=speaker.avatar_url;img.alt='';
+    img.onload=()=>placeholder.style.visibility='hidden';img.onerror=()=>img.remove();item.append(img)
+   }
    const label=document.createElement('span');label.className='audio-name';label.textContent=speaker.name;item.append(label);
    const role=document.createElement('small');role.textContent=speaker.owner?'المضيف':String(i+1);item.append(role);
   }else{
    item.classList.add('empty-seat');item.setAttribute('aria-label','مقعد '+(i+1)+' · طلب الميكروفون');
    const circle=document.createElement('span');circle.className='seat-plus';circle.textContent='+';
-   const label=document.createElement('small');label.textContent=String(i+1);item.append(circle,label);
+   // Empty seats show one clear action; the seat number remains in aria-label.
+   item.append(circle);
   }
-  box.append(item);
+  nodes.append(item);
+ }
+ box.replaceChildren(nodes);
+}
+function updateQuickMic(){
+ const button=$('micQuick');if(!button)return;
+ // Viewers already have the guest seat button. Only speakers need a quick mic.
+ button.hidden=!speaking;
+ button.textContent=speaking?(muted?'🔇':'🎙'):'🎙';
+ button.setAttribute('aria-pressed',String(speaking&&!muted));
+ button.setAttribute('aria-label',speaking?(muted?'تشغيل الميكروفون':'كتم الميكروفون'):'المقاعد وطلب التحدث');
+}
+
+function peopleSheet(){
+ const box=sheet('المشاهدون والمشرفون');
+ for(const p of state.participants||[]){
+  note(box,p.name);
+  if(state.manage_room)button(box,'حظر '+p.name,async()=>{
+   if(confirm('حظر هذا المستخدم من البث؟')){await api({action:'ban',user_id:p.user_id});await refresh()}
+  },'danger');
+  if(config.owner&&state.manage_room){
+   const isMod=state.moderator_ids?.includes(p.user_id);
+   button(box,(isMod?'إزالة إشراف ':'تعيين مشرف ')+p.name,()=>api({action:'set_moderator',user_id:p.user_id,enabled:!isMod}).then(refresh))
+  }
  }
 }
-function peopleSheet(){const box=sheet('المشاهدون والمشرفون');for(const p of state.participants||[]){note(box,p.name);button(box,'حظر '+p.name,async()=>{if(confirm('حظر هذا المستخدم من البث؟')){await api({action:'ban',user_id:p.user_id});await refresh()}});if(config.owner){const isMod=state.moderator_ids?.includes(p.user_id);button(box,(isMod?'إزالة إشراف ':'تعيين مشرف ')+p.name,()=>api({action:'set_moderator',user_id:p.user_id,enabled:!isMod}).then(refresh))}}}
-function moreSheet(){const box=sheet('أدوات البث');button(box,state.liked?'أعجبك هذا البث':'إعجاب بالبث',()=>api({action:'like'}).then(refresh));button(box,commentsVisible?'إخفاء التعليقات':'إظهار التعليقات',()=>{commentsVisible=!commentsVisible;$('messages').hidden=!commentsVisible;$('pinned').hidden=!commentsVisible||!state.pinned_comment;$('sheet').close()});if(state.manage_room)button(box,'المشاهدون والإشراف',peopleSheet);if(config.owner&&state.speakers?.length>=2)button(box,'منافسة PK',pkSheet);
+function moreSheet(){const box=sheet('أدوات الغرفة');
+ if(window.innerWidth<=380)button(box,'الرموز التعبيرية',()=>{$('sheet').close();$('emojiBtn').click()});
+ if(!config.owner)button(box,state.following?'إلغاء متابعة المضيف':'متابعة المضيف',()=>api({action:'follow'}).then(refresh));
+ if(config.mode==='audio')button(box,speakerMuted?'تشغيل صوت الغرفة':'كتم صوت الغرفة',()=>{$('sheet').close();$('speaker').click()});
+ button(box,'مشاركة الغرفة',()=>{$('sheet').close();$('share').click()});
+ if(speaking&&(state.publish_sources||[]).includes('camera')){
+  button(box,cameraOff?'تشغيل الكاميرا':'إيقاف الكاميرا',()=>{$('sheet').close();$('camera').click()});
+  button(box,'تبديل الكاميرا',()=>{$('sheet').close();$('switch').click()});
+ }
+ button(box,state.liked?'أعجبك هذا البث':'إعجاب بالبث',()=>api({action:'like'}).then(refresh));button(box,commentsVisible?'إخفاء التعليقات':'إظهار التعليقات',()=>{commentsVisible=!commentsVisible;$('messages').hidden=!commentsVisible;$('pinned').hidden=!commentsVisible||!state.pinned_comment;$('sheet').close()});if(state.manage_room)button(box,'المشاهدون والإشراف',peopleSheet);if(config.owner&&state.speakers?.length>=2)button(box,'منافسة PK',pkSheet);
  if(speaking){button(box,'جودة الفيديو · '+quality+'p',qualitySheet)}
  button(box,'إحصائيات البث',()=>{const b=sheet('إحصائيات البث');note(b,'المشاهدون المتصلون الآن: '+(state.viewers||0));note(b,'الإعجابات: '+(state.likes||0));note(b,'قيمة الهدايا: '+(state.gift_total_cents||0));if(config.owner)note(b,'حصة مستلمي الهدايا المستحقة: '+(state.earned_cents||0));for(const p of state.top_supporters||[])note(b,p.name+' · '+p.total)});
  button(box,'الإبلاغ عن البث',async()=>{const reason=prompt('سبب الإبلاغ (3 أحرف على الأقل)');if(reason&&reason.trim().length>=3){await api({action:'report',reason});$('status').textContent='وصل البلاغ إلى الإدارة';$('sheet').close()}});
@@ -202,8 +261,8 @@ function playEffects(){
  const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
  setTimeout(()=>{box.hidden=true;effectBusy=false;playEffects()},reduced?1600:effect==='simple'?1600:effect==='depth'?3800:2600);
 }
-function drawState(result){state=result;document.querySelectorAll('.tile').forEach(t=>{const speaker=result.speakers?.find(s=>s.identity===t.dataset.identity);if(speaker)t.querySelector('small').textContent=speaker.name});serverOffset=Date.parse(result.server_time)-Date.now();const vCount=result.viewers||0;if($('viewerCount'))$('viewerCount').textContent=vCount>=1000?(vCount/1000).toFixed(1)+'K':vCount;else $('viewers').textContent=vCount+' مشاهد';$('viewers').title=vCount+' مشاهد';$('follow').textContent=result.following?'تتابعه':'متابعة';const host=result.speakers?.[0];$('badge').textContent=host?('المستوى '+host.level+(host.vip?' · VIP':'')):'';
- const signature=JSON.stringify(result.comments);if(lastComments!==signature){lastComments=signature;const box=$('messages');box.replaceChildren();for(const c of result.comments||[]){const p=document.createElement('div');p.className='comment-bubble';const av=document.createElement('div');av.className='comment-avatar';av.textContent=(c.name||'U').slice(0,1);const body=document.createElement('div');body.className='comment-body';const name=document.createElement('span');name.className='comment-author';name.textContent=c.name+': ';body.append(name,document.createTextNode(c.text));p.append(av,body);if(result.manage_room){const pin=document.createElement('button');pin.textContent='تثبيت';pin.onclick=()=>api({action:'pin_comment',comment_id:c.id}).then(refresh).catch(message);const del=document.createElement('button');del.textContent='حذف';del.onclick=()=>api({action:'delete_comment',comment_id:c.id}).then(refresh).catch(message);p.append(pin,del)}box.append(p)}box.scrollTop=box.scrollHeight}
+function drawState(result){state=result;updateQuickMic();document.querySelectorAll('.tile').forEach(t=>{const speaker=result.speakers?.find(s=>s.identity===t.dataset.identity);if(speaker)t.querySelector('small').textContent=speaker.name});serverOffset=Date.parse(result.server_time)-Date.now();const vCount=result.viewers||0;if($('viewerCount'))$('viewerCount').textContent=vCount>=1000?(vCount/1000).toFixed(1)+'K':vCount;else $('viewers').textContent=vCount+' مشاهد';$('viewers').title=vCount+' مشاهد';$('follow').textContent=result.following?'تتابعه':'متابعة';const host=result.speakers?.[0];$('badge').textContent=host&&Number.isFinite(Number(host.level))?('المستوى '+Math.max(0,Number(host.level))+(host.vip?' · VIP':'')):'';
+ const signature=JSON.stringify(result.comments);if(lastComments!==signature){lastComments=signature;const box=$('messages');const nearBottom=box.scrollHeight-box.clientHeight-box.scrollTop<38,previousScroll=box.scrollTop;box.replaceChildren();for(const c of result.comments||[]){const p=document.createElement('div');p.className='comment-bubble';const av=document.createElement('div');av.className='comment-avatar';av.textContent=(c.name||'U').slice(0,1);const body=document.createElement('div');body.className='comment-body';const name=document.createElement('span');name.className='comment-author';name.textContent=c.name+': ';body.append(name,document.createTextNode(c.text));p.append(av,body);if(result.manage_room){const pin=document.createElement('button');pin.textContent='تثبيت';pin.onclick=()=>api({action:'pin_comment',comment_id:c.id}).then(refresh).catch(message);const del=document.createElement('button');del.textContent='حذف';del.onclick=()=>api({action:'delete_comment',comment_id:c.id}).then(refresh).catch(message);p.append(pin,del)}box.append(p)}box.scrollTop=nearBottom?box.scrollHeight:Math.min(previousScroll,Math.max(0,box.scrollHeight-box.clientHeight))}
  $('pinned').hidden=!result.pinned_comment||!commentsVisible;if(result.pinned_comment)$('pinned').textContent='مثبّت · '+result.pinned_comment.name+': '+result.pinned_comment.text;
  $('goal').hidden=!result.gift_goal_cents;if(result.gift_goal_cents){if($('goalText'))$('goalText').textContent=(result.gift_total_cents||0)+' / '+result.gift_goal_cents;if($('goalProgress'))$('goalProgress').style.width=Math.min(100,Math.round(((result.gift_total_cents||0)/result.gift_goal_cents)*100))+'%';else $('goal').textContent='هدف الهدايا '+(result.gift_total_cents||0)+' / '+result.gift_goal_cents;}
  $('pk').hidden=!result.pk;document.body.classList.toggle('has-pk',!!result.pk);if(result.pk){const pk=result.pk;const teams=pk.teams.map(team=>team.map(id=>result.speakers?.find(s=>s.user_id===id)?.name||'مشارك').join(' + '));$('pkTeams').replaceChildren();for(let i=0;i<2;i++){const span=document.createElement('span');span.title=teams[i];span.textContent=(i===0?'الفريق الأول':'الفريق الثاني')+' · '+pk.scores[i];$('pkTeams').append(span)}const total=pk.scores[0]+pk.scores[1];$('pkProgress').value=total?pk.scores[0]/total*100:50;pkClock()}
@@ -212,10 +271,34 @@ function drawState(result){state=result;document.querySelectorAll('.tile').forEa
 }
 function pkClock(){if(!state.pk)return;const pk=state.pk;const seconds=Math.max(0,Math.ceil((Date.parse(pk.ends_at)-Date.now()-serverOffset)/1000));$('pkTimer').textContent=pk.cancelled?'أُلغيت المنافسة':seconds>0?Math.floor(seconds/60)+':'+String(seconds%60).padStart(2,'0'):'انتهت المنافسة · '+(pk.scores[0]===pk.scores[1]?'تعادل':pk.scores[0]>pk.scores[1]?'الفريق الأول يتقدم':'الفريق الثاني يتقدم')}
 setInterval(pkClock,1000);
-async function refresh(){const result=await api();if(!['starting','active','reconnecting'].includes(result.status)){stop('انتهى البث');return}drawState(result);if(result.status==='reconnecting')$('status').textContent='صاحب البث يعيد الاتصال…';else if(!mediaFault&&room.state===ConnectionState.Connected&&(!(config.owner||speaking)||mediaReady))$('status').textContent='مباشر';return result}
-async function poll(){while(!closed){try{await refresh()}catch(e){if(e.name==='MediaFailure'){mediaMessage(e);return}if(['broadcast_forbidden','broadcast_ended','live_authorization_required','admission_refunded'].includes(e.message)){stop('انتهت صلاحية البث');break}$('status').textContent='إعادة الاتصال…'}await new Promise(r=>setTimeout(r,3000))}}
+async function refresh(){
+ const result=await api();controlFailures=0;
+ if(!['starting','active','reconnecting'].includes(result.status)){stop('انتهى البث');return}
+ drawState(result);
+ if(result.status==='reconnecting'||result.status==='starting'){
+  if(!reconnectSince)reconnectSince=Date.now();
+  const late=Date.now()-reconnectSince>=12000;
+  $('status').textContent=result.status==='starting'?(late?'تأخر بدء البث. يمكنك إعادة الاتصال.':'الغرفة تبدأ الآن…'):(late?'صاحب البث يعيد الاتصال. أعد المحاولة.':'صاحب البث يعيد الاتصال…');
+  $('reconnectAction').hidden=connecting||retrying||!late;
+ }else{
+  reconnectSince=0;$('reconnectAction').hidden=true;
+  if(!mediaFault&&room?.state===ConnectionState.Connected&&(!(config.owner||speaking)||mediaReady))$('status').textContent='مباشر';
+ }
+ return result;
+}
+async function poll(){while(!closed){
+ try{await refresh()}
+ catch(e){
+  if(e.name==='MediaFailure'){mediaMessage(e);return}
+  if(['broadcast_forbidden','broadcast_ended','live_authorization_required','admission_refunded'].includes(e.message)){stop('انتهت صلاحية البث');break}
+  controlFailures++;
+  $('status').textContent='تعذّر تحديث الغرفة. نعيد المحاولة…';
+  $('reconnectAction').hidden=controlFailures<3;
+ }
+ await new Promise(r=>setTimeout(r,3000))
+}}
 $('composer').onsubmit=async e=>{e.preventDefault();const input=$('text'),text=input.value.trim();if(!text)return;const b=e.submitter||$('composer').querySelector('button');b.disabled=true;try{await api({action:'comment',text});input.value='';await refresh()}catch(e){message(e)}finally{b.disabled=false}};
-$('mute').onclick=async()=>{try{await room.localParticipant.setMicrophoneEnabled(muted);muted=!muted;$('mute').textContent=muted?'تشغيل الميكروفون':'كتم الميكروفون'}catch(e){message(e)}};
+$('mute').onclick=async()=>{try{await room.localParticipant.setMicrophoneEnabled(muted);muted=!muted;$('mute').textContent=muted?'تشغيل الميكروفون':'كتم الميكروفون';updateQuickMic()}catch(e){message(e)}};
 $('camera').onclick=async()=>{try{await room.localParticipant.setCameraEnabled(cameraOff);cameraOff=!cameraOff;$('camera').textContent=cameraOff?'تشغيل الفيديو':'إيقاف الفيديو';if(!cameraOff){const track=room.localParticipant.getTrackPublication(Track.Source.Camera)?.track;if(track)renderTrack(track,room.localParticipant,true)}else document.querySelectorAll('.tile').forEach(t=>{if(t.dataset.identity===room.localParticipant.identity)t.remove()});layout()}catch(e){message(e)}};
 $('switch').onclick=async()=>{try{const next=facing==='user'?'environment':'user';await room.localParticipant.getTrackPublication(Track.Source.Camera)?.track?.restartTrack({facingMode:next});facing=next;document.querySelectorAll('.tile').forEach(t=>{if(t.dataset.identity===room.localParticipant.identity)t.querySelector('video').style.transform=facing==='user'?'scaleX(-1)':''})}catch(e){$('status').textContent='الكاميرا الأخرى غير متاحة'}};
 $('exit').onclick=()=>{if(config.owner){if(confirm('مغادرتك تنهي البث. هل تريد الإنهاء؟'))api({action:'end'}).then(leave).catch(message)}else leave()};
@@ -226,8 +309,12 @@ $('speaker').onclick=async()=>{
   if(!speakerMuted)try{await el.play()}catch(e){speakerMuted=true;el.muted=true;updateSpeakerControl();$('status').textContent='تعذر تشغيل الصوت. تحقق من صوت الجهاز وأذونات الوسائط.';break}
  }
 };
-$('follow').onclick=()=>api({action:'follow'}).then(refresh).catch(message);$('gift').onclick=giftSheet;$('guests').onclick=guestSheet;$('more').onclick=moreSheet;
+$('follow').onclick=()=>api({action:'follow'}).then(refresh).catch(message);
+$('gift').onclick=giftSheet;$('guests').onclick=guestSheet;
+$('micQuick').onclick=()=>{if(speaking)$('mute').click();else guestSheet()};
+$('more').onclick=moreSheet;
 $('share').onclick=async()=>{const text='انضم إلى بث '+config.ownerName+' «'+config.title+'» على Relaxia. افتح قسم البث المباشر وابحث عن عنوان البث. الدخول الخاص يتطلب تصريحًا.';try{if(window.LayaliLive?.shareLive){window.LayaliLive.shareLive(text);$('status').textContent='نُسخت دعوة البث؛ يمكنك إرسالها إلى أصدقائك.';}else if(navigator.share)await navigator.share({title:'Relaxia · مباشر',text});else if(navigator.clipboard){await navigator.clipboard.writeText(text);$('status').textContent='نُسخت دعوة البث'}else prompt('انسخ دعوة البث',text)}catch(e){if(e.name!=='AbortError')message(e)}};
+$('reconnectAction').onclick=()=>{if(connecting||retrying)return;$('reconnectAction').hidden=true;reconnectSince=Date.now();reconnect()};
 $('retryMedia').onclick=async()=>{if(activating)return;activating=true;try{if(!await consent(config.mode))throw new RelaxiaMedia.MediaFailure('camera_capture',{name:'NotAllowedError'});room?.removeAllListeners();await room?.disconnect();const fresh=await api({action:'token'});state.can_publish=fresh.can_publish;state.publish_sources=fresh.publish_sources;await connect(fresh.token)}catch(e){message(e)}finally{activating=false}};
 
 const heartEmojis=['💜','💖','❤️','💕','✨'];
@@ -252,7 +339,14 @@ if($('emojiBtn'))$('emojiBtn').onclick=()=>{
   button(box,emoji,()=>{const input=$('text');if(!input)return;input.value=(input.value+emoji).slice(0,300);$('sheet').close();input.focus()});
  }
 };
-layout();window.relaxiaStageLoaded=true;
+layout();updateQuickMic();window.relaxiaStageLoaded=true;
+// These seats use room metadata; they are placeholders, not fabricated online users.
+if(config.mode==='audio')drawAudioSeats({
+ max_speakers:config.maxSpeakers||15,
+ speakers:[{identity:'host-'+config.ownerId,name:config.ownerName,owner:true,avatar_url:config.ownerAvatar||''}]
+});
+// Load seats, audience and chat before LiveKit connects, including recovery states.
+if(!polling){polling=true;poll()}
 window.addEventListener('pagehide',()=>{leaving=true;releasePrepared();room?.disconnect()});connect().catch(e=>{message(e);if(e.name!=='MediaFailure')reconnect()});
 
 // Native lifecycle: keep audio connected, release camera while the app is hidden.

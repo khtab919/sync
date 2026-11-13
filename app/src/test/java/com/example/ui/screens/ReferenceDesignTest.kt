@@ -76,16 +76,40 @@ class ReferenceDesignTest {
         screenshot("02-register")
     }
 
+    @Test @Config(qualifiers = "ar-rSA-w320dp-h760dp-port-mdpi")
+    fun compactRoyalHomeShowsOnlyLiveActionsWithoutDuplicateBottomTabs() {
+        var live = 0
+        var audio = 0
+        val user = JSONObject().put("display_name", "خلال").put("selected_frame", 0)
+        compose.setContent {
+            MyApplicationTheme {
+                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    RelaxiaHomeDashboard(
+                        user, 0L, "", {}, {}, {},
+                        onLive = { live++ }, onAudio = { audio++ }
+                    )
+                }
+            }
+        }
+        for (title in listOf("بث مباشر", "غرف صوتية")) {
+            compose.onNodeWithText(title).assertIsDisplayed().performClick()
+        }
+        // Reels and store already have dedicated bottom navigation destinations.
+        compose.onNodeWithText("مشاهدة الريلز").assertDoesNotExist()
+        compose.onNodeWithText("المتجر").assertDoesNotExist()
+        compose.runOnIdle { org.junit.Assert.assertEquals(listOf(1, 1), listOf(live, audio)) }
+        screenshot("21-compact-royal-home-320")
+    }
+
     @Test fun homeOverflowKeepsSecondaryActionsReachable() {
-        var live=0;var wallet=0;var saved=0;var refresh=0
-        compose.setContent { MyApplicationTheme { Surface { Row { HomeToolbarActions({live++},{wallet++},{saved++},{refresh++}) } } } }
+        var support=0;var wallet=0;var saved=0;var refresh=0
+        compose.setContent { MyApplicationTheme { Surface { Row { HomeToolbarActions({},{wallet++},{saved++},{refresh++},{support++}) } } } }
         compose.onNodeWithText("المحفظة والرصيد").assertDoesNotExist()
-        compose.onNodeWithText("مباشر").performClick()
-        for(title in listOf("المحفظة والرصيد","المحفوظات","تحديث المحتوى")) {
+        for(title in listOf("المحفظة والرصيد","المحفوظات","تحديث المحتوى","الدعم والمساعدة")) {
             compose.onNodeWithContentDescription("خيارات التصفح").performClick()
             compose.onNodeWithText(title).performClick()
         }
-        org.junit.Assert.assertEquals(listOf(1,1,1,1),listOf(live,wallet,saved,refresh))
+        org.junit.Assert.assertEquals(listOf(1,1,1,1),listOf(support,wallet,saved,refresh))
         compose.onNodeWithText("المحفظة والرصيد").assertDoesNotExist()
     }
 
@@ -207,8 +231,9 @@ class ReferenceDesignTest {
 
     @Test fun coinPackageShowsPriceAndActualBonus() {
         var chosen=false
-        compose.setContent { MyApplicationTheme { Surface(Modifier.fillMaxSize(),color=MaterialTheme.colorScheme.background) { Column(Modifier.padding(22.dp)) { CoinPackage(2500,100,"25.00",true){chosen=true} } } } }
-        compose.onNodeWithText("2500").assertExists()
+        compose.setContent { MyApplicationTheme { Surface(Modifier.fillMaxSize(),color=MaterialTheme.colorScheme.background) { Column(Modifier.padding(22.dp)) { CoinPackage(2500,100,"25.00",true,null){chosen=true} } } } }
+        screenshot("12-coin-package")
+        compose.onNodeWithText(java.text.NumberFormat.getIntegerInstance(java.util.Locale.US).format(2500)).assertExists()
         compose.onNodeWithText("+100 نقطة ترويجية").performClick()
         org.junit.Assert.assertTrue(chosen)
         screenshot("12-coin-package")
@@ -285,13 +310,31 @@ class ReferenceDesignTest {
         screenshot("16-petroleum-email-login-320")
     }
 
+    @Test fun coinPackageIsLegibleInLightAndDarkMode() {
+        var dark by mutableStateOf(false)
+        compose.setContent {
+            MyApplicationTheme(darkTheme = dark) {
+                Surface(Modifier.width(138.dp)) {
+                    CoinPackage(coins = 1000, bonus = 150, dollars = "10.00", selected = true, badge = "أكبر مكافأة") {}
+                }
+            }
+        }
+        compose.onNodeWithText("1,000").assertExists()
+        compose.onNodeWithText("10.00 USD").assertExists()
+        screenshot("18-coin-package-light")
+        compose.runOnIdle { dark = true }
+        compose.onNodeWithText("1,000").assertExists()
+        compose.onNodeWithText("10.00 USD").assertExists()
+        screenshot("19-coin-package-dark")
+    }
+
     @Test fun bothThemesUseTheRequestedRoyalBluePalette() {
         var dark by mutableStateOf(false)
         var background=androidx.compose.ui.graphics.Color.Unspecified
         var primary=androidx.compose.ui.graphics.Color.Unspecified
         compose.setContent {MyApplicationTheme(darkTheme=dark){val colors=MaterialTheme.colorScheme;SideEffect{background=colors.background;primary=colors.primary};Surface{androidx.compose.material3.Text("Relaxia")}}}
-        compose.runOnIdle{org.junit.Assert.assertEquals(androidx.compose.ui.graphics.Color(0xFFF2F6FD),background);org.junit.Assert.assertEquals(androidx.compose.ui.graphics.Color(0xFF1458C3),primary);dark=true}
-        compose.runOnIdle{org.junit.Assert.assertEquals(androidx.compose.ui.graphics.Color(0xFF101820),background);org.junit.Assert.assertEquals(androidx.compose.ui.graphics.Color(0xFF91BCFF),primary)}
+        compose.runOnIdle{org.junit.Assert.assertEquals(androidx.compose.ui.graphics.Color(0xFFF4F7FF),background);org.junit.Assert.assertEquals(androidx.compose.ui.graphics.Color(0xFF194C9F),primary);dark=true}
+        compose.runOnIdle{org.junit.Assert.assertEquals(androidx.compose.ui.graphics.Color(0xFF080F23),background);org.junit.Assert.assertEquals(androidx.compose.ui.graphics.Color(0xFF9CC3FF),primary)}
     }
 
     @Test fun profileDisplaysPublicNumberAndIndependentHandle() {

@@ -827,11 +827,11 @@ fun FullScreenMediaViewerDialog(
                                     modifier = Modifier
                                         .width(104.dp)
                                         .height(68.dp)
-                                        .clip(RoundedCornerShape(14.dp))
+                                        .clip(RoundedCornerShape(18.dp))
                                         .border(
                                             width = if (selected) 1.5.dp else 1.dp,
                                             color = if (selected) VioletBlueVip else DarkBorderGray,
-                                            shape = RoundedCornerShape(14.dp)
+                                            shape = RoundedCornerShape(18.dp)
                                         )
                                         .clickable { selectedPhotoIndex = idx }
                                 ) {

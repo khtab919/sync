@@ -16,7 +16,7 @@ android {
   defaultConfig {
     // QA preview uses a separate install identity; the production applicationId is untouched.
     applicationId = if (providers.gradleProperty("RELAXIA_QA_SIDE_BY_SIDE").orElse("false").get() == "true") "com.aistudio.layalilounge.x9m4kp.qa116" else "com.aistudio.layalilounge.x9m4kp"
-    manifestPlaceholders["relaxiaAppLabel"] = if (providers.gradleProperty("RELAXIA_QA_SIDE_BY_SIDE").orElse("false").get() == "true") "Relaxia 11.6 QA" else "Relaxia"
+    manifestPlaceholders["relaxiaAppLabel"] = if (providers.gradleProperty("RELAXIA_QA_SIDE_BY_SIDE").orElse("false").get() == "true") "Relaxia 11.7 QA" else "Relaxia"
     minSdk = 24
     targetSdk = 36
     val backendUrl = providers.gradleProperty("LAYALI_API_URL").orElse("").get()
@@ -24,8 +24,8 @@ android {
       "LAYALI_API_URL must be an HTTPS origin"
     }
     buildConfigField("String", "LAYALI_API_URL", "\"$backendUrl\"")
-    versionCode = 37
-    versionName = "11.6.4"
+    versionCode = 39
+    versionName = "11.7.1"
     val revision = providers.environmentVariable("GITHUB_SHA").orElse("local").get().take(12)
     buildConfigField("String", "BUILD_REVISION", "\"$revision\"")
 
@@ -67,12 +67,14 @@ android {
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       // Do not remove or modify this signingConfig assignment. It is necessary for Android apps in
       // AI Studio.
-      signingConfig = signingConfigs.getByName("release")
+      // Produce an UNINSTALLABLE unsigned production artifact for signature recovery.
+      // A distributable update still requires the exact original private signing key.
+      signingConfig = if (providers.gradleProperty("RELAXIA_UNSIGNED_BUILD").orElse("false").get() == "true") null else signingConfigs.getByName("release")
     }
     debug {
       // Do not remove or modify this signingConfig assignment. It is necessary for Android apps in
       // AI Studio.
-      signingConfig = signingConfigs.getByName("debugConfig")
+      signingConfig = if (providers.gradleProperty("RELAXIA_UNSIGNED_BUILD").orElse("false").get() == "true") null else signingConfigs.getByName("debugConfig")
     }
   }
   compileOptions {

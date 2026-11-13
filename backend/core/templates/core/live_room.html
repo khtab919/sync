@@ -3,7 +3,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Relaxia · مباشر</title>
-<link rel="stylesheet" href="/static/core/live-stage.css?v=rooms-5">
+<link rel="stylesheet" href="/static/core/live-stage.css?v=rooms-royal-13">
 <body{% if config.mode == "audio" %} class="audio-mode"{% endif %}>
 <main id="stage">
   <div id="video" aria-label="البث المباشر"{% if config.mode == "audio" %} hidden{% endif %}></div>
@@ -19,7 +19,7 @@
   <div id="floatingHearts" class="floating-hearts-layer" aria-hidden="true"></div>
 
   <header>
-    <button id="exit" class="round" aria-label="خروج">×</button>
+    <button id="exit" class="round" aria-label="خروج"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
     <span id="viewers" class="pill" title="المشاهدون"><svg class="pill-eye" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span id="viewerCount">—</span></span>
     <span class="live-pill"><span class="pulse-dot"></span>{% if config.mode == "audio" %}غرفة صوتية{% else %}بث مباشر{% endif %}</span>
     <button id="profile" class="identity" aria-label="ملف صاحب البث">
@@ -35,7 +35,7 @@
     <button id="follow" class="accent" hidden>متابعة</button>
   </header>
 
-  <div id="connection"><span class="dot"></span><span id="status" role="status">جارٍ الاتصال…</span><button id="retryMedia" hidden>إعادة تجهيز الكاميرا والميكروفون</button><span id="badge"></span></div>
+  <div id="connection"><span class="dot"></span><span id="status" role="status">جارٍ الاتصال…</span><button id="retryMedia" hidden>إعادة تجهيز الكاميرا والميكروفون</button><button id="reconnectAction" type="button" hidden>إعادة الاتصال</button><span id="badge"></span></div>
   <section id="pk" hidden><div id="pkTeams"></div><progress id="pkProgress" max="100" value="50"></progress><small id="pkTimer"></small></section>
 
   <div id="goal" class="goal-card" hidden>
@@ -49,7 +49,7 @@
 
   <div id="giftEffect" aria-live="polite" hidden></div>
   <div id="pinned" hidden></div>
-  <section id="messages" aria-label="التعليقات"></section>
+  <section id="messages" role="log" aria-live="polite" aria-relevant="additions" aria-label="التعليقات"></section>
 
   <footer>
     <div id="publisherControls" hidden>
@@ -58,13 +58,14 @@
       <button id="switch">تبديل الكاميرا</button>
     </div>
     <div class="bottom">
-      <button id="more" class="tool-circle" aria-label="المزيد">•••</button>
-      <button id="gift" class="tool-circle" aria-label="هدية"{% if config.mode == "audio" or not config.gifts %} hidden{% endif %}>🎁</button>
-      <button id="speaker" class="tool-circle" type="button" aria-label="كتم صوت الغرفة"{% if config.mode != "audio" %} hidden{% endif %}>🔊</button>
-      <button id="guests" class="tool-circle" aria-label="الضيوف">👥</button>
-      <button id="share" class="tool-circle" aria-label="مشاركة">↗</button>
+      <button id="more" class="tool-circle" type="button" aria-label="المزيد من خيارات الغرفة"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>
+      <button id="gift" class="tool-circle" type="button" aria-label="هدية" hidden>🎁</button>
+      <button id="speaker" class="tool-circle" type="button" aria-label="كتم صوت الغرفة" hidden>🔊</button>
+      <button id="guests" class="tool-circle" type="button" aria-label="المقاعد والضيوف"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 20v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/><circle cx="9.5" cy="7.5" r="3.5"/><path d="M17 4.4a3.4 3.4 0 0 1 0 6.6M20.5 20v-2a4 4 0 0 0-3-3.87"/></svg></button>
+      <button id="micQuick" class="tool-circle" type="button" aria-label="المقاعد وطلب التحدث">🎙</button>
+      <button id="share" class="tool-circle" type="button" aria-label="مشاركة" hidden>↗</button>
       <form id="composer">
-        <input id="text" maxlength="300" placeholder="اكتب رسالة…" aria-label="اكتب تعليقًا" autocomplete="off">
+        <input id="text" maxlength="300" placeholder="اكتب تعليقًا…" aria-label="اكتب تعليقًا" autocomplete="off">
         <button id="emojiBtn" type="button" class="composer-emoji" aria-label="رمز تعبيري">😊</button>
         <button class="composer-send" aria-label="إرسال التعليق">↑</button>
       </form>
@@ -108,7 +109,7 @@
 })();
 </script>
 <script src="/static/core/livekit-client.umd.min.js"></script>
-<script src="/static/core/live-media.js?v=rooms-5"></script>
-<script src="/static/core/live-stage.js?v=rooms-5"></script>
+<script src="/static/core/live-media.js?v=rooms-royal-13"></script>
+<script src="/static/core/live-stage.js?v=rooms-royal-13"></script>
 </body>
 </html>
