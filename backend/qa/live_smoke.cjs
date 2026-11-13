@@ -62,6 +62,8 @@ const base='http://127.0.0.1:8880';
  await contexts[0].addInitScript(()=>{navigator.mediaDevices.getUserMedia=async()=>{throw new DOMException('Denied by regression test','NotAllowedError')}});
  const deniedCreated=await api(0,'/api/live',{title:'Synthetic denied camera',max_viewers:1,minimum_seconds:30});if(deniedCreated.status!==201)throw Error('Denied fixture create failed');
  const denied=await open(0,deniedCreated.value,true);
+ // The Chromium camera capture error is asynchronous under real CI load.
+ await denied.waitForFunction(()=>mediaFault===true,null,{timeout:15000});
  if(!await denied.evaluate(()=>mediaFault&&typeof room==='undefined'&&document.getElementById('status').textContent.includes('الكاميرا')))throw Error('Camera failure remained silent or attempted signaling');
  await api(0,'/api/live/'+deniedCreated.value.id,{action:'end'});
  console.log(JSON.stringify({cameraDenialExplicit:true,audioOnlyNoCamera:true,actualSpeakers:12,actualGuestAudioTracksAtHost:11,guestVideoPublished:true,pkFromSettledGift:true,giftDebitOnce:true,offlineRecovery:true,guestRevocation:true,actualSfuViewers:12,hostPublishing:true,hostDecodedPreview:true,allReceivedRtp:stats.every(x=>x.bytesReceived>0),viewerStats:stats,unpaidRejected:true,forgedLinkRejected:true,freshTokenReconnect:true,reentryNoDuplicateCharge:true,comments:true,endedDisconnectsAll:true,recordingServices:0,devices:'synthetic browser media; not a production capacity benchmark'}));
