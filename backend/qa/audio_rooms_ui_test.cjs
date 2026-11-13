@@ -48,7 +48,7 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    await page.locator('#more').click();
    await page.getByRole('button',{name:'تشغيل صوت الغرفة',exact:true}).click();
    assert.equal(await page.locator('audio[data-live-remote]').evaluate(el=>el.muted),false);
-   await page.locator('#emojiBtn').click();
+   if(width<=380){await page.locator('#more').click();await page.getByRole('button',{name:'الرموز التعبيرية',exact:true}).click();}else await page.locator('#emojiBtn').click();
    await page.getByRole('button',{name:'🎉',exact:true}).click();
    assert.equal(await page.locator('#text').inputValue(),'🎉');
    await page.locator('.composer-send').click();
