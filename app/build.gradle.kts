@@ -67,7 +67,9 @@ android {
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       // Do not remove or modify this signingConfig assignment. It is necessary for Android apps in
       // AI Studio.
-      signingConfig = signingConfigs.getByName("release")
+      // Produce an UNINSTALLABLE unsigned production artifact for signature recovery.
+      // A distributable update still requires the exact original private signing key.
+      signingConfig = if (providers.gradleProperty("RELAXIA_UNSIGNED_BUILD").orElse("false").get() == "true") null else signingConfigs.getByName("release")
     }
     debug {
       // Do not remove or modify this signingConfig assignment. It is necessary for Android apps in
