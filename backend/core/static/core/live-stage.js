@@ -206,6 +206,8 @@ function drawAudioSeats(result){
 }
 function updateQuickMic(){
  const button=$('micQuick');if(!button)return;
+ // Viewers already have the guest seat button. Only speakers need a quick mic.
+ button.hidden=!speaking;
  button.textContent=speaking?(muted?'🔇':'🎙'):'🎙';
  button.setAttribute('aria-pressed',String(speaking&&!muted));
  button.setAttribute('aria-label',speaking?(muted?'تشغيل الميكروفون':'كتم الميكروفون'):'المقاعد وطلب التحدث');
@@ -213,6 +215,7 @@ function updateQuickMic(){
 
 function peopleSheet(){const box=sheet('المشاهدون والمشرفون');for(const p of state.participants||[]){note(box,p.name);button(box,'حظر '+p.name,async()=>{if(confirm('حظر هذا المستخدم من البث؟')){await api({action:'ban',user_id:p.user_id});await refresh()}});if(config.owner){const isMod=state.moderator_ids?.includes(p.user_id);button(box,(isMod?'إزالة إشراف ':'تعيين مشرف ')+p.name,()=>api({action:'set_moderator',user_id:p.user_id,enabled:!isMod}).then(refresh))}}}
 function moreSheet(){const box=sheet('أدوات الغرفة');
+ if(window.innerWidth<=380)button(box,'الرموز التعبيرية',()=>{$('sheet').close();$('emojiBtn').click()});
  if(!config.owner)button(box,state.following?'إلغاء متابعة المضيف':'متابعة المضيف',()=>api({action:'follow'}).then(refresh));
  if(config.mode==='audio')button(box,speakerMuted?'تشغيل صوت الغرفة':'كتم صوت الغرفة',()=>{$('sheet').close();$('speaker').click()});
  button(box,'مشاركة الغرفة',()=>{$('sheet').close();$('share').click()});
@@ -318,7 +321,7 @@ if($('emojiBtn'))$('emojiBtn').onclick=()=>{
   button(box,emoji,()=>{const input=$('text');if(!input)return;input.value=(input.value+emoji).slice(0,300);$('sheet').close();input.focus()});
  }
 };
-layout();window.relaxiaStageLoaded=true;
+layout();updateQuickMic();window.relaxiaStageLoaded=true;
 // These seats use room metadata; they are placeholders, not fabricated online users.
 if(config.mode==='audio')drawAudioSeats({
  max_speakers:config.maxSpeakers||15,

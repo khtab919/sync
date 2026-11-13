@@ -880,3 +880,9 @@ html[data-theme=light] body.audio-mode .goal-card{color:#fff}
 
 /* Royal-blue daylight remains inspectable without image gradients. */
 html[data-theme=light] body.audio-mode #stage{background-color:#D7E8FF}
+
+/* v8: reachable tool sheet, spacious comment composer, no duplicate audience mic. */
+body.audio-mode footer{padding:7px 9px max(10px,env(safe-area-inset-bottom,0px))}
+body.audio-mode #sheet{inset:auto 10px 8px!important;margin:0 auto!important;width:calc(100% - 20px)!important;max-width:600px!important;max-height:min(74dvh,calc(var(--room-viewport-height,100dvh) - 20px))!important;overflow-y:auto}
+body.audio-mode #sheet .sheet-head{position:sticky;top:-17px;z-index:2;background:#15396F;padding:8px 4px;margin-bottom:9px;border-radius:16px}
+@media(max-width:380px){body.audio-mode #composer .composer-emoji{display:none}body.audio-mode footer .bottom{gap:5px}body.audio-mode footer .tool-circle{width:40px;height:40px;min-height:40px;flex-basis:40px}body.audio-mode footer #composer{min-width:120px}body.audio-mode footer #composer input{font-size:13px}}

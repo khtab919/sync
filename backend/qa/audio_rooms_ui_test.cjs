@@ -34,13 +34,14 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    assert.equal(await page.locator('#speaker').isVisible(),false);
    assert.equal(await page.locator('#share').isVisible(),false);
    assert.equal(await page.locator('#gift').isVisible(),false);
-   assert.equal(await page.locator('#micQuick').isVisible(),true);
+   assert.equal(await page.locator('#micQuick').isVisible(),false,'no duplicate quick microphone for audience');
    assert.equal(await page.locator('#bigGiftBtn').isVisible(),true);
    assert.equal(await page.locator('#viewers').isVisible(),true);
    await page.evaluate(()=>{
      const audio=document.createElement('audio');audio.dataset.liveRemote='1';audio.play=()=>Promise.resolve();document.body.append(audio);
    });
    await page.locator('#more').click();
+   if(width<=380){await page.getByRole('button',{name:'الرموز التعبيرية',exact:true}).click();await page.locator('#closeSheet').click();await page.locator('#more').click();}
    await page.getByRole('button',{name:'كتم صوت الغرفة',exact:true}).click();
    assert.equal(await page.locator('audio[data-live-remote]').evaluate(el=>el.muted),true);
    assert.equal(await page.locator('#speaker').getAttribute('aria-label'),'تشغيل صوت الغرفة');
@@ -71,7 +72,7 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    assert.ok(layout.overflowX<=2,'room must fit phone width');
    assert.ok(layout.overflowY<=2,'room must not slide vertically');
    assert.ok(layout.seatsScrollable<=2,'audio seats must not scroll independently');
-   assert.equal(layout.actions,4,'room footer must show four primary action buttons');
+   assert.equal(layout.actions,3,'only three distinct primary viewer actions');
    await page.evaluate(()=>{const before=document.querySelector('.audio-seat');window.seatBefore=before;drawAudioSeats({max_speakers:15,speakers:[{identity:'host-1',name:'مضيف تجريبي',owner:true,avatar_url:''}]})});
    assert.equal(await page.evaluate(()=>seatBefore===document.querySelector('.audio-seat')),true,'poll must not rebuild unchanged seats');
    await page.locator('.empty-seat').first().click();
