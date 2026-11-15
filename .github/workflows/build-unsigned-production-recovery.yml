@@ -68,7 +68,7 @@ jobs:
           Path('SIGNING-REQUIRED.txt').write_text(
             "NOT INSTALLABLE. NOT AN APP UPDATE.\\n"
             "Production package: com.aistudio.layalilounge.x9m4kp\\n"
-            "Version: 11.7.1 (38)\\n"
+            "Version: 11.7.1 (39)\\n"
             "This unsigned APK requires the ORIGINAL production private keystore.\\n"
             "Never generate or substitute a new signing identity to update an installed app.\\n"
             "The GitHub production build workflow stops safely when its key is unavailable.\\n"
