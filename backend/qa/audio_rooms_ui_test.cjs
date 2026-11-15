@@ -60,6 +60,24 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    assert.equal(await page.locator('#text').inputValue(),'🎉');
    await page.locator('.composer-send').click();
    assert.equal(await page.evaluate(()=>sent.find(a=>a.action==='comment')?.text),'🎉');
+   assert.equal(await page.locator('#text').inputValue(),'','sent text is cleared');
+   assert.equal(await page.locator('#commentNotice').innerText(),'تم إرسال التعليق','chat confirms send');
+   const composerBounds=await page.locator('#composer').boundingBox();
+   assert.ok(composerBounds.width>=width-30,'composer spans the available viewport');
+   await page.evaluate(()=>{api=async action=>{
+    if(action?.action==='comment')throw Error('network');
+    if(action)window.sent.push(action);
+    return window.qaRoom;
+   }});
+   await page.locator('#text').fill('تعليق غير مُرسل');
+   await page.locator('#sendComment').click();
+   assert.equal(await page.locator('#text').inputValue(),'تعليق غير مُرسل','failed comment draft is retained');
+   assert.ok(await page.locator('#commentNotice').getAttribute('class')==='error','failed comment has visible error feedback');
+   await page.evaluate(()=>{api=async action=>{
+    if(action)window.sent.push(action);
+    return window.qaRoom;
+   }});
+   await page.locator('#text').fill('');
    await page.locator('#more').click();
    await page.getByRole('button',{name:'إعجاب بالبث',exact:true}).click();
    assert.equal(await page.evaluate(()=>sent.filter(a=>a.action==='like').length),1);
@@ -85,6 +103,23 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    assert.ok(layout.overflowY<=2,'room must not slide vertically');
    assert.ok(layout.seatsScrollable<=2,'audio seats must not scroll independently');
    assert.equal(layout.actions,3,'only three distinct primary viewer actions');
+   assert.equal(await page.locator('.comment-empty').count(),1,'comments have an honest empty state');
+   await page.locator('#more').click();
+   assert.ok(await page.getByText('التعليقات والتفاعل',{exact:true}).isVisible(),'settings are grouped by purpose');
+   await page.getByRole('button',{name:'إخفاء التعليقات',exact:true}).click();
+   assert.equal(await page.locator('#messages').isVisible(),false,'comments can be hidden');
+   await page.locator('#more').click();
+   await page.getByRole('button',{name:'إظهار التعليقات',exact:true}).click();
+   assert.equal(await page.locator('#messages').isVisible(),true,'comments can be restored');
+   await page.evaluate(()=>{
+    qaRoom={...qaRoom,manage_room:true,comments:[{id:451,name:'عضو',text:'رسالة للاختبار'}]};
+    drawState(qaRoom);
+   });
+   assert.equal(await page.locator('.comment-actions').count(),1,'moderation actions are not repeated inline');
+   await page.locator('.comment-actions').click();
+   await page.getByRole('button',{name:'تثبيت التعليق',exact:true}).click();
+   assert.equal(await page.evaluate(()=>sent.filter(a=>a.action==='pin_comment').length),1);
+   await page.evaluate(()=>{qaRoom={...qaRoom,manage_room:false,comments:[]};drawState(qaRoom)});
    await page.evaluate(()=>{const before=document.querySelector('.audio-seat');window.seatBefore=before;drawAudioSeats({max_speakers:15,speakers:[{identity:'host-1',name:'مضيف تجريبي',owner:true,avatar_url:''}]})});
    assert.equal(await page.evaluate(()=>seatBefore===document.querySelector('.audio-seat')),true,'poll must not rebuild unchanged seats');
    await page.locator('.empty-seat').first().click();
