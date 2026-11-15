@@ -974,3 +974,6 @@ body:not(.audio-mode) #commentNotice{position:absolute;z-index:12;bottom:calc(va
 body:not(.audio-mode) #commentNotice.error{background:#66233C;color:#FFF2F5}
 @media(max-height:680px){#stage{--room-footer-height:116px}footer .bottom{gap:6px}}
 @media(max-height:560px){#stage{--room-footer-height:112px}footer .quick-actions>.tool-circle{width:40px;height:40px;min-height:40px;flex-basis:40px}}
+
+/* Hide redundant connected status; keep failures and reconnect notices visible. */
+#connection.is-ready:not(.media-fault){display:none!important}
