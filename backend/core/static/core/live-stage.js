@@ -105,7 +105,7 @@ async function connect(token=config.token){
  room.on(RoomEvent.TrackSubscribed,(track,pub,participant)=>renderTrack(track,participant));
  room.on(RoomEvent.TrackUnsubscribed,track=>{track.detach().forEach(el=>{const tile=el.closest('.tile');el.remove();tile?.remove()});layout()});
  room.on(RoomEvent.ConnectionStateChanged,s=>{if(mediaFault)return;$('connection').classList.remove('is-ready');$('status').textContent=s===ConnectionState.Connected?((config.owner||speaking)&&!mediaReady?'جارٍ نشر الصوت والصورة…':'متصل'):s===ConnectionState.Reconnecting?'إعادة الاتصال…':'جارٍ الاتصال…'});
- room.on(RoomEvent.ConnectionQualityChanged,(q,p)=>{if(p===room.localParticipant&&['poor','lost'].includes(String(q).toLowerCase()))$('status').textContent='الشبكة ضعيفة · يجري تكييف الجودة'});
+ room.on(RoomEvent.ConnectionQualityChanged,(q,p)=>{if(p===room.localParticipant&&['poor','lost'].includes(String(q).toLowerCase())){$('connection').classList.remove('is-ready');$('status').textContent='الشبكة ضعيفة · يجري تكييف الجودة'}});
  room.on(RoomEvent.ActiveSpeakersChanged,participants=>{activeSpeakerIds=new Set(participants.map(p=>p.identity));document.querySelectorAll('.audio-person').forEach(el=>el.classList.toggle('speaking',activeSpeakerIds.has(el.dataset.identity)))});
  room.on(RoomEvent.Disconnected,()=>{if(!closed&&!leaving)reconnect()});
  await connectWithTimeout(room,config.url,token);$('reconnectAction').hidden=true;for(const participant of room.remoteParticipants.values()){for(const publication of participant.trackPublications.values()){if(publication.isSubscribed&&publication.track)renderTrack(publication.track,participant);}}if(closed||leaving){room.removeAllListeners();await room.disconnect();releasePrepared();return}if(config.owner||speaking)await enableTracks();$('status').textContent='مباشر';
@@ -114,7 +114,7 @@ async function connect(token=config.token){
  }catch(e){room?.removeAllListeners();try{await room?.disconnect()}finally{releasePrepared();mediaReady=false}throw e}
  finally{connecting=false}
 }
-async function reconnect(){if(retrying||connecting||closed||leaving)return;retrying=true;try{for(let attempt=0;attempt<6&&!closed&&!leaving;attempt++){$('status').textContent='إعادة الاتصال…';await new Promise(r=>setTimeout(r,Math.min(5000,1000*(attempt+1))));try{const fresh=await api({action:'token'});state.can_publish=fresh.can_publish;state.publish_sources=fresh.publish_sources;if(closed||leaving)return;room?.removeAllListeners();await room?.disconnect();document.querySelectorAll('audio').forEach(el=>el.remove());$('video').replaceChildren();if(state.can_publish===false&&!config.owner)speaking=false;await connect(fresh.token);return}catch(e){if(e.name==='MediaFailure'){mediaMessage(e);return}if(['broadcast_forbidden','broadcast_ended','live_authorization_required','admission_refunded','feature_restricted','broadcast_permission_required'].includes(e.message)){stop('انتهت صلاحية البث');return}}}if(!closed&&!leaving){$('status').textContent='تعذّر الاتصال. جرّب إعادة الاتصال دون شراء دخول جديد.';$('reconnectAction').hidden=false}}finally{retrying=false}}
+async function reconnect(){if(retrying||connecting||closed||leaving)return;retrying=true;try{for(let attempt=0;attempt<6&&!closed&&!leaving;attempt++){$('connection').classList.remove('is-ready');$('status').textContent='إعادة الاتصال…';await new Promise(r=>setTimeout(r,Math.min(5000,1000*(attempt+1))));try{const fresh=await api({action:'token'});state.can_publish=fresh.can_publish;state.publish_sources=fresh.publish_sources;if(closed||leaving)return;room?.removeAllListeners();await room?.disconnect();document.querySelectorAll('audio').forEach(el=>el.remove());$('video').replaceChildren();if(state.can_publish===false&&!config.owner)speaking=false;await connect(fresh.token);return}catch(e){if(e.name==='MediaFailure'){mediaMessage(e);return}if(['broadcast_forbidden','broadcast_ended','live_authorization_required','admission_refunded','feature_restricted','broadcast_permission_required'].includes(e.message)){stop('انتهت صلاحية البث');return}}}if(!closed&&!leaving){$('status').textContent='تعذّر الاتصال. جرّب إعادة الاتصال دون شراء دخول جديد.';$('reconnectAction').hidden=false}}finally{retrying=false}}
 function sheet(title){$('sheetTitle').textContent=title;$('sheetBody').replaceChildren();if(!$('sheet').open)$('sheet').showModal();return $('sheetBody')}
 function button(box,label,fn,cls=''){const b=document.createElement('button');b.textContent=label;b.className=cls;b.onclick=async()=>{if(b.disabled)return;b.disabled=true;try{await fn()}catch(e){message(e)}finally{b.disabled=false}};box.appendChild(b);return b}
 function note(box,text){const p=document.createElement('p');p.textContent=text;box.appendChild(p)}
@@ -333,7 +333,7 @@ async function poll(){while(!closed){
   if(e.name==='MediaFailure'){mediaMessage(e);return}
   if(['broadcast_forbidden','broadcast_ended','live_authorization_required','admission_refunded'].includes(e.message)){stop('انتهت صلاحية البث');break}
   controlFailures++;
-  $('status').textContent='تعذّر تحديث الغرفة. نعيد المحاولة…';
+  $('connection').classList.remove('is-ready');$('status').textContent='تعذّر تحديث الغرفة. نعيد المحاولة…';
   $('reconnectAction').hidden=controlFailures<3;
  }
  await new Promise(r=>setTimeout(r,3000))
