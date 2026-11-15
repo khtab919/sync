@@ -3,7 +3,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Relaxia · مباشر</title>
-<link rel="stylesheet" href="/static/core/live-stage.css?v=rooms-royal-13">
+<link rel="stylesheet" href="/static/core/live-stage.css?v=rooms-royal-14">
 <body{% if config.mode == "audio" %} class="audio-mode"{% endif %}>
 <main id="stage">
   <div id="video" aria-label="البث المباشر"{% if config.mode == "audio" %} hidden{% endif %}></div>
@@ -51,6 +51,7 @@
   <div id="pinned" hidden></div>
   <section id="messages" role="log" aria-live="polite" aria-relevant="additions" aria-label="التعليقات"></section>
 
+  <div id="commentNotice" role="status" aria-live="polite" hidden></div>
   <footer>
     <div id="publisherControls" hidden>
       <button id="mute">كتم الميكروفون</button>
@@ -58,18 +59,20 @@
       <button id="switch">تبديل الكاميرا</button>
     </div>
     <div class="bottom">
-      <button id="more" class="tool-circle" type="button" aria-label="المزيد من خيارات الغرفة"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>
-      <button id="gift" class="tool-circle" type="button" aria-label="هدية" hidden>🎁</button>
-      <button id="speaker" class="tool-circle" type="button" aria-label="كتم صوت الغرفة" hidden>🔊</button>
-      <button id="guests" class="tool-circle" type="button" aria-label="المقاعد والضيوف"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 20v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/><circle cx="9.5" cy="7.5" r="3.5"/><path d="M17 4.4a3.4 3.4 0 0 1 0 6.6M20.5 20v-2a4 4 0 0 0-3-3.87"/></svg></button>
-      <button id="micQuick" class="tool-circle" type="button" aria-label="المقاعد وطلب التحدث">🎙</button>
-      <button id="share" class="tool-circle" type="button" aria-label="مشاركة" hidden>↗</button>
-      <form id="composer">
+      <div class="quick-actions" role="group" aria-label="أدوات البث">
+        <button id="more" class="tool-circle" type="button" aria-label="المزيد من خيارات الغرفة"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>
+        <button id="gift" class="tool-circle" type="button" aria-label="هدية" hidden>🎁</button>
+        <button id="speaker" class="tool-circle" type="button" aria-label="كتم صوت الغرفة" hidden>🔊</button>
+        <button id="guests" class="tool-circle" type="button" aria-label="المقاعد والضيوف"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 20v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/><circle cx="9.5" cy="7.5" r="3.5"/><path d="M17 4.4a3.4 3.4 0 0 1 0 6.6M20.5 20v-2a4 4 0 0 0-3-3.87"/></svg></button>
+        <button id="micQuick" class="tool-circle" type="button" aria-label="المقاعد وطلب التحدث">🎙</button>
+        <button id="share" class="tool-circle" type="button" aria-label="مشاركة" hidden>↗</button>
+        <button id="bigGiftBtn" class="gift-fab" aria-label="إرسال هدية"{% if not config.gifts %} hidden{% endif %}>🎁</button>
+      </div>
+      <form id="composer" aria-label="كتابة تعليق في الغرفة">
         <input id="text" maxlength="300" placeholder="اكتب تعليقًا…" aria-label="اكتب تعليقًا" autocomplete="off">
         <button id="emojiBtn" type="button" class="composer-emoji" aria-label="رمز تعبيري">😊</button>
-        <button class="composer-send" aria-label="إرسال التعليق">↑</button>
+        <button id="sendComment" type="submit" class="composer-send" aria-label="إرسال التعليق">↑</button>
       </form>
-      <button id="bigGiftBtn" class="gift-fab" aria-label="إرسال هدية"{% if not config.gifts %} hidden{% endif %}>🎁</button>
     </div>
   </footer>
 
@@ -109,7 +112,7 @@
 })();
 </script>
 <script src="/static/core/livekit-client.umd.min.js"></script>
-<script src="/static/core/live-media.js?v=rooms-royal-13"></script>
-<script src="/static/core/live-stage.js?v=rooms-royal-13"></script>
+<script src="/static/core/live-media.js?v=rooms-royal-14"></script>
+<script src="/static/core/live-stage.js?v=rooms-royal-14"></script>
 </body>
 </html>

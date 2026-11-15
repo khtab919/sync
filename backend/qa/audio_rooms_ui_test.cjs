@@ -79,7 +79,7 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
     overflowX:document.documentElement.scrollWidth-innerWidth,
     overflowY:document.getElementById('stage').scrollHeight-document.getElementById('stage').clientHeight,
     seatsScrollable:document.getElementById('audioStage').scrollHeight-document.getElementById('audioStage').clientHeight,
-    actions:[...document.querySelectorAll('.bottom > button')].filter(x=>!x.hidden&&getComputedStyle(x).display!=='none').length
+    actions:[...document.querySelectorAll('.quick-actions > button')].filter(x=>!x.hidden&&getComputedStyle(x).display!=='none').length
    }));
    assert.ok(layout.overflowX<=2,'room must fit phone width');
    assert.ok(layout.overflowY<=2,'room must not slide vertically');
