@@ -118,6 +118,18 @@ async function reconnect(){if(retrying||connecting||closed||leaving)return;retry
 function sheet(title){$('sheetTitle').textContent=title;$('sheetBody').replaceChildren();if(!$('sheet').open)$('sheet').showModal();return $('sheetBody')}
 function button(box,label,fn,cls=''){const b=document.createElement('button');b.textContent=label;b.className=cls;b.onclick=async()=>{if(b.disabled)return;b.disabled=true;try{await fn()}catch(e){message(e)}finally{b.disabled=false}};box.appendChild(b);return b}
 function note(box,text){const p=document.createElement('p');p.textContent=text;box.appendChild(p)}
+function sectionHeading(box,title){const h=document.createElement('h3');h.className='room-setting-heading';h.textContent=title;box.append(h)}
+function commentNotice(text,isError=false){
+ const el=$('commentNotice');if(!el)return;
+ el.hidden=!text;el.textContent=text;el.classList.toggle('error',!!isError);
+}
+function commentActionsSheet(comment){
+ if(!state.manage_room)return;
+ const box=sheet('إدارة التعليق');
+ note(box,(comment.name||'مستخدم')+' · '+(comment.text||''));
+ button(box,'تثبيت التعليق',async()=>{await api({action:'pin_comment',comment_id:comment.id});$('sheet').close();await refresh()});
+ button(box,'حذف التعليق',async()=>{if(!confirm('حذف التعليق من الغرفة؟'))return;await api({action:'delete_comment',comment_id:comment.id});$('sheet').close();await refresh()},'danger');
+}
 $('closeSheet').onclick=()=>$('sheet').close();$('sheet').addEventListener('click',e=>{if(e.target===$('sheet'))$('sheet').close()});
 async function consent(mode){
  if(!window.LayaliLive?.requestPublishPermissions)return true;
@@ -232,20 +244,48 @@ function peopleSheet(){
   }
  }
 }
-function moreSheet(){const box=sheet('أدوات الغرفة');
- if(window.innerWidth<=380)button(box,'الرموز التعبيرية',()=>{$('sheet').close();$('emojiBtn').click()});
- if(!config.owner)button(box,state.following?'إلغاء متابعة المضيف':'متابعة المضيف',()=>api({action:'follow'}).then(refresh));
+function moreSheet(){
+ const box=sheet('إعدادات وأدوات البث');
+ sectionHeading(box,'الصوت والمقاعد');
  if(config.mode==='audio')button(box,speakerMuted?'تشغيل صوت الغرفة':'كتم صوت الغرفة',()=>{$('sheet').close();$('speaker').click()});
- button(box,'مشاركة الغرفة',()=>{$('sheet').close();$('share').click()});
- if(speaking&&(state.publish_sources||[]).includes('camera')){
-  button(box,cameraOff?'تشغيل الكاميرا':'إيقاف الكاميرا',()=>{$('sheet').close();$('camera').click()});
-  button(box,'تبديل الكاميرا',()=>{$('sheet').close();$('switch').click()});
+ if(speaking){
+  button(box,muted?'تشغيل ميكروفوني':'كتم ميكروفوني',()=>{$('sheet').close();$('mute').click()});
+  if((state.publish_sources||[]).includes('camera')){
+   button(box,cameraOff?'تشغيل الكاميرا':'إيقاف الكاميرا',()=>{$('sheet').close();$('camera').click()});
+   button(box,'تبديل الكاميرا',()=>{$('sheet').close();$('switch').click()});
+   button(box,'جودة الفيديو · '+quality+'p',qualitySheet);
+  }
  }
- button(box,state.liked?'أعجبك هذا البث':'إعجاب بالبث',()=>api({action:'like'}).then(refresh));button(box,commentsVisible?'إخفاء التعليقات':'إظهار التعليقات',()=>{commentsVisible=!commentsVisible;$('messages').hidden=!commentsVisible;$('pinned').hidden=!commentsVisible||!state.pinned_comment;$('sheet').close()});if(state.manage_room)button(box,'المشاهدون والإشراف',peopleSheet);if(config.owner&&state.speakers?.length>=2)button(box,'منافسة PK',pkSheet);
- if(speaking){button(box,'جودة الفيديو · '+quality+'p',qualitySheet)}
- button(box,'إحصائيات البث',()=>{const b=sheet('إحصائيات البث');note(b,'المشاهدون المتصلون الآن: '+(state.viewers||0));note(b,'الإعجابات: '+(state.likes||0));note(b,'قيمة الهدايا: '+(state.gift_total_cents||0));if(config.owner)note(b,'حصة مستلمي الهدايا المستحقة: '+(state.earned_cents||0));for(const p of state.top_supporters||[])note(b,p.name+' · '+p.total)});
- button(box,'الإبلاغ عن البث',async()=>{const reason=prompt('سبب الإبلاغ (3 أحرف على الأقل)');if(reason&&reason.trim().length>=3){await api({action:'report',reason});$('status').textContent='وصل البلاغ إلى الإدارة';$('sheet').close()}});
- if(config.owner)button(box,'إنهاء البث للجميع',async()=>{if(confirm('إنهاء البث للجميع؟')){await api({action:'end'});stop('انتهى البث')}},'danger')}
+ button(box,'المقاعد وطلبات التحدث',guestSheet);
+ sectionHeading(box,'التعليقات والتفاعل');
+ button(box,commentsVisible?'إخفاء التعليقات':'إظهار التعليقات',()=>{
+  commentsVisible=!commentsVisible;$('messages').hidden=!commentsVisible;
+  $('pinned').hidden=!commentsVisible||!state.pinned_comment;$('sheet').close()
+ });
+ if(window.innerWidth<=380)button(box,'الرموز التعبيرية',()=>{$('sheet').close();$('emojiBtn').click()});
+ button(box,state.liked?'أعجبك هذا البث':'إعجاب بالبث',()=>api({action:'like'}).then(refresh));
+ if(!config.owner)button(box,state.following?'إلغاء متابعة المضيف':'متابعة المضيف',()=>api({action:'follow'}).then(refresh));
+ button(box,'مشاركة الغرفة',()=>{$('sheet').close();$('share').click()});
+ sectionHeading(box,'الإدارة والمعلومات');
+ if(state.manage_room)button(box,'المشاهدون والمشرفون',peopleSheet);
+ if(config.owner&&state.speakers?.length>=2)button(box,'منافسة PK',pkSheet);
+ button(box,'إحصائيات البث',()=>{
+  const b=sheet('إحصائيات البث');
+  note(b,'المشاهدون المتصلون الآن: '+(state.viewers||0));
+  note(b,'الإعجابات: '+(state.likes||0));
+  note(b,'قيمة الهدايا: '+(state.gift_total_cents||0));
+  if(config.owner)note(b,'حصة مستلمي الهدايا المستحقة: '+(state.earned_cents||0));
+  for(const p of state.top_supporters||[])note(b,p.name+' · '+p.total);
+ });
+ sectionHeading(box,'السلامة');
+ button(box,'الإبلاغ عن البث',async()=>{
+  const reason=prompt('سبب الإبلاغ (3 أحرف على الأقل)');
+  if(reason&&reason.trim().length>=3){await api({action:'report',reason});$('status').textContent='وصل البلاغ إلى الإدارة';$('sheet').close()}
+ });
+ if(config.owner)button(box,'إنهاء البث للجميع',async()=>{
+  if(confirm('إنهاء البث للجميع؟')){await api({action:'end'});stop('انتهى البث')}
+ },'danger');
+}
 function qualitySheet(){const box=sheet('جودة الفيديو');note(box,'تتكيّف جودة النقل تلقائيًا. 1080p تعتمد على الكاميرا والجهاز والشبكة.');for(const q of [360,720,1080])button(box,q+'p',async()=>{const track=room.localParticipant.getTrackPublication(Track.Source.Camera)?.track;if(!track)throw Error('camera_unavailable');await track.restartTrack({resolution:{width:Math.round(q*16/9),height:q,frameRate:q===360?20:30},facingMode:facing});quality=q;$('sheet').close()})}
 function playEffects(){
  if(effectBusy||!giftQueue.length)return;effectBusy=true;
@@ -262,7 +302,7 @@ function playEffects(){
  setTimeout(()=>{box.hidden=true;effectBusy=false;playEffects()},reduced?1600:effect==='simple'?1600:effect==='depth'?3800:2600);
 }
 function drawState(result){state=result;updateQuickMic();document.querySelectorAll('.tile').forEach(t=>{const speaker=result.speakers?.find(s=>s.identity===t.dataset.identity);if(speaker)t.querySelector('small').textContent=speaker.name});serverOffset=Date.parse(result.server_time)-Date.now();const vCount=result.viewers||0;if($('viewerCount'))$('viewerCount').textContent=vCount>=1000?(vCount/1000).toFixed(1)+'K':vCount;else $('viewers').textContent=vCount+' مشاهد';$('viewers').title=vCount+' مشاهد';$('follow').textContent=result.following?'تتابعه':'متابعة';const host=result.speakers?.[0];$('badge').textContent=host&&Number.isFinite(Number(host.level))?('المستوى '+Math.max(0,Number(host.level))+(host.vip?' · VIP':'')):'';
- const signature=JSON.stringify(result.comments);if(lastComments!==signature){lastComments=signature;const box=$('messages');const nearBottom=box.scrollHeight-box.clientHeight-box.scrollTop<38,previousScroll=box.scrollTop;box.replaceChildren();for(const c of result.comments||[]){const p=document.createElement('div');p.className='comment-bubble';const av=document.createElement('div');av.className='comment-avatar';av.textContent=(c.name||'U').slice(0,1);const body=document.createElement('div');body.className='comment-body';const name=document.createElement('span');name.className='comment-author';name.textContent=c.name+': ';body.append(name,document.createTextNode(c.text));p.append(av,body);if(result.manage_room){const pin=document.createElement('button');pin.textContent='تثبيت';pin.onclick=()=>api({action:'pin_comment',comment_id:c.id}).then(refresh).catch(message);const del=document.createElement('button');del.textContent='حذف';del.onclick=()=>api({action:'delete_comment',comment_id:c.id}).then(refresh).catch(message);p.append(pin,del)}box.append(p)}box.scrollTop=nearBottom?box.scrollHeight:Math.min(previousScroll,Math.max(0,box.scrollHeight-box.clientHeight))}
+ const signature=JSON.stringify(result.comments);if(lastComments!==signature){lastComments=signature;const box=$('messages');const nearBottom=box.scrollHeight-box.clientHeight-box.scrollTop<38,previousScroll=box.scrollTop;box.replaceChildren();for(const c of result.comments||[]){const p=document.createElement('div');p.className='comment-bubble';const av=document.createElement('div');av.className='comment-avatar';av.textContent=(c.name||'U').slice(0,1);const body=document.createElement('div');body.className='comment-body';const name=document.createElement('span');name.className='comment-author';name.textContent=c.name+': ';body.append(name,document.createTextNode(c.text));p.append(av,body);if(result.manage_room){const manage=document.createElement('button');manage.type='button';manage.className='comment-actions';manage.textContent='⋯';manage.setAttribute('aria-label','إدارة تعليق '+(c.name||''));manage.onclick=()=>commentActionsSheet(c);p.append(manage)}box.append(p)}if(!(result.comments||[]).length){const blank=document.createElement('p');blank.className='comment-empty';blank.textContent='لا توجد تعليقات بعد · ابدأ الحوار';box.append(blank)}box.scrollTop=nearBottom?box.scrollHeight:Math.min(previousScroll,Math.max(0,box.scrollHeight-box.clientHeight))}
  $('pinned').hidden=!result.pinned_comment||!commentsVisible;if(result.pinned_comment)$('pinned').textContent='مثبّت · '+result.pinned_comment.name+': '+result.pinned_comment.text;
  $('goal').hidden=!result.gift_goal_cents;if(result.gift_goal_cents){if($('goalText'))$('goalText').textContent=(result.gift_total_cents||0)+' / '+result.gift_goal_cents;if($('goalProgress'))$('goalProgress').style.width=Math.min(100,Math.round(((result.gift_total_cents||0)/result.gift_goal_cents)*100))+'%';else $('goal').textContent='هدف الهدايا '+(result.gift_total_cents||0)+' / '+result.gift_goal_cents;}
  $('pk').hidden=!result.pk;document.body.classList.toggle('has-pk',!!result.pk);if(result.pk){const pk=result.pk;const teams=pk.teams.map(team=>team.map(id=>result.speakers?.find(s=>s.user_id===id)?.name||'مشارك').join(' + '));$('pkTeams').replaceChildren();for(let i=0;i<2;i++){const span=document.createElement('span');span.title=teams[i];span.textContent=(i===0?'الفريق الأول':'الفريق الثاني')+' · '+pk.scores[i];$('pkTeams').append(span)}const total=pk.scores[0]+pk.scores[1];$('pkProgress').value=total?pk.scores[0]/total*100:50;pkClock()}
@@ -297,7 +337,24 @@ async function poll(){while(!closed){
  }
  await new Promise(r=>setTimeout(r,3000))
 }}
-$('composer').onsubmit=async e=>{e.preventDefault();const input=$('text'),text=input.value.trim();if(!text)return;const b=e.submitter||$('composer').querySelector('button');b.disabled=true;try{await api({action:'comment',text});input.value='';await refresh()}catch(e){message(e)}finally{b.disabled=false}};
+let sendingComment=false;
+$('composer').onsubmit=async e=>{
+ e.preventDefault();
+ const input=$('text'),content=input.value.trim(),send=$('sendComment');
+ if(sendingComment||!content)return;
+ sendingComment=true;send.disabled=true;$('composer').classList.add('is-sending');
+ commentNotice('جارٍ إرسال التعليق…');
+ try{
+  await api({action:'comment',text:content});
+  input.value='';commentNotice('تم إرسال التعليق');
+  // A successful send is not undone by a later polling failure.
+  await refresh().catch(()=>{});
+ }catch(error){
+  // Preserve the draft for retry; never silently discard a failed comment.
+  commentNotice('تعذر الإرسال. التعليق محفوظ؛ حاول مجددًا.',true);
+ }finally{sendingComment=false;send.disabled=false;$('composer').classList.remove('is-sending')}
+};
+$('text').addEventListener('input',()=>commentNotice(''));
 $('mute').onclick=async()=>{try{await room.localParticipant.setMicrophoneEnabled(muted);muted=!muted;$('mute').textContent=muted?'تشغيل الميكروفون':'كتم الميكروفون';updateQuickMic()}catch(e){message(e)}};
 $('camera').onclick=async()=>{try{await room.localParticipant.setCameraEnabled(cameraOff);cameraOff=!cameraOff;$('camera').textContent=cameraOff?'تشغيل الفيديو':'إيقاف الفيديو';if(!cameraOff){const track=room.localParticipant.getTrackPublication(Track.Source.Camera)?.track;if(track)renderTrack(track,room.localParticipant,true)}else document.querySelectorAll('.tile').forEach(t=>{if(t.dataset.identity===room.localParticipant.identity)t.remove()});layout()}catch(e){message(e)}};
 $('switch').onclick=async()=>{try{const next=facing==='user'?'environment':'user';await room.localParticipant.getTrackPublication(Track.Source.Camera)?.track?.restartTrack({facingMode:next});facing=next;document.querySelectorAll('.tile').forEach(t=>{if(t.dataset.identity===room.localParticipant.identity)t.querySelector('video').style.transform=facing==='user'?'scaleX(-1)':''})}catch(e){$('status').textContent='الكاميرا الأخرى غير متاحة'}};
