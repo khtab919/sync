@@ -977,3 +977,11 @@ body:not(.audio-mode) #commentNotice.error{background:#66233C;color:#FFF2F5}
 
 /* Hide redundant connected status; keep failures and reconnect notices visible. */
 #connection.is-ready:not(.media-fault){display:none!important}
+
+/* The report is an accessible in-room sheet, not a browser prompt. */
+#sheet #sheetBody textarea{width:100%;min-height:112px;max-height:180px;resize:vertical;
+ color:#F5FAFF;background:#0E2B62;border:1px solid #78A6EC7C;
+ border-radius:15px;padding:12px 13px;font:inherit;line-height:1.6;
+ box-sizing:border-box}
+#sheet #sheetBody textarea:focus{outline:2px solid #A7CEFF;outline-offset:1px}
+#sheet #sheetBody textarea::placeholder{color:#C6D8F6}

@@ -119,16 +119,41 @@ function sheet(title){$('sheetTitle').textContent=title;$('sheetBody').replaceCh
 function button(box,label,fn,cls=''){const b=document.createElement('button');b.textContent=label;b.className=cls;b.onclick=async()=>{if(b.disabled)return;b.disabled=true;try{await fn()}catch(e){message(e)}finally{b.disabled=false}};box.appendChild(b);return b}
 function note(box,text){const p=document.createElement('p');p.textContent=text;box.appendChild(p)}
 function sectionHeading(box,title){const h=document.createElement('h3');h.className='room-setting-heading';h.textContent=title;box.append(h)}
+function confirmActionSheet(title,explanation,action){
+ const box=sheet(title);
+ note(box,explanation);
+ button(box,'إلغاء',()=>{$('sheet').close()});
+ button(box,'تأكيد الإجراء',async()=>{await action();if($('sheet').open)$('sheet').close()},'danger');
+}
+function reportSheet(){
+ const box=sheet('الإبلاغ عن البث');
+ note(box,'وضح سبب البلاغ ليصل إلى فريق الإدارة. لن يُرسل شيء دون تأكيدك.');
+ const input=document.createElement('textarea');
+ input.id='reportReason';input.rows=4;input.maxLength=500;
+ input.placeholder='اكتب سبب البلاغ (3 أحرف على الأقل)';
+ input.setAttribute('aria-label','سبب البلاغ');
+ input.addEventListener('input',()=>input.setCustomValidity(''));
+ box.append(input);
+ button(box,'إرسال البلاغ',async()=>{
+  const reason=input.value.trim();
+  if(reason.length<3){input.setCustomValidity('اكتب سببًا واضحًا لا يقل عن 3 أحرف');input.reportValidity();return}
+  await api({action:'report',reason});
+  $('sheet').close();$('status').textContent='وصل البلاغ إلى الإدارة';
+ },'primary');
+ button(box,'إلغاء',()=>{$('sheet').close()});
+}
 function commentNotice(text,isError=false){
  const el=$('commentNotice');if(!el)return;
+ clearTimeout(commentNotice.timer);
  el.hidden=!text;el.textContent=text;el.classList.toggle('error',!!isError);
+ if(text&&!isError&&text.startsWith('تم إرسال'))commentNotice.timer=setTimeout(()=>{el.hidden=true;el.textContent=''},2200);
 }
 function commentActionsSheet(comment){
  if(!state.manage_room)return;
  const box=sheet('إدارة التعليق');
  note(box,(comment.name||'مستخدم')+' · '+(comment.text||''));
  button(box,'تثبيت التعليق',async()=>{await api({action:'pin_comment',comment_id:comment.id});$('sheet').close();await refresh()});
- button(box,'حذف التعليق',async()=>{if(!confirm('حذف التعليق من الغرفة؟'))return;await api({action:'delete_comment',comment_id:comment.id});$('sheet').close();await refresh()},'danger');
+ button(box,'حذف التعليق',()=>confirmActionSheet('حذف التعليق','سيُحذف التعليق من الغرفة بعد تأكيدك.',async()=>{await api({action:'delete_comment',comment_id:comment.id});await refresh()}),'danger');
 }
 $('closeSheet').onclick=()=>$('sheet').close();$('sheet').addEventListener('click',e=>{if(e.target===$('sheet'))$('sheet').close()});
 async function consent(mode){
@@ -278,13 +303,11 @@ function moreSheet(){
   for(const p of state.top_supporters||[])note(b,p.name+' · '+p.total);
  });
  sectionHeading(box,'السلامة');
- button(box,'الإبلاغ عن البث',async()=>{
-  const reason=prompt('سبب الإبلاغ (3 أحرف على الأقل)');
-  if(reason&&reason.trim().length>=3){await api({action:'report',reason});$('status').textContent='وصل البلاغ إلى الإدارة';$('sheet').close()}
- });
- if(config.owner)button(box,'إنهاء البث للجميع',async()=>{
-  if(confirm('إنهاء البث للجميع؟')){await api({action:'end'});stop('انتهى البث')}
- },'danger');
+ button(box,'الإبلاغ عن البث',reportSheet);
+ if(config.owner)button(box,'إنهاء البث للجميع',()=>confirmActionSheet(
+  'إنهاء البث','سيُغلق البث لجميع المشاهدين. لن يتم تسجيل البث أو حفظه.',
+  async()=>{await api({action:'end'});stop('انتهى البث')}
+ ),'danger');
 }
 function qualitySheet(){const box=sheet('جودة الفيديو');note(box,'تتكيّف جودة النقل تلقائيًا. 1080p تعتمد على الكاميرا والجهاز والشبكة.');for(const q of [360,720,1080])button(box,q+'p',async()=>{const track=room.localParticipant.getTrackPublication(Track.Source.Camera)?.track;if(!track)throw Error('camera_unavailable');await track.restartTrack({resolution:{width:Math.round(q*16/9),height:q,frameRate:q===360?20:30},facingMode:facing});quality=q;$('sheet').close()})}
 function playEffects(){
