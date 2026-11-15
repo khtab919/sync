@@ -954,3 +954,23 @@ body.audio-mode #commentNotice.error{background:#66233C;color:#FFF2F5;border-col
 @media(max-height:680px){body.audio-mode #stage{--room-footer-height:116px;--room-chat-height:clamp(77px,15dvh,108px)}body.audio-mode footer .bottom{gap:6px}}
 @media(max-height:560px){body.audio-mode #stage{--room-footer-height:112px;--room-chat-height:70px}body.audio-mode footer .quick-actions .tool-circle{width:40px;height:40px;min-height:40px;flex-basis:40px}}
 @media(max-width:380px){body.audio-mode footer .quick-actions{gap:7px}body.audio-mode footer #composer .composer-emoji{display:grid}body.audio-mode footer #composer input{font-size:14px;padding-inline:5px}}
+
+/* v14 parity: video rooms share the same safe comment and control layout.
+   Audio-specific rules above remain authoritative where room seating is present. */
+#stage{--room-footer-height:124px}
+footer .bottom{display:flex;flex-direction:column;align-items:stretch;gap:8px}
+footer .quick-actions{display:flex;align-items:center;justify-content:flex-start;gap:10px;min-height:44px;width:100%;max-width:100%;direction:rtl}
+footer .quick-actions>button[hidden]{display:none!important}
+footer .quick-actions>.gift-fab{margin-inline-start:auto}
+footer .quick-actions>.tool-circle,footer .quick-actions>.gift-fab{width:44px;height:44px;min-height:44px;flex:0 0 44px}
+footer #composer{box-sizing:border-box;width:100%;flex:0 0 48px;min-width:0;min-height:48px;padding:3px 7px;gap:4px;border-radius:20px;display:flex}
+footer #composer input{min-width:0;width:0;flex:1 1 auto;font-size:15px;line-height:22px;padding:8px 9px}
+footer #composer:focus-within{border-color:#A7CEFF;box-shadow:0 0 0 2px #A7CEFF40}
+footer #composer .composer-emoji{min-width:36px;min-height:40px}
+footer #composer .composer-send{width:40px;height:40px;min-height:40px}
+body:not(.audio-mode) #messages{bottom:calc(var(--room-footer-height) + env(safe-area-inset-bottom,0px) + 4px);left:12px;right:12px}
+body:not(.audio-mode) #pinned{bottom:calc(28vh + var(--room-footer-height) + 6px);left:12px;right:12px}
+body:not(.audio-mode) #commentNotice{position:absolute;z-index:12;bottom:calc(var(--room-footer-height) + 8px);left:12px;max-width:calc(100% - 24px);padding:7px 12px;border-radius:12px;background:#123F83;color:#fff;font-size:12px}
+body:not(.audio-mode) #commentNotice.error{background:#66233C;color:#FFF2F5}
+@media(max-height:680px){#stage{--room-footer-height:116px}footer .bottom{gap:6px}}
+@media(max-height:560px){#stage{--room-footer-height:112px}footer .quick-actions>.tool-circle{width:40px;height:40px;min-height:40px;flex-basis:40px}}
