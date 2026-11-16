@@ -137,6 +137,60 @@ internal fun relaxiaLiveFooterRepairScript(): String = """
           window.relaxiaLiveFooterObserver.observe(footer);
         }
       }
+      // Compatibility for APKs connected to a server that has not yet
+      // published rooms-controls-24. Do not alter the room connection, tokens,
+      // media tracks, existing approved speakers or server account data.
+      if (document.body.classList.contains('audio-mode') &&
+          !document.querySelector('link[href*="rooms-controls-24"]') &&
+          !window.relaxiaEightSeatFallbackInstalled) {
+        window.relaxiaEightSeatFallbackInstalled = true;
+        var audioGrid = document.getElementById('audioStage');
+        if (audioGrid) {
+          var legacyStyle = document.createElement('style');
+          legacyStyle.id = 'relaxia-legacy-eight-seats';
+          legacyStyle.textContent = [
+            'body.audio-mode #stage{background:radial-gradient(ellipse at 77% 20%,#6D89B24A,transparent 46%),radial-gradient(ellipse at 14% 77%,#955A7A38,transparent 54%),linear-gradient(155deg,#0B2039,#1C334B 50%,#27223A)!important}',
+            'html[data-theme="light"] body.audio-mode #stage{background:radial-gradient(ellipse at 78% 15%,#B7C9DEAA,transparent 52%),linear-gradient(155deg,#EDF1F4,#E3E9EF 55%,#EFE7ED)!important}',
+            'body.audio-mode #audioStage.seat-grid{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;align-content:center!important;gap:10px 6px!important}',
+            'body.audio-mode #audioStage .audio-seat{border:1px solid #B5CEE655!important;border-radius:19px!important;padding:9px 2px!important;background:linear-gradient(155deg,#C9DDF31E,#233C5B20)!important;min-height:105px!important}',
+            'body.audio-mode #audioStage .audio-seat:first-child{border-color:#D8B88799!important}',
+            'body.audio-mode #audioStage .audio-seat .seat-plus{background:linear-gradient(140deg,#547CA14D,#24496B7A)!important;border:1px solid #9FC5EEA0!important;color:#F1F6FD!important}',
+            'body.audio-mode #audioStage .seat-plus svg{display:block;width:25px;height:25px}',
+            'body.audio-mode #audioStage .audio-seat .audio-name{color:#F2F7FC!important;font-weight:650!important}',
+            'html[data-theme="light"] body.audio-mode #audioStage .audio-seat{background:#FFFFFFB8!important;border-color:#A9BCCD70!important}',
+            'html[data-theme="light"] body.audio-mode #audioStage .audio-seat .audio-name{color:#24405D!important}',
+            '#stage footer .gift-fab svg,#stage footer .composer-emoji svg,#stage footer .composer-send svg{display:block!important;width:23px;height:23px}'
+          ].join('');
+          document.head.appendChild(legacyStyle);
+          var microphonePlus = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 10v2a7 7 0 0 0 11.3 5.5M12 19v2M8.5 21h7M19 11v6M16 14h6"/></svg>';
+          var giftIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M2.5 10h19V7H2.5zM12 7v14M12 7c-4 0-6-1-6-3.1 0-2.9 4-2.4 6 3.1zm0 0c4 0 6-1 6-3.1 0-2.9-4-2.4-6 3.1z"/></svg>';
+          var smileIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 14.5q4 4 8 0M9 9h.01M15 9h.01"/></svg>';
+          var sendIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 14-8-4 16-4-7-6-1zM11 13l8-9"/></svg>';
+          [['bigGiftBtn',giftIcon],['emojiBtn',smileIcon],['sendComment',sendIcon]].forEach(function(pair){
+            var button = document.getElementById(pair[0]);
+            if (button) button.innerHTML = pair[1];
+          });
+          // Keep any previously approved extra speakers visible until their
+          // legacy live room ends; never revoke a seat from a rendering fix.
+          function refreshLegacyAudioSeats() {
+            var seats = audioGrid.querySelectorAll('.audio-seat');
+            var occupied = audioGrid.querySelectorAll('.audio-seat:not(.empty-seat)').length;
+            var count = Math.max(8, occupied);
+            Array.prototype.forEach.call(seats,function(seat,index){
+              seat.style.display = index < count ? '' : 'none';
+              if (seat.classList.contains('empty-seat')) {
+                var plus = seat.querySelector('.seat-plus');
+                if (plus && !plus.querySelector('svg')) plus.innerHTML = microphonePlus;
+              }
+            });
+          }
+          refreshLegacyAudioSeats();
+          if (typeof MutationObserver !== 'undefined') {
+            window.relaxiaEightSeatObserver = new MutationObserver(refreshLegacyAudioSeats);
+            window.relaxiaEightSeatObserver.observe(audioGrid, {childList:true});
+          }
+        }
+      }
       measureVisibleRoom();
       return 'repaired';
     })();
