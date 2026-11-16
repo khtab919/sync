@@ -240,27 +240,73 @@ function pkSheet(){const box=sheet('منافسة PK');note(box,'تحدٍّ با�
  const duration=document.createElement('select');for(const n of [60,180,300])duration.add(new Option((n/60)+' دقيقة',String(n)));box.append(duration);
  button(box,'بدء المنافسة',async()=>{const teams=[[],[]];for(const [id,el] of members)if(el.value!=='')teams[Number(el.value)].push(id);await api({action:'pk_start',teams,duration:Number(duration.value)});$('sheet').close();await refresh()},'primary')}
 function giftSheet(){
- const box=sheet('متجر الهدايا');note(box,'اختر مستلم الهدية، ثم أكد السعر قبل الإرسال.');
+ const box=sheet('متجر الهدايا');
+ note(box,'حدد المستلم والهدية والعدد. يُحتسب الإجمالي ويُؤكد قبل الخصم.');
  const select=document.createElement('select');select.setAttribute('aria-label','مستلم الهدية');
- for(const speaker of state.speakers||[])if(speaker.user_id!==config.userId)select.add(new Option(speaker.name,String(speaker.user_id)));
+ for(const speaker of state.speakers||[]){
+  if(speaker.user_id!==config.userId)select.add(new Option(speaker.name,String(speaker.user_id)));
+ }
  box.append(select);
  if(!select.options.length)note(box,'لا يوجد مستلم آخر على الميكروفون حاليًا.');
  const tabs=document.createElement('div');tabs.className='gift-tabs';box.append(tabs);
  const grid=document.createElement('div');grid.className='gift-grid';box.append(grid);
+ const catalog=Array.isArray(state.gift_catalog)?state.gift_catalog:[];
+ let selected=catalog[0]||null,comboCount=1;
+ const picker=document.createElement('div');picker.className='gift-combo-picker';box.append(picker);
+ const comboTitle=document.createElement('div');comboTitle.className='gift-combo-title';
+ comboTitle.textContent='إرسال متتابع';picker.append(comboTitle);
+ const counts=document.createElement('div');counts.className='gift-combo-counts';picker.append(counts);
+ const checkout=document.createElement('div');checkout.className='gift-checkout';box.append(checkout);
+ const summary=document.createElement('div');summary.className='gift-checkout-summary';checkout.append(summary);
+ const send=button(checkout,'',async()=>{
+  if(!selected||!select.value)return;
+  const total=selected.price_cents*comboCount;
+  if(!Number.isSafeInteger(total)||total<=0||total>1000000)throw Error('invalid_gift_combo');
+  const receiver=select.selectedOptions[0]?.text||'المستلم';
+  if(!confirm('تأكيد إرسال '+selected.name+' ×'+comboCount+' إلى '+receiver+' مقابل '+total.toLocaleString('ar')+' كوين؟'))return;
+  // Each combination is one server-authorized financial operation.
+  const fingerprint=selected.code+':'+select.value+':'+selected.price_cents+':'+comboCount;
+  if(giftPending&&giftPending!==fingerprint)throw Error('pending_gift_retry');
+  giftPending=fingerprint;giftKey=giftKey||crypto.randomUUID();
+  try{
+   const result=await api({action:'gift',gift_code:selected.code,recipient_id:Number(select.value),
+       price_cents:selected.price_cents,combo_count:comboCount,confirmed:true,request_key:giftKey});
+   giftKey=null;giftPending=null;
+   drawState(result);
+   $('sheet').close();
+  }catch(error){
+   if(['insufficient_balance','price_confirmation_required','gift_unavailable','invalid_gift_combo','payment_request_conflict'].includes(error.message)){
+    giftKey=null;giftPending=null;
+   }
+   throw error;
+  }
+ },'primary gift-send');
+ function refreshChoice(){
+  const cost=selected?selected.price_cents*comboCount:0;
+  summary.textContent=selected
+    ?selected.name+' ×'+comboCount+' · '+cost.toLocaleString('ar')+' كوين'
+    :'لا توجد هدايا متاحة';
+  send.textContent='تأكيد الإرسال';
+  send.disabled=!selected||!select.value||cost>1000000;
+  for(const el of grid.children)el.setAttribute('aria-pressed',String(el.dataset.giftCode===selected?.code));
+  for(const el of counts.children)el.setAttribute('aria-pressed',String(Number(el.dataset.comboCount)===comboCount));
+ }
+ for(const n of [1,10,66,99]){
+  const b=button(counts,'×'+n,()=>{comboCount=n;refreshChoice()});
+  b.dataset.comboCount=String(n);
+ }
+ select.addEventListener('change',refreshChoice);
  function render(category){
-  grid.replaceChildren();for(const tab of tabs.children)tab.setAttribute('aria-pressed',String(tab.dataset.category===category));
-  const catalog=(state.gift_catalog||[]).filter(g=>category==='all'||g.effect===category);
-  for(const g of catalog){
-   const b=button(grid,'',async()=>{
-    if(!select.value)return;
-    if(!confirm('إرسال '+g.name+' إلى '+select.selectedOptions[0].text+' مقابل '+g.price_cents+' كوين؟'))return;
-    const fingerprint=g.code+':'+select.value+':'+g.price_cents;
-    if(giftPending&&giftPending!==fingerprint)throw Error('pending_gift_retry');
-    giftPending=fingerprint;giftKey=giftKey||crypto.randomUUID();
-    try{const result=await api({action:'gift',gift_code:g.code,recipient_id:Number(select.value),price_cents:g.price_cents,confirmed:true,request_key:giftKey});giftKey=null;giftPending=null;drawState(result);$('sheet').close()}
-    catch(e){if(['insufficient_balance','price_confirmation_required','gift_unavailable'].includes(e.message)){giftKey=null;giftPending=null}throw e}
-   });
-   b.disabled=!select.options.length;b.className='gift-card '+g.effect;b.setAttribute('aria-label',g.name+' · '+g.price_cents+' كوين');
+  grid.replaceChildren();
+  for(const tab of tabs.children)tab.setAttribute('aria-pressed',String(tab.dataset.category===category));
+  const filtered=catalog.filter(g=>category==='all'||g.effect===category);
+  if(!filtered.some(g=>g.code===selected?.code))selected=filtered[0]||null;
+  for(const g of filtered){
+   const b=button(grid,'',()=>{selected=g;comboCount=1;refreshChoice()});
+   b.disabled=!select.options.length;
+   b.className='gift-card '+g.effect;
+   b.dataset.giftCode=g.code;
+   b.setAttribute('aria-label',g.name+' · '+g.price_cents+' كوين');
    const icon=document.createElement('span');icon.className='gift-art';icon.textContent=g.symbol;
    const medallion=document.createElement('span');medallion.className='gift-medallion';medallion.append(icon);
    b.classList.add('gift-'+String(g.code).replace(/[^a-z0-9_-]/g,''));
@@ -268,12 +314,16 @@ function giftSheet(){
    const price=document.createElement('small');price.textContent=g.price_cents.toLocaleString('ar')+' كوين';
    b.append(medallion,name,price);
   }
-  if(!catalog.length)note(grid,'لا توجد هدايا متاحة في هذا القسم.');
+  if(!filtered.length)note(grid,'لا توجد هدايا متاحة في هذا القسم.');
+  refreshChoice();
  }
- for(const [key,label] of [['all','الكل'],['simple','بسيطة'],['animated','متحركة'],['depth','فاخرة']]){
-  const tab=button(tabs,label,()=>render(key));tab.dataset.category=key;
+ for(const [key,label] of [['all','الكل'],['simple','سريعة'],['animated','متحركة'],['depth','فاخرة']]){
+  const tab=button(tabs,label,()=>render(key));
+  tab.dataset.category=key;
  }
- render('all');note(box,'أكبر الداعمين');for(const supporter of state.top_supporters||[])note(box,supporter.name+' · '+supporter.total+' كوين');
+ render('all');
+ sectionHeading(box,'أكبر الداعمين');
+ for(const supporter of state.top_supporters||[])note(box,supporter.name+' · '+supporter.total+' كوين');
 }
 function drawAudioSeats(result){
  const box=$('audioStage'),speakers=result.speakers||[],capacity=Math.max(8,speakers.length);
