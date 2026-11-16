@@ -163,6 +163,7 @@ class StageTests(TestCase):
         self.assertEqual(event['combo_count'],10)
         self.assertEqual(event['total_price_cents'],50000)
         self.assertEqual(event['code'],'falcon_gold')
+        self.assertEqual(self.request(f'/api/live/{row.pk}/events',None,self.viewer).json()['available_coins'],10000)
         changed={**data,'combo_count':1}
         self.assertEqual(self.event(row,changed,self.viewer).status_code,409)
         self.assertEqual(Wallet.objects.get(user=self.viewer).balance_cents,10000)
