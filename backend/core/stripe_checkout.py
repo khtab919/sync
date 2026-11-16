@@ -62,7 +62,7 @@ def _stripe_api_create(quote, request):
         'success_url': origin + '/api/stripe/return?status=success',
         'cancel_url': origin + '/api/stripe/return?status=cancel',
         # Checkout Session must be 30min or more from creation to expire.
-        'expires_at': str(int(time.time()) + 1800),
+        'expires_at': str(int(time.time()) + 1920),  # 2-minute clock/latency margin beyond Stripe's 30-minute minimum
     }
     req = Request(
         'https://api.stripe.com/v1/checkout/sessions',
@@ -142,8 +142,11 @@ def create_checkout(request):
         invoice, created = StripeCheckout.objects.get_or_create(quote=quote)
         if invoice.session_id and invoice.session_url:
             return JsonResponse(_response(invoice))
-        if not created and invoice.status == 'creating':
+        if (not created and invoice.status == 'creating'
+                and (timezone.now() - invoice.created_at).total_seconds() < 90):
             raise ApiError('checkout_creation_pending', 409)
+        # If the process died mid-creation, retry with the original provider
+        # idempotency key rather than leaving this top-up unusable forever.
         invoice.status = 'creating'
         invoice.save(update_fields=['status'])
 
