@@ -503,9 +503,11 @@ fun ServerAppScreen(baseUrl: String) {
             return@MyApplicationTheme
         }
         Scaffold(
+            contentWindowInsets = WindowInsets.safeDrawing,
+            floatingActionButtonPosition = FabPosition.Start,
             floatingActionButton = {
                 if (page.isBlank() && screen in listOf("تصفح", "العرض")) Column(verticalArrangement = Arrangement.spacedBy(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    SmallFloatingActionButton(onClick = { showCreationSheet = true }, modifier = Modifier.size(46.dp), shape = CircleShape, containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary) {
+                    SmallFloatingActionButton(onClick = { showCreationSheet = true }, modifier = Modifier.padding(start=16.dp,bottom=16.dp).size(46.dp), shape = CircleShape, containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary) {
                         Icon(Icons.Rounded.Edit, "إنشاء محتوى")
                     }
                 }
@@ -536,10 +538,13 @@ fun ServerAppScreen(baseUrl: String) {
             },
             bottomBar = {
                 if (page.isBlank() && (screen != "ريلز" || rows.isEmpty())) {
+                    Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).navigationBarsPadding()) {
+                    HorizontalDivider(thickness=1.dp,color=if(dark)Color(0xFF52627C) else Color(0xFFE5E7EB))
                     NavigationBar(
                         containerColor = MaterialTheme.colorScheme.surface,
-                        tonalElevation = 2.dp,
-                        modifier = Modifier.clip(RoundedCornerShape(topStart = 23.dp, topEnd = 23.dp)).height(72.dp)
+                        tonalElevation = 3.dp,
+                        windowInsets = WindowInsets(0,0,0,0),
+                        modifier = Modifier.clip(RoundedCornerShape(topStart = 23.dp, topEnd = 23.dp)).height(76.dp)
                     ) {
                         destinations.forEachIndexed { index, _ ->
                             val active = tab == index
@@ -567,18 +572,21 @@ fun ServerAppScreen(baseUrl: String) {
                                         })
                                 },
                                 label = {
-                                    Text(destinationLabels[index], fontSize = 10.sp,
+                                    Text(destinationLabels[index], fontSize = 11.sp,
                                         fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
                                         maxLines = 1)
                                 },
                                 colors = NavigationBarItemDefaults.colors(
-                                    indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-                                    selectedIconColor = MaterialTheme.colorScheme.primary,
-                                    selectedTextColor = MaterialTheme.colorScheme.primary
+                                    indicatorColor = if(dark)Color(0xFF263E73) else Color(0xFFDCE8FA),
+                                    selectedIconColor = if(dark)Color(0xFF95BDFF) else Color(0xFF1E40AF),
+                                    selectedTextColor = if(dark)Color(0xFF95BDFF) else Color(0xFF1E40AF),
+                                    unselectedIconColor = if(dark)Color(0xFFCAD6E7) else Color(0xFF4B5563),
+                                    unselectedTextColor = if(dark)Color(0xFFCAD6E7) else Color(0xFF4B5563)
                                 )
                             )
                         }
                     }
+                    } // navigationBarsPadding wrapper
                 }
             }
         ) { padding ->
@@ -637,7 +645,7 @@ fun ServerAppScreen(baseUrl: String) {
                         ) { Icon(Icons.Rounded.ArrowForward, "العودة للتصفح", tint=Color.White) }
                     }
                 } else PullToRefreshBox(isRefreshing = loading, onRefresh = { if (!loading) revision++ }, modifier = Modifier.weight(1f)) {
-                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(if (screen == "تصفح") 5.dp else 12.dp)) {
+                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = if(screen=="تصفح") 120.dp else 40.dp), verticalArrangement = Arrangement.spacedBy(if (screen == "تصفح") 5.dp else 12.dp)) {
                     if ((loading && rows.isEmpty() && screen in listOf("دردشة", "الحجوزات", "المحفوظات", "ريلز")) || (loading && services.isEmpty() && screen in listOf("تصفح", "العرض"))) item { LuxurySkeletonCards() }
                     when (screen) {
                         "تصفح" -> {
@@ -1158,21 +1166,21 @@ private fun Story(name: String, frame: Int, imageUrl: String = "", click: () -> 
 @Composable
 private fun FeedCard(service: JSONObject, owner: () -> Unit, details: () -> Unit, react: (String) -> Unit, chat: () -> Unit) {
     Box(Modifier.padding(horizontal = 16.dp)) { ReferenceCard {
-        Row(Modifier.fillMaxWidth().padding(10.dp).clickable(onClick = owner), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal=14.dp,vertical=12.dp).clickable(onClick = owner), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             ReferenceAvatar(service.optString("owner_name"), service.optInt("owner_frame"), 44, service.optString("owner_avatar_url"))
             Column(Modifier.weight(1f)) { Text(service.optString("owner_name"), fontWeight = FontWeight.SemiBold); Text(service.optString("category", "خدمة"), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             IconButton(onClick = { react("save") }) { Icon(if (service.optBoolean("saved")) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder, "حفظ العرض") }
         }
         ReferenceImage(service.optString("image_url"), Modifier.fillMaxWidth().aspectRatio(1.55f).clip(RoundedCornerShape(15.dp)).clickable(onClick = details))
-        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { react("like") }) { Icon(if (service.optBoolean("liked")) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, "إعجاب", tint = if (service.optBoolean("liked")) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface) }
             Text(service.optInt("like_count").toString(), fontSize = 12.sp)
             IconButton(onClick = chat) { Icon(Icons.Rounded.ChatBubbleOutline, "محادثة صاحب الحساب") }
             Spacer(Modifier.weight(1f))
             TextButton(onClick = details) { Text("عرض التفاصيل") }
         }
-        Text(service.optString("title"), Modifier.padding(horizontal = 16.dp), fontWeight = FontWeight.SemiBold)
-        Text(service.optString("description"), Modifier.padding(start = 16.dp, end = 16.dp, bottom = 18.dp, top = 8.dp), maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(service.optString("title"), Modifier.padding(horizontal = 14.dp), fontWeight = FontWeight.SemiBold)
+        Text(service.optString("description"), Modifier.padding(start = 14.dp, end = 14.dp, bottom = 16.dp, top = 7.dp), maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     } }
 }
 @Composable
