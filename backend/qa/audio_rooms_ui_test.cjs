@@ -119,9 +119,11 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    assert.ok(await page.getByText('التعليقات والتفاعل',{exact:true}).isVisible(),'settings are grouped by purpose');
    await page.getByRole('button',{name:'إخفاء التعليقات',exact:true}).click();
    assert.equal(await page.locator('#messages').isVisible(),false,'comments can be hidden');
+   assert.equal(await page.locator('body').evaluate(el=>el.classList.contains('comments-hidden')),true,'hidden chat frees room space');
    await page.locator('#more').click();
    await page.getByRole('button',{name:'إظهار التعليقات',exact:true}).click();
    assert.equal(await page.locator('#messages').isVisible(),true,'comments can be restored');
+   assert.equal(await page.locator('body').evaluate(el=>el.classList.contains('comments-hidden')),false,'chat area restores after re-enabling comments');
    await page.evaluate(()=>{
     qaRoom={...qaRoom,manage_room:true,comments:[{id:451,name:'عضو',text:'رسالة للاختبار'}]};
     drawState(qaRoom);

@@ -1027,3 +1027,7 @@ body.audio-mode #stage{--room-footer-height:136px}
 
 /* Preserve a real opaque base under the royal-blue gradient in daylight. */
 html[data-theme=light] body.audio-mode #stage{background-color:#D7E8FF}
+
+/* No invisible chat gutter when a viewer intentionally hides room comments. */
+body.audio-mode.comments-hidden #stage{--room-chat-height:0px}
+body.audio-mode.comments-hidden #messages,body.audio-mode.comments-hidden #pinned{display:none!important}

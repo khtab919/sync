@@ -298,7 +298,9 @@ function moreSheet(){
  button(box,'المقاعد وطلبات التحدث',guestSheet);
  sectionHeading(box,'التعليقات والتفاعل');
  button(box,commentsVisible?'إخفاء التعليقات':'إظهار التعليقات',()=>{
-  commentsVisible=!commentsVisible;$('messages').hidden=!commentsVisible;
+  commentsVisible=!commentsVisible;
+  document.body.classList.toggle('comments-hidden',!commentsVisible);
+  $('messages').hidden=!commentsVisible;
   $('pinned').hidden=!commentsVisible||!state.pinned_comment;$('sheet').close()
  });
  if(window.innerWidth<=380)button(box,'الرموز التعبيرية',()=>{$('sheet').close();$('emojiBtn').click()});
