@@ -68,8 +68,8 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
      const audio=document.createElement('audio');audio.dataset.liveRemote='1';audio.play=()=>Promise.resolve();document.body.append(audio);
    });
    // Reproduce an Android WebView reporting a collapsed CSS viewport.
-   await page.evaluate(()=>document.documentElement.style.setProperty('--room-viewport-height','1px'));
    await page.locator('#bigGiftBtn').click();
+   await page.evaluate(()=>document.documentElement.style.setProperty('--room-viewport-height','1px'));
    assert.equal(await page.locator('#sheet').evaluate(el=>el.open),true,'gift modal opens');
    assert.ok(await page.getByRole('heading',{name:'متجر الهدايا'}).isVisible(),'gift modal heading visible');
    const giftBounds=await page.locator('#sheet').boundingBox();
