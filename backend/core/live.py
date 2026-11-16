@@ -70,7 +70,7 @@ def authorized(row,user):
 
 def describe(row,user):
     admission=LiveAdmission.objects.select_related('operation').filter(broadcast=row,user=user).first()
-    return {'id':row.pk,'owner_id':row.owner_id,'owner_name':row.owner.profile.display_name or row.owner.username,'avatar_url':row.owner.profile.avatar_url,'title':row.title,'mode':row.mode,'max_speakers':row.max_speakers,'private':row.private,'invite_only':row.invite_only,'price_cents':row.price_cents,'max_viewers':row.max_viewers,'viewers':row.viewers,'minimum_seconds':row.minimum_seconds,'status':row.status,'gifts_enabled':row.gifts_enabled,'likes':LiveLike.objects.filter(broadcast=row).count(),'liked':LiveLike.objects.filter(broadcast=row,user=user).exists(),'following':__import__('core.models',fromlist=['Follow']).Follow.objects.filter(user=user,creator=row.owner).exists(),'owner':row.owner_id==user.pk,'admitted':bool(admission and not admission.banned),'payment_status':admission.operation.status if admission and admission.operation_id else 'free','refund_policy':f'يُحجز السعر عند التأكيد. تستحق الخدمة بعد {row.minimum_seconds} ثانية من إتاحة الوسائط أثناء اتصالك. يُعاد الحجز إذا انتهى البث قبل ذلك. لا يتكرر الدفع لإعادة الدخول في البث نفسه.'}
+    return {'id':row.pk,'owner_id':row.owner_id,'owner_name':row.owner.profile.display_name or row.owner.username,'avatar_url':row.owner.profile.avatar_url,'title':row.title,'mode':row.mode,'max_speakers':(min(row.max_speakers,8) if row.mode=='audio' else row.max_speakers),'private':row.private,'invite_only':row.invite_only,'price_cents':row.price_cents,'max_viewers':row.max_viewers,'viewers':row.viewers,'minimum_seconds':row.minimum_seconds,'status':row.status,'gifts_enabled':row.gifts_enabled,'likes':LiveLike.objects.filter(broadcast=row).count(),'liked':LiveLike.objects.filter(broadcast=row,user=user).exists(),'following':__import__('core.models',fromlist=['Follow']).Follow.objects.filter(user=user,creator=row.owner).exists(),'owner':row.owner_id==user.pk,'admitted':bool(admission and not admission.banned),'payment_status':admission.operation.status if admission and admission.operation_id else 'free','refund_policy':f'يُحجز السعر عند التأكيد. تستحق الخدمة بعد {row.minimum_seconds} ثانية من إتاحة الوسائط أثناء اتصالك. يُعاد الحجز إذا انتهى البث قبل ذلك. لا يتكرر الدفع لإعادة الدخول في البث نفسه.'}
 
 def financial_locks(row):
     ids=list(LiveAdmission.objects.filter(broadcast=row).values_list('user_id',flat=True))+[row.owner_id]
@@ -160,8 +160,11 @@ def broadcasts(request):
         price=amount(p,'price_cents') if private else 0
         maximum=p.get('max_viewers',25);minimum=p.get('minimum_seconds',30)
         if type(maximum) is not int or not 1<=maximum<=min(100,int(os.environ.get("LAYALI_MAX_LIVE_VIEWERS","25"))) or type(minimum) is not int or not 30<=minimum<=3600:raise ApiError('invalid_live_limits')
-        mode=p.get('mode','video');speakers=p.get('max_speakers',1);goal=p.get('gift_goal_cents',0)
-        if mode not in ('audio','video') or type(speakers) is not int or not 1<=speakers<=min(15 if mode=='audio' else 12,maximum+1) or type(goal) is not int or not 0<=goal<=10000000:raise ApiError('invalid_stage_mode')
+        mode=p.get('mode','video');requested_speakers=p.get('max_speakers',8 if mode=='audio' else 1);goal=p.get('gift_goal_cents',0)
+        if mode not in ('audio','video') or type(requested_speakers) is not int or not 1<=requested_speakers<=min(15 if mode=='audio' else 12,maximum+1 if mode=='video' else 15) or type(goal) is not int or not 0<=goal<=10000000:raise ApiError('invalid_stage_mode')
+        # Audio rooms always have eight places including the host, even when
+        # an older Android client sends its legacy fifteen-seat setting.
+        speakers=8 if mode=='audio' else requested_speakers
         names=p.get('invite_names',[])
         if not isinstance(names,list) or len(names)>100 or not all(isinstance(n,str) and 1<=len(n)<=100 for n in names):raise ApiError('invalid_invitations')
         with transaction.atomic():
@@ -175,7 +178,7 @@ def broadcasts(request):
             invited=list(User.objects.filter(username__in=names,is_active=True))
             if invite_only and len(invited)!=len(set(names)):raise ApiError('unknown_invited_user')
             row.invited.set(invited)
-        try:provider('CreateRoom',{'name':room_name(row),'empty_timeout':60,'departure_timeout':10,'max_participants':maximum+2})
+        try:provider('CreateRoom',{'name':room_name(row),'empty_timeout':60,'departure_timeout':10,'max_participants':max(maximum+2,speakers+1)})
         except ApiError:
             row.status='failed';row.ended_at=timezone.now();row.save();raise
         return JsonResponse(describe(row,request.actor),status=201)
@@ -258,7 +261,7 @@ def room(request,broadcast_id):
             a=ticket.admission;join=join_token(a,ticket.session);ticket.used_at=timezone.now();ticket.save(update_fields=['used_at'])
         nonce=secrets.token_urlsafe(24)
         control=signing.dumps({'session':ticket.session_id,'admission':a.pk},salt='live-control')
-        config={'id':str(broadcast_id),'token':join,'control':control,'url':os.environ.get('LIVEKIT_PUBLIC_URL',request.build_absolute_uri('/livekit').replace('https://','wss://')),'owner':a.user_id==a.broadcast.owner_id,'ownerId':a.broadcast.owner_id,'ownerPublicId':a.broadcast.owner.profile.public_id or '', 'ownerAvatar':a.broadcast.owner.profile.avatar_url,'ownerName':a.broadcast.owner.profile.display_name or a.broadcast.owner.username,'title':a.broadcast.title,'gifts':a.broadcast.gifts_enabled,'mode':a.broadcast.mode,'maxSpeakers':a.broadcast.max_speakers,'userId':a.user_id,'userName':a.user.profile.display_name or a.user.username,'userAvatar':a.user.profile.avatar_url,'private':a.broadcast.private,'inviteOnly':a.broadcast.invite_only}
+        config={'id':str(broadcast_id),'token':join,'control':control,'url':os.environ.get('LIVEKIT_PUBLIC_URL',request.build_absolute_uri('/livekit').replace('https://','wss://')),'owner':a.user_id==a.broadcast.owner_id,'ownerId':a.broadcast.owner_id,'ownerPublicId':a.broadcast.owner.profile.public_id or '', 'ownerAvatar':a.broadcast.owner.profile.avatar_url,'ownerName':a.broadcast.owner.profile.display_name or a.broadcast.owner.username,'title':a.broadcast.title,'gifts':a.broadcast.gifts_enabled,'mode':a.broadcast.mode,'maxSpeakers':(min(a.broadcast.max_speakers,8) if a.broadcast.mode=='audio' else a.broadcast.max_speakers),'userId':a.user_id,'userName':a.user.profile.display_name or a.user.username,'userAvatar':a.user.profile.avatar_url,'private':a.broadcast.private,'inviteOnly':a.broadcast.invite_only}
         public=urlsplit(config['url'])
         if public.scheme not in ('wss','ws') or public.username or public.password or (public.scheme=='ws' and os.environ.get('LAYALI_TESTING')!='1'):raise ApiError('invalid_live_origin',503)
         ws_origin=public.scheme+'://'+public.netloc
