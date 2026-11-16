@@ -320,11 +320,11 @@ class ReferenceDesignTest {
                 }
             }
         }
-        compose.onNodeWithText("1,000").assertExists()
+        compose.onNodeWithText("1,000 كوين").assertExists()
         compose.onNodeWithText("10.00 USD").assertExists()
         screenshot("18-coin-package-light")
         compose.runOnIdle { dark = true }
-        compose.onNodeWithText("1,000").assertExists()
+        compose.onNodeWithText("1,000 كوين").assertExists()
         compose.onNodeWithText("10.00 USD").assertExists()
         screenshot("19-coin-package-dark")
     }
