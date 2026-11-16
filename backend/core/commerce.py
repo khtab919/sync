@@ -178,8 +178,9 @@ def bonus_for(cents):
 @endpoint(['GET'])
 def payment_info(request):
     from .nowpayments import configured
+    from .stripe_checkout import configured as stripe_configured
     settings = funding_settings()
-    return JsonResponse({'network':'BNB Smart Chain (BEP20)', 'currency':'USDT', 'address':ADDRESS, 'qr_url':request.build_absolute_uri('/api/payment-qr'), 'packages_cents':[100,300,1000,2500,5000,10000], 'packages':[{'coins':coins,'bonus_points':bonus_for(coins)} for coins in (100,300,1000,2500,5000,10000)], 'coin_rate':100, 'credit_rate':'100 coins = 1 USD internal balance', 'manual_review':True, 'nowpayments_enabled':configured(), 'shamcash_enabled':bool(settings.shamcash_enabled and settings.shamcash_account and settings.shamcash_rate>0), 'shamcash_account':settings.shamcash_account if settings.shamcash_enabled else '', 'shamcash_currency':settings.shamcash_currency, 'shamcash_instructions':settings.shamcash_instructions})
+    return JsonResponse({'network':'BNB Smart Chain (BEP20)', 'currency':'USDT', 'address':ADDRESS, 'qr_url':request.build_absolute_uri('/api/payment-qr'), 'packages_cents':[100,300,1000,2500,5000,10000], 'packages':[{'coins':coins,'bonus_points':bonus_for(coins)} for coins in (100,300,1000,2500,5000,10000)], 'coin_rate':100, 'credit_rate':'100 coins = 1 USD internal balance', 'manual_review':True, 'nowpayments_enabled':configured(), 'stripe_enabled':stripe_configured(), 'shamcash_enabled':bool(settings.shamcash_enabled and settings.shamcash_account and settings.shamcash_rate>0), 'shamcash_account':settings.shamcash_account if settings.shamcash_enabled else '', 'shamcash_currency':settings.shamcash_currency, 'shamcash_instructions':settings.shamcash_instructions})
 
 
 def payment_qr(request):
@@ -211,18 +212,21 @@ def quotes(request):
     cents=amount(request.payload,'amount_cents')
     if cents<100: raise ApiError('minimum_topup_one_usdt')
     method=request.payload.get('method','usdt')
-    if method not in ('usdt','shamcash','nowpayments'): raise ApiError('invalid_payment_method')
+    if method not in ('usdt','shamcash','nowpayments','stripe'): raise ApiError('invalid_payment_method')
     with transaction.atomic():
         User.objects.select_for_update().get(pk=request.actor.pk)
-        existing=TopUpQuote.objects.filter(user=request.actor,method=method,amount_cents=cents,expires_at__gt=timezone.now(),topup__isnull=True,gatewayinvoice__credited_at__isnull=True).exclude(gatewayinvoice__status__in=['failed','expired','refunded']).first()
+        existing=TopUpQuote.objects.filter(user=request.actor,method=method,amount_cents=cents,expires_at__gt=timezone.now(),topup__isnull=True,gatewayinvoice__credited_at__isnull=True,stripecheckout__credited_at__isnull=True).exclude(gatewayinvoice__status__in=['failed','expired','refunded']).exclude(stripecheckout__status__in=['failed','expired','refunded','disputed']).first()
         if existing:return JsonResponse(quote_json(existing,request))
         settings=funding_settings()
         if method=='nowpayments':
             from .nowpayments import configured
             if not configured():raise ApiError('nowpayments_not_configured',409)
+        if method=='stripe':
+            from .stripe_checkout import configured as stripe_configured
+            if not stripe_configured():raise ApiError('stripe_not_configured',409)
         if method=='shamcash' and not(settings.shamcash_enabled and settings.shamcash_account and settings.shamcash_rate>0): raise ApiError('shamcash_not_configured',409)
         rate=settings.shamcash_rate if method=='shamcash' else Decimal(1)
-        row=TopUpQuote.objects.create(user=request.actor,method=method,amount_cents=cents,bonus_cents=bonus_for(cents),payment_amount=(Decimal(cents)*rate/100).quantize(Decimal('.01'),rounding=ROUND_HALF_UP),payment_currency=settings.shamcash_currency if method=='shamcash' else 'USD' if method=='nowpayments' else 'USDT',destination=settings.shamcash_account if method=='shamcash' else 'NOWPayments hosted checkout' if method=='nowpayments' else ADDRESS,expires_at=timezone.now()+timedelta(minutes=30))
+        row=TopUpQuote.objects.create(user=request.actor,method=method,amount_cents=cents,bonus_cents=bonus_for(cents),payment_amount=(Decimal(cents)*rate/100).quantize(Decimal('.01'),rounding=ROUND_HALF_UP),payment_currency=settings.shamcash_currency if method=='shamcash' else 'USD' if method in ('nowpayments','stripe') else 'USDT',destination=settings.shamcash_account if method=='shamcash' else 'NOWPayments hosted checkout' if method=='nowpayments' else 'Stripe hosted card checkout' if method=='stripe' else ADDRESS,expires_at=timezone.now()+timedelta(minutes=30))
     return JsonResponse(quote_json(row,request),status=201)
 
 
@@ -230,10 +234,11 @@ def quotes(request):
 def topups(request):
     from .models import TopUpQuote
     if request.method=='GET':
-        from .models import GatewayInvoice
+        from .models import GatewayInvoice, StripeCheckout
         manual=[{'id':r.pk,'method':r.method,'amount_cents':r.amount_cents,'bonus_cents':r.bonus_cents,'status':r.status,'transaction_hash':r.transaction_hash,'review_note':r.review_note,'late_submission':r.late_submission} for r in TopUp.objects.filter(user=request.actor).order_by('-created_at')[:100]]
         automatic=[{'id':str(r.quote_id),'method':'nowpayments','amount_cents':r.quote.amount_cents,'bonus_cents':r.quote.bonus_cents,'status':'approved' if r.credited_at else 'rejected' if r.status in ('failed','expired','refunded') else 'pending','review_note':r.status} for r in GatewayInvoice.objects.filter(quote__user=request.actor).select_related('quote').order_by('-created_at')[:100]]
-        return JsonResponse({'items':automatic+manual})
+        stripe_rows=[{'id':str(r.quote_id),'method':'stripe','amount_cents':r.quote.amount_cents,'bonus_cents':r.quote.bonus_cents,'status':'approved' if r.credited_at else 'rejected' if r.status in ('failed','expired','refunded','disputed') else 'pending','review_note':r.status,'review_required':r.review_required} for r in StripeCheckout.objects.filter(quote__user=request.actor).select_related('quote').order_by('-created_at')[:100]]
+        return JsonResponse({'items':stripe_rows+automatic+manual})
     with transaction.atomic():
         User.objects.select_for_update().get(pk=request.actor.pk)
         quote=None
@@ -243,7 +248,7 @@ def topups(request):
         cents=quote.amount_cents if quote else amount(request.payload,'amount_cents')
         if cents<100:raise ApiError('minimum_topup_one_usdt')
         method=quote.method if quote else 'usdt'
-        if method=='nowpayments':raise ApiError('gateway_invoice_required',409)
+        if method in ('nowpayments','stripe'):raise ApiError('gateway_invoice_required',409)
         reference=text(request.payload,'transaction_hash',4,100).strip()
         if method=='usdt':
             reference=reference.lower().removeprefix('0x')
@@ -283,7 +288,8 @@ def payment_settings(request):
             settings.shamcash_enabled=p['enabled'];settings.shamcash_account=account;settings.shamcash_currency=p['currency'];settings.shamcash_rate=rate;settings.shamcash_instructions=str(p.get('instructions',''))[:500];settings.save()
             audit(request.actor,settings,'Sham Cash destination, currency and conversion settings updated')
     from .nowpayments import configured
-    return JsonResponse({'nowpayments_configured':configured(),'enabled':settings.shamcash_enabled,'account':settings.shamcash_account,'currency':settings.shamcash_currency,'rate':str(settings.shamcash_rate),'instructions':settings.shamcash_instructions})
+    from .stripe_checkout import configured as stripe_configured
+    return JsonResponse({'stripe_configured':stripe_configured(),'nowpayments_configured':configured(),'enabled':settings.shamcash_enabled,'account':settings.shamcash_account,'currency':settings.shamcash_currency,'rate':str(settings.shamcash_rate),'instructions':settings.shamcash_instructions})
 
 
 @endpoint(['GET', 'POST'])
