@@ -347,7 +347,17 @@ def review_requests(request):
     sellers = [{'id': str(r.pk), 'kind': 'seller', 'user_id':r.user_id,'public_id':r.user.profile.public_id, 'username': r.user.username, 'description': r.description, 'status': r.status, 'review_note': r.review_note} for r in SellerApplication.objects.select_related('user').order_by(Case(When(status='pending', then=Value(0)), default=Value(1), output_field=IntegerField()), '-id')[:100]]
     from .models import GatewayInvoice
     gateway=[{'id':str(r.quote_id),'kind':'gateway','username':r.quote.user.username,'user_id':r.quote.user_id,'amount_cents':r.quote.amount_cents,'bonus_cents':r.quote.bonus_cents,'status':'approved' if r.credited_at else r.status,'review_note':'تحتاج مراجعة التاجر' if r.review_required else '','provider_id':r.payment_id or r.invoice_id or ''} for r in GatewayInvoice.objects.select_related('quote__user').order_by('-created_at')[:100]]
-    return JsonResponse({'items': payments + sellers + gateway})
+    from .models import StripeCheckout
+    stripe_rows=[{
+        'id':str(r.quote_id),'kind':'gateway','method':'stripe',
+        'username':r.quote.user.username,'user_id':r.quote.user_id,
+        'amount_cents':r.quote.amount_cents,'bonus_cents':r.quote.bonus_cents,
+        'status':'approved' if r.credited_at and not r.review_required else r.status,
+        'review_note':'Stripe: مراجعة استرداد أو اعتراض مطلوبة' if r.review_required else '',
+        'provider_id':r.payment_intent_id or r.session_id or '',
+        'review_required':r.review_required,
+    } for r in StripeCheckout.objects.select_related('quote__user').order_by('-created_at')[:100]]
+    return JsonResponse({'items': payments + sellers + gateway + stripe_rows})
 
 
 def message_json(request, row):
