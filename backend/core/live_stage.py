@@ -5,7 +5,7 @@ from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 from .models import (LiveAdmission,LiveBroadcast,LiveSeat,LiveRoomModerator,LiveGiftDefinition,
-                     LiveGiftEvent,LivePK,LiveComment,BenefitGrant,FinancialOperation)
+                     LiveGiftEvent,LivePK,LiveComment,BenefitGrant,FinancialOperation,Wallet)
 from .views import ApiError,User,text
 
 
@@ -57,6 +57,8 @@ def snapshot(row,user):
     events=LiveGiftEvent.objects.filter(broadcast=row).select_related('operation__buyer__profile','operation__creator__profile').order_by('-pk')[:20]
     top=LiveGiftEvent.objects.filter(broadcast=row,operation__status='settled').values('operation__buyer_id','operation__buyer__profile__display_name','operation__buyer__username').annotate(total=Sum('operation__amount_cents')).order_by('-total')[:5]
     received=LiveGiftEvent.objects.filter(broadcast=row,operation__status='settled').aggregate(total=Sum('operation__amount_cents'),earnings=Sum('operation__creator_cents'))
+    wallet=Wallet.objects.filter(user=user).values('balance_cents','reserved_cents').first()
+    available_coins=max(0,wallet['balance_cents']-wallet['reserved_cents']) if wallet else 0
     return {'mode':row.mode,'max_speakers':(max(8,len(speakers)) if row.mode=='audio' else row.max_speakers),'speakers':speakers,'can_publish':can_publish,'publish_sources':sources,
             'seat_status':own.status if own else '', 'manage_room':manager,
             'seat_requests':[dict(person(s.admission.user),mode=s.mode) for s in seats if s.status=='pending'] if manager else [],
@@ -65,6 +67,7 @@ def snapshot(row,user):
             'gift_events':[{'id':g.pk,'code':g.gift_code,'sender':g.operation.buyer.profile.display_name or g.operation.buyer.username,'recipient':g.operation.creator.profile.display_name or g.operation.creator.username,'name':g.gift_name,'symbol':g.symbol,'effect':g.effect,'combo_count':g.combo_count,'total_price_cents':g.operation.amount_cents} for g in reversed(events)],
             'top_supporters':[{'name':t['operation__buyer__profile__display_name'] or t['operation__buyer__username'],'total':t['total']} for t in top],
             'gift_total_cents':received['total'] or 0,'gift_goal_cents':row.gift_goal_cents,
+            'available_coins':available_coins,
             'earned_cents':received['earnings'] or 0 if row.owner_id==user.pk else None,'pk':pk_json(row),
             'pinned_comment':{'id':row.pinned_comment_id,'name':row.pinned_comment.user.profile.display_name or row.pinned_comment.user.username,'text':row.pinned_comment.text} if row.pinned_comment_id else None}
 
