@@ -104,6 +104,14 @@ jobs:
           fi
           grep -F "package: name='com.aistudio.layalilounge.x9m4kp'" release-badging.txt
 
+      - name: Preserve unsigned production build for local validation
+        uses: actions/upload-artifact@v4
+        with:
+          name: Relaxia-11.7.3-unsigned
+          path: app/build/outputs/apk/release/app-release-unsigned.apk
+          retention-days: 7
+          if-no-files-found: error
+
       - name: Require NEW signing key for the original package (reinstall required)
         env:
           RELAXIA_NEW_KEYSTORE_BASE64: ${{ secrets.RELAXIA_NEW_KEYSTORE_BASE64 }}
