@@ -176,20 +176,28 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
     LaunchedEffect(Unit){busy=true;try{reload()}catch(e:CancellationException){throw e}catch(e:Exception){note=commerceError(e)}finally{busy=false}}
     LaunchedEffect(quoteText, submittedId, showOrders) { scrollState.scrollTo(0) }
 
-    Surface(Modifier.fillMaxSize(),color=MaterialTheme.colorScheme.background){Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding().verticalScroll(scrollState).padding(22.dp),verticalArrangement=Arrangement.spacedBy(18.dp)){
+    val showSelection=!showOrders && quote==null && submittedId.isBlank()
+    Surface(Modifier.fillMaxSize(),color=CoinNavy,contentColor=Color.White){
+        Box(Modifier.fillMaxSize()
+            .background(Brush.verticalGradient(listOf(Color(0xFF112D56),CoinNavy,Color(0xFF070E1C))))
+            .safeDrawingPadding()){
+            Column(Modifier.fillMaxSize().imePadding().verticalScroll(scrollState)
+                .padding(horizontal=18.dp)
+                .padding(top=12.dp,bottom=if(showSelection)142.dp else 28.dp),
+                verticalArrangement=Arrangement.spacedBy(14.dp)){
         Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
             TextButton(onClick=back,enabled=!busy){Text("رجوع")}
             Spacer(Modifier.weight(1f))
-            Text("Relaxia",fontWeight=FontWeight.SemiBold,color=MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Relaxia",fontWeight=FontWeight.SemiBold,color=Color(0xFFA5B9D8))
         }
-        Text("متجر الكوينز",style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold)
-        Surface(shape=RoundedCornerShape(26.dp),shadowElevation=3.dp,color=MaterialTheme.colorScheme.primaryContainer){
-            Row(Modifier.fillMaxWidth().padding(16.dp),verticalAlignment=Alignment.CenterVertically){
-                Icon(androidx.compose.material.icons.Icons.Rounded.Toll, null, Modifier.size(32.dp), tint=MaterialTheme.colorScheme.primary)
+        Text(if(quote==null)"اختر باقة الشحن"else"إتمام الشحن",style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.ExtraBold,color=Color.White)
+        Surface(shape=RoundedCornerShape(50.dp),shadowElevation=2.dp,color=Color(0xFF263857),border=BorderStroke(1.dp,Color(0xFF7288AA))){
+            Row(Modifier.fillMaxWidth().padding(horizontal=16.dp,vertical=10.dp),verticalAlignment=Alignment.CenterVertically){
+                Icon(androidx.compose.material.icons.Icons.Rounded.Toll, null, Modifier.size(23.dp), tint=CoinGold)
                 Spacer(Modifier.width(10.dp))
                 Column{
-                    Text("رصيد الكوينز المتاح",style=MaterialTheme.typography.bodySmall)
-                    Text(if(balance==null)"—"else java.text.NumberFormat.getIntegerInstance(java.util.Locale.US).format(balance)+" كوين",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold)
+                    Text("رصيدك الحالي",style=MaterialTheme.typography.bodySmall,color=Color(0xFFA5B9D8))
+                    Text(if(balance==null)"—"else java.text.NumberFormat.getIntegerInstance(java.util.Locale.US).format(balance)+" كوين",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold,color=Color.White)
                 }
             }
         }
@@ -197,8 +205,8 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
             FilterChip(!showOrders,{showOrders=false},label={Text("شراء كوينز")})
             FilterChip(showOrders,{showOrders=true},label={Text("طلباتي")})
         }
-        if(!showOrders && submittedId.isBlank()) Text(if(quote==null)"اختر باقة الشحن"else"أكمل عملية الدفع",style=MaterialTheme.typography.titleMedium)
-        Text("100 كوين = 1 USD كقيمة أساسية داخل التطبيق. يظهر المبلغ النهائي قبل الدفع. النقاط الترويجية منفصلة وغير قابلة للسحب.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+        if(!showOrders && submittedId.isBlank() && quote!=null) Text("أكمل عملية الدفع",style=MaterialTheme.typography.titleMedium,color=Color.White)
+        if(!showSelection) Text("100 كوين = 1 USD كقيمة أساسية داخل التطبيق. يظهر المبلغ النهائي قبل الدفع. النقاط الترويجية منفصلة وغير قابلة للسحب.",style=MaterialTheme.typography.bodySmall,color=Color(0xFFA5B9D8))
         if(note.isNotBlank())Text(note,color=MaterialTheme.colorScheme.primary)
         if(busy)LuxuryLoadingStatus("جارٍ تحديث الطلب")
         if(submittedId.isNotBlank()) {
@@ -210,7 +218,7 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
             if(packages.isEmpty()&&!busy)Text("لا تتوفر باقات شحن حاليًا. أعد تحديث المتجر لاحقًا.",color=MaterialTheme.colorScheme.onSurfaceVariant)
             val maxBonus=packages.maxOfOrNull{it.bonusPoints}?:0
             BoxWithConstraints(Modifier.fillMaxWidth()){
-                val columns=if(maxWidth>=335.dp)3 else 2
+                val columns=if(maxWidth>=280.dp)3 else 2
                 Column(verticalArrangement=Arrangement.spacedBy(9.dp)){
                     packages.chunked(columns).forEach{line->
                         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(9.dp)){
@@ -221,7 +229,7 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
                                         coins=option.coins,bonus=option.bonusPoints,
                                         dollars=BigDecimal.valueOf(option.coins.toLong(),2).toPlainString(),
                                         selected=selected==option.coins,badge=badge
-                                    ){selected=option.coins;showPaymentSheet=true}
+                                    ){selected=option.coins}
                                 }
                             }
                             repeat(columns-line.size){Spacer(Modifier.weight(1f))}
@@ -229,7 +237,7 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
                     }
                 }
             }
-            Text("اضغط على أي باقة لعرض وسائل الدفع المتاحة وتأكيد السعر.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("اختر إحدى الباقات ثم اضغط اشحن الآن لعرض وسائل الدفع والسعر النهائي.",style=MaterialTheme.typography.bodySmall,color=Color(0xFFA5B9D8))
         }else if(!showOrders && quote!=null){
             Text("${quote.optInt("amount_cents")} كوين" + if(quote.optInt("bonus_cents")>0) " · +${quote.optInt("bonus_cents")} نقطة ترويجية" else "",fontSize=20.sp,fontWeight=FontWeight.Bold)
             Text(
@@ -275,7 +283,30 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
                 PurchaseStatusCard(r.optString("id"),r.optLong("amount_cents"),r.optString("status"),r.optString("review_note"))
             }
         }
-    }}
+            } // scrolling content
+            if(showSelection) {
+                Column(
+                    modifier=Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                        .background(Brush.verticalGradient(listOf(Color(0x00101E38),Color(0xFF070E1C))))
+                        .padding(horizontal=20.dp,vertical=12.dp),
+                    horizontalAlignment=Alignment.CenterHorizontally,
+                    verticalArrangement=Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(onClick={showPaymentSheet=true},
+                        enabled=!busy&&packages.any{it.coins==selected}&&methods.any{it.enabled},
+                        modifier=Modifier.fillMaxWidth().height(52.dp),
+                        shape=RoundedCornerShape(50.dp),
+                        colors=ButtonDefaults.buttonColors(containerColor=Color(0xFF1E40AF),contentColor=Color.White)
+                    ) {
+                        Text("اشحن الآن",fontWeight=FontWeight.ExtraBold,fontSize=17.sp)
+                    }
+                    Text("100 كوين = 1 USD كقيمة أساسية داخل التطبيق. يظهر المبلغ النهائي قبل الدفع. النقاط الترويجية منفصلة وغير قابلة للسحب.",
+                        fontSize=10.sp,lineHeight=13.sp,color=Color(0xFFB2C3DB),
+                        modifier=Modifier.fillMaxWidth())
+                }
+            }
+        } // safeDrawingPadding box
+    }
     if(showPaymentSheet && !showOrders && quote==null && submittedId.isBlank()){
         ModalBottomSheet(onDismissRequest={showPaymentSheet=false},shape=RoundedCornerShape(topStart=32.dp,topEnd=32.dp)){
             Column(
