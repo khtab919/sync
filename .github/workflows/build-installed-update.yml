@@ -73,7 +73,7 @@ jobs:
           PY
 
       - name: Compile and test installed application update
-        run: gradle testReleaseUnitTest assembleRelease "-PLAYALI_API_URL=${LAYALI_API_URL}" -PRELAXIA_UNSIGNED_BUILD=true -PRELAXIA_QA_SIDE_BY_SIDE=true --no-daemon --stacktrace
+        run: gradle testDebugUnitTest assembleRelease "-PLAYALI_API_URL=${LAYALI_API_URL}" -PRELAXIA_UNSIGNED_BUILD=true -PRELAXIA_QA_SIDE_BY_SIDE=true --no-daemon --stacktrace
 
       - name: Verify release metadata and export signing tools
         run: |
