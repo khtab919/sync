@@ -23,6 +23,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -181,6 +184,14 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
         Box(Modifier.fillMaxSize()
             .background(Brush.verticalGradient(listOf(Color(0xFF112D56),CoinNavy,Color(0xFF070E1C))))
             .safeDrawingPadding()){
+            Canvas(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(255.dp)){
+                val stars=listOf(.04f to .22f,.19f to .07f,.29f to .53f,
+                    .40f to .15f,.54f to .38f,.62f to .11f,.74f to .59f,
+                    .83f to .25f,.94f to .48f,.17f to .73f,.48f to .81f)
+                for((x,y) in stars)
+                    drawCircle(Color(0xFFE2C387).copy(alpha=.42f),
+                        radius=1.5.dp.toPx(),center=Offset(size.width*x,size.height*y))
+            }
             Column(Modifier.fillMaxSize().imePadding().verticalScroll(scrollState)
                 .padding(horizontal=18.dp)
                 .padding(top=12.dp,bottom=if(showSelection)142.dp else 28.dp),
@@ -292,13 +303,18 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
                     horizontalAlignment=Alignment.CenterHorizontally,
                     verticalArrangement=Arrangement.spacedBy(8.dp)
                 ) {
-                    Button(onClick={showPaymentSheet=true},
-                        enabled=!busy&&packages.any{it.coins==selected}&&methods.any{it.enabled},
+                    val canCharge=!busy&&packages.any{it.coins==selected}&&methods.any{it.enabled}
+                    Surface(onClick={showPaymentSheet=true},
+                        enabled=canCharge,
                         modifier=Modifier.fillMaxWidth().height(52.dp),
                         shape=RoundedCornerShape(50.dp),
-                        colors=ButtonDefaults.buttonColors(containerColor=Color(0xFF1E40AF),contentColor=Color.White)
-                    ) {
-                        Text("اشحن الآن",fontWeight=FontWeight.ExtraBold,fontSize=17.sp)
+                        color=Color(0xFF1E40AF)
+                    ){
+                        Box(Modifier.fillMaxSize().background(
+                            Brush.horizontalGradient(listOf(Color(0xFF1E40AF),Color(0xFFF0BC71)))),
+                            contentAlignment=Alignment.Center){
+                            Text("اشحن الآن",color=Color.White,fontWeight=FontWeight.ExtraBold,fontSize=17.sp)
+                        }
                     }
                     Text("100 كوين = 1 USD كقيمة أساسية داخل التطبيق. يظهر المبلغ النهائي قبل الدفع. النقاط الترويجية منفصلة وغير قابلة للسحب.",
                         fontSize=10.sp,lineHeight=13.sp,color=Color(0xFFB2C3DB),
