@@ -22,7 +22,7 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    assert.equal(await page.locator('.audio-seat').count(),8,'placeholder seats render before network response');
    await page.evaluate(()=>{
     window.sent=[];room={state:'connected',localParticipant:{}};
-    const result={status:'active',mode:'audio',max_speakers:8,server_time:new Date().toISOString(),speakers:[{identity:'host-1',user_id:1,name:'مضيف تجريبي',owner:true,mode:'audio',avatar_url:''}],comments:[],gift_events:[],gift_catalog:[{code:'flower',name:'زهرة',symbol:'🌷',price_cents:50,effect:'simple'},{code:'whale',name:'الحوت الأزرق',symbol:'🐋',price_cents:10000,effect:'depth'},{code:'lion',name:'الأسد الملكي',symbol:'🦁',price_cents:15000,effect:'depth'}]};
+    const result={status:'active',mode:'audio',max_speakers:8,server_time:new Date().toISOString(),speakers:[{identity:'host-1',user_id:1,name:'مضيف تجريبي',owner:true,mode:'audio',avatar_url:''}],comments:[],gift_events:[],gift_catalog:[{code:'gift_flower',name:'زهرة',symbol:'🌷',price_cents:50,effect:'simple',category:'simple',icon_url:'/static/core/gifts/icons/gift_flower.webp'},{code:'gift_blue_whale',name:'الحوت الأزرق',symbol:'🐋',price_cents:10000,effect:'depth',category:'luxury',icon_url:'/static/core/gifts/icons/gift_blue_whale.webp'},{code:'gift_eagle',name:'نسر',symbol:'🦅',price_cents:6000,effect:'depth',category:'luxury',icon_url:'/static/core/gifts/icons/gift_eagle.webp'}]};
     window.qaRoom=result;api=async action=>{if(action)window.sent.push(action);return {...window.qaRoom,seat_status:action?.action==='seat_request'?'pending':''}};drawState(result);
    });
    assert.equal(await page.locator('.audio-seat').count(),8);
@@ -206,9 +206,11 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    await page.getByRole('button',{name:'فاخرة',exact:true}).click();
    assert.equal(await page.locator('.gift-card').count(),2);
    assert.equal(await page.locator('.gift-medallion').count(),2,'real gifts use dimensional artwork');
-   assert.equal(await page.locator('.gift-card').first().getAttribute('aria-label'),'الحوت الأزرق · 10000 كوين');
-   await page.locator('.gift-card').first().click();
-   assert.equal(await page.locator('.gift-card').first().getAttribute('aria-pressed'),'true','selected gift is highlighted');
+   const whaleCard=page.locator('.gift-card[data-gift-code="gift_blue_whale"]');
+   assert.equal(await whaleCard.getAttribute('aria-label'),'الحوت الأزرق · 10000 كوين');
+   assert.ok((await whaleCard.locator('img.gift-webp').getAttribute('src')).endsWith('gift_blue_whale.webp'),'real WebP asset URL is wired into gift grid');
+   await whaleCard.click();
+   assert.equal(await whaleCard.getAttribute('aria-pressed'),'true','selected gift is highlighted');
    await page.getByRole('button',{name:'×10',exact:true}).click();
    assert.ok((await page.locator('.gift-checkout-summary').innerText()).includes((100000).toLocaleString('ar')),'gift checkout computes unit price times combo');
    page.once('dialog',d=>d.dismiss());await page.locator('.gift-send').click();
@@ -219,7 +221,7 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    assert.equal(gift.price_cents,10000);assert.equal(gift.combo_count,10);assert.equal(gift.recipient_id,1);assert.ok(gift.request_key);
    assert.equal(await page.locator('#sheet').evaluate(el=>el.open),false,'confirmed gift closes the store');
    if(process.env.LIVE_PREVIEW_DIR){fs.mkdirSync(process.env.LIVE_PREVIEW_DIR,{recursive:true});await page.screenshot({path:path.join(process.env.LIVE_PREVIEW_DIR,`audio-room-${width}.png`)});await page.locator('#bigGiftBtn').click();await page.getByRole('button',{name:'فاخرة',exact:true}).click();await page.screenshot({path:path.join(process.env.LIVE_PREVIEW_DIR,`audio-gifts-${width}.png`)});await page.locator('#closeSheet').click();}
-   await page.evaluate(()=>{giftQueue=[{code:'whale',name:'الحوت الأزرق',symbol:'🐋',effect:'depth',sender:'داعم تجريبي',recipient:'مضيف تجريبي',combo_count:10,total_price_cents:100000}];playEffects()});
+   await page.evaluate(()=>{giftQueue=[{code:'gift_blue_whale',name:'الحوت الأزرق',symbol:'🐋',effect:'depth',sender:'داعم تجريبي',recipient:'مضيف تجريبي',combo_count:10,total_price_cents:100000}];playEffects()});
    assert.ok((await page.locator('#giftEffect').getAttribute('class')).includes('gift-fullscreen'),'depth gifts receive full-screen effect');
    assert.equal(await page.locator('#giftEffect .gift-combo-banner').innerText(),'×10 · '+(100000).toLocaleString('ar')+' كوين');
    assert.equal(await page.locator('#giftEffect .gift-particles i').count(),28,'premium gifts have complete particle animation');
