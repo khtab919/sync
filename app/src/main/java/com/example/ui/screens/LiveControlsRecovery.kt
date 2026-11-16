@@ -68,11 +68,37 @@ internal fun relaxiaLiveFooterRepairScript(): String = """
       // The WebView has now been constrained by Compose imePadding. Re-measure
       // the browser viewport during keyboard animation and keep the composer
       // in that visible area, including on servers with older live-stage.js.
+      // Legacy live assets have conflicting bottom-sheet inset rules. Use
+      // explicit pixel coordinates so the modal stays in the Android viewport.
+      function positionNativeRoomSheet() {
+        var modal = document.getElementById('sheet');
+        if (!modal || !modal.open) return;
+        var layoutHeight = Math.max(document.documentElement.clientHeight || 0, window.innerHeight || 0);
+        var v = window.visualViewport;
+        var usable = v && v.height >= 240 && v.height <= layoutHeight + 2;
+        var visibleHeight = usable ? Math.min(layoutHeight, v.height) : layoutHeight;
+        if (visibleHeight < 160) return;
+        var offset = usable ? Math.max(0, v.offsetTop || 0) : 0;
+        var h = Math.max(180, Math.min(760, Math.floor(visibleHeight * .78)));
+        var y = Math.max(8, Math.floor(offset + visibleHeight - h - 8));
+        var rules = {
+          position:'fixed', top:y+'px', bottom:'auto',
+          left:'10px', right:'10px', margin:'0 auto',
+          width:'calc(100% - 20px)', height:h+'px',
+          maxHeight:h+'px', minHeight:'0px',
+          overflowY:'auto', overscrollBehavior:'contain'
+        };
+        Object.keys(rules).forEach(function(k){
+          modal.style.setProperty(k.replace(/[A-Z]/g, function(c){return '-'+c.toLowerCase()}), rules[k], 'important');
+        });
+      }
       function measureVisibleRoom() {
         var viewport = window.visualViewport;
-        var layoutHeight = document.documentElement.clientHeight || window.innerHeight;
-        var height = Math.max(1, Math.floor(Math.min(layoutHeight, viewport ? viewport.height : layoutHeight)));
+        var layoutHeight = Math.max(document.documentElement.clientHeight || 0, window.innerHeight || 0);
+        var usable = viewport && viewport.height >= 240 && viewport.height <= layoutHeight + 2;
+        var height = Math.max(1, Math.floor(usable ? Math.min(layoutHeight, viewport.height) : layoutHeight));
         document.documentElement.style.setProperty('--room-viewport-height', height + 'px');
+        positionNativeRoomSheet();
         // Native repair mirrors the production footer measurement for older
         // server assets, so messages and seats never sit underneath controls.
         var footerHeight = Math.ceil(footer.getBoundingClientRect().height);
@@ -97,7 +123,15 @@ internal fun relaxiaLiveFooterRepairScript(): String = """
           }, true);
         }
         window.addEventListener('resize', measureVisibleRoom, {passive:true});
-        if (window.visualViewport) window.visualViewport.addEventListener('resize', measureVisibleRoom, {passive:true});
+        if (window.visualViewport) {
+          window.visualViewport.addEventListener('resize', measureVisibleRoom, {passive:true});
+          window.visualViewport.addEventListener('scroll', positionNativeRoomSheet, {passive:true});
+        }
+        var liveSheet = document.getElementById('sheet');
+        if (liveSheet && typeof MutationObserver !== 'undefined') {
+          window.relaxiaLiveDialogObserver = new MutationObserver(function() { positionNativeRoomSheet(); });
+          window.relaxiaLiveDialogObserver.observe(liveSheet, {attributes:true, attributeFilter:['open']});
+        }
         if (typeof ResizeObserver !== 'undefined') {
           window.relaxiaLiveFooterObserver = new ResizeObserver(measureVisibleRoom);
           window.relaxiaLiveFooterObserver.observe(footer);
