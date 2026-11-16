@@ -303,12 +303,12 @@ function giftSheet(){
  function render(category){
   grid.replaceChildren();
   for(const tab of tabs.children)tab.setAttribute('aria-pressed',String(tab.dataset.category===category));
-  const filtered=catalog.filter(g=>category==='all'||g.effect===category);
+  const filtered=catalog.filter(g=>category==='all'||g.category===category);
   if(!filtered.some(g=>g.code===selected?.code))selected=filtered[0]||null;
   for(const g of filtered){
    const b=button(grid,'',()=>{selected=g;comboCount=1;refreshChoice()});
    b.disabled=!select.options.length;
-   b.className='gift-card '+g.effect;
+   b.className='gift-card '+g.effect+(g.price_cents>=1000?' gift-premium':'');
    b.dataset.giftCode=g.code;
    b.setAttribute('aria-label',g.name+' · '+g.price_cents+' كوين');
    const icon=document.createElement('img');
@@ -321,13 +321,15 @@ function giftSheet(){
    const medallion=document.createElement('span');medallion.className='gift-medallion';medallion.append(icon);
    b.classList.add('gift-'+String(g.code).replace(/[^a-z0-9_-]/g,''));
    const name=document.createElement('strong');name.textContent=g.name;
-   const price=document.createElement('small');price.textContent=g.price_cents.toLocaleString('ar')+' كوين';
+   const price=document.createElement('small');price.className='gift-price';price.textContent=g.price_cents.toLocaleString('ar')+' كوين';
+   const coin=document.createElement('span');coin.className='gift-price-coin';coin.setAttribute('aria-hidden','true');
+   price.append(coin);
    b.append(medallion,name,price);
   }
   if(!filtered.length)note(grid,'لا توجد هدايا متاحة في هذا القسم.');
   refreshChoice();
  }
- for(const [key,label] of [['all','الكل'],['simple','سريعة'],['animated','متحركة'],['depth','فاخرة']]){
+ for(const [key,label] of [['all','الكل'],['simple','سريعة'],['animated','متحركة'],['luxury','فاخرة']]){
   const tab=button(tabs,label,()=>render(key));
   tab.dataset.category=key;
  }
