@@ -57,7 +57,7 @@ def snapshot(row,user):
     events=LiveGiftEvent.objects.filter(broadcast=row).select_related('operation__buyer__profile','operation__creator__profile').order_by('-pk')[:20]
     top=LiveGiftEvent.objects.filter(broadcast=row,operation__status='settled').values('operation__buyer_id','operation__buyer__profile__display_name','operation__buyer__username').annotate(total=Sum('operation__amount_cents')).order_by('-total')[:5]
     received=LiveGiftEvent.objects.filter(broadcast=row,operation__status='settled').aggregate(total=Sum('operation__amount_cents'),earnings=Sum('operation__creator_cents'))
-    return {'mode':row.mode,'max_speakers':row.max_speakers,'speakers':speakers,'can_publish':can_publish,'publish_sources':sources,
+    return {'mode':row.mode,'max_speakers':(max(8,len(speakers)) if row.mode=='audio' else row.max_speakers),'speakers':speakers,'can_publish':can_publish,'publish_sources':sources,
             'seat_status':own.status if own else '', 'manage_room':manager,
             'seat_requests':[dict(person(s.admission.user),mode=s.mode) for s in seats if s.status=='pending'] if manager else [],
             'moderator_ids':list(LiveRoomModerator.objects.filter(broadcast=row).values_list('user_id',flat=True)) if row.owner_id==user.pk else [],
@@ -107,7 +107,7 @@ def action(request,row,a):
         current=LiveBroadcast.objects.select_for_update().get(pk=row.pk);authorized(current,request.actor)
         if kind=='seat_request':
             eligible(request.actor,True)
-            if current.max_speakers<=1 or request.actor.pk==row.owner_id:raise ApiError('stage_unavailable',409)
+            if (min(current.max_speakers,8) if current.mode=='audio' else current.max_speakers)<=1 or request.actor.pk==row.owner_id:raise ApiError('stage_unavailable',409)
             mode=p.get('mode')
             if mode not in ('audio','video') or (row.mode=='audio' and mode!='audio'):raise ApiError('invalid_stage_mode')
             seat,_=LiveSeat.objects.get_or_create(admission=a,defaults={'mode':mode})
@@ -128,7 +128,7 @@ def action(request,row,a):
             if p.get('approve') is True:
                 eligible(seat.admission.user,True)
                 if seat.admission.banned:raise ApiError('broadcast_forbidden',403)
-                if seat.status!='approved' and LiveSeat.objects.filter(admission__broadcast=row,status='approved').count()>=current.max_speakers-1:raise ApiError('stage_full',409)
+                if seat.status!='approved' and LiveSeat.objects.filter(admission__broadcast=row,status='approved').count()>=(min(current.max_speakers,8) if current.mode=='audio' else current.max_speakers)-1:raise ApiError('stage_full',409)
                 seat.status='approved'
             else:
                 provider('RemoveParticipant',{'room':room_name(row),'identity':str(seat.admission_id)},room_name(row));seat.status='rejected'
@@ -150,7 +150,7 @@ def action(request,row,a):
             teams=p.get('teams');duration=p.get('duration')
             if not isinstance(teams,list) or len(teams)!=2 or any(not isinstance(t,list) or not t for t in teams):raise ApiError('invalid_pk_teams')
             flat=[u for t in teams for u in t]
-            if any(type(u) is not int for u in flat) or len(flat)!=len(set(flat)) or len(flat)>current.max_speakers or row.owner_id not in flat or type(duration) is not int or duration not in (60,180,300):raise ApiError('invalid_pk_teams')
+            if any(type(u) is not int for u in flat) or len(flat)!=len(set(flat)) or len(flat)>(min(current.max_speakers,8) if current.mode=='audio' else current.max_speakers) or row.owner_id not in flat or type(duration) is not int or duration not in (60,180,300):raise ApiError('invalid_pk_teams')
             permitted={row.owner_id}|set(LiveSeat.objects.filter(admission__broadcast=row,status='approved',admission__connected=True).values_list('admission__user_id',flat=True))
             if not set(flat)<=permitted:raise ApiError('invalid_pk_teams')
             if LivePK.objects.filter(broadcast=row,cancelled_at__isnull=True,ends_at__gt=timezone.now()).exists():raise ApiError('pk_already_active',409)
