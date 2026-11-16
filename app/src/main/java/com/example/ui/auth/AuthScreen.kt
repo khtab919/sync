@@ -471,7 +471,7 @@ fun AuthScreen(
                     if (errorMessage != null) {
                         Surface(
                             color = MaterialTheme.colorScheme.error.copy(alpha = 0.12f),
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(18.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(bottom = 12.dp)
@@ -489,7 +489,7 @@ fun AuthScreen(
                     if (statusNotice != null) {
                         Surface(
                             color = EmeraldVerified.copy(alpha = 0.12f),
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(18.dp),
                             border = BorderStroke(1.dp, EmeraldVerified),
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -761,7 +761,7 @@ fun AuthScreen(
                                     errorMessage = null
                                 },
                                 color = MaterialTheme.colorScheme.background,
-                                shape = RoundedCornerShape(12.dp),
+                                shape = RoundedCornerShape(18.dp),
                                 border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.outline),
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -930,7 +930,7 @@ fun AuthScreen(
                             },
                             label = { Text("اسم المستخدم أو البريد الإلكتروني", fontSize = 11.sp) },
                             singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(18.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .testTag("change_password_identifier_input")
@@ -946,7 +946,7 @@ fun AuthScreen(
                                 label = { Text("كلمة المرور الحالية", fontSize = 11.sp) },
                                 singleLine = true,
                                 visualTransformation = PasswordVisualTransformation(),
-                                shape = RoundedCornerShape(12.dp),
+                                shape = RoundedCornerShape(18.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .testTag("change_password_current_input")
@@ -962,7 +962,7 @@ fun AuthScreen(
                             label = { Text("كلمة المرور الجديدة (6 خانات فأكثر)", fontSize = 11.sp) },
                             singleLine = true,
                             visualTransformation = PasswordVisualTransformation(),
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(18.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .testTag("change_password_new_input")
@@ -977,7 +977,7 @@ fun AuthScreen(
                             label = { Text("تأكيد كلمة المرور الجديدة", fontSize = 11.sp) },
                             singleLine = true,
                             visualTransformation = PasswordVisualTransformation(),
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(18.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .testTag("change_password_confirm_input")

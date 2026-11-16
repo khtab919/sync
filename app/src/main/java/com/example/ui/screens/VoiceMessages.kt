@@ -6,7 +6,7 @@ import android.net.Uri
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -63,7 +63,7 @@ internal fun VoiceMessage(url:String,messageKey:String="") {
                 FilledIconButton({controller.toggle(url,identity)}, modifier=Modifier.size(42.dp), shape=androidx.compose.foundation.shape.CircleShape,
                     colors=IconButtonDefaults.filledIconButtonColors(containerColor=LocalContentColor.current.copy(alpha=.16f),contentColor=LocalContentColor.current)) {
                     if(active&&controller.loading) CircularProgressIndicator(Modifier.size(20.dp),strokeWidth=2.dp,color=LocalContentColor.current)
-                    else Icon(if(active&&controller.playing)Icons.Outlined.Pause else Icons.Outlined.PlayArrow,"تشغيل أو إيقاف الرسالة الصوتية",Modifier.size(28.dp))
+                    else Icon(if(active&&controller.playing)Icons.Rounded.Pause else Icons.Rounded.PlayArrow,"تشغيل أو إيقاف الرسالة الصوتية",Modifier.size(28.dp))
                 }
                 Column(Modifier.weight(1f)) {
                     Text("رسالة صوتية",style=MaterialTheme.typography.labelSmall)
@@ -90,7 +90,7 @@ internal fun VoiceMessage(url:String,messageKey:String="") {
 internal fun RecordingIndicator(seconds:Int,amplitude:Float, samples:List<Float> = emptyList(), paused:Boolean=false){
     val color=MaterialTheme.colorScheme.primary
     Row(Modifier.fillMaxWidth().padding(12.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)){
-        Icon(if(paused)Icons.Outlined.Pause else Icons.Outlined.Mic,if(paused)"التسجيل متوقف مؤقتًا"else"جارٍ تسجيل الصوت",tint=color)
+        Icon(if(paused)Icons.Rounded.Pause else Icons.Rounded.Mic,if(paused)"التسجيل متوقف مؤقتًا"else"جارٍ تسجيل الصوت",tint=color)
         Text("${seconds/60}:${(seconds%60).toString().padStart(2,'0')}")
         Canvas(Modifier.weight(1f).height(30.dp)){
             val center=size.height/2

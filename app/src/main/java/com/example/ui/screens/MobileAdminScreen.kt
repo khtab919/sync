@@ -184,7 +184,7 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
                 OutlinedTextField(administrativeReason,{administrativeReason=it.take(300)},label={Text("سبب الإجراء الإداري")},modifier=Modifier.fillMaxWidth())
                 if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
                 if (success.isNotBlank()) Text(success, color = MaterialTheme.colorScheme.primary)
-                if (loading || busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+                if (loading || busy) LuxuryLoadingStatus("جارٍ التحميل")
                 TextButton(onClick = { revision++ }, enabled = !busy && !loading) { Text("تحديث") }
             }
             if(section=="البث المباشر") {

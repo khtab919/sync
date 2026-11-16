@@ -3,8 +3,13 @@ on:
   push:
     branches:
       - fix/relaxia-116-live-white-screen-20261112
+      - design/relaxia-soft-luxury-20261113
     paths:
       - .github/workflows/check-live-runtime.yml
+      - backend/core/static/core/live-stage.css
+      - backend/core/static/core/live-stage.js
+      - backend/core/static/core/live-media.js
+      - backend/core/templates/core/live_room.html
   workflow_dispatch:
 permissions:
   contents: read

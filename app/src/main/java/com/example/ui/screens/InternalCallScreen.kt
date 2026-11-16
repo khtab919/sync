@@ -156,6 +156,6 @@ internal fun InternalCallScreen(api: LayaliApi, baseUrl: String, callId: String,
                     else error = "رفض فتح عنوان اتصال غير تابع للخادم."
                 }
             })
-        } else if(error.isBlank()) { LinearProgressIndicator(Modifier.fillMaxWidth()); Text("جارٍ تجهيز الاتصال داخل التطبيق…", Modifier.padding(24.dp)) }
+        } else if(error.isBlank()) { LuxuryLoadingStatus("جارٍ التحميل"); Text("جارٍ تجهيز الاتصال داخل التطبيق…", Modifier.padding(24.dp)) }
     } }
 }

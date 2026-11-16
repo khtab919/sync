@@ -104,7 +104,7 @@ internal fun AdminCentre(api:LayaliApi,name:String,ownerId:Int,back:()->Unit){
         TextButton(onClick={page="الرئيسية";detail=null;query=""}){Text("الرئيسية")}
        else TextButton(onClick=back){Text("التطبيق")}
       }
-      if(busy)LinearProgressIndicator(Modifier.fillMaxWidth())
+      if(busy)LuxuryLoadingStatus("جارٍ التحميل")
       if(error.isNotBlank())Text(error,color=MaterialTheme.colorScheme.error,
           style=MaterialTheme.typography.bodySmall)
       if(success.isNotBlank())Text(success,color=MaterialTheme.colorScheme.primary,

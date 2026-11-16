@@ -103,7 +103,7 @@ internal fun CommerceScreen(api: LayaliApi, kind: String, back: () -> Unit) {
         Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding().verticalScroll(rememberScrollState()).padding(22.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             TextButton(back, enabled = !busy) { Text("رجوع") }
             Text(if(isWheel) "يا نصيب" else kind, style = MaterialTheme.typography.headlineLarge)
-            if(busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+            if(busy) LuxuryLoadingStatus("جارٍ التحميل")
             if(note.isNotBlank()) Text(note, color = MaterialTheme.colorScheme.primary)
             if(kind == "شحن الرصيد") {
                 Text("USDT · BEP20 فقط", style = MaterialTheme.typography.titleLarge)
@@ -185,18 +185,18 @@ internal fun SellerPublishScreen(api: LayaliApi, back: () -> Unit) {
     var note by remember { mutableStateOf("") }
     fun perform(block: suspend () -> Unit) { if(busy) return; busy = true; scope.launch { try { block() } catch(e: CancellationException) { throw e } catch(e: Exception) { note = commerceError(e) } finally { busy = false } } }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri -> if(uri != null) perform { media = api.upload(context, uri, if(reel) "reel" else "offer"); note = "تم رفع الملف." } }
-    Surface(Modifier.fillMaxSize()) { Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding().verticalScroll(rememberScrollState()).padding(22.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Surface(Modifier.fillMaxSize()) { Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding().verticalScroll(rememberScrollState()).padding(22.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         TextButton(back, enabled = !busy) { Text("رجوع") }
         Text("مساحة النشر", style = MaterialTheme.typography.headlineLarge)
         Text("النشر متاح فوراً لجميع الحسابات النشطة · محتوى 18+ غير صريح")
         Row { FilterChip(!reel, { reel = false; media = JSONObject() }, label = { Text("خدمة أو منتج") }, enabled = !busy); Spacer(Modifier.width(8.dp)); FilterChip(reel, { reel = true; media = JSONObject() }, label = { Text("ريلز") }, enabled = !busy) }
-        if(busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+        if(busy) LuxuryLoadingStatus("جارٍ التحميل")
         if(note.isNotBlank()) Text(note)
         if(!reel) {
-            OutlinedTextField(title, { title = it.take(150) }, label = { Text("عنوان العرض") }, modifier = Modifier.fillMaxWidth())
-            if(!reel){OutlinedTextField(duration,{duration=it.filter{c->c.isDigit()}.take(4)},label={Text("مدة الخدمة بالدقائق")},singleLine=true,modifier=Modifier.fillMaxWidth());OutlinedTextField(terms,{terms=it.take(600)},label={Text("شروط الخدمة والإلغاء")},modifier=Modifier.fillMaxWidth())}
-            OutlinedTextField(description, { description = it.take(600) }, label = { Text("وصف العرض") }, minLines = 3, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(price, { price = it }, label = { Text("السعر بالدولار") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth())
+            Field(title, { title = it.take(150) }, "عنوان العرض")
+            if(!reel){Field(duration,{duration=it.filter{c->c.isDigit()}.take(4)},"مدة الخدمة بالدقائق",numeric=true);Field(terms,{terms=it.take(600)},"شروط الخدمة والإلغاء",lines=2)}
+            Field(description, { description = it.take(600) }, "وصف العرض", lines=3)
+            Field(price, { price = it }, "السعر بالدولار", numeric=true)
             Row { listOf("خدمة", "جلسة", "منتج").forEach { c -> FilterChip(category == c, { category = c }, label = { Text(c) }) } }
         }
         OutlinedButton(onClick = { picker.launch(if(reel) "video/mp4" else "image/*") }, enabled = !busy) { Text(if(reel) "اختيار فيديو MP4 من الهاتف · حتى 20MB" else "رفع صورة من الهاتف · حتى 8MB") }
@@ -228,7 +228,7 @@ internal fun SupportFloatingButton() {
 @Composable
 private fun RewardWheel(prizes: org.json.JSONArray?, rotation: Float) {
     val animated by androidx.compose.animation.core.animateFloatAsState(rotation, androidx.compose.animation.core.tween(2400, easing = androidx.compose.animation.core.FastOutSlowInEasing), label = "wheel")
-    val palette = listOf(androidx.compose.ui.graphics.Color(0xFF277C9D), androidx.compose.ui.graphics.Color(0xFF3187A8), androidx.compose.ui.graphics.Color(0xFFDCECF2), androidx.compose.ui.graphics.Color(0xFF153E53))
+    val palette = listOf(androidx.compose.ui.graphics.Color(0xFF792D45), androidx.compose.ui.graphics.Color(0xFFA04B63), androidx.compose.ui.graphics.Color(0xFFF0E0E3), androidx.compose.ui.graphics.Color(0xFF4C2037))
     Box(Modifier.fillMaxWidth(), contentAlignment = androidx.compose.ui.Alignment.TopCenter) {
         androidx.compose.foundation.Canvas(Modifier.size(280.dp)) {
             val ring = 9.dp.toPx()

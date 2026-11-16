@@ -544,7 +544,7 @@ fun ChatScreen(
                         label = { Text("سعر الدردشة المخصص بالدولار ($)") },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(18.dp),
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("my_chat_price_input")

@@ -30,7 +30,7 @@ import org.json.JSONObject
             if(confirmDelete)Button(enabled=!busy,onClick={act{api.request("/api/account/security","POST",JSONObject().put("action","delete").put("current_password",current));api.forgetSession();sessionEnded();close()}}){Text("تأكيد حذف حسابي")}
         }
         if(notice.isNotBlank())Text(notice)
-        if(busy)LinearProgressIndicator(Modifier.fillMaxWidth())
+        if(busy)LuxuryLoadingStatus("جارٍ التحميل")
     }},confirmButton={TextButton(enabled=!busy&&password.length>=8,onClick={act{
         if(recovery)api.request("/api/account/reset/confirm","POST",JSONObject().put("code",code.trim()).put("password",password))
         else api.request("/api/account/security","POST",JSONObject().put("action","password").put("current_password",current).put("password",password))

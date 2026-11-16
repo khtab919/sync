@@ -140,7 +140,7 @@ fun ReelsScreen(
     val customCommentsByReel = remember { mutableStateMapOf<String, List<String>>() }
 
     val allReels = remember(venues, publishedServices) {
-        val pubReels = publishedServices.mapIndexed { idx, pub ->
+        val pubReels = publishedServices.map { pub ->
             ReelItemUiModel(
                 id = "reel_pub_${pub.id}",
                 title = pub.title,
@@ -150,19 +150,19 @@ fun ReelsScreen(
                 category = pub.category,
                 description = pub.description,
                 priceUsd = pub.priceUsd.toInt(),
-                rating = 4.9,
-                reviewsCount = 140 + (idx * 27),
-                baseLikes = 620 + (idx * 115),
+                rating = 0.0,
+                reviewsCount = 0,
+                baseLikes = 0,
                 imageUrl = pub.imageUrl,
                 audioTrackTitle = pub.cityName,
-                durationLabel = "00:45",
-                badges = listOf("VIP", pub.category),
-                accentHex = 0xFF0D9488L,
-                secondaryHex = 0xFF09111EL,
+                durationLabel = "",
+                badges = listOf(pub.category),
+                accentHex = 0xFF792D45L,
+                secondaryHex = 0xFF4C2037L,
                 sourcePublished = pub
             )
         }
-        val venueReels = venues.mapIndexed { idx, venue ->
+        val venueReels = venues.map { venue ->
             ReelItemUiModel(
                 id = "reel_venue_${venue.id}",
                 title = venue.name,
@@ -173,8 +173,8 @@ fun ReelsScreen(
                 description = venue.shortDescription,
                 priceUsd = venue.startingPriceUsd,
                 rating = venue.ratingAverage,
-                reviewsCount = venue.reviewCount,
-                baseLikes = 480 + (idx * 95),
+                reviewsCount = 0,
+                baseLikes = 0,
                 imageUrl = venue.visualPresetKey,
                 audioTrackTitle = venue.cityName,
                 durationLabel = venue.showcaseDuration,
@@ -346,14 +346,11 @@ fun ReelsScreen(
             },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val sampleComments = listOf(
-                        "أجواء راقية جداً في ${reel.cityName} ✨",
-                        "تجربة مميزة وحجز سريع."
-                    )
-                    (customList + sampleComments).take(4).forEach { comment ->
+                    if (customList.isEmpty()) Text("لا توجد تعليقات معروضة بعد.", color = SoftWhiteText.copy(alpha = 0.75f), fontSize = 12.sp)
+                    customList.take(4).forEach { comment ->
                         Surface(
                             color = RoyalNavyBackground.copy(alpha = 0.6f),
-                            shape = RoundedCornerShape(10.dp),
+                            shape = RoundedCornerShape(18.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(
@@ -382,7 +379,7 @@ fun ReelsScreen(
                         if (newCommentText.isNotBlank()) {
                             customCommentsByReel[reel.id] = listOf(newCommentText.trim()) + customList
                             newCommentText = ""
-                            onShowMessage("تم إضافة تعليقك")
+                            onShowMessage("أُضيف تعليقك مؤقتًا إلى هذه الجلسة")
                         } else {
                             activeCommentReel = null
                         }
@@ -771,8 +768,8 @@ fun HomeReelsPreviewStrip(
                     title = pub.title,
                     imageUrl = pub.imageUrl,
                     category = pub.category,
-                    accentHex = 0xFF0D9488L,
-                    secondaryHex = 0xFF09111EL,
+                    accentHex = 0xFF792D45L,
+                    secondaryHex = 0xFF4C2037L,
                     onClick = { onOpenReelItem(pub.id) }
                 )
             }
@@ -809,7 +806,7 @@ private fun HomeReelStoryCard(
 ) {
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(18.dp),
         color = RoyalNavyCard,
         modifier = Modifier
             .width(102.dp)

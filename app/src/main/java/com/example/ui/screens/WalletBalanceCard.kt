@@ -2,7 +2,7 @@ package com.example.ui.screens
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AccountBalanceWallet
+import androidx.compose.material.icons.rounded.AccountBalanceWallet
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -21,6 +21,6 @@ internal fun WalletSummary(balanceCents: Long?, loading: Boolean, error: String,
             if(error.isNotBlank()) TextButton(retry,contentPadding=PaddingValues(0.dp)){Text("إعادة تحميل الرصيد",fontSize=11.sp)}
         }
         TextButton(buy){Text("متجر الرصيد",fontWeight=FontWeight.SemiBold)}
-        IconButton(wallet){Icon(Icons.Outlined.AccountBalanceWallet,"المحفظة")}
+        IconButton(wallet){Icon(Icons.Rounded.AccountBalanceWallet,"المحفظة")}
     }
 }
