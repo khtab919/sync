@@ -362,11 +362,18 @@ async function refresh(){
  if(!['starting','active','reconnecting'].includes(result.status)){stop('انتهى البث');return}
  drawState(result);
  if(result.status==='reconnecting'||result.status==='starting'){
-   $('connection').classList.remove('is-ready');
-  if(!reconnectSince)reconnectSince=Date.now();
-  const late=Date.now()-reconnectSince>=12000;
-  $('status').textContent=result.status==='starting'?(late?'تأخر بدء البث. يمكنك إعادة الاتصال.':'الغرفة تبدأ الآن…'):(late?'صاحب البث يعيد الاتصال. أعد المحاولة.':'صاحب البث يعيد الاتصال…');
-  $('reconnectAction').hidden=connecting||retrying||!late;
+  $('connection').classList.remove('is-ready');
+  if(mediaFault){
+   // Preserve the permission error; room heartbeat must not overwrite it.
+   $('connection').classList.add('media-fault');
+   $('retryMedia').hidden=false;
+   $('reconnectAction').hidden=true;
+  }else{
+   if(!reconnectSince)reconnectSince=Date.now();
+   const late=Date.now()-reconnectSince>=12000;
+   $('status').textContent=result.status==='starting'?(late?'تأخر بدء البث. يمكنك إعادة الاتصال.':'الغرفة تبدأ الآن…'):(late?'صاحب البث يعيد الاتصال. أعد المحاولة.':'صاحب البث يعيد الاتصال…');
+   $('reconnectAction').hidden=connecting||retrying||!late;
+  }
  }else{
   reconnectSince=0;$('reconnectAction').hidden=true;
   if(!mediaFault&&room?.state===ConnectionState.Connected&&(!(config.owner||speaking)||mediaReady)){$('status').textContent='مباشر';$('connection').classList.add('is-ready')}else $('connection').classList.remove('is-ready');
@@ -379,8 +386,11 @@ async function poll(){while(!closed){
   if(e.name==='MediaFailure'){mediaMessage(e);return}
   if(['broadcast_forbidden','broadcast_ended','live_authorization_required','admission_refunded'].includes(e.message)){stop('انتهت صلاحية البث');break}
   controlFailures++;
-  $('connection').classList.remove('is-ready');$('status').textContent='تعذّر تحديث الغرفة. نعيد المحاولة…';
-  $('reconnectAction').hidden=controlFailures<3;
+  if(!mediaFault){
+   $('connection').classList.remove('is-ready');
+   $('status').textContent='تعذّر تحديث الغرفة. نعيد المحاولة…';
+   $('reconnectAction').hidden=controlFailures<3;
+  }
  }
  await new Promise(r=>setTimeout(r,3000))
 }}
