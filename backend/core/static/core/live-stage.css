@@ -1019,3 +1019,8 @@ html[data-theme=light] body.audio-mode .seat-plus{border-color:#6C95D9;color:#19
 @media(max-height:680px){body.audio-mode #stage{--room-footer-height:114px;--room-chat-height:clamp(72px,13dvh,104px)}body.audio-mode #audioStage.seat-grid{top:calc(env(safe-area-inset-top,0px) + 103px);gap:5px}}
 @media(max-height:560px){body.audio-mode #stage{--room-footer-height:109px;--room-chat-height:68px}}
 @media(prefers-reduced-motion:reduce){body.audio-mode #messages .comment-bubble{backdrop-filter:none}}
+
+/* v16: fallback measurements for short Android screens; JS measures footer precisely. */
+body.audio-mode #stage{--room-footer-height:136px}
+@media(max-height:680px){body.audio-mode #stage{--room-footer-height:132px}}
+@media(max-height:560px){body.audio-mode #stage{--room-footer-height:130px}}

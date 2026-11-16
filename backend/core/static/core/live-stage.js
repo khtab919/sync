@@ -12,6 +12,20 @@ function updateRoomViewport(){
 updateRoomViewport();
 window.visualViewport?.addEventListener('resize',updateRoomViewport,{passive:true});
 window.addEventListener('resize',updateRoomViewport,{passive:true});
+/* Footer height is device-dependent (font scale, keyboard, cutout, safe areas).
+   Use its measured height to keep comments and seats above the working controls. */
+function syncRoomFooterMetrics(){
+ const footer=document.querySelector('#stage footer'),stage=$('stage');
+ if(!footer||!stage)return;
+ const height=Math.ceil(footer.getBoundingClientRect().height);
+ if(height>0)stage.style.setProperty('--room-footer-height',Math.max(124,height+6)+'px');
+}
+const roomFooter=document.querySelector('#stage footer');
+const footerSizeObserver=roomFooter&&typeof ResizeObserver!=='undefined'?new ResizeObserver(syncRoomFooterMetrics):null;
+if(roomFooter&&footerSizeObserver)footerSizeObserver.observe(roomFooter);
+window.visualViewport?.addEventListener('resize',syncRoomFooterMetrics,{passive:true});
+window.addEventListener('resize',syncRoomFooterMetrics,{passive:true});
+requestAnimationFrame(syncRoomFooterMetrics);
 let state={},speaking=false,activating=false,latestGift=0,haveGiftBaseline=false,giftQueue=[],effectBusy=false,giftKey=null,giftPending=null,quality=720,serverOffset=0;
 let preparedTracks=[],mediaFault=false,mediaReady=false;
 const path='/api/live/'+config.id+'/control';
