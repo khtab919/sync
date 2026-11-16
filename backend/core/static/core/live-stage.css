@@ -1024,3 +1024,6 @@ html[data-theme=light] body.audio-mode .seat-plus{border-color:#6C95D9;color:#19
 body.audio-mode #stage{--room-footer-height:136px}
 @media(max-height:680px){body.audio-mode #stage{--room-footer-height:132px}}
 @media(max-height:560px){body.audio-mode #stage{--room-footer-height:130px}}
+
+/* Preserve a real opaque base under the royal-blue gradient in daylight. */
+html[data-theme=light] body.audio-mode #stage{background-color:#D7E8FF}
