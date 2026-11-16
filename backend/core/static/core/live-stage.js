@@ -140,13 +140,42 @@ async function connect(token=config.token){
  finally{connecting=false}
 }
 async function reconnect(){if(retrying||connecting||closed||leaving)return;retrying=true;try{for(let attempt=0;attempt<6&&!closed&&!leaving;attempt++){$('connection').classList.remove('is-ready');$('status').textContent='إعادة الاتصال…';await new Promise(r=>setTimeout(r,Math.min(5000,1000*(attempt+1))));try{const fresh=await api({action:'token'});state.can_publish=fresh.can_publish;state.publish_sources=fresh.publish_sources;if(closed||leaving)return;room?.removeAllListeners();await room?.disconnect();document.querySelectorAll('audio').forEach(el=>el.remove());$('video').replaceChildren();if(state.can_publish===false&&!config.owner)speaking=false;await connect(fresh.token);return}catch(e){if(e.name==='MediaFailure'){mediaMessage(e);return}if(['broadcast_forbidden','broadcast_ended','live_authorization_required','admission_refunded','feature_restricted','broadcast_permission_required'].includes(e.message)){stop('انتهت صلاحية البث');return}}}if(!closed&&!leaving){$('status').textContent='تعذّر الاتصال. جرّب إعادة الاتصال دون شراء دخول جديد.';$('reconnectAction').hidden=false}}finally{retrying=false}}
+// Android System WebView can calculate a tiny CSS dialog max-height when
+// visualViewport collapses or the stage was resized by Gboard. Position the
+// modal in real, measured CSS pixels instead of relying on bottom/inset/100dvh.
+function positionRoomSheet(){
+ const modal=$('sheet');
+ if(!modal?.open)return;
+ const layoutHeight=Math.max(document.documentElement.clientHeight||0,window.innerHeight||0);
+ const visual=window.visualViewport;
+ const usableVisual=visual && visual.height>=240 && visual.height<=layoutHeight+2;
+ const height=usableVisual?Math.min(layoutHeight,visual.height):layoutHeight;
+ if(height<160)return;
+ const offsetTop=usableVisual?Math.max(0,visual.offsetTop||0):0;
+ const inset=8;
+ const sheetHeight=Math.max(180,Math.min(760,Math.floor(height*.78)));
+ const top=Math.max(inset,Math.floor(offsetTop+height-sheetHeight-inset));
+ const bounds={
+  position:'fixed',top:top+'px',bottom:'auto',
+  left:'10px',right:'10px',margin:'0 auto',
+  width:'calc(100% - 20px)',height:sheetHeight+'px',
+  maxHeight:sheetHeight+'px',minHeight:'0px',
+  overflowY:'auto',overscrollBehavior:'contain'
+ };
+ for(const [key,value] of Object.entries(bounds))modal.style.setProperty(key.replace(/[A-Z]/g,c=>'-'+c.toLowerCase()),value,'important');
+ modal.scrollTop=Math.max(0,modal.scrollTop);
+}
+window.addEventListener('resize',positionRoomSheet,{passive:true});
+window.visualViewport?.addEventListener('resize',positionRoomSheet,{passive:true});
+window.visualViewport?.addEventListener('scroll',positionRoomSheet,{passive:true});
 function sheet(title){
- // Dismiss the IME when opening a menu; otherwise its bottom actions are covered.
+ // Dismiss the IME before opening every room menu, not just gifts.
  if(document.activeElement?.id==='text')document.activeElement.blur();
  const modal=$('sheet');
  $('sheetTitle').textContent=title;
  $('sheetBody').replaceChildren();
  if(!modal.open)modal.showModal();
+ positionRoomSheet();
  modal.scrollTop=0;
  return $('sheetBody');
 }
