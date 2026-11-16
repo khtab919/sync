@@ -434,18 +434,52 @@ function moreSheet(){
 }
 function qualitySheet(){const box=sheet('جودة الفيديو');note(box,'تتكيّف جودة النقل تلقائيًا. 1080p تعتمد على الكاميرا والجهاز والشبكة.');for(const q of [360,720,1080])button(box,q+'p',async()=>{const track=room.localParticipant.getTrackPublication(Track.Source.Camera)?.track;if(!track)throw Error('camera_unavailable');await track.restartTrack({resolution:{width:Math.round(q*16/9),height:q,frameRate:q===360?20:30},facingMode:facing});quality=q;$('sheet').close()})}
 function playEffects(){
- if(effectBusy||!giftQueue.length)return;effectBusy=true;
- const g=giftQueue.shift(),box=$('giftEffect');box.replaceChildren();
+ if(effectBusy||!giftQueue.length)return;
+ effectBusy=true;
+ const g=giftQueue.shift(),box=$('giftEffect');
+ box.replaceChildren();
  const effect=['simple','animated','depth'].includes(g.effect)?g.effect:'simple';
+ const combo=Math.max(1,Math.min(99,Number(g.combo_count)||1));
  box.className='gift-show '+effect;
  if(g.code==='whale'||g.code==='lion')box.classList.add('show-'+g.code);
+ if(['falcon_gold','royal_yacht','cyber_supercar','emperor_crown','knight_sword','meteor_shower','crystal_hearts'].includes(g.code))
+  box.classList.add('show-'+g.code);
+ if(effect==='depth')box.classList.add('gift-fullscreen');
  const icon=document.createElement('span');icon.className='gift-hero';icon.textContent=g.symbol;
  const label=document.createElement('strong');label.textContent=g.sender+' أرسل '+g.name;
  const recipient=document.createElement('small');recipient.textContent='إلى '+g.recipient;
- if(effect!=='simple'){const particles=document.createElement('div');particles.className='gift-particles';particles.setAttribute('aria-hidden','true');for(let i=0;i<8;i++){const star=document.createElement('i');star.textContent=g.code==='whale'?'○':'✦';particles.append(star)}box.append(particles)}
- box.append(icon,label,recipient);box.hidden=false;
+ if(effect!=='simple'||g.code==='meteor_shower'){
+  const particles=document.createElement('div');particles.className='gift-particles';
+  particles.setAttribute('aria-hidden','true');
+  for(let i=0;i<(effect==='depth'?28:12);i++){
+   const spark=document.createElement('i');
+   spark.textContent=g.code==='whale'?'○':(g.code==='crystal_hearts'?'◆':'✦');
+   spark.style.setProperty('--spark-angle',(i*137.5)+'deg');
+   spark.style.setProperty('--spark-distance',(35+(i%5)*18)+'px');
+   spark.style.animationDelay=((i%10)*.095)+'s';
+   particles.append(spark);
+  }
+  box.append(particles);
+ }
+ box.append(icon,label,recipient);
+ if(combo>1){
+  const banner=document.createElement('div');
+  banner.className='gift-combo-banner';
+  banner.textContent='×'+combo+' · '+(Number(g.total_price_cents)||0).toLocaleString('ar')+' كوين';
+  box.append(banner);
+ }
+ const activeSeat=(state.speakers||[]).find(s=>s.name===g.recipient);
+ const targetSeat=activeSeat&&document.querySelector('#audioStage .audio-seat[data-identity="'+CSS.escape(activeSeat.identity)+'"]');
+ if(targetSeat&&effect==='animated')targetSeat.classList.add('gift-seat-glow');
+ box.hidden=false;
  const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
- setTimeout(()=>{box.hidden=true;effectBusy=false;playEffects()},reduced?1600:effect==='simple'?1600:effect==='depth'?3800:2600);
+ const duration=reduced?1100:effect==='simple'?2000:effect==='depth'?4500:3000;
+ setTimeout(()=>{
+  box.hidden=true;
+  if(targetSeat)targetSeat.classList.remove('gift-seat-glow');
+  effectBusy=false;
+  playEffects();
+ },duration);
 }
 function drawState(result){state=result;updateQuickMic();document.querySelectorAll('.tile').forEach(t=>{const speaker=result.speakers?.find(s=>s.identity===t.dataset.identity);if(speaker)t.querySelector('small').textContent=speaker.name});serverOffset=Date.parse(result.server_time)-Date.now();const vCount=result.viewers||0;if($('viewerCount'))$('viewerCount').textContent=vCount>=1000?(vCount/1000).toFixed(1)+'K':vCount;else $('viewers').textContent=vCount+' مشاهد';$('viewers').title=vCount+' مشاهد';$('follow').textContent=result.following?'تتابعه':'متابعة';const host=result.speakers?.[0];$('badge').textContent=host&&Number(host.level)>0?('المستوى '+Math.floor(Number(host.level))+(host.vip?' · VIP':'')):(host?.vip?'VIP':'');
  const signature=JSON.stringify([!!result.manage_room,result.comments||[]]);if(lastComments!==signature){lastComments=signature;const box=$('messages');const nearBottom=box.scrollHeight-box.clientHeight-box.scrollTop<38,previousScroll=box.scrollTop;box.replaceChildren();for(const c of result.comments||[]){const p=document.createElement('div');p.className='comment-bubble';const av=document.createElement('div');av.className='comment-avatar';av.textContent=(c.name||'U').slice(0,1);const body=document.createElement('div');body.className='comment-body';const name=document.createElement('span');name.className='comment-author';name.textContent=c.name+': ';body.append(name,document.createTextNode(c.text));p.append(av,body);if(result.manage_room){const manage=document.createElement('button');manage.type='button';manage.className='comment-actions';manage.textContent='⋯';manage.setAttribute('aria-label','إدارة تعليق '+(c.name||''));manage.onclick=()=>commentActionsSheet(c);p.append(manage)}box.append(p)}if(!(result.comments||[]).length){const blank=document.createElement('p');blank.className='comment-empty';blank.textContent='لا توجد تعليقات بعد · ابدأ الحوار';box.append(blank)}box.scrollTop=nearBottom?box.scrollHeight:Math.min(previousScroll,Math.max(0,box.scrollHeight-box.clientHeight))}
