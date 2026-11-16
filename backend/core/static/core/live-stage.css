@@ -1223,3 +1223,143 @@ body.audio-mode dialog#sheet[open], body:not(.audio-mode) dialog#sheet[open] {
   min-height:0;
   overflow:visible;
 }
+
+/* rooms-controls-24: eight refined audio seats, calm royal background, vector tools.
+   This layer intentionally follows legacy 5-column/audio-style declarations. */
+body.audio-mode #stage {
+  background:
+    radial-gradient(ellipse at 76% 17%,rgba(96,135,182,.28) 0%,transparent 46%),
+    radial-gradient(ellipse at 18% 74%,rgba(153,89,121,.21) 0%,transparent 54%),
+    linear-gradient(157deg,#0B1D36 2%,#18334D 47%,#1D213A 100%);
+}
+body.audio-mode .shade {
+  background:linear-gradient(180deg,rgba(8,19,38,.2),transparent 38%,transparent 70%,rgba(11,19,34,.3));
+  pointer-events:none;
+}
+html[data-theme=light] body.audio-mode #stage {
+  background:
+    radial-gradient(ellipse at 77% 20%,rgba(170,195,220,.52),transparent 45%),
+    radial-gradient(ellipse at 17% 72%,rgba(206,172,188,.25),transparent 52%),
+    linear-gradient(159deg,#E9F0F4 0%,#E6EAF0 52%,#EEE6EC 100%)!important;
+}
+html[data-theme=light] body.audio-mode .shade {
+  background:linear-gradient(180deg,rgba(236,242,249,.15),transparent 44%,transparent 70%,rgba(211,218,234,.16));
+}
+body.audio-mode #audioStage.seat-grid {
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  grid-auto-rows:min-content;
+  inset:calc(env(safe-area-inset-top,0px) + 118px) 12px calc(var(--room-footer-height) + var(--room-chat-height) + env(safe-area-inset-bottom,0px) + 13px);
+  align-content:center;
+  justify-items:stretch;
+  gap:clamp(9px,1.9vh,18px) clamp(5px,1.5vw,10px);
+  overflow:hidden;
+  padding:5px 0;
+}
+body.audio-mode #audioStage .audio-seat {
+  position:relative;
+  border:1px solid rgba(171,199,226,.22);
+  border-radius:21px;
+  padding:12px 3px 9px;
+  min-height:121px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:flex-start;
+  gap:5px;
+  background:linear-gradient(158deg,rgba(207,225,245,.12),rgba(20,40,66,.13));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.13),0 5px 13px rgba(6,19,37,.1);
+  overflow:hidden;
+  transition:border-color .16s ease,background .16s ease,transform .16s ease;
+}
+body.audio-mode #audioStage .audio-seat.empty-seat:active {transform:scale(.97)}
+body.audio-mode #audioStage .audio-seat.host-seat {
+  border-color:rgba(205,169,123,.61);
+  background:linear-gradient(153deg,rgba(182,138,92,.16),rgba(35,44,68,.17));
+}
+body.audio-mode #audioStage .audio-seat .audio-placeholder,
+body.audio-mode #audioStage .audio-seat img,
+body.audio-mode #audioStage .audio-seat .seat-plus,
+body.audio-mode #audioStage .audio-seat .audio-waves {
+  width:clamp(48px,14vw,66px);
+  height:clamp(48px,14vw,66px);
+  flex-shrink:0;
+}
+body.audio-mode #audioStage .audio-seat .audio-placeholder,
+body.audio-mode #audioStage .audio-seat img {
+  border:2px solid rgba(152,196,232,.73);
+  background:linear-gradient(145deg,#244765,#415674);
+  box-shadow:0 4px 12px rgba(0,17,42,.28);
+}
+body.audio-mode #audioStage .audio-seat.host-seat .audio-placeholder,
+body.audio-mode #audioStage .audio-seat.host-seat img {
+  border-color:#D9B98B;
+  box-shadow:0 0 0 3px rgba(208,172,120,.19),0 5px 14px rgba(0,17,42,.25);
+}
+body.audio-mode #audioStage .audio-seat .seat-plus {
+  display:grid;place-items:center;
+  border:1.5px solid rgba(160,197,223,.66);
+  border-radius:50%;
+  color:#E6F1FC;
+  background:linear-gradient(150deg,rgba(116,151,187,.39),rgba(48,82,116,.48));
+  box-shadow:inset 0 1px 4px rgba(246,249,255,.15),0 4px 11px rgba(8,23,45,.18);
+}
+body.audio-mode #audioStage .seat-plus svg {width:25px;height:25px;display:block;}
+body.audio-mode #audioStage .audio-seat .audio-name {
+  max-width:100%;font-size:11px;font-weight:650;line-height:1.25;
+  text-overflow:ellipsis;white-space:nowrap;overflow:hidden;color:#F1F6FC;
+}
+body.audio-mode #audioStage .audio-seat small {font-size:10px;line-height:1.2;color:#CFDEEA;}
+body.audio-mode #audioStage .audio-seat.empty-seat .seat-plus {margin-bottom:6px;}
+body.audio-mode #audioStage .audio-seat.empty-seat {min-height:121px;justify-content:center;}
+body.audio-mode #audioStage .audio-seat.empty-seat .seat-plus {margin:0;}
+body.audio-mode #audioStage .audio-seat .audio-waves {pointer-events:none;}
+html[data-theme=light] body.audio-mode #audioStage .audio-seat {
+  color:#203B54;
+  border-color:rgba(100,136,168,.28);
+  background:linear-gradient(155deg,rgba(255,255,255,.68),rgba(221,233,243,.6));
+  box-shadow:0 5px 15px rgba(33,65,94,.08),inset 0 1px 0 rgba(255,255,255,.9);
+}
+html[data-theme=light] body.audio-mode #audioStage .audio-seat.host-seat {border-color:rgba(170,129,82,.55);}
+html[data-theme=light] body.audio-mode #audioStage .audio-seat .audio-name {color:#203A56;}
+html[data-theme=light] body.audio-mode #audioStage .audio-seat small {color:#45637D;}
+html[data-theme=light] body.audio-mode #audioStage .audio-seat .seat-plus {
+  color:#28567D;border-color:rgba(105,144,177,.6);
+  background:linear-gradient(155deg,#F4F8FC,#D9E5EE);
+}
+#stage footer .tool-circle,
+#stage footer .gift-fab {
+  transition:background-color .18s ease,transform .16s ease;
+}
+#stage footer .tool-circle svg,
+#stage footer .gift-fab svg,
+#stage footer .composer-emoji svg,
+#stage footer .composer-send svg {display:block;width:23px;height:23px;flex-shrink:0;}
+#stage footer .tool-circle {
+  border-color:rgba(143,181,216,.65)!important;
+  background:linear-gradient(151deg,#2F587E,#1D3E60)!important;
+  color:#F5F8FF!important;
+  box-shadow:inset 0 1px 0 #FFFFFF20,0 3px 9px #0A1F3850!important;
+}
+#stage footer .gift-fab {
+  display:grid;place-items:center;
+  color:#302337!important;
+  background:linear-gradient(150deg,#E7CAA0,#B88C61)!important;
+  border:1px solid rgba(249,222,179,.7);
+  box-shadow:inset 0 2px 3px #FFF5DD70,0 4px 13px #07162C45;
+}
+#stage footer .composer-emoji svg {color:#E1ECF8;}
+#stage footer .composer-send svg {color:white;}
+@media(max-height:680px) {
+  body.audio-mode #audioStage.seat-grid {top:calc(env(safe-area-inset-top,0px) + 106px);gap:7px 5px;}
+  body.audio-mode #audioStage .audio-seat {min-height:98px;padding:6px 2px 5px;border-radius:17px;gap:3px;}
+  body.audio-mode #audioStage .audio-seat.empty-seat {min-height:98px;}
+  body.audio-mode #audioStage .audio-seat .audio-placeholder,
+  body.audio-mode #audioStage .audio-seat img,
+  body.audio-mode #audioStage .audio-seat .seat-plus,
+  body.audio-mode #audioStage .audio-seat .audio-waves {width:clamp(40px,12vw,51px);height:clamp(40px,12vw,51px);}
+}
+@media(prefers-reduced-motion:reduce) {
+  body.audio-mode #audioStage .audio-seat,
+  #stage footer .tool-circle,#stage footer .gift-fab {transition:none;}
+}
