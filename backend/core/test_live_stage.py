@@ -131,6 +131,51 @@ class StageTests(TestCase):
         self.assertEqual(Wallet.objects.get(user=self.viewer).reserved_cents,100)
         self.assertEqual(FinancialOperation.objects.filter(buyer=self.viewer).count(),1)
 
+    def test_luxury_gift_catalog_has_server_owned_prices_and_tiers(self):
+        for code, name, price, effect in [
+            ('falcon_gold','صقر الصحراء الذهبي',5000,'depth'),
+            ('royal_yacht','اليخت الملكي',3500,'depth'),
+            ('cyber_supercar','السيارة الخارقة',2500,'depth'),
+            ('emperor_crown','تاج الإمبراطور',800,'animated'),
+            ('knight_sword','سيف الفارس المضيء',500,'animated'),
+            ('meteor_shower','وابل النيازك',100,'simple'),
+            ('crystal_hearts','قلوب كريستالية',10,'simple'),
+        ]:
+            gift=LiveGiftDefinition.objects.get(pk=code)
+            self.assertEqual((gift.name,gift.price_cents,gift.effect, gift.enabled),(name,price,effect,True))
+
+    def test_combo_gift_settles_once_at_catalog_price_and_shows_correct_multiplier(self):
+        row=self.stage()
+        Wallet.objects.filter(user=self.viewer).update(balance_cents=60000)
+        key=str(uuid.uuid4())
+        data={'action':'gift','gift_code':'falcon_gold','price_cents':5000,
+              'recipient_id':self.owner.pk,'combo_count':10,'total_cost':1,
+              'confirmed':True,'request_key':key}
+        for _ in range(2):
+            self.assertEqual(self.event(row,data,self.viewer).status_code,200)
+        self.assertEqual(Wallet.objects.get(user=self.viewer).balance_cents,10000)
+        self.assertEqual(Wallet.objects.get(user=self.owner).balance_cents,40000)
+        self.assertEqual(FinancialOperation.objects.filter(kind='live_gift').count(),1)
+        gift=LiveGiftEvent.objects.get()
+        self.assertEqual(gift.combo_count,10)
+        self.assertEqual(gift.operation.amount_cents,50000)
+        event=self.request(f'/api/live/{row.pk}/events').json()['gift_events'][0]
+        self.assertEqual(event['combo_count'],10)
+        self.assertEqual(event['total_price_cents'],50000)
+        self.assertEqual(event['code'],'falcon_gold')
+        changed={**data,'combo_count':1}
+        self.assertEqual(self.event(row,changed,self.viewer).status_code,409)
+        self.assertEqual(Wallet.objects.get(user=self.viewer).balance_cents,10000)
+
+    def test_combo_rejects_invalid_counts_without_creating_financial_operation(self):
+        row=self.stage()
+        base={'action':'gift','gift_code':'crystal_hearts','price_cents':10,
+              'recipient_id':self.owner.pk,'confirmed':True,'request_key':str(uuid.uuid4())}
+        for count in (0,100,999,-1,True,'10',1.5):
+            response=self.event(row,{**base,'combo_count':count},self.viewer)
+            self.assertEqual(response.status_code,400)
+        self.assertEqual(FinancialOperation.objects.filter(kind='live_gift').count(),0)
+
     def test_whale_and_lion_catalog_gifts_are_settled_once_at_server_prices(self):
         self.assertGreaterEqual(LiveGiftDefinition.objects.filter(enabled=True).count(),24)
         row=self.stage();Wallet.objects.filter(user=self.viewer).update(balance_cents=50000)
