@@ -1,0 +1,21 @@
+services:
+  relaxia-website:
+    build: .
+    container_name: relaxia-official-website
+    restart: unless-stopped
+    environment:
+      RELAXIA_SITE_DB: /data/site.sqlite3
+      RELAXIA_SITE_ADMIN_TOKEN: ${RELAXIA_SITE_ADMIN_TOKEN:-}
+    ports:
+      - "127.0.0.1:8088:8080"
+    volumes:
+      - relaxia_website_db:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+volumes:
+  relaxia_website_db:
