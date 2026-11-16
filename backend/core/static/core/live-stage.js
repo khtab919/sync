@@ -240,7 +240,7 @@ function pkSheet(){const box=sheet('منافسة PK');note(box,'تحدٍّ با�
  const duration=document.createElement('select');for(const n of [60,180,300])duration.add(new Option((n/60)+' دقيقة',String(n)));box.append(duration);
  button(box,'بدء المنافسة',async()=>{const teams=[[],[]];for(const [id,el] of members)if(el.value!=='')teams[Number(el.value)].push(id);await api({action:'pk_start',teams,duration:Number(duration.value)});$('sheet').close();await refresh()},'primary')}
 function giftSheet(){
- const box=sheet('متجر الهدايا');note(box,'اختر المستلم والهدية. يظهر السعر قبل التأكيد؛ يحصل المستلم على 80٪.');
+ const box=sheet('متجر الهدايا');note(box,'اختر مستلم الهدية، ثم أكد السعر قبل الإرسال.');
  const select=document.createElement('select');select.setAttribute('aria-label','مستلم الهدية');
  for(const speaker of state.speakers||[])if(speaker.user_id!==config.userId)select.add(new Option(speaker.name,String(speaker.user_id)));
  box.append(select);
@@ -276,8 +276,7 @@ function giftSheet(){
  render('all');note(box,'أكبر الداعمين');for(const supporter of state.top_supporters||[])note(box,supporter.name+' · '+supporter.total+' كوين');
 }
 function drawAudioSeats(result){
- const box=$('audioStage'),capacity=Math.max(1,Math.min(15,result.max_speakers||config.maxSpeakers||1));
- const speakers=result.speakers||[];
+ const box=$('audioStage'),speakers=result.speakers||[],capacity=Math.max(8,speakers.length);
  const signature=JSON.stringify([capacity,speakers.map(s=>[s.identity,s.name,s.owner,s.avatar_url])]);
  if(signature===audioSeatSignature&&box.querySelectorAll('.audio-seat').length===capacity){
   box.querySelectorAll('.audio-seat[data-identity]').forEach(item=>item.classList.toggle('speaking',activeSpeakerIds.has(item.dataset.identity)));
@@ -289,7 +288,7 @@ function drawAudioSeats(result){
  for(let i=0;i<capacity;i++){
   const speaker=speakers[i],item=document.createElement('button');item.type='button';item.className='audio-person audio-seat';item.onclick=guestSheet;
   if(speaker){
-   item.dataset.identity=speaker.identity;item.classList.toggle('speaking',activeSpeakerIds.has(speaker.identity));
+   item.dataset.identity=speaker.identity;item.classList.toggle('speaking',activeSpeakerIds.has(speaker.identity));item.classList.toggle('host-seat',!!speaker.owner);
    item.setAttribute('aria-label',speaker.name+(speaker.owner?' · صاحب الغرفة':''));
    const waves=document.createElement('div');waves.className='audio-waves';waves.setAttribute('aria-hidden','true');
    for(let n=0;n<3;n++)waves.append(document.createElement('span'));item.append(waves);
@@ -302,7 +301,7 @@ function drawAudioSeats(result){
    const role=document.createElement('small');role.textContent=speaker.owner?'المضيف':String(i+1);item.append(role);
   }else{
    item.classList.add('empty-seat');item.setAttribute('aria-label','مقعد '+(i+1)+' · طلب الميكروفون');
-   const circle=document.createElement('span');circle.className='seat-plus';circle.textContent='+';
+   const circle=document.createElement('span');circle.className='seat-plus';circle.setAttribute('aria-hidden','true');circle.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 10v2a7 7 0 0 0 11.3 5.5M12 19v2M8.5 21h7M19 11v6M16 14h6"/></svg>';
    // Empty seats show one clear action; the seat number remains in aria-label.
    item.append(circle);
   }
@@ -535,7 +534,7 @@ if($('emojiBtn'))$('emojiBtn').onclick=()=>{
 layout();updateQuickMic();window.relaxiaStageLoaded=true;
 // These seats use room metadata; they are placeholders, not fabricated online users.
 if(config.mode==='audio')drawAudioSeats({
- max_speakers:config.maxSpeakers||15,
+ max_speakers:8,
  speakers:[{identity:'host-'+config.ownerId,name:config.ownerName,owner:true,avatar_url:config.ownerAvatar||''}]
 });
 // Load seats, audience and chat before LiveKit connects, including recovery states.
