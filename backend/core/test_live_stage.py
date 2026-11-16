@@ -131,6 +131,18 @@ class StageTests(TestCase):
         self.assertEqual(Wallet.objects.get(user=self.viewer).reserved_cents,100)
         self.assertEqual(FinancialOperation.objects.filter(buyer=self.viewer).count(),1)
 
+    def test_public_luxury_store_has_exactly_21_webp_items_sorted_by_price(self):
+        from .live_stage import LUXURY_GIFT_CODES
+        row=self.stage()
+        catalog=self.request(f'/api/live/{row.pk}/events').json()['gift_catalog']
+        self.assertEqual(len(catalog),21)
+        self.assertEqual({g['code'] for g in catalog},set(LUXURY_GIFT_CODES))
+        self.assertEqual([g['price_cents'] for g in catalog],sorted(g['price_cents'] for g in catalog))
+        self.assertEqual({g['category'] for g in catalog},{'simple','animated','luxury'})
+        for gift in catalog:
+            self.assertEqual(gift['icon_url'],f"/static/core/gifts/icons/{gift['code']}.webp")
+            self.assertEqual(gift['animation_url'],f"/static/core/gifts/animations/{gift['code']}.webp")
+
     def test_luxury_gift_catalog_has_server_owned_prices_and_tiers(self):
         for code, name, price, effect in [
             ('falcon_gold','صقر الصحراء الذهبي',5000,'depth'),
