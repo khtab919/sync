@@ -215,8 +215,14 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
             }
         }
         Row(horizontalArrangement=Arrangement.spacedBy(10.dp)) {
-            FilterChip(!showOrders,{showOrders=false},label={Text("شراء كوينز")})
-            FilterChip(showOrders,{showOrders=true},label={Text("طلباتي")})
+            val chipColors=FilterChipDefaults.filterChipColors(
+                containerColor=Color(0xFF21334F),
+                labelColor=Color(0xFFCDDBEF),
+                selectedContainerColor=Color(0xFF385A8A),
+                selectedLabelColor=Color.White
+            )
+            FilterChip(!showOrders,{showOrders=false},label={Text("شراء كوينز")},colors=chipColors)
+            FilterChip(showOrders,{showOrders=true},label={Text("طلباتي")},colors=chipColors)
         }
         if(!showOrders && submittedId.isBlank() && quote!=null) Text("أكمل عملية الدفع",style=MaterialTheme.typography.titleMedium,color=Color.White)
         if(!showSelection) Text("100 كوين = 1 USD كقيمة أساسية داخل التطبيق. يظهر المبلغ النهائي قبل الدفع. النقاط الترويجية منفصلة وغير قابلة للسحب.",style=MaterialTheme.typography.bodySmall,color=Color(0xFFA5B9D8))
@@ -228,7 +234,7 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
             TextButton(onClick={submittedId="";showOrders=true}){Text("عرض جميع طلباتي")}
             if(submittedStatus!="pending")TextButton(onClick={submittedId="";showOrders=false}){Text("شراء رصيد جديد")}
         } else if(!showOrders && quote==null){
-            if(packages.isEmpty()&&!busy)Text("لا تتوفر باقات شحن حاليًا. أعد تحديث المتجر لاحقًا.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+            if(packages.isEmpty()&&!busy)Text("لا تتوفر باقات شحن حاليًا. أعد تحديث المتجر لاحقًا.",color=Color(0xFFB2C3DB))
             val maxBonus=packages.maxOfOrNull{it.bonusPoints}?:0
             BoxWithConstraints(Modifier.fillMaxWidth()){
                 val columns=if(maxWidth>=280.dp)3 else 2
@@ -256,7 +262,7 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
             Text(
                 if(quoteSeconds>0L)"صلاحية عرض السعر: %02d:%02d".format(quoteSeconds/60,quoteSeconds%60)
                 else "انتهت صلاحية عرض السعر. إن لم تدفع، اطلب عرضًا جديدًا. إن دفعت بالفعل، أكمل إرسال الإثبات للمراجعة.",
-                style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant
+                style=MaterialTheme.typography.bodySmall,color=Color(0xFFB2C3DB)
             )
             Text("المطلوب: ${quote.optString("payment_amount")} ${quote.optString("payment_currency")}",style=MaterialTheme.typography.titleLarge)
             val rail=quote.optString("method")
@@ -283,7 +289,7 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
             Text(if(rail=="usdt")"أدخل TxID كاملًا: 64 حرفًا أو رقمًا من إيصال التحويل."else"أدخل رقم إشعار التحويل كما يظهر في الإيصال.",style=MaterialTheme.typography.bodySmall)
             OutlinedButton(onClick={picker.launch("image/*")},enabled=!busy){Text(if(receipt.isBlank())"رفع صورة إثبات الدفع"else"استبدال الإيصال")}
             if(preview.isNotBlank())ReferenceImage(preview,Modifier.fillMaxWidth().height(150.dp))
-            Text("الرصيد يضاف بعد تحقق المسؤول من وصول المبلغ فعليًا. صورة الإيصال وحدها لا تكفي.",fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("الرصيد يضاف بعد تحقق المسؤول من وصول المبلغ فعليًا. صورة الإيصال وحدها لا تكفي.",fontSize=12.sp,color=Color(0xFFB2C3DB))
             Button(onClick={perform{val result=api.request("/api/topups","POST",JSONObject().put("quote_id",quote.getString("id")).put("transaction_hash",reference).put("receipt_id",receipt));submittedId=result.getString("id");submittedStatus=result.optString("status","pending");submittedAmount=quote.optLong("amount_cents");quoteText="";receipt="";reference="";preview="";showOrders=true;try{reload()}catch(e:CancellationException){throw e}catch(e:Exception){note="تم استلام الطلب. تعذّر تحديث القائمة؛ يمكنك تحديث الحالة لاحقًا."}}},enabled=!busy&&receipt.isNotBlank()&&validPaymentReference(rail,reference),modifier=Modifier.fillMaxWidth().height(52.dp)){Text(if(busy)"جارٍ تقديم الطلب…"else"تقديم طلب الشراء")}
             }
             TextButton(onClick={quoteText=""},enabled=!busy){Text("العودة إلى الباقات")}
@@ -291,7 +297,7 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
         if(showOrders && submittedId.isBlank()) {
             Text("طلبات الشراء",style=MaterialTheme.typography.titleLarge)
             OutlinedButton(onClick={perform{reload()}},enabled=!busy){Text("تحديث الطلبات")}
-            if(rows.isEmpty()&&!busy)Text("لا توجد طلبات شراء حتى الآن.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+            if(rows.isEmpty()&&!busy)Text("لا توجد طلبات شراء حتى الآن.",color=Color(0xFFB2C3DB))
             rows.forEach { r ->
                 PurchaseStatusCard(r.optString("id"),r.optLong("amount_cents"),r.optString("status"),r.optString("review_note"))
             }
