@@ -23,6 +23,7 @@ def public_gift_catalog():
     ).order_by('price_cents','code').values('code','name','symbol','price_cents','effect')
     return [
         {**row,
+         'category': 'luxury' if row['effect']=='depth' else row['effect'],
          'icon_url': '/static/core/gifts/icons/'+row['code']+'.webp',
          'animation_url': '/static/core/gifts/animations/'+row['code']+'.webp'}
         for row in rows
