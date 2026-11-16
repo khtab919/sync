@@ -168,6 +168,18 @@ class StageTests(TestCase):
         self.assertEqual(self.event(row,changed,self.viewer).status_code,409)
         self.assertEqual(Wallet.objects.get(user=self.viewer).balance_cents,10000)
 
+    def test_maximum_combo_99_settles_atomically(self):
+        row=self.stage()
+        key=str(uuid.uuid4())
+        data={'action':'gift','gift_code':'crystal_hearts','price_cents':10,
+              'combo_count':99,'confirmed':True,'request_key':key}
+        self.assertEqual(self.event(row,data,self.viewer).status_code,200)
+        self.assertEqual(self.event(row,data,self.viewer).status_code,200)
+        self.assertEqual(Wallet.objects.get(user=self.viewer).balance_cents,10)
+        self.assertEqual(FinancialOperation.objects.filter(kind='live_gift').count(),1)
+        self.assertEqual(LiveGiftEvent.objects.get().combo_count,99)
+        self.assertEqual(LiveGiftEvent.objects.get().operation.amount_cents,990)
+
     def test_combo_rejects_invalid_counts_without_creating_financial_operation(self):
         row=self.stage()
         base={'action':'gift','gift_code':'crystal_hearts','price_cents':10,
