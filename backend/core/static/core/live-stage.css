@@ -1195,7 +1195,7 @@ body.chat-focused #stage #messages {
 /* rooms-controls-23: never let an Android visualViewport/IME collapse the modal.
    Inline coordinates from positionRoomSheet are the primary placement; this is
    the safe fallback if JavaScript runs late or a cached page loads old assets. */
-#sheet[open] {
+body.audio-mode dialog#sheet[open], body:not(.audio-mode) dialog#sheet[open] {
   position:fixed!important;
   top:auto!important;
   bottom:max(8px,env(safe-area-inset-bottom,0px))!important;
