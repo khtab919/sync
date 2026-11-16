@@ -16,6 +16,8 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    const page=await browser.newPage({viewport:{width,height}});
    await page.addInitScript(()=>window.relaxiaStageLoaded=true);
    await page.route('https://room.test/',route=>route.fulfill({contentType:'text/html',body:html}));
+   // The luxury pack may not yet be present on a new server: no broken icons.
+   await page.route('**/static/core/gifts/icons/*.webp',route=>route.fulfill({status:404,body:''}));
    await page.goto('https://room.test/');await page.addStyleTag({content:css});
    await page.evaluate(()=>{window.LivekitClient={Room:{},RoomEvent:{},Track:{},ConnectionState:{Connected:'connected'}};window.RelaxiaMedia={}});
    await page.addScriptTag({content:js});
@@ -208,7 +210,9 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    assert.equal(await page.locator('.gift-medallion').count(),2,'real gifts use dimensional artwork');
    const whaleCard=page.locator('.gift-card[data-gift-code="gift_blue_whale"]');
    assert.equal(await whaleCard.getAttribute('aria-label'),'الحوت الأزرق · 10000 كوين');
-   assert.ok((await whaleCard.locator('img.gift-webp').getAttribute('src')).endsWith('gift_blue_whale.webp'),'real WebP asset URL is wired into gift grid');
+   await whaleCard.locator('.gift-art-fallback').waitFor({state:'visible'});
+   assert.equal(await whaleCard.locator('.gift-art-fallback').innerText(),'الحو'.slice(0,2),'missing WebP uses legible gift mark, never a broken-image symbol');
+   assert.equal(await whaleCard.locator('img.gift-webp').count(),0,'failed gift image is removed from the card');
    await whaleCard.click();
    assert.equal(await whaleCard.getAttribute('aria-pressed'),'true','selected gift is highlighted');
    await page.getByRole('button',{name:'×10',exact:true}).click();
@@ -220,6 +224,20 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    const gift=await page.evaluate(()=>sent.find(a=>a.action==='gift'));
    assert.equal(gift.price_cents,10000);assert.equal(gift.combo_count,10);assert.equal(gift.recipient_id,1);assert.ok(gift.request_key);
    assert.equal(await page.locator('#sheet').evaluate(el=>el.open),false,'confirmed gift closes the store');
+   // The broadcaster may browse gifts, but cannot pay themselves.
+   await page.evaluate(()=>{config.userId=1;qaRoom={...qaRoom,speakers:[{identity:'host-1',user_id:1,name:'مضيف تجريبي',owner:true,mode:'audio',avatar_url:''}]};drawState(qaRoom)});
+   await page.locator('#bigGiftBtn').click();
+   assert.equal(await page.locator('select[aria-label="مستلم الهدية"]').isDisabled(),true,'broadcaster cannot gift themselves');
+   assert.ok((await page.locator('.gift-recipient-hint').innerText()).includes('لنفسك'),'empty recipient state explains self-gift prevention');
+   assert.equal(await page.locator('.gift-card').first().isEnabled(),true,'browsing gifts remains possible');
+   assert.equal(await page.locator('.gift-send').isDisabled(),true,'no financial operation without a valid receiver');
+   // A newly approved speaker must become selectable without reopening the store.
+   await page.evaluate(()=>{qaRoom={...qaRoom,speakers:[...qaRoom.speakers,{identity:'guest-3',user_id:3,name:'ضيف معتمد',owner:false,mode:'audio',avatar_url:''}]};drawState(qaRoom)});
+   assert.equal(await page.locator('select[aria-label="مستلم الهدية"]').isEnabled(),true);
+   assert.equal(await page.locator('select[aria-label="مستلم الهدية"]').inputValue(),'3','recipient list refreshes with new approved speaker');
+   assert.equal(await page.locator('.gift-send').isEnabled(),true);
+   await page.locator('#closeSheet').click();
+   await page.evaluate(()=>{config.userId=2;qaRoom={...qaRoom,speakers:[qaRoom.speakers[0]]};drawState(qaRoom)});
    if(process.env.LIVE_PREVIEW_DIR){fs.mkdirSync(process.env.LIVE_PREVIEW_DIR,{recursive:true});await page.screenshot({path:path.join(process.env.LIVE_PREVIEW_DIR,`audio-room-${width}.png`)});await page.locator('#bigGiftBtn').click();await page.getByRole('button',{name:'فاخرة',exact:true}).click();await page.screenshot({path:path.join(process.env.LIVE_PREVIEW_DIR,`audio-gifts-${width}.png`)});await page.locator('#closeSheet').click();}
    await page.evaluate(()=>{giftQueue=[{code:'gift_blue_whale',name:'الحوت الأزرق',symbol:'🐋',effect:'depth',sender:'داعم تجريبي',recipient:'مضيف تجريبي',combo_count:10,total_price_cents:100000}];playEffects()});
    assert.ok((await page.locator('#giftEffect').getAttribute('class')).includes('gift-fullscreen'),'depth gifts receive full-screen effect');
