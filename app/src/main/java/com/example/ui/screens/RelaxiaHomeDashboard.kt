@@ -21,15 +21,13 @@ import org.json.JSONObject
 internal fun RelaxiaHomeDashboard(
     profile: JSONObject,
     balanceCents: Long?,
-    query: String,
-    onSearch: (String) -> Unit,
     onProfile: () -> Unit,
     onWallet: () -> Unit,
     onLive: () -> Unit,
     onAudio: () -> Unit
 ) {
     Column(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Row(
@@ -43,14 +41,14 @@ internal fun RelaxiaHomeDashboard(
                 color = MaterialTheme.colorScheme.surface
             ) {
                 Row(
-                    Modifier.padding(horizontal = 9.dp, vertical = 7.dp),
+                    Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
                     horizontalArrangement = Arrangement.spacedBy(9.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     ReferenceAvatar(
                         profile.optString("display_name"),
                         profile.optInt("selected_frame"),
-                        40,
+                        36,
                         profile.optString("avatar_url")
                     )
                     Column {
@@ -66,7 +64,7 @@ internal fun RelaxiaHomeDashboard(
             Spacer(Modifier.weight(1f))
             Surface(onClick = onWallet, shape = RoundedCornerShape(18.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh) {
-                Row(Modifier.padding(horizontal = 11.dp, vertical = 10.dp),
+                Row(Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                     Icon(Icons.Rounded.AccountBalanceWallet, "الرصيد",
@@ -79,24 +77,6 @@ internal fun RelaxiaHomeDashboard(
                 }
             }
         }
-        OutlinedTextField(
-            value = query,
-            onValueChange = onSearch,
-            placeholder = { Text("ابحث عن حساب، ريلز أو خدمة", fontSize = 13.sp) },
-            leadingIcon = { Icon(Icons.Rounded.Search, null) },
-            trailingIcon = {
-                if (query.isNotBlank()) IconButton(onClick = { onSearch("") }) {
-                    Icon(Icons.Rounded.Close, "مسح البحث")
-                }
-            },
-            singleLine = true,
-            shape = RoundedCornerShape(20.dp),
-            modifier = Modifier.fillMaxWidth(),
-            colors = OutlinedTextFieldDefaults.colors(
-                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                focusedContainerColor = MaterialTheme.colorScheme.surface
-            )
-        )
         // Reels and store are already in bottom navigation. Only live entry points
         // remain here, avoiding the four oversized duplicate dashboard cards.
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -115,14 +95,14 @@ private fun HomeDestinationCard(
 ) {
     Surface(
         onClick = onClick,
-        modifier = modifier.heightIn(min = 57.dp),
+        modifier = modifier.heightIn(min = 51.dp),
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant),
         tonalElevation = 1.dp
     ) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 10.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 9.dp, vertical = 7.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {

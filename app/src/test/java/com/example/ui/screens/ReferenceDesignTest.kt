@@ -85,7 +85,7 @@ class ReferenceDesignTest {
             MyApplicationTheme {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     RelaxiaHomeDashboard(
-                        user, 0L, "", {}, {}, {},
+                        user, 0L, {}, {},
                         onLive = { live++ }, onAudio = { audio++ }
                     )
                 }
@@ -95,6 +95,7 @@ class ReferenceDesignTest {
             compose.onNodeWithText(title).assertIsDisplayed().performClick()
         }
         // Reels and store already have dedicated bottom navigation destinations.
+        compose.onNodeWithText("ابحث عن حساب، ريلز أو خدمة").assertDoesNotExist()
         compose.onNodeWithText("مشاهدة الريلز").assertDoesNotExist()
         compose.onNodeWithText("المتجر").assertDoesNotExist()
         compose.runOnIdle { org.junit.Assert.assertEquals(listOf(1, 1), listOf(live, audio)) }

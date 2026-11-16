@@ -505,11 +505,8 @@ fun ServerAppScreen(baseUrl: String) {
         Scaffold(
             floatingActionButton = {
                 if (page.isBlank() && screen in listOf("تصفح", "العرض")) Column(verticalArrangement = Arrangement.spacedBy(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    SmallFloatingActionButton(onClick = { showCreationSheet = true }, modifier = Modifier.size(51.dp), shape = CircleShape, containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary) {
+                    SmallFloatingActionButton(onClick = { showCreationSheet = true }, modifier = Modifier.size(46.dp), shape = CircleShape, containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary) {
                         Icon(Icons.Rounded.Edit, "إنشاء محتوى")
-                    }
-                    SmallFloatingActionButton(onClick = { open("الدعم وخدمة العملاء") }, modifier = Modifier.size(44.dp), shape = CircleShape, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) {
-                        Icon(Icons.Rounded.SupportAgent, "الدعم والمساعدة", tint = MaterialTheme.colorScheme.primary)
                     }
                 }
             },
@@ -640,7 +637,7 @@ fun ServerAppScreen(baseUrl: String) {
                         ) { Icon(Icons.Rounded.ArrowForward, "العودة للتصفح", tint=Color.White) }
                     }
                 } else PullToRefreshBox(isRefreshing = loading, onRefresh = { if (!loading) revision++ }, modifier = Modifier.weight(1f)) {
-                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = if (page.isBlank() && screen in listOf("تصفح", "العرض")) 92.dp else 24.dp), verticalArrangement = Arrangement.spacedBy(if (screen == "تصفح") 8.dp else 12.dp)) {
+                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(if (screen == "تصفح") 5.dp else 12.dp)) {
                     if ((loading && rows.isEmpty() && screen in listOf("دردشة", "الحجوزات", "المحفوظات", "ريلز")) || (loading && services.isEmpty() && screen in listOf("تصفح", "العرض"))) item { LuxurySkeletonCards() }
                     when (screen) {
                         "تصفح" -> {
@@ -649,60 +646,15 @@ fun ServerAppScreen(baseUrl: String) {
                                     profile = profile,
                                     balanceCents = if (walletAccountId == profile.optInt("id") && wallet.has("available_cents"))
                                         wallet.optLong("available_cents") else null,
-                                    query = query,
-                                    onSearch = { query = it.take(120) },
                                     onProfile = { page = ""; tab = 4 },
                                     onWallet = { open("المحفظة") },
                                     onLive = { open("البث المباشر") },
                                     onAudio = { open("الغرف الصوتية") }
                                 )
                             }
-                            if (query.trim().length >= 2) {
-                                item(key = "search_result_caption") {
-                                    Text("نتائج البحث", Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-                                        style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                }
-                                items(accountMatches.take(5), key = { "account_" + it.optInt("id") }) { person ->
-                                    Surface(onClick = { showCreator(person.optInt("id")) },
-                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp),
-                                        shape = RoundedCornerShape(18.dp),
-                                        color = MaterialTheme.colorScheme.surface) {
-                                        Row(Modifier.fillMaxWidth().padding(12.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                            ReferenceAvatar(person.optString("display_name"),
-                                                person.optInt("selected_frame"), 44, person.optString("avatar_url"))
-                                            Column(Modifier.weight(1f)) {
-                                                Text(person.optString("display_name").ifBlank {
-                                                    person.optString("username") }, fontWeight = FontWeight.SemiBold)
-                                                Text("ID: " + person.optString("public_id"),
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                            }
-                                            Icon(Icons.Rounded.ArrowBack, "فتح الحساب")
-                                        }
-                                    }
-                                }
-                                items(searchReels.take(5), key = { "reel_" + it.optInt("id") }) { reel ->
-                                    Surface(onClick = {
-                                        directReel = reel.optInt("id").toString()
-                                        page = ""; tab = 1; revision++
-                                    }, modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp),
-                                        shape = RoundedCornerShape(18.dp),
-                                        color = MaterialTheme.colorScheme.surface) {
-                                        Row(Modifier.fillMaxWidth().padding(12.dp),
-                                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                            verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(Icons.Rounded.SmartDisplay, null, tint = MaterialTheme.colorScheme.primary)
-                                            Text(reel.optString("caption").ifBlank {
-                                                reel.optString("title").ifBlank { "مشاهدة الريل" } },
-                                                Modifier.weight(1f), maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis)
-                                            Icon(Icons.Rounded.ArrowBack, "فتح الريل")
-                                        }
-                                    }
-                                }
-                            } else {
+                            // The feed starts immediately when there are no live rooms.
+                            // Show only real live previews, loading or an actionable server error.
+                            if (livePreview.isNotEmpty() || livePreviewLoading || livePreviewError) {
                                 item(key = "home_live_preview") {
                                     RelaxiaLiveNow(
                                         rooms = livePreview,
@@ -714,14 +666,16 @@ fun ServerAppScreen(baseUrl: String) {
                                 }
                             }
                             item(key = "home_feed_heading") {
-                                Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp),
-                                    verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                                    Text(if (query.isNotBlank()) "العروض المطابقة" else "اكتشف من المجتمع",
-                                        style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        FilterChip(!followingOnly, { followingOnly = false }, label = { Text("لك") })
-                                        FilterChip(followingOnly, { followingOnly = true }, label = { Text("أتابعهم") })
-                                    }
+                                Row(
+                                    Modifier.fillMaxWidth().padding(horizontal = 18.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text("المجتمع", Modifier.weight(1f),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold, maxLines = 1)
+                                    FilterChip(!followingOnly, { followingOnly = false }, label = { Text("لك") })
+                                    FilterChip(followingOnly, { followingOnly = true }, label = { Text("أتابعهم") })
                                 }
                             }
                             val visible = services
@@ -1204,12 +1158,12 @@ private fun Story(name: String, frame: Int, imageUrl: String = "", click: () -> 
 @Composable
 private fun FeedCard(service: JSONObject, owner: () -> Unit, details: () -> Unit, react: (String) -> Unit, chat: () -> Unit) {
     Box(Modifier.padding(horizontal = 16.dp)) { ReferenceCard {
-        Row(Modifier.fillMaxWidth().padding(14.dp).clickable(onClick = owner), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            ReferenceAvatar(service.optString("owner_name"), service.optInt("owner_frame"), 52, service.optString("owner_avatar_url"))
+        Row(Modifier.fillMaxWidth().padding(10.dp).clickable(onClick = owner), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            ReferenceAvatar(service.optString("owner_name"), service.optInt("owner_frame"), 44, service.optString("owner_avatar_url"))
             Column(Modifier.weight(1f)) { Text(service.optString("owner_name"), fontWeight = FontWeight.SemiBold); Text(service.optString("category", "خدمة"), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             IconButton(onClick = { react("save") }) { Icon(if (service.optBoolean("saved")) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder, "حفظ العرض") }
         }
-        ReferenceImage(service.optString("image_url"), Modifier.fillMaxWidth().aspectRatio(1.14f).clip(RoundedCornerShape(15.dp)).clickable(onClick = details))
+        ReferenceImage(service.optString("image_url"), Modifier.fillMaxWidth().aspectRatio(1.55f).clip(RoundedCornerShape(15.dp)).clickable(onClick = details))
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { react("like") }) { Icon(if (service.optBoolean("liked")) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, "إعجاب", tint = if (service.optBoolean("liked")) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface) }
             Text(service.optInt("like_count").toString(), fontSize = 12.sp)
@@ -1218,7 +1172,7 @@ private fun FeedCard(service: JSONObject, owner: () -> Unit, details: () -> Unit
             TextButton(onClick = details) { Text("عرض التفاصيل") }
         }
         Text(service.optString("title"), Modifier.padding(horizontal = 16.dp), fontWeight = FontWeight.SemiBold)
-        Text(service.optString("description"), Modifier.padding(start = 16.dp, end = 16.dp, bottom = 18.dp, top = 8.dp), maxLines = 3, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(service.optString("description"), Modifier.padding(start = 16.dp, end = 16.dp, bottom = 18.dp, top = 8.dp), maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     } }
 }
 @Composable
