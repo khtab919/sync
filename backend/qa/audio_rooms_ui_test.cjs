@@ -62,6 +62,10 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    assert.equal(await page.evaluate(()=>sent.find(a=>a.action==='comment')?.text),'🎉');
    assert.equal(await page.locator('#text').inputValue(),'','sent text is cleared');
    assert.equal(await page.locator('#commentNotice').innerText(),'تم إرسال التعليق','chat confirms send');
+   await page.locator('#text').focus();
+   assert.equal(await page.locator('body').evaluate(el=>el.classList.contains('chat-focused')),true,'focused chat adapts the live stage to the keyboard');
+   await page.locator('#text').evaluate(el=>el.blur());
+   assert.equal(await page.locator('body').evaluate(el=>el.classList.contains('chat-focused')),false,'chat layout restores after keyboard closes');
    const composerBounds=await page.locator('#composer').boundingBox();
    assert.ok(composerBounds.width>=width-30,'composer spans the available viewport');
    await page.evaluate(()=>{api=async action=>{
