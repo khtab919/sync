@@ -1043,3 +1043,57 @@ body.audio-mode.comments-hidden #messages,body.audio-mode.comments-hidden #pinne
 #stage footer .tool-circle:focus-visible, #stage #publisherControls button:focus-visible {
   outline:2px solid #FFFFFF; outline-offset:2px;
 }
+
+/* rooms-controls-21: real-device footer visibility repair.
+   Keep all actions visible in both light and dark room themes. */
+#stage footer {
+  color:#F5F9FF!important;
+  background:linear-gradient(to top,#08172F,#142D54)!important;
+  border-top:1px solid #9ABCF088;
+}
+#stage footer .bottom{
+  display:flex;flex-direction:column;align-items:stretch;gap:8px;
+}
+#stage footer .quick-actions{
+  display:flex;flex-direction:row;align-items:center;justify-content:flex-start;
+  width:100%;min-width:0;gap:clamp(4px,1.5vw,8px);
+}
+#stage footer .quick-actions .tool-circle{
+  display:grid;place-items:center;min-width:39px;
+  width:clamp(39px,11vw,44px);height:clamp(39px,11vw,44px);
+  flex:0 0 clamp(39px,11vw,44px);padding:0;
+  color:#FFFFFF!important;background:#214B83!important;
+  border:1px solid #A0C7FF!important;opacity:1;
+}
+#stage footer .quick-actions .tool-circle svg{
+  display:block;width:22px;height:22px;
+  color:#FFFFFF!important;stroke:currentColor!important;opacity:1;
+}
+#stage footer .quick-actions .tool-circle svg[fill="currentColor"]{
+  fill:currentColor!important;
+}
+#stage footer .quick-actions .gift-fab{
+  margin-inline-start:auto;flex:0 0 44px;width:44px;height:44px;
+}
+#stage footer #composer{
+  box-sizing:border-box;width:100%;min-width:0;min-height:50px;
+  flex:0 0 50px;display:flex;align-items:center;padding:4px 7px;
+  border:1px solid #A4C9FF;background:#173C73;
+}
+#stage footer #composer input{
+  min-width:0;flex:1 1 auto;width:0;
+  color:#FFFFFF!important;caret-color:#FFFFFF;font-size:15px;
+}
+#stage footer #composer input::placeholder{
+  color:#ECF3FF!important;opacity:1!important;
+}
+#stage footer #composer .composer-send{
+  display:grid;place-items:center;flex:0 0 40px;
+  width:40px;height:40px;min-height:40px;
+  color:#FFFFFF!important;background:#397ACB;
+}
+#stage footer #composer .composer-emoji{color:#FFFFFF!important;opacity:1;}
+html[data-theme="light"] body.audio-mode header .identity-meta strong,
+html[data-theme="light"] body.audio-mode header .identity-meta small{
+  color:#F5F9FF;
+}
