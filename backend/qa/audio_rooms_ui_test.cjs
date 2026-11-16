@@ -82,10 +82,28 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    assert.equal(await page.evaluate(()=>sent.find(a=>a.action==='comment')?.text),'🎉');
    assert.equal(await page.locator('#text').inputValue(),'','sent text is cleared');
    assert.equal(await page.locator('#commentNotice').innerText(),'تم إرسال التعليق','chat confirms send');
+   // Simulate Gboard reducing the viewport before the native keyboard test.
+   await page.setViewportSize({width,height:440});
    await page.locator('#text').focus();
-   assert.equal(await page.locator('body').evaluate(el=>el.classList.contains('chat-focused')),true,'focused chat adapts the live stage to the keyboard');
+   assert.equal(await page.locator('body').evaluate(el=>el.classList.contains('chat-focused')),true,'keyboard focus adjusts the room layout');
+   assert.equal(await page.locator('.quick-actions').isVisible(),false,'actions step aside while typing');
+   const keyboardComposer=await page.locator('#composer').boundingBox();
+   assert.ok(keyboardComposer.y>=0 && keyboardComposer.y+keyboardComposer.height<=442,'the full comment input stays above the simulated keyboard');
+   await page.locator('#text').fill('تعليق من لوحة المفاتيح');
+   await page.locator('#text').press('Enter');
+   assert.equal(await page.evaluate(()=>sent.find(a=>a.action==='comment'&&a.text==='تعليق من لوحة المفاتيح')?.text),'تعليق من لوحة المفاتيح','IME send posts comment');
+   assert.equal(await page.locator('#text').inputValue(),'','successful IME send clears draft');
    await page.locator('#text').evaluate(el=>el.blur());
-   assert.equal(await page.locator('body').evaluate(el=>el.classList.contains('chat-focused')),false,'chat layout restores after keyboard closes');
+   await page.setViewportSize({width,height});
+   assert.equal(await page.locator('body').evaluate(el=>el.classList.contains('chat-focused')),false,'keyboard closing restores room layout');
+   assert.equal(await page.locator('.quick-actions').isVisible(),true,'actions return when keyboard is closed');
+   for(const id of ['more','guests','bigGiftBtn']){
+    await page.locator('#'+id).click();
+    assert.equal(await page.locator('#sheet').evaluate(el=>el.open),true,id+' menu opens');
+    const menu=await page.locator('#sheet').boundingBox();
+    assert.ok(menu && menu.y>=0 && menu.y+menu.height<=height+2,id+' menu is not cut off');
+    await page.locator('#closeSheet').click();
+   }
    const composerBounds=await page.locator('#composer').boundingBox();
    assert.ok(composerBounds.width>=width-30,'composer spans the available viewport');
    await page.evaluate(()=>{api=async action=>{
