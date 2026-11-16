@@ -8,6 +8,27 @@ from .models import (LiveAdmission,LiveBroadcast,LiveSeat,LiveRoomModerator,Live
                      LiveGiftEvent,LivePK,LiveComment,BenefitGrant,FinancialOperation,Wallet)
 from .views import ApiError,User,text
 
+# Public gift SKU identifiers are independent of the legacy and admin catalogs.
+# Prices are always read from LiveGiftDefinition, never from the browser.
+LUXURY_GIFT_CODES = (
+    'gift_clap','gift_coffee','gift_flower','gift_chocolate','gift_rose','gift_teddy',
+    'gift_butterfly','gift_balloons','gift_heart','gift_bouquet','gift_cake','gift_dolphin',
+    'gift_star','gift_fireworks','gift_diamond','gift_crown','gift_supercar','gift_yacht',
+    'gift_eagle','gift_palace','gift_blue_whale'
+)
+
+def public_gift_catalog():
+    rows = LiveGiftDefinition.objects.filter(
+        enabled=True, code__in=LUXURY_GIFT_CODES
+    ).order_by('price_cents','code').values('code','name','symbol','price_cents','effect')
+    return [
+        {**row,
+         'icon_url': '/static/core/gifts/icons/'+row['code']+'.webp',
+         'animation_url': '/static/core/gifts/animations/'+row['code']+'.webp'}
+        for row in rows
+    ]
+
+
 
 def publishing(admission):
     from .live import eligible
@@ -63,7 +84,7 @@ def snapshot(row,user):
             'seat_status':own.status if own else '', 'manage_room':manager,
             'seat_requests':[dict(person(s.admission.user),mode=s.mode) for s in seats if s.status=='pending'] if manager else [],
             'moderator_ids':list(LiveRoomModerator.objects.filter(broadcast=row).values_list('user_id',flat=True)) if row.owner_id==user.pk else [],
-            'gift_catalog':list(LiveGiftDefinition.objects.filter(enabled=True).order_by('price_cents').values('code','name','symbol','price_cents','effect')),
+            'gift_catalog':public_gift_catalog(),
             'gift_events':[{'id':g.pk,'code':g.gift_code,'sender':g.operation.buyer.profile.display_name or g.operation.buyer.username,'recipient':g.operation.creator.profile.display_name or g.operation.creator.username,'name':g.gift_name,'symbol':g.symbol,'effect':g.effect,'combo_count':g.combo_count,'total_price_cents':g.operation.amount_cents} for g in reversed(events)],
             'top_supporters':[{'name':t['operation__buyer__profile__display_name'] or t['operation__buyer__username'],'total':t['total']} for t in top],
             'gift_total_cents':received['total'] or 0,'gift_goal_cents':row.gift_goal_cents,
@@ -78,7 +99,7 @@ def action(request,row,a):
     if kind=='gift':
         code=p.get('gift_code')
         if not code:code={100:'rose',300:'heart',1000:'star'}.get(p.get('price_cents'))
-        gift=LiveGiftDefinition.objects.filter(pk=code,enabled=True).first()
+        gift=LiveGiftDefinition.objects.filter(pk=code,enabled=True).first() if code in LUXURY_GIFT_CODES else None
         if not row.gifts_enabled or not gift:raise ApiError('gift_unavailable',409)
         if p.get('confirmed') is not True or type(p.get('price_cents')) is not int or p['price_cents']!=gift.price_cents:raise ApiError('price_confirmation_required',409)
         combo=p.get('combo_count',1)
