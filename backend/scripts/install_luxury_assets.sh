@@ -24,7 +24,10 @@ else
 fi
 git merge --ff-only "origin/$BRANCH"
 
-grep -Fq 'rooms-controls-26' backend/core/templates/core/live_room.html
+# Verify that the deployed frontend supports the WebP gift catalog;
+# do not pin installation to one cached room-controls revision.
+grep -Fq 'gift-webp' backend/core/static/core/live-stage.js
+grep -Fq 'core/gifts/icons' backend/core/static/core/live-stage.js
 test -f backend/core/migrations/0036_luxury_gift_catalog.py
 
 # The pack contains only backend/static gift WebPs and Android source assets.
