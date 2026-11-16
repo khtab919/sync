@@ -86,6 +86,7 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    await page.setViewportSize({width,height:440});
    await page.locator('#text').focus();
    assert.equal(await page.locator('body').evaluate(el=>el.classList.contains('chat-focused')),true,'keyboard focus adjusts the room layout');
+   assert.equal(await page.locator('#audioStage').isVisible(),false,'keyboard prioritizes comments over seats on short screens');
    assert.equal(await page.locator('.quick-actions').isVisible(),true,'room action menus stay tappable while typing');
    await page.locator('#more').click();
    assert.equal(await page.locator('#sheet').evaluate(el=>el.open),true,'more menu opens with keyboard focused');
