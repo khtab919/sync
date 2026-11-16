@@ -62,7 +62,7 @@ def snapshot(row,user):
             'seat_requests':[dict(person(s.admission.user),mode=s.mode) for s in seats if s.status=='pending'] if manager else [],
             'moderator_ids':list(LiveRoomModerator.objects.filter(broadcast=row).values_list('user_id',flat=True)) if row.owner_id==user.pk else [],
             'gift_catalog':list(LiveGiftDefinition.objects.filter(enabled=True).order_by('price_cents').values('code','name','symbol','price_cents','effect')),
-            'gift_events':[{'id':g.pk,'code':g.gift_code,'sender':g.operation.buyer.profile.display_name or g.operation.buyer.username,'recipient':g.operation.creator.profile.display_name or g.operation.creator.username,'name':g.gift_name,'symbol':g.symbol,'effect':g.effect} for g in reversed(events)],
+            'gift_events':[{'id':g.pk,'code':g.gift_code,'sender':g.operation.buyer.profile.display_name or g.operation.buyer.username,'recipient':g.operation.creator.profile.display_name or g.operation.creator.username,'name':g.gift_name,'symbol':g.symbol,'effect':g.effect,'combo_count':g.combo_count,'total_price_cents':g.operation.amount_cents} for g in reversed(events)],
             'top_supporters':[{'name':t['operation__buyer__profile__display_name'] or t['operation__buyer__username'],'total':t['total']} for t in top],
             'gift_total_cents':received['total'] or 0,'gift_goal_cents':row.gift_goal_cents,
             'earned_cents':received['earnings'] or 0 if row.owner_id==user.pk else None,'pk':pk_json(row),
@@ -78,6 +78,11 @@ def action(request,row,a):
         gift=LiveGiftDefinition.objects.filter(pk=code,enabled=True).first()
         if not row.gifts_enabled or not gift:raise ApiError('gift_unavailable',409)
         if p.get('confirmed') is not True or type(p.get('price_cents')) is not int or p['price_cents']!=gift.price_cents:raise ApiError('price_confirmation_required',409)
+        combo=p.get('combo_count',1)
+        if type(combo) is not int or not 1<=combo<=99:raise ApiError('invalid_gift_combo')
+        # Only the server sets total: never accept client-supplied total_cost.
+        total=gift.price_cents*combo
+        if total<1 or total>1000000:raise ApiError('invalid_gift_combo')
         recipient_id=p.get('recipient_id',row.owner_id)
         if type(recipient_id) is not int or recipient_id==request.actor.pk:raise ApiError('invalid_gift_recipient')
         key=uuid.UUID(text(p,'request_key',36,36))
@@ -90,15 +95,15 @@ def action(request,row,a):
             if not target:raise ApiError('invalid_gift_recipient')
             eligible(target,True)
             from . import finance
-            op=finance.hold(request.actor,target,'live_gift',key,str(row.pk),gift.price_cents)
+            op=finance.hold(request.actor,target,'live_gift',key,str(row.pk),total)
             existing=LiveGiftEvent.objects.filter(operation=op).first()
             if existing:
-                if existing.gift_code!=gift.code:raise ApiError('payment_request_conflict',409)
+                if existing.gift_code!=gift.code or existing.combo_count!=combo:raise ApiError('payment_request_conflict',409)
                 return
             finance.settle(op)
             pk=LivePK.objects.filter(broadcast=row,cancelled_at__isnull=True,ends_at__gt=timezone.now()).order_by('-id').first()
             team=next((i for i,members in enumerate(pk.teams) if recipient_id in members),None) if pk else None
-            LiveGiftEvent.objects.create(broadcast=row,operation=op,gift_code=gift.code,gift_name=gift.name,symbol=gift.symbol,effect=gift.effect,pk_round=pk if team is not None else None,team=team)
+            LiveGiftEvent.objects.create(broadcast=row,operation=op,gift_code=gift.code,gift_name=gift.name,symbol=gift.symbol,effect=gift.effect,combo_count=combo,pk_round=pk if team is not None else None,team=team)
         return
     if kind=='pk_start':
         from .live import synchronize
