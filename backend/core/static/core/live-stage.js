@@ -503,7 +503,19 @@ function playEffects(){
  icon.src='/static/core/gifts/animations/'+String(g.code).replace(/[^a-z0-9_]/g,'')+'.webp?play='+g.id;
  icon.alt=g.name;
  icon.decoding='async';
- icon.onerror=()=>{icon.onerror=null;icon.src='/static/core/gifts/icons/'+String(g.code).replace(/[^a-z0-9_]/g,'')+'.webp';};
+ let triedStaticGiftArt=false;
+ icon.onerror=()=>{
+  if(!triedStaticGiftArt){
+   triedStaticGiftArt=true;
+   icon.src='/static/core/gifts/icons/'+String(g.code).replace(/[^a-z0-9_]/g,'')+'.webp';
+   return;
+  }
+  icon.onerror=null;
+  const fallback=document.createElement('span');
+  fallback.className='gift-effect-fallback';
+  fallback.textContent=g.name||'هدية';
+  icon.replaceWith(fallback);
+ };
  const label=document.createElement('strong');label.textContent=g.sender+' أرسل '+g.name;
  const recipient=document.createElement('small');recipient.textContent='إلى '+g.recipient;
  if(effect!=='simple'||g.code==='meteor_shower'){
