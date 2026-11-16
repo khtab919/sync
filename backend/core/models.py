@@ -500,6 +500,7 @@ class LiveGiftEvent(models.Model):
     gift_name=models.CharField(max_length=60)
     symbol=models.CharField(max_length=8)
     effect=models.CharField(max_length=10)
+    combo_count=models.PositiveSmallIntegerField(default=1)
     pk_round=models.ForeignKey(LivePK,on_delete=models.PROTECT,null=True)
     team=models.PositiveSmallIntegerField(null=True)
     created_at=models.DateTimeField(auto_now_add=True)
