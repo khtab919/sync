@@ -55,7 +55,7 @@ internal fun relaxiaLiveFooterRepairScript(): String = """
           '#stage footer #composer .composer-emoji{color:#FFFFFF!important;opacity:1!important}',
           'html[data-theme="light"] body.audio-mode #stage footer .tool-circle,html[data-theme="dark"] body.audio-mode #stage footer .tool-circle{color:#FFFFFF!important}',
           '#stage footer .tool-circle:focus-visible,#stage footer #composer:focus-within{outline:2px solid #FFFFFF!important;outline-offset:2px!important}',
-          'body.chat-focused #stage footer .quick-actions{display:none!important}',
+          'body.chat-focused #stage footer .quick-actions{display:flex!important;gap:4px!important}',
           'body.chat-focused #stage footer .bottom{gap:0!important}',
           'body.chat-focused #stage footer{padding-top:5px!important}',
           '#stage footer #composer input{-webkit-user-select:text!important;user-select:text!important}',
