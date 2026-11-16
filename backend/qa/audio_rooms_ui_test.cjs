@@ -5,7 +5,7 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
 const root=path.resolve(__dirname,'..');
 const html=execFileSync(process.env.TEST_PYTHON||'python',['-c',`import django;django.setup()
 from django.template.loader import render_to_string
-config={'id':'room-test','owner':False,'ownerName':'مضيف تجريبي','ownerId':1,'ownerPublicId':'58321','userId':2,'userName':'زائر تجريبي','mode':'audio','maxSpeakers':15,'title':'غرفة الأصدقاء','gifts':True,'private':False}
+config={'id':'room-test','owner':False,'ownerName':'مضيف تجريبي','ownerId':1,'ownerPublicId':'58321','userId':2,'userName':'زائر تجريبي','mode':'audio','maxSpeakers':8,'title':'غرفة الأصدقاء','gifts':True,'private':False}
 print(render_to_string('core/live_room.html',{'config':config,'nonce':'qa','theme':'dark'}))`],{cwd:root,env:{...process.env,DJANGO_SETTINGS_MODULE:'config.settings',DJANGO_SECRET_KEY:'test-only',POSTGRES_PASSWORD:'test-only',LAYALI_TESTING:'1'},encoding:'utf8'}).replace(/<script src="[^\"]+"><\/script>/g,'').replace(/<link rel="stylesheet"[^>]+>/,'');
 const css=fs.readFileSync(path.join(root,'core/static/core/live-stage.css'),'utf8');
 const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8').replace('connect().catch(e=>{message(e);if(e.name!==\'MediaFailure\')reconnect()});','');
@@ -19,15 +19,18 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    await page.goto('https://room.test/');await page.addStyleTag({content:css});
    await page.evaluate(()=>{window.LivekitClient={Room:{},RoomEvent:{},Track:{},ConnectionState:{Connected:'connected'}};window.RelaxiaMedia={}});
    await page.addScriptTag({content:js});
-   assert.equal(await page.locator('.audio-seat').count(),15,'placeholder seats render before network response');
+   assert.equal(await page.locator('.audio-seat').count(),8,'placeholder seats render before network response');
    await page.evaluate(()=>{
     window.sent=[];room={state:'connected',localParticipant:{}};
-    const result={status:'active',mode:'audio',max_speakers:15,server_time:new Date().toISOString(),speakers:[{identity:'host-1',user_id:1,name:'مضيف تجريبي',owner:true,mode:'audio',avatar_url:''}],comments:[],gift_events:[],gift_catalog:[{code:'flower',name:'زهرة',symbol:'🌷',price_cents:50,effect:'simple'},{code:'whale',name:'الحوت الأزرق',symbol:'🐋',price_cents:10000,effect:'depth'},{code:'lion',name:'الأسد الملكي',symbol:'🦁',price_cents:15000,effect:'depth'}]};
+    const result={status:'active',mode:'audio',max_speakers:8,server_time:new Date().toISOString(),speakers:[{identity:'host-1',user_id:1,name:'مضيف تجريبي',owner:true,mode:'audio',avatar_url:''}],comments:[],gift_events:[],gift_catalog:[{code:'flower',name:'زهرة',symbol:'🌷',price_cents:50,effect:'simple'},{code:'whale',name:'الحوت الأزرق',symbol:'🐋',price_cents:10000,effect:'depth'},{code:'lion',name:'الأسد الملكي',symbol:'🦁',price_cents:15000,effect:'depth'}]};
     window.qaRoom=result;api=async action=>{if(action)window.sent.push(action);return {...window.qaRoom,seat_status:action?.action==='seat_request'?'pending':''}};drawState(result);
    });
-   assert.equal(await page.locator('.audio-seat').count(),15);
-   assert.equal(await page.locator('.empty-seat').count(),14);
+   assert.equal(await page.locator('.audio-seat').count(),8);
+   assert.equal(await page.locator('.empty-seat').count(),7);
    assert.equal(await page.locator('.empty-seat small').count(),0,'empty places have accessible numbers, not visually crowded labels');
+   assert.equal(await page.locator('.empty-seat .seat-plus svg').count(),7,'all empty seats use consistent microphone SVG icons');
+   assert.ok(await page.locator('.host-seat').count()===1,'host uses distinct decorated seat');
+   assert.ok(!(await page.locator('body').innerText()).includes('80٪'),'the live room never reveals payout percentages');
    assert.equal(await page.locator('.empty-seat').first().getAttribute('aria-label'),'مقعد 2 · طلب الميكروفون');
    assert.equal(await page.locator('#title').innerText(),'ID: 58321');
    assert.ok(!(await page.locator('#badge').innerText()).includes('undefined'),'level must not expose undefined placeholders');
@@ -154,7 +157,7 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    await page.getByRole('button',{name:'إرسال البلاغ',exact:true}).click();
    assert.equal(await page.evaluate(()=>sent.filter(a=>a.action==='report').length),1,'report reaches the real action');
    assert.equal(await page.locator('#sheet').evaluate(el=>el.open),false);
-   assert.equal(await page.locator('.empty-seat').count(),14);
+   assert.equal(await page.locator('.empty-seat').count(),7);
    const seats=await page.locator('#audioStage').boundingBox(),footer=await page.locator('footer').boundingBox();
    assert.ok(seats.y+seats.height<footer.y,'seat grid must not overlap controls');
    const comments=await page.locator('#messages').boundingBox();
@@ -194,7 +197,7 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    await page.getByRole('button',{name:'تثبيت التعليق',exact:true}).click();
    assert.equal(await page.evaluate(()=>sent.filter(a=>a.action==='pin_comment').length),1);
    await page.evaluate(()=>{qaRoom={...qaRoom,manage_room:false,comments:[]};drawState(qaRoom)});
-   await page.evaluate(()=>{const before=document.querySelector('.audio-seat');window.seatBefore=before;drawAudioSeats({max_speakers:15,speakers:[{identity:'host-1',name:'مضيف تجريبي',owner:true,avatar_url:''}]})});
+   await page.evaluate(()=>{const before=document.querySelector('.audio-seat');window.seatBefore=before;drawAudioSeats({max_speakers:8,speakers:[{identity:'host-1',name:'مضيف تجريبي',owner:true,avatar_url:''}]})});
    assert.equal(await page.evaluate(()=>seatBefore===document.querySelector('.audio-seat')),true,'poll must not rebuild unchanged seats');
    await page.locator('.empty-seat').first().click();
    await page.getByRole('button',{name:'طلب الانضمام صوتيًا',exact:true}).click();
@@ -215,6 +218,6 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    if(process.env.LIVE_PREVIEW_DIR)await page.screenshot({path:path.join(process.env.LIVE_PREVIEW_DIR,`whale-effect-${width}.png`)});
    await page.close();
   }
-  console.log('PASS: 15 seats at 360/430px, five-digit ID, speaker mute/unmute, emoji picker, comment and like, guest request, gift confirmation/cancellation, whale effect. Synthetic UI only.');
+  console.log('PASS: 8 seats at 320/360/430px, five-digit ID, speaker mute/unmute, emoji picker, comment and like, guest request, gift confirmation/cancellation, whale effect. Synthetic UI only.');
  }finally{await browser.close()}
 })().catch(e=>{console.error(e);process.exitCode=1});
