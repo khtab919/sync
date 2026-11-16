@@ -58,6 +58,7 @@ internal fun relaxiaLiveFooterRepairScript(): String = """
           'body.chat-focused #stage footer .quick-actions{display:flex!important;gap:4px!important}',
           'body.chat-focused #stage footer .bottom{gap:0!important}',
           'body.chat-focused #stage footer{padding-top:5px!important}',
+          '@media(max-height:600px){body.audio-mode.chat-focused #audioStage.seat-grid{display:none!important}body.audio-mode.chat-focused #stage{--room-chat-height:clamp(70px,calc(var(--room-viewport-height,100dvh) - var(--room-footer-height) - 30px),220px)}}',
           '#stage footer #composer input{-webkit-user-select:text!important;user-select:text!important}',
           '#stage footer #composer .composer-send{min-width:44px!important;width:44px!important;min-height:44px!important;height:44px!important}',
           '#sheet[open]{position:fixed!important;inset:auto 9px 7px!important;max-height:min(74dvh,calc(var(--room-viewport-height,100dvh) - 24px))!important;overflow-y:auto!important;touch-action:pan-y!important}'
