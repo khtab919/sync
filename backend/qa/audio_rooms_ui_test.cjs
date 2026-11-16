@@ -44,6 +44,21 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    assert.equal(await page.locator('#exit svg').count(),1,'use the consistent vector close icon');
    assert.equal(await page.locator('#more svg').count(),1,'use the consistent vector overflow icon');
    assert.equal(await page.locator('#guests svg').count(),1,'use the consistent vector guest icon');
+   // Light stage text must not bleed into the dark controls, including host mic states.
+   for(const theme of ['light','dark']){
+    await page.evaluate(theme=>{document.documentElement.dataset.theme=theme;speaking=true;muted=false;updateQuickMic()},theme);
+    for(const id of ['more','guests','micQuick']){
+     const control=page.locator('#'+id);
+     assert.equal(await control.locator('svg').count(),1,'visible controls use vectors: '+id);
+     assert.equal(await control.evaluate(el=>getComputedStyle(el).color),'rgb(245, 249, 255)','readable control foreground in '+theme);
+     const icon=await control.locator('svg').boundingBox();assert.ok(icon.width>=20&&icon.height>=20,'icon has explicit bounds');
+    }
+    await page.evaluate(()=>{muted=true;updateQuickMic()});
+    assert.equal(await page.locator('#micQuick').getAttribute('aria-label'),'تشغيل الميكروفون');
+    assert.equal(await page.locator('#micQuick').getAttribute('aria-pressed'),'false');
+    if(process.env.LIVE_PREVIEW_DIR){fs.mkdirSync(process.env.LIVE_PREVIEW_DIR,{recursive:true});await page.screenshot({path:path.join(process.env.LIVE_PREVIEW_DIR,`controls-${theme}-${width}.png`)})}
+   }
+   await page.evaluate(()=>{speaking=false;muted=false;updateQuickMic();document.documentElement.dataset.theme='dark'});
    await page.evaluate(()=>{
      const audio=document.createElement('audio');audio.dataset.liveRemote='1';audio.play=()=>Promise.resolve();document.body.append(audio);
    });

@@ -1374,6 +1374,7 @@ private fun formatReelTime(ms: Long): String {
     return "${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}"
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ReelItemView(
     row: JSONObject,
@@ -1569,7 +1570,15 @@ private fun ReelItemView(
                         }
                     },
                     enabled = durationMs > 0,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    thumb = {
+                        Box(Modifier.size(8.dp).background(Color.White, CircleShape))
+                    },
+                    track = { sliderState ->
+                        Box(Modifier.fillMaxWidth().height(2.dp).background(Color.White.copy(alpha = 0.25f))) {
+                            Box(Modifier.fillMaxWidth(sliderState.value.coerceIn(0f, 1f)).height(2.dp).background(Color.White))
+                        }
+                    }
                 )
                 Row(
                     Modifier.fillMaxWidth(),
@@ -1633,20 +1642,11 @@ private fun ReelItemView(
                     36,
                     row.optString("avatar_url")
                 )
-                Text(
-                    row.optString("owner_name"),
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
                 if (row.optBoolean("identity_verified")) {
                     Icon(Icons.Rounded.Verified, "حساب موثق", tint = Color(0xFFDCE8FD), modifier = Modifier.size(17.dp))
                 }
             }
-            val handle = row.optString("owner_username")
-            if (handle.isNotBlank()) Text("@$handle", color = Color.White.copy(alpha = .85f), fontSize = 12.sp)
+            // Keep the avatar profile action without showing names over the video.
             if (viewerId > 0 && row.optInt("owner_id") != viewerId && row.optInt("owner_id") > 0) {
                 OutlinedButton(
                     onClick = {

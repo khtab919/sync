@@ -45,9 +45,16 @@ function releasePrepared(){for(const track of preparedTracks){track.detach().for
 function stop(label){releasePrepared();if(closed)return;closed=true;room?.removeAllListeners();room?.disconnect();document.querySelectorAll('audio[data-live-remote]').forEach(el=>el.remove());$('ended').hidden=false;$('endedTitle').textContent=label;document.querySelectorAll('footer button,footer input').forEach(el=>el.disabled=true);$('video').replaceChildren();if($('sheet').open)$('sheet').close()}
 function leave(){releasePrepared();document.querySelectorAll('audio[data-live-remote]').forEach(el=>el.remove());if(window.LayaliLive){leaving=true;closed=true;room?.disconnect();window.LayaliLive.closeRoom()}else stop('غادرت البث')}
 $('closeEnded').onclick=()=>window.LayaliLive?window.LayaliLive.closeRoom():history.back();
+// Fixed vector paths keep microphone/speaker states legible on Android WebView.
+function setMediaControlIcon(button,kind,off){
+ const paths=kind==='mic'
+  ? '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/>'
+  : '<path d="M11 5 6 9H3v6h3l5 4zM15 8a6 6 0 0 1 0 8M18 5a10 10 0 0 1 0 14"/>';
+ button.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+paths+(off?'<path d="m3 3 18 18"/>':'')+'</svg>';
+}
 function updateSpeakerControl(){
  const button=$('speaker');if(!button)return;
- button.textContent=speakerMuted?'🔇':'🔊';
+ setMediaControlIcon(button,'speaker',speakerMuted);
  button.setAttribute('aria-label',speakerMuted?'تشغيل صوت الغرفة':'كتم صوت الغرفة');
  button.setAttribute('aria-pressed',String(speakerMuted));
  button.title=speakerMuted?'تشغيل صوت الغرفة':'كتم صوت الغرفة';
@@ -265,7 +272,7 @@ function updateQuickMic(){
  const button=$('micQuick');if(!button)return;
  // Viewers already have the guest seat button. Only speakers need a quick mic.
  button.hidden=!speaking;
- button.textContent=speaking?(muted?'🔇':'🎙'):'🎙';
+ setMediaControlIcon(button,'mic',muted);
  button.setAttribute('aria-pressed',String(speaking&&!muted));
  button.setAttribute('aria-label',speaking?(muted?'تشغيل الميكروفون':'كتم الميكروفون'):'المقاعد وطلب التحدث');
 }
