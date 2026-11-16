@@ -5,6 +5,7 @@ import json
 import os
 import sqlite3
 from datetime import datetime, timezone
+from contextlib import closing
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
@@ -48,12 +49,12 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path == "/api/healthz":
             return self.response(200, {"ok":True})
         if self.path == "/api/release":
-            with db() as c:
+            with closing(db()) as c:
                 r = c.execute("SELECT version,url,sha256,published_at FROM releases ORDER BY id DESC LIMIT 1").fetchone()
             if r:
                 return self.response(200, {"available":True, "version":r[0], "url":r[1], "sha256":r[2], "published_at":r[3]})
             return self.response(200, {"available":False})
-        if self.path.startswith("/api/") or self.path.startswith("/.") or "/." in self.path or self.path.endswith((".py",".md",".yaml",".sqlite3",".Dockerfile")):
+        if self.path.startswith("/api/") or self.path.startswith("/.") or "/." in self.path or self.path == "/Dockerfile" or self.path.endswith((".py",".md",".yaml",".sqlite3")):
             return self.response(404, {"error":"not_found"})
         if self.path == "/":
             self.path = "/index.html"
@@ -76,7 +77,7 @@ class Handler(SimpleHTTPRequestHandler):
             parsed=urlparse(u)
             if parsed.scheme!="https" or parsed.hostname!="github.com" or not parsed.path.startswith("/khtab919/sync/releases/download/") or parsed.username or parsed.password or parsed.fragment: raise ValueError()
             if not isinstance(s,str) or len(s)!=64 or any(c not in "0123456789abcdef" for c in s): raise ValueError()
-            with db() as c:
+            with closing(db()) as c:
                 c.execute("INSERT INTO releases (version,url,sha256,published_at) VALUES(?,?,?,?)",(v,u,s,datetime.now(timezone.utc).isoformat()))
                 c.commit()
             return self.response(201,{"saved":True,"version":v})
