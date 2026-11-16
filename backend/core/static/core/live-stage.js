@@ -268,7 +268,9 @@ function giftSheet(){
    option.disabled=true;option.selected=true;select.add(option);
    select.disabled=true;
    recipientHint.hidden=false;
-   recipientHint.textContent=config.owner
+   // Use the real room participants, not a possibly stale owner UI flag.
+   const selfIsHost=(snapshot.speakers||[]).some(s=>s.owner && s.user_id===config.userId);
+   recipientHint.textContent=selfIsHost
     ?'لا يمكنك إرسال هدية لنفسك. ستتمكن من الإرسال عند انضمام متحدث آخر.'
     :'لا يوجد متحدث متاح لاستلام هدية الآن. تُحدّث القائمة تلقائيًا.';
   }else{
