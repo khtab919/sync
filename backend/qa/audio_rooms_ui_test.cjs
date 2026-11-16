@@ -207,14 +207,22 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    assert.equal(await page.locator('.gift-card').count(),2);
    assert.equal(await page.locator('.gift-medallion').count(),2,'real gifts use dimensional artwork');
    assert.equal(await page.locator('.gift-card').first().getAttribute('aria-label'),'الحوت الأزرق · 10000 كوين');
-   page.once('dialog',d=>d.dismiss());await page.locator('.gift-card').first().click();
-   assert.equal(await page.evaluate(()=>sent.filter(a=>a.action==='gift').length),0);
-   page.once('dialog',d=>d.accept());await page.locator('.gift-card').first().click();
-   assert.equal(await page.evaluate(()=>sent.filter(a=>a.action==='gift').length),1);
-   const gift=await page.evaluate(()=>sent.find(a=>a.action==='gift'));assert.equal(gift.price_cents,10000);assert.equal(gift.recipient_id,1);assert.ok(gift.request_key);
+   await page.locator('.gift-card').first().click();
+   assert.equal(await page.locator('.gift-card').first().getAttribute('aria-pressed'),'true','selected gift is highlighted');
+   await page.getByRole('button',{name:'×10',exact:true}).click();
+   assert.ok((await page.locator('.gift-checkout-summary').innerText()).includes('100٬000')||(await page.locator('.gift-checkout-summary').innerText()).includes('100,000'),'gift checkout computes server-listed unit price times combo');
+   page.once('dialog',d=>d.dismiss());await page.locator('.gift-send').click();
+   assert.equal(await page.evaluate(()=>sent.filter(a=>a.action==='gift').length),0,'cancelling confirmation does not send or debit');
+   page.once('dialog',d=>d.accept());await page.locator('.gift-send').click();
+   assert.equal(await page.evaluate(()=>sent.filter(a=>a.action==='gift').length),1,'confirmed combo sends one operation');
+   const gift=await page.evaluate(()=>sent.find(a=>a.action==='gift'));
+   assert.equal(gift.price_cents,10000);assert.equal(gift.combo_count,10);assert.equal(gift.recipient_id,1);assert.ok(gift.request_key);
+   assert.equal(await page.locator('#sheet').evaluate(el=>el.open),false,'confirmed gift closes the store');
    if(process.env.LIVE_PREVIEW_DIR){fs.mkdirSync(process.env.LIVE_PREVIEW_DIR,{recursive:true});await page.screenshot({path:path.join(process.env.LIVE_PREVIEW_DIR,`audio-room-${width}.png`)});await page.locator('#bigGiftBtn').click();await page.getByRole('button',{name:'فاخرة',exact:true}).click();await page.screenshot({path:path.join(process.env.LIVE_PREVIEW_DIR,`audio-gifts-${width}.png`)});await page.locator('#closeSheet').click();}
-   await page.evaluate(()=>{giftQueue=[{code:'whale',name:'الحوت الأزرق',symbol:'🐋',effect:'depth',sender:'داعم تجريبي',recipient:'مضيف تجريبي'}];playEffects()});
-   assert.equal(await page.locator('#giftEffect').getAttribute('class'),'gift-show depth show-whale');
+   await page.evaluate(()=>{giftQueue=[{code:'whale',name:'الحوت الأزرق',symbol:'🐋',effect:'depth',sender:'داعم تجريبي',recipient:'مضيف تجريبي',combo_count:10,total_price_cents:100000}];playEffects()});
+   assert.ok((await page.locator('#giftEffect').getAttribute('class')).includes('gift-fullscreen'),'depth gifts receive full-screen effect');
+   assert.equal(await page.locator('#giftEffect .gift-combo-banner').innerText(),'×10 · ١٠٠٬٠٠٠ كوين');
+   assert.equal(await page.locator('#giftEffect .gift-particles i').count(),28,'premium gifts have complete particle animation');
    if(process.env.LIVE_PREVIEW_DIR)await page.screenshot({path:path.join(process.env.LIVE_PREVIEW_DIR,`whale-effect-${width}.png`)});
    await page.close();
   }
