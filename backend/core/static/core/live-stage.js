@@ -302,6 +302,15 @@ function moreSheet(){
   if(config.owner)note(b,'حصة مستلمي الهدايا المستحقة: '+(state.earned_cents||0));
   for(const p of state.top_supporters||[])note(b,p.name+' · '+p.total);
  });
+ sectionHeading(box,'الاتصال والجودة');
+ button(box,'حالة الاتصال',()=>{
+  const b=sheet('حالة الاتصال');
+  const connected=room?.state===ConnectionState.Connected;
+  note(b,'حالة الغرفة: '+(connected?'متصل':'غير متصل أو يعيد الاتصال'));
+  if(config.owner||speaking)note(b,'نشر الصوت أو الفيديو: '+(mediaReady?'جاهز':'قيد التجهيز أو متوقف'));
+  note(b,'إعدادات الصوت: '+(speakerMuted?'صوت الغرفة مكتوم':'صوت الغرفة يعمل'));
+  if(!connected)button(b,'إعادة محاولة الاتصال',()=>{$('sheet').close();$('reconnectAction').click()},'primary');
+ });
  sectionHeading(box,'السلامة');
  button(box,'الإبلاغ عن البث',reportSheet);
  if(config.owner)button(box,'إنهاء البث للجميع',()=>confirmActionSheet(
@@ -379,6 +388,8 @@ $('composer').onsubmit=async e=>{
  }finally{sendingComment=false;send.disabled=false;$('composer').classList.remove('is-sending')}
 };
 $('text').addEventListener('input',()=>commentNotice(''));
+$('text').addEventListener('focus',()=>document.body.classList.add('chat-focused'));
+$('text').addEventListener('blur',()=>document.body.classList.remove('chat-focused'));
 $('mute').onclick=async()=>{try{await room.localParticipant.setMicrophoneEnabled(muted);muted=!muted;$('mute').textContent=muted?'تشغيل الميكروفون':'كتم الميكروفون';updateQuickMic()}catch(e){message(e)}};
 $('camera').onclick=async()=>{try{await room.localParticipant.setCameraEnabled(cameraOff);cameraOff=!cameraOff;$('camera').textContent=cameraOff?'تشغيل الفيديو':'إيقاف الفيديو';if(!cameraOff){const track=room.localParticipant.getTrackPublication(Track.Source.Camera)?.track;if(track)renderTrack(track,room.localParticipant,true)}else document.querySelectorAll('.tile').forEach(t=>{if(t.dataset.identity===room.localParticipant.identity)t.remove()});layout()}catch(e){message(e)}};
 $('switch').onclick=async()=>{try{const next=facing==='user'?'environment':'user';await room.localParticipant.getTrackPublication(Track.Source.Camera)?.track?.restartTrack({facingMode:next});facing=next;document.querySelectorAll('.tile').forEach(t=>{if(t.dataset.identity===room.localParticipant.identity)t.querySelector('video').style.transform=facing==='user'?'scaleX(-1)':''})}catch(e){$('status').textContent='الكاميرا الأخرى غير متاحة'}};
