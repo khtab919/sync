@@ -72,6 +72,10 @@ internal fun relaxiaLiveFooterRepairScript(): String = """
         var layoutHeight = document.documentElement.clientHeight || window.innerHeight;
         var height = Math.max(1, Math.floor(Math.min(layoutHeight, viewport ? viewport.height : layoutHeight)));
         document.documentElement.style.setProperty('--room-viewport-height', height + 'px');
+        // Native repair mirrors the production footer measurement for older
+        // server assets, so messages and seats never sit underneath controls.
+        var footerHeight = Math.ceil(footer.getBoundingClientRect().height);
+        if (footerHeight > 0) stage.style.setProperty('--room-footer-height', Math.max(124, footerHeight + 6) + 'px');
       }
       if (!window.relaxiaLiveKeyboardFixAttached) {
         window.relaxiaLiveKeyboardFixAttached = true;
@@ -93,6 +97,10 @@ internal fun relaxiaLiveFooterRepairScript(): String = """
         }
         window.addEventListener('resize', measureVisibleRoom, {passive:true});
         if (window.visualViewport) window.visualViewport.addEventListener('resize', measureVisibleRoom, {passive:true});
+        if (typeof ResizeObserver !== 'undefined') {
+          window.relaxiaLiveFooterObserver = new ResizeObserver(measureVisibleRoom);
+          window.relaxiaLiveFooterObserver.observe(footer);
+        }
       }
       measureVisibleRoom();
       return 'repaired';
