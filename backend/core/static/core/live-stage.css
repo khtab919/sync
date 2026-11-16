@@ -1529,3 +1529,6 @@ body.audio-mode #audioStage .audio-seat.gift-seat-glow {
  z-index:4;
  box-shadow:0 -6px 16px rgba(6,18,36,.7);
 }
+
+/* An explicit display:flex effect must never override the hidden attribute. */
+#giftEffect[hidden] {display:none!important;}
