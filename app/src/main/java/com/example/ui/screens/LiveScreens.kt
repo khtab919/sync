@@ -832,10 +832,14 @@ internal fun CameraPreviewSurface(
             title={Text("إعدادات البث المتقدمة")},
             text={
                 Column(Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState()), verticalArrangement=Arrangement.spacedBy(10.dp)){
-                    Text("عدد المتحدثين المسموح به:")
-                    Row(Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement=Arrangement.spacedBy(6.dp)){
-                        (if(audioOnly)listOf("8")else listOf("1","2","4","6","12")).forEach{n->
-                            FilterChip(selected=speakers==n, onClick={onSpeakersChange(n)}, label={Text(n)})
+                    if(audioOnly){
+                        Text("الغرفة الصوتية: 8 مقاعد تشمل المضيف، بترتيب منظم للمشاركين.",style=MaterialTheme.typography.bodyMedium)
+                    }else{
+                        Text("عدد المتحدثين المسموح به:")
+                        Row(Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                            listOf("1","2","4","6","12").forEach{n->
+                                FilterChip(selected=speakers==n, onClick={onSpeakersChange(n)}, label={Text(n)})
+                            }
                         }
                     }
                     OutlinedTextField(
