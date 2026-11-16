@@ -252,7 +252,9 @@ function giftSheet(){
  if(!select.options.length)note(box,'لا يوجد مستلم آخر على الميكروفون حاليًا.');
  const tabs=document.createElement('div');tabs.className='gift-tabs';box.append(tabs);
  const grid=document.createElement('div');grid.className='gift-grid';box.append(grid);
- const catalog=Array.isArray(state.gift_catalog)?state.gift_catalog:[];
+ const catalog=(Array.isArray(state.gift_catalog)?state.gift_catalog:[])
+  .filter(g=>/^gift_[a-z_]+$/.test(g.code))
+  .sort((a,b)=>a.price_cents-b.price_cents);
  let selected=catalog[0]||null,comboCount=1;
  const picker=document.createElement('div');picker.className='gift-combo-picker';box.append(picker);
  const comboTitle=document.createElement('div');comboTitle.className='gift-combo-title';
@@ -309,7 +311,13 @@ function giftSheet(){
    b.className='gift-card '+g.effect;
    b.dataset.giftCode=g.code;
    b.setAttribute('aria-label',g.name+' · '+g.price_cents+' كوين');
-   const icon=document.createElement('span');icon.className='gift-art';icon.textContent=g.symbol;
+   const icon=document.createElement('img');
+   icon.className='gift-art gift-webp';
+   icon.src=g.icon_url || '/static/core/gifts/icons/'+g.code+'.webp';
+   icon.alt=g.name;
+   icon.loading='lazy';
+   icon.decoding='async';
+   icon.onerror=()=>{icon.onerror=null;icon.classList.add('gift-art-missing');icon.removeAttribute('src');icon.alt=g.name;};
    const medallion=document.createElement('span');medallion.className='gift-medallion';medallion.append(icon);
    b.classList.add('gift-'+String(g.code).replace(/[^a-z0-9_-]/g,''));
    const name=document.createElement('strong');name.textContent=g.name;
@@ -447,7 +455,12 @@ function playEffects(){
  if(['falcon_gold','royal_yacht','cyber_supercar','emperor_crown','knight_sword','meteor_shower','crystal_hearts'].includes(g.code))
   box.classList.add('show-'+g.code);
  if(effect==='depth')box.classList.add('gift-fullscreen');
- const icon=document.createElement('span');icon.className='gift-hero';icon.textContent=g.symbol;
+ const icon=document.createElement('img');
+ icon.className='gift-hero gift-effect-art';
+ icon.src='/static/core/gifts/animations/'+String(g.code).replace(/[^a-z0-9_]/g,'')+'.webp?play='+g.id;
+ icon.alt=g.name;
+ icon.decoding='async';
+ icon.onerror=()=>{icon.onerror=null;icon.src='/static/core/gifts/icons/'+String(g.code).replace(/[^a-z0-9_]/g,'')+'.webp';};
  const label=document.createElement('strong');label.textContent=g.sender+' أرسل '+g.name;
  const recipient=document.createElement('small');recipient.textContent='إلى '+g.recipient;
  if(effect!=='simple'||g.code==='meteor_shower'){
