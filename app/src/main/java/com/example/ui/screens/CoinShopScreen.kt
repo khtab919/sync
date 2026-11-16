@@ -20,6 +20,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.foundation.background
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -54,36 +57,68 @@ private fun storePackages(info:JSONObject):List<StorePackage>{
     }
 }
 
+private val CoinNavy=Color(0xFF0B162C)
+private val CoinGlass=Color(0xD916223B)
+private val CoinGold=Color(0xFFF4C37D)
+
+@Composable
+private fun Coin3DArtwork(coins:Int) {
+    val context=LocalContext.current
+    val bitmap=remember(context,coins){
+        runCatching {
+            context.assets.open("coins/ic_coin_${coins}.webp").use { android.graphics.BitmapFactory.decodeStream(it) }
+        }.getOrNull()
+    }
+    if(bitmap!=null) {
+        androidx.compose.foundation.Image(
+            bitmap=bitmap.asImageBitmap(),
+            contentDescription="مجسم كوينز بقيمة ${coins}",
+            modifier=Modifier.size(69.dp),
+            contentScale=androidx.compose.ui.layout.ContentScale.Fit
+        )
+    } else {
+        // Standalone signed APK still renders a functional card before art is packaged.
+        Icon(androidx.compose.material.icons.Icons.Rounded.Toll,
+            contentDescription="كوينز ${coins}",
+            modifier=Modifier.size(53.dp),tint=CoinGold)
+    }
+}
+
 @Composable
 internal fun CoinPackage(coins:Int,bonus:Int,dollars:String,selected:Boolean,badge:String?,choose:()->Unit){
-    val colors=MaterialTheme.colorScheme
     Surface(
         onClick=choose,
-        shape=RoundedCornerShape(24.dp),
-        color=if(selected)colors.primaryContainer else colors.surface,
-        shadowElevation=if(selected)4.dp else 1.dp,
-        border=BorderStroke(if(selected)2.dp else 1.dp,if(selected)colors.primary else colors.outlineVariant)
+        shape=RoundedCornerShape(16.dp),
+        color=CoinGlass,
+        contentColor=Color.White,
+        shadowElevation=if(selected)9.dp else 2.dp,
+        border=BorderStroke(if(selected)1.5.dp else 1.dp,
+            if(selected)Color(0xFFF59E0B) else Color(0xFF465876))
     ){
         Column(
-            Modifier.fillMaxWidth().heightIn(min=174.dp).padding(horizontal=6.dp,vertical=10.dp),
+            modifier=Modifier.fillMaxWidth().heightIn(min=164.dp)
+                .padding(horizontal=4.dp,vertical=8.dp),
             horizontalAlignment=Alignment.CenterHorizontally,
-            verticalArrangement=Arrangement.spacedBy(5.dp)
+            verticalArrangement=Arrangement.spacedBy(4.dp)
         ){
-            if(badge!=null){
-                Surface(color=colors.primary,shape=RoundedCornerShape(18.dp)){
-                    Text(badge,Modifier.padding(horizontal=6.dp,vertical=3.dp),fontSize=10.sp,color=colors.onPrimary,fontWeight=FontWeight.SemiBold,maxLines=1)
+            if(badge!=null) {
+                Surface(shape=RoundedCornerShape(10.dp),color=Color(0xFF2D3955)){
+                    Text(badge,Modifier.padding(horizontal=7.dp,vertical=2.dp),
+                        color=Color.White,fontSize=9.sp,fontWeight=FontWeight.Bold,maxLines=1)
                 }
-            }else Spacer(Modifier.height(19.dp))
-            Icon(androidx.compose.material.icons.Icons.Rounded.Toll, "كوينز", Modifier.size(36.dp), tint=colors.primary)
-            Text(java.text.NumberFormat.getIntegerInstance(java.util.Locale.US).format(coins),fontSize=20.sp,fontWeight=FontWeight.Bold,maxLines=1)
-            Text("كوين",fontSize=12.sp,color=colors.onSurfaceVariant)
-            if(bonus>0) Text(
-                "+${java.text.NumberFormat.getIntegerInstance(java.util.Locale.US).format(bonus)} نقطة ترويجية",
-                fontSize=10.sp,color=if(bonus>0)colors.primary else colors.onSurfaceVariant,maxLines=2,lineHeight=13.sp
-            )
-            Spacer(Modifier.height(4.dp))
-            Surface(color=colors.surfaceVariant,shape=RoundedCornerShape(18.dp)){
-                Text("$dollars USD",Modifier.padding(horizontal=7.dp,vertical=6.dp),fontSize=11.sp,fontWeight=FontWeight.SemiBold,maxLines=1)
+            } else Spacer(Modifier.height(16.dp))
+            Text(java.text.NumberFormat.getIntegerInstance(java.util.Locale.US).format(coins)+" كوين",
+                fontSize=if(coins>=10000)13.sp else 14.sp,fontWeight=FontWeight.ExtraBold,
+                color=Color.White,maxLines=1)
+            Coin3DArtwork(coins)
+            if(bonus>0) {
+                Text("+${java.text.NumberFormat.getIntegerInstance(java.util.Locale.US).format(bonus)} نقطة ترويجية",
+                    fontSize=9.sp,fontWeight=FontWeight.SemiBold,color=Color(0xFF4DE6A0),
+                    maxLines=1)
+            } else Spacer(Modifier.height(14.dp))
+            Surface(color=Color(0xFF2C3955),shape=RoundedCornerShape(50.dp)){
+                Text("USD ${dollars}",Modifier.padding(horizontal=10.dp,vertical=7.dp),
+                    color=Color.White,fontSize=12.sp,fontWeight=FontWeight.Bold,maxLines=1)
             }
         }
     }
