@@ -469,7 +469,7 @@ function playEffects(){
   box.append(banner);
  }
  const activeSeat=(state.speakers||[]).find(s=>s.name===g.recipient);
- const targetSeat=activeSeat&&document.querySelector('#audioStage .audio-seat[data-identity="'+CSS.escape(activeSeat.identity)+'"]');
+ const targetSeat=activeSeat&&Array.from(document.querySelectorAll('#audioStage .audio-seat[data-identity]')).find(el=>el.dataset.identity===activeSeat.identity);
  if(targetSeat&&effect==='animated')targetSeat.classList.add('gift-seat-glow');
  box.hidden=false;
  const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
