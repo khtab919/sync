@@ -22,7 +22,11 @@ class LiveControlsRecoveryTest {
         assertTrue(script.contains("enterkeyhint"))
         assertTrue(script.contains("relaxiaLiveKeyboardFixAttached"))
         assertTrue(script.contains("measureVisibleRoom"))
+        assertTrue(script.contains("--room-footer-height"))
+        assertTrue(script.contains("relaxiaLiveFooterObserver"))
+        assertTrue(script.contains("ResizeObserver"))
         assertTrue(script.contains("chat-focused"))
+        assertTrue(script.contains("#audioStage.seat-grid{display:none!important}"))
         assertTrue(script.contains("input.blur()"))
         assertFalse(script.contains("fetch("))
     }

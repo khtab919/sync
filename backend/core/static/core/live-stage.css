@@ -1149,3 +1149,45 @@ body.chat-focused #stage #messages {
   body.chat-focused #stage #audioStage.seat-grid {top:8px;}
   body.chat-focused #stage #messages {max-height:46px;}
 }
+
+
+/* When the Android keyboard reduces the room below 600px, prioritise real
+   conversation over seats. Seats return immediately after closing the IME. */
+@media (max-height:600px) {
+  body.audio-mode.chat-focused #audioStage.seat-grid {display:none!important}
+  body.audio-mode.chat-focused #stage {
+    --room-chat-height:clamp(70px,calc(var(--room-viewport-height,100dvh) - var(--room-footer-height) - 30px),220px);
+  }
+  body.audio-mode.chat-focused #messages {height:var(--room-chat-height);max-height:var(--room-chat-height)}
+}
+
+/* Relaxia voice-room integration: real controls, readable input and keyboard-safe menus. */
+#stage footer #composer input {
+  font-size:16px!important;
+  line-height:22px;
+}
+#stage footer #composer .composer-emoji {
+  display:grid;place-items:center;
+  min-width:44px;min-height:44px;
+  padding:0 4px;
+}
+#stage footer .quick-actions .tool-circle {
+  min-width:44px!important;
+  width:44px!important;
+  height:44px!important;
+  min-height:44px!important;
+  flex:0 0 44px!important;
+}
+#stage footer #composer.is-sending .composer-send {
+  opacity:.65;cursor:progress;
+}
+#stage footer #composer input:focus-visible {
+  outline:none;
+}
+#stage footer #composer:focus-within {
+  border-color:#C1DBFF!important;
+  box-shadow:0 0 0 2px #A7CEFF40;
+}
+@media (max-width:340px) {
+  #stage footer .quick-actions {flex-wrap:wrap!important;row-gap:6px!important}
+}

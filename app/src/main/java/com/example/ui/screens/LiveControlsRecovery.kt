@@ -58,6 +58,7 @@ internal fun relaxiaLiveFooterRepairScript(): String = """
           'body.chat-focused #stage footer .quick-actions{display:flex!important;gap:4px!important}',
           'body.chat-focused #stage footer .bottom{gap:0!important}',
           'body.chat-focused #stage footer{padding-top:5px!important}',
+          '@media(max-height:600px){body.audio-mode.chat-focused #audioStage.seat-grid{display:none!important}body.audio-mode.chat-focused #stage{--room-chat-height:clamp(70px,calc(var(--room-viewport-height,100dvh) - var(--room-footer-height) - 30px),220px)}}',
           '#stage footer #composer input{-webkit-user-select:text!important;user-select:text!important}',
           '#stage footer #composer .composer-send{min-width:44px!important;width:44px!important;min-height:44px!important;height:44px!important}',
           '#sheet[open]{position:fixed!important;inset:auto 9px 7px!important;max-height:min(74dvh,calc(var(--room-viewport-height,100dvh) - 24px))!important;overflow-y:auto!important;touch-action:pan-y!important}'
@@ -72,6 +73,10 @@ internal fun relaxiaLiveFooterRepairScript(): String = """
         var layoutHeight = document.documentElement.clientHeight || window.innerHeight;
         var height = Math.max(1, Math.floor(Math.min(layoutHeight, viewport ? viewport.height : layoutHeight)));
         document.documentElement.style.setProperty('--room-viewport-height', height + 'px');
+        // Native repair mirrors the production footer measurement for older
+        // server assets, so messages and seats never sit underneath controls.
+        var footerHeight = Math.ceil(footer.getBoundingClientRect().height);
+        if (footerHeight > 0) stage.style.setProperty('--room-footer-height', Math.max(124, footerHeight + 6) + 'px');
       }
       if (!window.relaxiaLiveKeyboardFixAttached) {
         window.relaxiaLiveKeyboardFixAttached = true;
@@ -93,6 +98,10 @@ internal fun relaxiaLiveFooterRepairScript(): String = """
         }
         window.addEventListener('resize', measureVisibleRoom, {passive:true});
         if (window.visualViewport) window.visualViewport.addEventListener('resize', measureVisibleRoom, {passive:true});
+        if (typeof ResizeObserver !== 'undefined') {
+          window.relaxiaLiveFooterObserver = new ResizeObserver(measureVisibleRoom);
+          window.relaxiaLiveFooterObserver.observe(footer);
+        }
       }
       measureVisibleRoom();
       return 'repaired';
