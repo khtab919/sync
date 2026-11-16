@@ -1,4 +1,4 @@
-name: Build Relaxia 11.7.3 compatible update
+name: Build Relaxia 11.7.3 with NEW signing identity
 
 on:
   push:
@@ -104,25 +104,28 @@ jobs:
           fi
           grep -F "package: name='com.aistudio.layalilounge.x9m4kp'" release-badging.txt
 
-      - name: Require original signing key for same-app installation
+      - name: Require NEW signing key for the original package (reinstall required)
         env:
-          RELAXIA_KEYSTORE_BASE64: ${{ secrets.RELAXIA_KEYSTORE_BASE64 }}
+          RELAXIA_NEW_KEYSTORE_BASE64: ${{ secrets.RELAXIA_NEW_KEYSTORE_BASE64 }}
+          RELAXIA_NEW_STORE_PASSWORD: ${{ secrets.RELAXIA_NEW_STORE_PASSWORD }}
         run: |
           set -euo pipefail
-          if [ -z "$RELAXIA_KEYSTORE_BASE64" ]; then
-            echo "::error::Cannot issue a compatible APK: original signing key is not configured. Never replace it or change package ID."
+          if [ -z "$RELAXIA_NEW_KEYSTORE_BASE64" ] || [ -z "$RELAXIA_NEW_STORE_PASSWORD" ]; then
+            echo "::error::New release signing key missing. Configure RELAXIA_NEW_KEYSTORE_BASE64 and RELAXIA_NEW_STORE_PASSWORD in GitHub Actions secrets. This certificate is a NEW installation baseline."
             exit 1
           fi
           umask 077
-          printf '%s' "$RELAXIA_KEYSTORE_BASE64" | base64 -d > original-relaxia.keystore
-          actual="$(keytool -exportcert -keystore original-relaxia.keystore -storepass android -alias androiddebugkey | sha256sum | cut -d ' ' -f 1)"
-          expected='eadf736b5beaa7fa9395c633b83ab9a0892126219ef3f05ae59eb511465c501f'
+          printf '%s' "$RELAXIA_NEW_KEYSTORE_BASE64" | base64 -d > relaxia-new-release.p12
+          actual="$(keytool -exportcert -keystore relaxia-new-release.p12 -storetype PKCS12 -storepass:env RELAXIA_NEW_STORE_PASSWORD -alias upload | sha256sum | cut -d ' ' -f 1)"
+          expected='879960ff8f429775285cba8be567a5a1a6f6b5d94d83e264bd67115bd9b9d89c'
           if [ "$actual" != "$expected" ]; then
-            echo "::error::Original 11.3 signing certificate mismatch. A different signature cannot update the installed app."
+            echo "::error::New signing certificate mismatch. Never silently substitute another key."
             exit 1
           fi
 
-      - name: Sign, verify and export real APK for original app
+      - name: Sign and verify APK with new certificate (does NOT update old installations)
+        env:
+          RELAXIA_NEW_STORE_PASSWORD: ${{ secrets.RELAXIA_NEW_STORE_PASSWORD }}
         run: |
           set -euo pipefail
           tools_dir="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1 | xargs dirname)"
@@ -130,23 +133,23 @@ jobs:
             app/build/outputs/apk/release/app-release-unsigned.apk \
             Relaxia-11.7.3-aligned.apk
           "$tools_dir/apksigner" sign \
-            --ks original-relaxia.keystore \
-            --ks-key-alias androiddebugkey \
-            --ks-pass pass:android \
-            --key-pass pass:android \
+            --ks relaxia-new-release.p12 --ks-type PKCS12 \
+            --ks-key-alias upload \
+            --ks-pass env:RELAXIA_NEW_STORE_PASSWORD \
+            --key-pass env:RELAXIA_NEW_STORE_PASSWORD \
             --out Relaxia-11.7.3.apk \
             Relaxia-11.7.3-aligned.apk
           "$tools_dir/apksigner" verify --verbose --print-certs Relaxia-11.7.3.apk
           "$tools_dir/zipalign" -c -v 4 Relaxia-11.7.3.apk
           "$tools_dir/aapt" dump badging Relaxia-11.7.3.apk | grep -F "package: name='com.aistudio.layalilounge.x9m4kp'"
           cert="$("$tools_dir/apksigner" verify --print-certs Relaxia-11.7.3.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -1)"
-          test "$cert" = "eadf736b5beaa7fa9395c633b83ab9a0892126219ef3f05ae59eb511465c501f"
+          test "$cert" = "879960ff8f429775285cba8be567a5a1a6f6b5d94d83e264bd67115bd9b9d89c"
           sha256sum Relaxia-11.7.3.apk > Relaxia-11.7.3.SHA256
 
-      - name: Upload installable update ONLY after successful signature verification
+      - name: Upload NEW-signature APK (requires reinstall if old key installed)
         uses: actions/upload-artifact@v4
         with:
-          name: Relaxia-11.7.3-original-app-signed
+          name: Relaxia-11.7.3-new-signature-reinstall-required
           path: |
             Relaxia-11.7.3.apk
             Relaxia-11.7.3.SHA256
@@ -155,4 +158,4 @@ jobs:
 
       - name: Remove temporary signing material
         if: always()
-        run: rm -f original-relaxia.keystore
+        run: rm -f relaxia-new-release.p12
