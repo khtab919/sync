@@ -1515,3 +1515,17 @@ body.audio-mode #audioStage .audio-seat.gift-seat-glow {
  #giftEffect .gift-particles i {animation:none!important}
  #giftEffect .gift-particles{display:none!important}
 }
+
+#sheet .gift-balance {
+ display:flex;justify-content:center;align-items:center;
+ min-height:37px;padding:8px 12px;
+ color:#F3E0BA;font-weight:750;font-size:13px;
+ border:1px solid #D1AC746E;border-radius:14px;
+ background:linear-gradient(110deg,#473F62,#1A3557);
+}
+#sheet .gift-checkout {
+ position:sticky;
+ bottom:0;
+ z-index:4;
+ box-shadow:0 -6px 16px rgba(6,18,36,.7);
+}
