@@ -54,10 +54,47 @@ internal fun relaxiaLiveFooterRepairScript(): String = """
           '#stage footer #composer .composer-send{display:grid!important;place-items:center!important;flex:0 0 40px!important;width:40px!important;height:40px!important;min-height:40px!important;background:#397ACB!important;color:#FFFFFF!important;border-radius:50%!important}',
           '#stage footer #composer .composer-emoji{color:#FFFFFF!important;opacity:1!important}',
           'html[data-theme="light"] body.audio-mode #stage footer .tool-circle,html[data-theme="dark"] body.audio-mode #stage footer .tool-circle{color:#FFFFFF!important}',
-          '#stage footer .tool-circle:focus-visible,#stage footer #composer:focus-within{outline:2px solid #FFFFFF!important;outline-offset:2px!important}'
+          '#stage footer .tool-circle:focus-visible,#stage footer #composer:focus-within{outline:2px solid #FFFFFF!important;outline-offset:2px!important}',
+          'body.chat-focused #stage footer .quick-actions{display:none!important}',
+          'body.chat-focused #stage footer .bottom{gap:0!important}',
+          'body.chat-focused #stage footer{padding-top:5px!important}',
+          '#stage footer #composer input{-webkit-user-select:text!important;user-select:text!important}',
+          '#stage footer #composer .composer-send{min-width:44px!important;width:44px!important;min-height:44px!important;height:44px!important}',
+          '#sheet[open]{position:fixed!important;inset:auto 9px 7px!important;max-height:min(74dvh,calc(var(--room-viewport-height,100dvh) - 24px))!important;overflow-y:auto!important;touch-action:pan-y!important}'
         ].join('');
         document.head.appendChild(style);
       }
+      // The WebView has now been constrained by Compose imePadding. Re-measure
+      // the browser viewport during keyboard animation and keep the composer
+      // in that visible area, including on servers with older live-stage.js.
+      function measureVisibleRoom() {
+        var viewport = window.visualViewport;
+        var layoutHeight = document.documentElement.clientHeight || window.innerHeight;
+        var height = Math.max(1, Math.floor(Math.min(layoutHeight, viewport ? viewport.height : layoutHeight)));
+        document.documentElement.style.setProperty('--room-viewport-height', height + 'px');
+      }
+      if (!window.relaxiaLiveKeyboardFixAttached) {
+        window.relaxiaLiveKeyboardFixAttached = true;
+        var input = document.getElementById('text');
+        if (input) {
+          input.setAttribute('enterkeyhint', 'send');
+          input.addEventListener('focus', function () {
+            document.body.classList.add('chat-focused');
+            requestAnimationFrame(measureVisibleRoom);
+          });
+          input.addEventListener('blur', function () {
+            document.body.classList.remove('chat-focused');
+            requestAnimationFrame(measureVisibleRoom);
+          });
+          document.addEventListener('click', function (event) {
+            var button = event.target.closest('#more,#guests,#bigGiftBtn,#emojiBtn,#gift,#speaker,#micQuick,#share');
+            if (button && document.activeElement === input) input.blur();
+          }, true);
+        }
+        window.addEventListener('resize', measureVisibleRoom, {passive:true});
+        if (window.visualViewport) window.visualViewport.addEventListener('resize', measureVisibleRoom, {passive:true});
+      }
+      measureVisibleRoom();
       return 'repaired';
     })();
 """.trimIndent()
