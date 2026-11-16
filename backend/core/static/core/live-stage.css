@@ -1097,3 +1097,54 @@ html[data-theme="light"] body.audio-mode header .identity-meta strong,
 html[data-theme="light"] body.audio-mode header .identity-meta small{
   color:#F5F9FF;
 }
+
+/* rooms-controls-22: keyboard/IME and modal recovery on Android WebView. */
+#stage {
+  height:var(--room-viewport-height,100dvh);
+  max-height:var(--room-viewport-height,100dvh);
+}
+#stage footer #composer input {
+  -webkit-user-select:text;
+  user-select:text;
+  touch-action:manipulation;
+}
+#stage footer #composer .composer-send {
+  min-width:44px!important;
+  width:44px!important;
+  height:44px!important;
+  min-height:44px!important;
+  touch-action:manipulation;
+}
+body.chat-focused #stage footer .quick-actions {
+  /* Focus on typing; the actions reappear as soon as Gboard closes. */
+  display:none!important;
+}
+body.chat-focused #stage footer .bottom { gap:0!important; }
+body.chat-focused #stage footer { padding-top:5px!important; }
+body.chat-focused #stage {
+  --room-chat-height:clamp(40px,10dvh,85px);
+}
+body.chat-focused #stage #messages {
+  max-height:var(--room-chat-height);
+}
+#sheet[open] {
+  box-sizing:border-box;
+  position:fixed;
+  inset:auto 9px max(7px,env(safe-area-inset-bottom,0px))!important;
+  margin:0 auto!important;
+  width:calc(100% - 18px)!important;
+  max-width:600px!important;
+  max-height:min(76dvh,calc(var(--room-viewport-height,100dvh) - 24px))!important;
+  overflow-y:auto!important;
+  overscroll-behavior:contain;
+  touch-action:pan-y;
+}
+#sheet #sheetBody button {
+  min-height:46px;
+  touch-action:manipulation;
+}
+@media(max-height:480px) {
+  body.chat-focused #stage header {display:none;}
+  body.chat-focused #stage #audioStage.seat-grid {top:8px;}
+  body.chat-focused #stage #messages {max-height:46px;}
+}
