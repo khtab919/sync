@@ -22,7 +22,7 @@ function syncRoomFooterMetrics(){
  const footer=document.querySelector('#stage footer'),stage=$('stage');
  if(!footer||!stage)return;
  const height=Math.ceil(footer.getBoundingClientRect().height);
- if(height>0)stage.style.setProperty('--room-footer-height',Math.max(document.body.classList.contains('chat-focused')?70:124,height+6)+'px');
+ if(height>0)stage.style.setProperty('--room-footer-height',Math.max(124,height+6)+'px');
 }
 const roomFooter=document.querySelector('#stage footer');
 const footerSizeObserver=roomFooter&&typeof ResizeObserver!=='undefined'?new ResizeObserver(syncRoomFooterMetrics):null;
