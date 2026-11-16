@@ -317,7 +317,7 @@ function giftSheet(){
    icon.alt=g.name;
    icon.loading='lazy';
    icon.decoding='async';
-   icon.onerror=()=>{icon.onerror=null;icon.classList.add('gift-art-missing');icon.removeAttribute('src');icon.alt=g.name;};
+   icon.onerror=()=>{icon.onerror=null;icon.classList.add('gift-art-missing');icon.alt=g.name;};
    const medallion=document.createElement('span');medallion.className='gift-medallion';medallion.append(icon);
    b.classList.add('gift-'+String(g.code).replace(/[^a-z0-9_-]/g,''));
    const name=document.createElement('strong');name.textContent=g.name;
