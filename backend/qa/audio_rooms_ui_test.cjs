@@ -67,6 +67,18 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    await page.evaluate(()=>{
      const audio=document.createElement('audio');audio.dataset.liveRemote='1';audio.play=()=>Promise.resolve();document.body.append(audio);
    });
+   // Reproduce an Android WebView reporting a collapsed CSS viewport.
+   await page.evaluate(()=>document.documentElement.style.setProperty('--room-viewport-height','1px'));
+   await page.locator('#bigGiftBtn').click();
+   assert.equal(await page.locator('#sheet').evaluate(el=>el.open),true,'gift modal opens');
+   assert.ok(await page.getByRole('heading',{name:'متجر الهدايا'}).isVisible(),'gift modal heading visible');
+   const giftBounds=await page.locator('#sheet').boundingBox();
+   assert.ok(giftBounds && giftBounds.height>=Math.min(320,height*.5),'gift menu must not collapse below its header');
+   assert.ok(giftBounds.y>=0 && giftBounds.y+giftBounds.height<=height+2,'gift menu remains within visible screen');
+   assert.ok(await page.locator('#sheetBody .gift-card').count()>0,'gift grid is reachable');
+   await page.locator('#sheet').evaluate(el=>{el.scrollTop=el.scrollHeight});
+   await page.locator('#closeSheet').click();
+   await page.evaluate(()=>document.documentElement.style.removeProperty('--room-viewport-height'));
    await page.locator('#more').click();
    if(width<=380){await page.getByRole('button',{name:'الرموز التعبيرية',exact:true}).click();await page.locator('#closeSheet').click();await page.locator('#more').click();}
    await page.getByRole('button',{name:'كتم صوت الغرفة',exact:true}).click();
