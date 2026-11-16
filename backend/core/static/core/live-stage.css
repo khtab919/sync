@@ -1191,3 +1191,35 @@ body.chat-focused #stage #messages {
 @media (max-width:340px) {
   #stage footer .quick-actions {flex-wrap:wrap!important;row-gap:6px!important}
 }
+
+/* rooms-controls-23: never let an Android visualViewport/IME collapse the modal.
+   Inline coordinates from positionRoomSheet are the primary placement; this is
+   the safe fallback if JavaScript runs late or a cached page loads old assets. */
+#sheet[open] {
+  position:fixed!important;
+  top:auto!important;
+  bottom:max(8px,env(safe-area-inset-bottom,0px))!important;
+  left:10px!important;
+  right:10px!important;
+  margin:0 auto!important;
+  box-sizing:border-box!important;
+  width:calc(100% - 20px)!important;
+  max-width:600px!important;
+  height:min(76dvh,760px)!important;
+  max-height:calc(100dvh - 20px)!important;
+  min-height:0!important;
+  overflow-y:auto!important;
+  overscroll-behavior:contain;
+  touch-action:pan-y;
+}
+#sheet[open] .sheet-head {
+  position:sticky;
+  top:-17px;
+  z-index:3;
+  background:#15396F;
+  padding:9px 4px;
+}
+#sheet[open] #sheetBody {
+  min-height:0;
+  overflow:visible;
+}
