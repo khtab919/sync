@@ -1116,10 +1116,11 @@ html[data-theme="light"] body.audio-mode header .identity-meta small{
   touch-action:manipulation;
 }
 body.chat-focused #stage footer .quick-actions {
-  /* Focus on typing; the actions reappear as soon as Gboard closes. */
-  display:none!important;
+  /* Room menus remain tappable while Gboard is showing. */
+  display:flex!important;
+  gap:4px!important;
 }
-body.chat-focused #stage footer .bottom { gap:0!important; }
+body.chat-focused #stage footer .bottom { gap:5px!important; }
 body.chat-focused #stage footer { padding-top:5px!important; }
 body.chat-focused #stage {
   --room-chat-height:clamp(40px,10dvh,85px);
