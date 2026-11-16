@@ -5,9 +5,13 @@ const {Room,RoomEvent,Track,ConnectionState}=LivekitClient;
 let room,closed=false,muted=false,speakerMuted=false,cameraOff=false,facing='user',commentsVisible=true,lastComments='',leaving=false,retrying=false,polling=false;
 let activeSpeakerIds=new Set(),audioSeatSignature='',reconnectSince=0,controlFailures=0,connecting=false;
 function updateRoomViewport(){
- const height=window.visualViewport?.height||window.innerHeight;
- // Preserve truly tiny viewports so Android's native stage-height recovery can detect and repair them.
- document.documentElement.style.setProperty('--room-viewport-height',Math.max(1,Math.round(height))+'px');
+ // Account for a virtual keyboard which can shrink the visual viewport
+ // independently of the layout viewport on Android WebView.
+ const visual=window.visualViewport;
+ const layoutHeight=document.documentElement.clientHeight||window.innerHeight;
+ const visible=visual?Math.min(layoutHeight,visual.height):layoutHeight;
+ const height=Math.max(1,Math.round(visible));
+ document.documentElement.style.setProperty('--room-viewport-height',height+'px');
 }
 updateRoomViewport();
 window.visualViewport?.addEventListener('resize',updateRoomViewport,{passive:true});
@@ -136,7 +140,16 @@ async function connect(token=config.token){
  finally{connecting=false}
 }
 async function reconnect(){if(retrying||connecting||closed||leaving)return;retrying=true;try{for(let attempt=0;attempt<6&&!closed&&!leaving;attempt++){$('connection').classList.remove('is-ready');$('status').textContent='إعادة الاتصال…';await new Promise(r=>setTimeout(r,Math.min(5000,1000*(attempt+1))));try{const fresh=await api({action:'token'});state.can_publish=fresh.can_publish;state.publish_sources=fresh.publish_sources;if(closed||leaving)return;room?.removeAllListeners();await room?.disconnect();document.querySelectorAll('audio').forEach(el=>el.remove());$('video').replaceChildren();if(state.can_publish===false&&!config.owner)speaking=false;await connect(fresh.token);return}catch(e){if(e.name==='MediaFailure'){mediaMessage(e);return}if(['broadcast_forbidden','broadcast_ended','live_authorization_required','admission_refunded','feature_restricted','broadcast_permission_required'].includes(e.message)){stop('انتهت صلاحية البث');return}}}if(!closed&&!leaving){$('status').textContent='تعذّر الاتصال. جرّب إعادة الاتصال دون شراء دخول جديد.';$('reconnectAction').hidden=false}}finally{retrying=false}}
-function sheet(title){$('sheetTitle').textContent=title;$('sheetBody').replaceChildren();if(!$('sheet').open)$('sheet').showModal();return $('sheetBody')}
+function sheet(title){
+ // Dismiss the IME when opening a menu; otherwise its bottom actions are covered.
+ if(document.activeElement?.id==='text')document.activeElement.blur();
+ const modal=$('sheet');
+ $('sheetTitle').textContent=title;
+ $('sheetBody').replaceChildren();
+ if(!modal.open)modal.showModal();
+ modal.scrollTop=0;
+ return $('sheetBody');
+}
 function button(box,label,fn,cls=''){const b=document.createElement('button');b.textContent=label;b.className=cls;b.onclick=async()=>{if(b.disabled)return;b.disabled=true;try{await fn()}catch(e){message(e)}finally{b.disabled=false}};box.appendChild(b);return b}
 function note(box,text){const p=document.createElement('p');p.textContent=text;box.appendChild(p)}
 function sectionHeading(box,title){const h=document.createElement('h3');h.className='room-setting-heading';h.textContent=title;box.append(h)}
@@ -411,18 +424,39 @@ $('composer').onsubmit=async e=>{
  sendingComment=true;send.disabled=true;$('composer').classList.add('is-sending');
  commentNotice('جارٍ إرسال التعليق…');
  try{
-  await api({action:'comment',text:content});
-  input.value='';commentNotice('تم إرسال التعليق');
-  // A successful send is not undone by a later polling failure.
-  await refresh().catch(()=>{});
+  const result=await api({action:'comment',text:content});
+  // Successful POST already contains the saved comment and latest room state.
+  // A second fetch is unnecessary and may fail after a successful write.
+  input.value='';
+  drawState(result);
+  commentNotice('تم إرسال التعليق');
  }catch(error){
-  // Preserve the draft for retry; never silently discard a failed comment.
-  commentNotice('تعذر الإرسال. التعليق محفوظ؛ حاول مجددًا.',true);
- }finally{sendingComment=false;send.disabled=false;$('composer').classList.remove('is-sending')}
+  const reason=error?.message||'';
+  const detail=reason==='slow_down'?'أرسلت تعليقات كثيرة. حاول بعد قليل.'
+   :reason==='live_authorization_required'?'انتهت صلاحية الغرفة؛ أعد الدخول دون دفع جديد.'
+   :error?.name==='AbortError'?'انقطع الاتصال. تحقق من ظهور التعليق قبل إعادة المحاولة.'
+   :'تعذر إرسال التعليق. احتفظنا بنصك؛ حاول مجددًا.';
+  commentNotice(detail,true);
+ }finally{
+  sendingComment=false;send.disabled=false;$('composer').classList.remove('is-sending');
+ }
 };
+$('text').setAttribute('enterkeyhint','send');
+$('text').addEventListener('keydown',event=>{
+ if(event.key==='Enter'&&!event.isComposing&&event.keyCode!==229){
+  event.preventDefault();
+  if(!$('sendComment').disabled)$('composer').requestSubmit($('sendComment'));
+ }
+});
 $('text').addEventListener('input',()=>commentNotice(''));
-$('text').addEventListener('focus',()=>document.body.classList.add('chat-focused'));
-$('text').addEventListener('blur',()=>document.body.classList.remove('chat-focused'));
+$('text').addEventListener('focus',()=>{
+ document.body.classList.add('chat-focused');
+ requestAnimationFrame(()=>{updateRoomViewport();syncRoomFooterMetrics()});
+});
+$('text').addEventListener('blur',()=>{
+ document.body.classList.remove('chat-focused');
+ requestAnimationFrame(()=>{updateRoomViewport();syncRoomFooterMetrics()});
+});
 $('mute').onclick=async()=>{try{await room.localParticipant.setMicrophoneEnabled(muted);muted=!muted;$('mute').textContent=muted?'تشغيل الميكروفون':'كتم الميكروفون';updateQuickMic()}catch(e){message(e)}};
 $('camera').onclick=async()=>{try{await room.localParticipant.setCameraEnabled(cameraOff);cameraOff=!cameraOff;$('camera').textContent=cameraOff?'تشغيل الفيديو':'إيقاف الفيديو';if(!cameraOff){const track=room.localParticipant.getTrackPublication(Track.Source.Camera)?.track;if(track)renderTrack(track,room.localParticipant,true)}else document.querySelectorAll('.tile').forEach(t=>{if(t.dataset.identity===room.localParticipant.identity)t.remove()});layout()}catch(e){message(e)}};
 $('switch').onclick=async()=>{try{const next=facing==='user'?'environment':'user';await room.localParticipant.getTrackPublication(Track.Source.Camera)?.track?.restartTrack({facingMode:next});facing=next;document.querySelectorAll('.tile').forEach(t=>{if(t.dataset.identity===room.localParticipant.identity)t.querySelector('video').style.transform=facing==='user'?'scaleX(-1)':''})}catch(e){$('status').textContent='الكاميرا الأخرى غير متاحة'}};
