@@ -298,6 +298,9 @@ private fun liveError(e:Exception)=when(e.message){
                         return
                     }
                     pageFinished=true
+                    // Server may still deliver an older one-row live layout: repair the
+                    // trusted room DOM on device without touching media/tickets.
+                    v?.evaluateJavascript(relaxiaLiveFooterRepairScript(), null)
                 }
                 override fun onRenderProcessGone(v:WebView?,detail:RenderProcessGoneDetail?):Boolean{
                     view=null
