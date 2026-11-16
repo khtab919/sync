@@ -19,6 +19,11 @@ class LiveControlsRecoveryTest {
         assertTrue(script.contains("html[data-theme=\\\"light\\\"]") || script.contains("html[data-theme=\"light\"]"))
         assertFalse(script.contains("room.disconnect("))
         assertFalse(script.contains("localParticipant"))
+        assertTrue(script.contains("enterkeyhint"))
+        assertTrue(script.contains("relaxiaLiveKeyboardFixAttached"))
+        assertTrue(script.contains("measureVisibleRoom"))
+        assertTrue(script.contains("chat-focused"))
+        assertTrue(script.contains("input.blur()"))
         assertFalse(script.contains("fetch("))
     }
 }
