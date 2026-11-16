@@ -40,6 +40,11 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    assert.equal(await page.locator('#gift').isVisible(),false);
    assert.equal(await page.locator('#micQuick').isVisible(),false,'no duplicate quick microphone for audience');
    assert.equal(await page.locator('#bigGiftBtn').isVisible(),true);
+   const actionRow=await page.locator('footer .quick-actions').boundingBox();
+   const composerRow=await page.locator('footer #composer').boundingBox();
+   assert.ok(actionRow && composerRow && composerRow.y>=actionRow.y+actionRow.height-2,'comment input is on a dedicated row below controls');
+   assert.ok(composerRow.width >= width-30,'comment composer spans the mobile width');
+
    assert.equal(await page.locator('#viewers').isVisible(),true);
    assert.equal(await page.locator('#exit svg').count(),1,'use the consistent vector close icon');
    assert.equal(await page.locator('#more svg').count(),1,'use the consistent vector overflow icon');
@@ -50,7 +55,7 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
     for(const id of ['more','guests','micQuick']){
      const control=page.locator('#'+id);
      assert.equal(await control.locator('svg').count(),1,'visible controls use vectors: '+id);
-     assert.equal(await control.evaluate(el=>getComputedStyle(el).color),'rgb(245, 249, 255)','readable control foreground in '+theme);
+     assert.equal(await control.evaluate(el=>getComputedStyle(el).color),'rgb(255, 255, 255)','readable control foreground in '+theme);
      const icon=await control.locator('svg').boundingBox();assert.ok(icon.width>=20&&icon.height>=20,'icon has explicit bounds');
     }
     await page.evaluate(()=>{muted=true;updateQuickMic()});
