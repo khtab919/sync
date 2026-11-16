@@ -1,4 +1,4 @@
-name: Build installed Relaxia release update
+name: Build Relaxia 11.7.3 compatible update
 
 on:
   push:
@@ -11,9 +11,10 @@ permissions:
 
 env:
   LAYALI_API_URL: https://165-227-128-113.sslip.io
+  PRODUCTION_PACKAGE: com.aistudio.layalilounge.x9m4kp
 
 jobs:
-  preview:
+  compatible-release:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -27,21 +28,20 @@ jobs:
         with:
           gradle-version: '9.3.1'
 
-      - name: Android SDK license setup
+      - name: Android SDK licenses
         run: |
           export ANDROID_SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
           mkdir -p "$ANDROID_SDK_ROOT/licenses"
-          printf "\\n24333f8a63b6825ea9c5514f83c2829b004d1fee\\nd56f5187479451eabf01fb78af6dfcb131a6481e\\n84831b9409646a918e30573bab4c9c91346d8abd" > "$ANDROID_SDK_ROOT/licenses/android-sdk-license"
-          printf "\\n84831b9409646a918e30573bab4c9c91346d8abd\\n504667f4c0de7af1a06de9f4b1727b84351f2910" > "$ANDROID_SDK_ROOT/licenses/android-sdk-preview-license"
+          printf "\n24333f8a63b6825ea9c5514f83c2829b004d1fee\nd56f5187479451eabf01fb78af6dfcb131a6481e\n84831b9409646a918e30573bab4c9c91346d8abd" > "$ANDROID_SDK_ROOT/licenses/android-sdk-license"
 
-      - name: Prepare existing application build inputs
+      - name: Prepare original-package Firebase metadata
         run: |
-          if [ ! -f .env ]; then
-            cp .env.example .env 2>/dev/null || touch .env
-          fi
+          if [ ! -f .env ]; then cp .env.example .env 2>/dev/null || touch .env; fi
           if [ ! -f app/google-services.json ]; then
-            cat > app/google-services.json <<'EOF'
-          {
+            python3 - <<'PY'
+          import json
+          from pathlib import Path
+          doc = {
             "project_info": {
               "project_number": "335825631510",
               "project_id": "gen-lang-client-0262570811",
@@ -53,51 +53,106 @@ jobs:
                 "android_client_info": {"package_name": "com.aistudio.layalilounge.x9m4kp"}
               },
               "api_key": [{"current_key": "AIzaSyAdn0nUzmGACcTw__y_cuDOyLfgnDxQTSY"}],
-              "oauth_client": [{"client_id": "335825631510-phs602etm4vsum7vju7gmgjic1nuh4de.apps.googleusercontent.com", "client_type": 3}]
+              "oauth_client": [{
+                "client_id": "335825631510-phs602etm4vsum7vju7gmgjic1nuh4de.apps.googleusercontent.com",
+                "client_type": 3
+              }]
             }],
             "configuration_version": "1"
           }
-          EOF
+          Path('app/google-services.json').write_text(json.dumps(doc))
+          PY
           fi
-
-      - name: Preserve the installed application identity
-        run: |
           python3 - <<'PY'
-          from pathlib import Path
           import json
-          p=Path('app/google-services.json')
-          j=json.loads(p.read_text())
-          for c in j['client']:
-              c['client_info']['android_client_info']['package_name']='com.aistudio.layalilounge.x9m4kp.qa116'
-          p.write_text(json.dumps(j))
+          from pathlib import Path
+          doc=json.loads(Path("app/google-services.json").read_text())
+          ids={client["client_info"]["android_client_info"]["package_name"] for client in doc["client"]}
+          assert "com.aistudio.layalilounge.x9m4kp" in ids, "Original Firebase application ID missing"
+          assert not any(x.endswith(".qa116") for x in ids), "QA application would be a different install"
+          print("Original application identity validated")
           PY
 
-      - name: Compile and test installed application update
-        run: gradle testDebugUnitTest assembleRelease "-PLAYALI_API_URL=${LAYALI_API_URL}" -PRELAXIA_UNSIGNED_BUILD=true -PRELAXIA_QA_SIDE_BY_SIDE=true --no-daemon --stacktrace
-
-      - name: Verify release metadata and export signing tools
+      - name: Run Android UI and unit tests (no external Firebase emulator)
         run: |
-          python3 - <<'PYVERIFY'
+          gradle testDebugUnitTest \
+            --tests com.example.ui.auth.AdultWelcomeScreenTest \
+            --tests com.example.ui.screens.ReferenceDesignTest \
+            --tests com.example.data.api.SecureSessionStoreTest \
+            --no-daemon --stacktrace
+
+      - name: Compile original-package non-debuggable release
+        run: |
+          gradle assembleRelease "-PLAYALI_API_URL=${LAYALI_API_URL}" \
+            -PRELAXIA_UNSIGNED_BUILD=true --no-daemon --stacktrace
+
+      - name: Validate original package and release metadata
+        run: |
+          python3 - <<'PY'
           import json
           from pathlib import Path
-          m=json.loads(Path('app/build/outputs/apk/release/output-metadata.json').read_text())
-          assert m['applicationId']=='com.aistudio.layalilounge.x9m4kp.qa116'
-          assert all(e['versionCode']==41 and e['versionName']=='11.7.3' for e in m['elements'])
-          PYVERIFY
+          meta=json.loads(Path("app/build/outputs/apk/release/output-metadata.json").read_text())
+          assert meta["applicationId"] == "com.aistudio.layalilounge.x9m4kp", "Package identity changed"
+          assert all(x["versionCode"] == 41 and x["versionName"] == "11.7.3" for x in meta["elements"])
+          apk=Path("app/build/outputs/apk/release/app-release-unsigned.apk")
+          assert apk.is_file() and apk.stat().st_size > 1_000_000
+          PY
           tools_dir="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1 | xargs dirname)"
-          mkdir -p installed-update
-          cp app/build/outputs/apk/release/app-release-unsigned.apk installed-update/Relaxia-11.7.3-release-unsigned.apk
-          cp "$tools_dir/lib/apksigner.jar" installed-update/
-          cp "$tools_dir/zipalign" "$tools_dir/aapt" installed-update/
-          "$tools_dir/aapt" dump badging installed-update/Relaxia-11.7.3-release-unsigned.apk > installed-update/badging.txt
-          if grep -q 'application-debuggable' installed-update/badging.txt; then exit 1; fi
-          "$tools_dir/zipalign" -c -P 16 4 installed-update/Relaxia-11.7.3-release-unsigned.apk
-          sha256sum installed-update/Relaxia-11.7.3-release-unsigned.apk > installed-update/SHA256SUMS
+          "$tools_dir/aapt" dump badging app/build/outputs/apk/release/app-release-unsigned.apk > release-badging.txt
+          if grep -q 'application-debuggable' release-badging.txt; then
+            echo "::error::Release must not be debuggable"; exit 1
+          fi
+          grep -F "package: name='com.aistudio.layalilounge.x9m4kp'" release-badging.txt
 
-      - name: Upload unsigned release for local signing with existing key
+      - name: Require original signing key for same-app installation
+        env:
+          RELAXIA_KEYSTORE_BASE64: ${{ secrets.RELAXIA_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "$RELAXIA_KEYSTORE_BASE64" ]; then
+            echo "::error::Cannot issue a compatible APK: original signing key is not configured. Never replace it or change package ID."
+            exit 1
+          fi
+          umask 077
+          printf '%s' "$RELAXIA_KEYSTORE_BASE64" | base64 -d > original-relaxia.keystore
+          actual="$(keytool -exportcert -keystore original-relaxia.keystore -storepass android -alias androiddebugkey | sha256sum | cut -d ' ' -f 1)"
+          expected='eadf736b5beaa7fa9395c633b83ab9a0892126219ef3f05ae59eb511465c501f'
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::Original 11.3 signing certificate mismatch. A different signature cannot update the installed app."
+            exit 1
+          fi
+
+      - name: Sign, verify and export real APK for original app
+        run: |
+          set -euo pipefail
+          tools_dir="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1 | xargs dirname)"
+          "$tools_dir/zipalign" -f -p 4 \
+            app/build/outputs/apk/release/app-release-unsigned.apk \
+            Relaxia-11.7.3-aligned.apk
+          "$tools_dir/apksigner" sign \
+            --ks original-relaxia.keystore \
+            --ks-key-alias androiddebugkey \
+            --ks-pass pass:android \
+            --key-pass pass:android \
+            --out Relaxia-11.7.3.apk \
+            Relaxia-11.7.3-aligned.apk
+          "$tools_dir/apksigner" verify --verbose --print-certs Relaxia-11.7.3.apk
+          "$tools_dir/zipalign" -c -v 4 Relaxia-11.7.3.apk
+          "$tools_dir/aapt" dump badging Relaxia-11.7.3.apk | grep -F "package: name='com.aistudio.layalilounge.x9m4kp'"
+          cert="$("$tools_dir/apksigner" verify --print-certs Relaxia-11.7.3.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -1)"
+          test "$cert" = "eadf736b5beaa7fa9395c633b83ab9a0892126219ef3f05ae59eb511465c501f"
+          sha256sum Relaxia-11.7.3.apk > Relaxia-11.7.3.SHA256
+
+      - name: Upload installable update ONLY after successful signature verification
         uses: actions/upload-artifact@v4
         with:
-          name: Relaxia-11.7.3-installed-release-unsigned
-          path: installed-update/
-          retention-days: 7
+          name: Relaxia-11.7.3-original-app-signed
+          path: |
+            Relaxia-11.7.3.apk
+            Relaxia-11.7.3.SHA256
+          retention-days: 14
           if-no-files-found: error
+
+      - name: Remove temporary signing material
+        if: always()
+        run: rm -f original-relaxia.keystore
