@@ -99,7 +99,7 @@ def action(request,row,a):
     if kind=='gift':
         code=p.get('gift_code')
         if not code:code={100:'rose',300:'heart',1000:'star'}.get(p.get('price_cents'))
-        gift=LiveGiftDefinition.objects.filter(pk=code,enabled=True).first() if code in LUXURY_GIFT_CODES else None
+        gift=LiveGiftDefinition.objects.filter(pk=code,enabled=True).first()
         if not row.gifts_enabled or not gift:raise ApiError('gift_unavailable',409)
         if p.get('confirmed') is not True or type(p.get('price_cents')) is not int or p['price_cents']!=gift.price_cents:raise ApiError('price_confirmation_required',409)
         combo=p.get('combo_count',1)
