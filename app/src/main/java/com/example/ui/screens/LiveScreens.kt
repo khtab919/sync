@@ -28,6 +28,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Color
@@ -237,7 +238,19 @@ private fun liveError(e:Exception)=when(e.message){
             }
         }
     }
-    BackHandler{finish()}
+    val keyboardVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    BackHandler {
+        if (keyboardVisible) {
+            // Android back should dismiss Gboard first, not exit a live stream.
+            view?.evaluateJavascript(
+                "(function(){if(document.activeElement && document.activeElement.blur)document.activeElement.blur()})()",
+                null
+            )
+            val keyboard = context.getSystemService(android.content.Context.INPUT_METHOD_SERVICE)
+                as? android.view.inputmethod.InputMethodManager
+            view?.windowToken?.let { keyboard?.hideSoftInputFromWindow(it, 0) }
+        } else finish()
+    }
     // Screenshots are allowed in Relaxia live rooms. Do not set FLAG_SECURE.
     DisposableEffect(Unit){onDispose{view?.loadUrl("about:blank");view?.destroy()}}
     DisposableEffect(granted){
