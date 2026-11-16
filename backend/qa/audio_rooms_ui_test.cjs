@@ -172,6 +172,11 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
     drawState(qaRoom);
    });
    assert.equal(await page.locator('.comment-actions').count(),1,'moderation actions are not repeated inline');
+   // Permissions may change without changing comment text; stale controls must disappear.
+   await page.evaluate(()=>{qaRoom={...qaRoom,manage_room:false};drawState(qaRoom)});
+   assert.equal(await page.locator('.comment-actions').count(),0,'moderation controls follow server permissions');
+   await page.evaluate(()=>{qaRoom={...qaRoom,manage_room:true};drawState(qaRoom)});
+   assert.equal(await page.locator('.comment-actions').count(),1,'moderation controls return only with permission');
    await page.locator('.comment-actions').click();
    await page.getByRole('button',{name:'تثبيت التعليق',exact:true}).click();
    assert.equal(await page.evaluate(()=>sent.filter(a=>a.action==='pin_comment').length),1);
