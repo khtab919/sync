@@ -45,7 +45,8 @@ private data class StorePaymentMethod(val code:String,val name:String,val descri
 private fun storeMethods(info:JSONObject):List<StorePaymentMethod> = listOf(
     StorePaymentMethod("usdt","USDT · BEP20","تحويل USDT على شبكة BNB Smart Chain","₮",info.optString("address").isNotBlank()),
     StorePaymentMethod("shamcash","شام كاش","تحويل محلي مع إثبات الدفع","◈",info.optBoolean("shamcash_enabled")),
-    StorePaymentMethod("nowpayments","NOWPayments","فاتورة إلكترونية تؤكدها بوابة الدفع","✦",info.optBoolean("nowpayments_enabled"))
+    StorePaymentMethod("nowpayments","NOWPayments","فاتورة إلكترونية تؤكدها بوابة الدفع","✦",info.optBoolean("nowpayments_enabled")),
+    StorePaymentMethod("stripe","Visa / Mastercard · Stripe","دفع بالبطاقات عبر صفحة Stripe الآمنة","▣",info.optBoolean("stripe_enabled"))
 )
 
 private fun storePackages(info:JSONObject):List<StorePackage>{
@@ -266,19 +267,38 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
             )
             Text("المطلوب: ${quote.optString("payment_amount")} ${quote.optString("payment_currency")}",style=MaterialTheme.typography.titleLarge)
             val rail=quote.optString("method")
-            if(rail=="nowpayments") {
-                Text("دفع آمن عبر NOWPayments",style=MaterialTheme.typography.titleLarge)
-                Text("تختار العملة في صفحة البوابة. الرصيد يضاف بعد اكتمال الدفع وتأكيد الخادم؛ العودة من صفحة الدفع وحدها لا تعتمد العملية.",style=MaterialTheme.typography.bodySmall)
+            if(rail=="nowpayments"||rail=="stripe") {
+                val viaStripe=rail=="stripe"
+                Text(if(viaStripe)"الدفع بالفيزا أو ماستركارد"else"دفع آمن عبر NOWPayments",style=MaterialTheme.typography.titleLarge)
+                Text(
+                    if(viaStripe)"سيُفتح Stripe Checkout خارج التطبيق. يُضاف الرصيد فقط بعد تأكيد Stripe الموقّع من الخادم؛ الرجوع إلى التطبيق لا يؤكد الدفع."
+                    else "تختار العملة في صفحة البوابة. الرصيد يضاف بعد اكتمال الدفع وتأكيد الخادم؛ العودة من صفحة الدفع وحدها لا تعتمد العملية.",
+                    style=MaterialTheme.typography.bodySmall
+                )
                 Button(onClick={perform{
-                    val invoice=api.request("/api/nowpayments/invoices","POST",JSONObject().put("quote_id",quote.getString("id")))
-                    val link=invoice.getString("invoice_url");val parsed=Uri.parse(link)
-                    require(parsed.scheme=="https"&&parsed.host in listOf("nowpayments.io","www.nowpayments.io")&&parsed.userInfo==null)
-                    invoiceUrl=link;uriHandler.openUri(link)
-                }},enabled=!busy,modifier=Modifier.fillMaxWidth().height(52.dp)){Text(if(invoiceUrl.isBlank())"فتح بوابة الدفع"else"فتح فاتورة الدفع مجددًا")}
+                    val endpoint=if(viaStripe)"/api/stripe/checkout"else"/api/nowpayments/invoices"
+                    val invoice=api.request(endpoint,"POST",JSONObject().put("quote_id",quote.getString("id")))
+                    val link=invoice.getString(if(viaStripe)"checkout_url"else"invoice_url")
+                    val parsed=Uri.parse(link)
+                    val trusted=if(viaStripe)parsed.host=="checkout.stripe.com"
+                        else parsed.host in listOf("nowpayments.io","www.nowpayments.io")
+                    require(parsed.scheme=="https"&&trusted&&parsed.userInfo==null)
+                    invoiceUrl=link
+                    uriHandler.openUri(link)
+                }},enabled=!busy,modifier=Modifier.fillMaxWidth().height(52.dp)){
+                    Text(if(invoiceUrl.isBlank())"فتح بوابة الدفع"else"فتح صفحة الدفع مجددًا")
+                }
                 OutlinedButton(onClick={perform{
-                    val result=api.request("/api/nowpayments/status/${quote.getString("id")}")
-                    if(result.optBoolean("credited")){quoteText="";reload();note="تم تأكيد الدفع وإضافة الرصيد."}else note="الدفع بانتظار اكتمال تأكيد البوابة. لم يضف الرصيد بعد."
-                }},enabled=!busy&&invoiceUrl.isNotBlank(),modifier=Modifier.fillMaxWidth()){Text("تحقق من الدفع وتحديث الرصيد")}
+                    val route=if(viaStripe)"/api/stripe/status/"else"/api/nowpayments/status/"
+                    val result=api.request(route+quote.getString("id"))
+                    if(result.optBoolean("credited")){
+                        quoteText="";invoiceUrl="";reload();note="تم تأكيد الدفع وإضافة الرصيد."
+                    }else if(result.optBoolean("review_required")){
+                        note="العملية قيد المراجعة المالية. لم نؤكد إضافة رصيد جديد."
+                    }else note="الدفع بانتظار تأكيد البوابة. لا يمكن إضافة الكوينز قبل التحقق."
+                }},enabled=!busy&&invoiceUrl.isNotBlank(),modifier=Modifier.fillMaxWidth()){
+                    Text("التحقق من الدفع وتحديث الرصيد")
+                }
             } else {
             Text(if(rail=="usdt")"USDT على BEP20 فقط"else"استلام عبر شام كاش",fontWeight=FontWeight.Bold)
             Surface(color=androidx.compose.ui.graphics.Color.White,shape=RoundedCornerShape(24.dp)) { ReferenceImage(quote.optString("qr_url"),Modifier.fillMaxWidth().height(256.dp).padding(16.dp),contentScale=androidx.compose.ui.layout.ContentScale.Fit) }
