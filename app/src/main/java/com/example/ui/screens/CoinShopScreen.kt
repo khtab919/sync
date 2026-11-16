@@ -27,6 +27,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -38,7 +39,7 @@ import org.json.JSONObject
 import java.math.BigDecimal
 import java.time.Instant
 
-private data class StorePackage(val coins:Int,val bonusPoints:Int)
+private data class StorePackage(val coins:Int,val bonusPoints:Int){ val id:String get()="pack_$coins" }
 private data class StorePaymentMethod(val code:String,val name:String,val description:String,val symbol:String,val enabled:Boolean)
 
 private fun storeMethods(info:JSONObject):List<StorePaymentMethod> = listOf(
@@ -91,6 +92,7 @@ private fun Coin3DArtwork(coins:Int) {
 internal fun CoinPackage(coins:Int,bonus:Int,dollars:String,selected:Boolean,badge:String?,choose:()->Unit){
     Surface(
         onClick=choose,
+        modifier=Modifier.testTag("pack_$coins"),
         shape=RoundedCornerShape(16.dp),
         color=CoinGlass,
         contentColor=Color.White,
