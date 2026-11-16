@@ -1,0 +1,103 @@
+name: Build installed Relaxia release update
+
+on:
+  push:
+    branches:
+      - fix/live-controls-reels-20261116
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  LAYALI_API_URL: https://165-227-128-113.sslip.io
+
+jobs:
+  preview:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+
+      - name: Android SDK license setup
+        run: |
+          export ANDROID_SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          mkdir -p "$ANDROID_SDK_ROOT/licenses"
+          printf "\\n24333f8a63b6825ea9c5514f83c2829b004d1fee\\nd56f5187479451eabf01fb78af6dfcb131a6481e\\n84831b9409646a918e30573bab4c9c91346d8abd" > "$ANDROID_SDK_ROOT/licenses/android-sdk-license"
+          printf "\\n84831b9409646a918e30573bab4c9c91346d8abd\\n504667f4c0de7af1a06de9f4b1727b84351f2910" > "$ANDROID_SDK_ROOT/licenses/android-sdk-preview-license"
+
+      - name: Prepare existing application build inputs
+        run: |
+          if [ ! -f .env ]; then
+            cp .env.example .env 2>/dev/null || touch .env
+          fi
+          if [ ! -f app/google-services.json ]; then
+            cat > app/google-services.json <<'EOF'
+          {
+            "project_info": {
+              "project_number": "335825631510",
+              "project_id": "gen-lang-client-0262570811",
+              "storage_bucket": "gen-lang-client-0262570811.firebasestorage.app"
+            },
+            "client": [{
+              "client_info": {
+                "mobilesdk_app_id": "1:335825631510:android:c3c9ab3d14056ce9c17837",
+                "android_client_info": {"package_name": "com.aistudio.layalilounge.x9m4kp"}
+              },
+              "api_key": [{"current_key": "AIzaSyAdn0nUzmGACcTw__y_cuDOyLfgnDxQTSY"}],
+              "oauth_client": [{"client_id": "335825631510-phs602etm4vsum7vju7gmgjic1nuh4de.apps.googleusercontent.com", "client_type": 3}]
+            }],
+            "configuration_version": "1"
+          }
+          EOF
+          fi
+
+      - name: Preserve the installed application identity
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          p=Path('app/google-services.json')
+          j=json.loads(p.read_text())
+          for c in j['client']:
+              c['client_info']['android_client_info']['package_name']='com.aistudio.layalilounge.x9m4kp.qa116'
+          p.write_text(json.dumps(j))
+          PY
+
+      - name: Compile and test installed application update
+        run: gradle testReleaseUnitTest assembleRelease "-PLAYALI_API_URL=${LAYALI_API_URL}" -PRELAXIA_UNSIGNED_BUILD=true -PRELAXIA_QA_SIDE_BY_SIDE=true --no-daemon --stacktrace
+
+      - name: Verify release metadata and export signing tools
+        run: |
+          python3 - <<'PYVERIFY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('app/build/outputs/apk/release/output-metadata.json').read_text())
+          assert m['applicationId']=='com.aistudio.layalilounge.x9m4kp.qa116'
+          assert all(e['versionCode']==41 and e['versionName']=='11.7.3' for e in m['elements'])
+          PYVERIFY
+          tools_dir="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1 | xargs dirname)"
+          mkdir -p installed-update
+          cp app/build/outputs/apk/release/app-release-unsigned.apk installed-update/Relaxia-11.7.3-release-unsigned.apk
+          cp "$tools_dir/lib/apksigner.jar" installed-update/
+          cp "$tools_dir/zipalign" "$tools_dir/aapt" installed-update/
+          "$tools_dir/aapt" dump badging installed-update/Relaxia-11.7.3-release-unsigned.apk > installed-update/badging.txt
+          if grep -q 'application-debuggable' installed-update/badging.txt; then exit 1; fi
+          "$tools_dir/zipalign" -c -P 16 4 installed-update/Relaxia-11.7.3-release-unsigned.apk
+          sha256sum installed-update/Relaxia-11.7.3-release-unsigned.apk > installed-update/SHA256SUMS
+
+      - name: Upload unsigned release for local signing with existing key
+        uses: actions/upload-artifact@v4
+        with:
+          name: Relaxia-11.7.3-installed-release-unsigned
+          path: installed-update/
+          retention-days: 7
+          if-no-files-found: error
