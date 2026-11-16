@@ -248,7 +248,7 @@ private fun liveError(e:Exception)=when(e.message){
         if(event==Lifecycle.Event.ON_STOP)view?.evaluateJavascript("window.setNativeBackground?.(true)",null)
         if(event==Lifecycle.Event.ON_START)view?.evaluateJavascript("window.setNativeBackground?.(false)",null)
     };lifecycle.addObserver(observer);onDispose{lifecycle.removeObserver(observer)}}
-    Surface(Modifier.fillMaxSize(),color=Color(0xFF080F23),contentColor=Color.White){Column(Modifier.fillMaxSize().safeDrawingPadding()){
+    Surface(Modifier.fillMaxSize(),color=Color(0xFF080F23),contentColor=Color.White){Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding()){
         if(error.isNotBlank()){
             Column(Modifier.fillMaxWidth().padding(22.dp),verticalArrangement=Arrangement.spacedBy(16.dp)){
                 Icon(Icons.Rounded.ErrorOutline,"تعذر تحميل البث",Modifier.size(32.dp),tint=Color(0xFFF4BC97))
