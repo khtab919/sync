@@ -1,4 +1,4 @@
-name: Build Relaxia 11.7.4 with NEW signing identity
+name: Build Relaxia 11.7.5 with NEW signing identity
 
 on:
   push:
@@ -94,7 +94,7 @@ jobs:
           from pathlib import Path
           meta=json.loads(Path("app/build/outputs/apk/release/output-metadata.json").read_text())
           assert meta["applicationId"] == "com.aistudio.layalilounge.x9m4kp", "Package identity changed"
-          assert all(x["versionCode"] == 42 and x["versionName"] == "11.7.4" for x in meta["elements"])
+          assert all(x["versionCode"] == 43 and x["versionName"] == "11.7.5" for x in meta["elements"])
           apk=Path("app/build/outputs/apk/release/app-release-unsigned.apk")
           assert apk.is_file() and apk.stat().st_size > 1_000_000
           PY
@@ -108,7 +108,7 @@ jobs:
       - name: Preserve unsigned production build for local validation
         uses: actions/upload-artifact@v4
         with:
-          name: Relaxia-11.7.4-unsigned
+          name: Relaxia-11.7.5-unsigned
           path: app/build/outputs/apk/release/app-release-unsigned.apk
           retention-days: 7
           if-no-files-found: error
@@ -140,28 +140,28 @@ jobs:
           tools_dir="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1 | xargs dirname)"
           "$tools_dir/zipalign" -f -p 4 \
             app/build/outputs/apk/release/app-release-unsigned.apk \
-            Relaxia-11.7.4-aligned.apk
+            Relaxia-11.7.5-aligned.apk
           "$tools_dir/apksigner" sign \
             --ks relaxia-new-release.p12 --ks-type PKCS12 \
             --ks-key-alias upload \
             --ks-pass env:RELAXIA_NEW_STORE_PASSWORD \
             --key-pass env:RELAXIA_NEW_STORE_PASSWORD \
-            --out Relaxia-11.7.4.apk \
-            Relaxia-11.7.4-aligned.apk
-          "$tools_dir/apksigner" verify --verbose --print-certs Relaxia-11.7.4.apk
-          "$tools_dir/zipalign" -c -v 4 Relaxia-11.7.4.apk
-          "$tools_dir/aapt" dump badging Relaxia-11.7.4.apk | grep -F "package: name='com.aistudio.layalilounge.x9m4kp'"
-          cert="$("$tools_dir/apksigner" verify --print-certs Relaxia-11.7.4.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -1)"
+            --out Relaxia-11.7.5.apk \
+            Relaxia-11.7.5-aligned.apk
+          "$tools_dir/apksigner" verify --verbose --print-certs Relaxia-11.7.5.apk
+          "$tools_dir/zipalign" -c -v 4 Relaxia-11.7.5.apk
+          "$tools_dir/aapt" dump badging Relaxia-11.7.5.apk | grep -F "package: name='com.aistudio.layalilounge.x9m4kp'"
+          cert="$("$tools_dir/apksigner" verify --print-certs Relaxia-11.7.5.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -1)"
           test "$cert" = "879960ff8f429775285cba8be567a5a1a6f6b5d94d83e264bd67115bd9b9d89c"
-          sha256sum Relaxia-11.7.4.apk > Relaxia-11.7.4.SHA256
+          sha256sum Relaxia-11.7.5.apk > Relaxia-11.7.5.SHA256
 
       - name: Upload NEW-signature APK (requires reinstall if old key installed)
         uses: actions/upload-artifact@v4
         with:
-          name: Relaxia-11.7.4-new-signature-reinstall-required
+          name: Relaxia-11.7.5-new-signature-reinstall-required
           path: |
-            Relaxia-11.7.4.apk
-            Relaxia-11.7.4.SHA256
+            Relaxia-11.7.5.apk
+            Relaxia-11.7.5.SHA256
           retention-days: 14
           if-no-files-found: error
 
