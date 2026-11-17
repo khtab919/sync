@@ -224,19 +224,27 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    const gift=await page.evaluate(()=>sent.find(a=>a.action==='gift'));
    assert.equal(gift.price_cents,10000);assert.equal(gift.combo_count,10);assert.equal(gift.recipient_id,1);assert.ok(gift.request_key);
    assert.equal(await page.locator('#sheet').evaluate(el=>el.open),false,'confirmed gift closes the store');
-   // The broadcaster may browse gifts, but cannot pay themselves.
+   // A gift from the quick button defaults to the host; a seat overrides it.
+   // A broadcaster must never send to themselves, even when gifts are browsable.
    await page.evaluate(()=>{config.userId=1;qaRoom={...qaRoom,speakers:[{identity:'host-1',user_id:1,name:'مضيف تجريبي',owner:true,mode:'audio',avatar_url:''}]};drawState(qaRoom)});
    await page.locator('#bigGiftBtn').click();
-   assert.equal(await page.locator('select[aria-label="مستلم الهدية"]').isDisabled(),true,'broadcaster cannot gift themselves');
-   assert.ok((await page.locator('.gift-recipient-hint').innerText()).includes('لنفسك'),'empty recipient state explains self-gift prevention');
-   assert.equal(await page.locator('.gift-card').first().isEnabled(),true,'browsing gifts remains possible');
-   assert.equal(await page.locator('.gift-send').isDisabled(),true,'no financial operation without a valid receiver');
-   // A newly approved speaker must become selectable without reopening the store.
+   assert.equal(await page.locator('select[aria-label="مستلم الهدية"]').count(),0,'no redundant recipient dropdown in gift sheet');
+   assert.ok((await page.locator('.gift-target-summary').innerText()).includes('لنفسك'),'self gifting clearly blocked');
+   assert.equal(await page.locator('.gift-card').first().isEnabled(),true,'gift catalog stays browseable');
+   assert.equal(await page.locator('.gift-send').isDisabled(),true,'no charge without eligible target');
    await page.evaluate(()=>{qaRoom={...qaRoom,speakers:[...qaRoom.speakers,{identity:'guest-3',user_id:3,name:'ضيف معتمد',owner:false,mode:'audio',avatar_url:''}]};drawState(qaRoom)});
-   assert.equal(await page.locator('select[aria-label="مستلم الهدية"]').isEnabled(),true);
-   assert.equal(await page.locator('select[aria-label="مستلم الهدية"]').inputValue(),'3','recipient list refreshes with new approved speaker');
-   assert.equal(await page.locator('.gift-send').isEnabled(),true);
+   assert.equal(await page.locator('.gift-send').isDisabled(),true,'no silent fallback to a guest for host');
    await page.locator('#closeSheet').click();
+   const sentBeforeSeat=await page.evaluate(()=>sent.filter(a=>a.action==='gift').length);
+   await page.locator('.audio-seat[data-identity="guest-3"]').click();
+   assert.equal(await page.locator('#sheet').evaluate(el=>el.open),true,'occupied seat opens gift store');
+   assert.ok((await page.locator('.gift-target-summary').innerText()).includes('ضيف معتمد'),'selected speaker is the gift recipient');
+   assert.equal(await page.locator('.gift-send').isEnabled(),true,'another speaker can receive gift');
+   assert.equal(await page.evaluate(()=>sent.filter(a=>a.action==='gift').length),sentBeforeSeat,'seat tap never charges coins');
+   page.once('dialog',d=>d.accept());
+   await page.locator('.gift-send').click();
+   const sentGifts=await page.evaluate(()=>sent.filter(a=>a.action==='gift'));
+   assert.equal(sentGifts[sentGifts.length-1].recipient_id,3,'gift goes to chosen approved seat only after confirmation');
    await page.evaluate(()=>{config.userId=2;qaRoom={...qaRoom,speakers:[qaRoom.speakers[0]]};drawState(qaRoom)});
    if(process.env.LIVE_PREVIEW_DIR){fs.mkdirSync(process.env.LIVE_PREVIEW_DIR,{recursive:true});await page.screenshot({path:path.join(process.env.LIVE_PREVIEW_DIR,`audio-room-${width}.png`)});await page.locator('#bigGiftBtn').click();await page.getByRole('button',{name:'فاخرة',exact:true}).click();await page.screenshot({path:path.join(process.env.LIVE_PREVIEW_DIR,`audio-gifts-${width}.png`)});await page.locator('#closeSheet').click();}
    await page.evaluate(()=>{giftQueue=[{code:'gift_blue_whale',name:'الحوت الأزرق',symbol:'🐋',effect:'depth',sender:'داعم تجريبي',recipient:'مضيف تجريبي',combo_count:10,total_price_cents:100000}];playEffects()});
