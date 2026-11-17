@@ -123,6 +123,39 @@ def preview(request,user_id):
     shown_frame=active_frame.value if active_frame else (
         p.selected_frame if p.selected_frame in progress['owned_frames'] else 0)
     d={'read_only':True,'banner':'وضع معاينة إدارية','profile':{'public_id':p.public_id,'username':u.username,'display_name':p.display_name,'avatar_url':p.avatar_url,'bio':p.bio,'creator':p.creator,'gender':p.gender,'publishing_allowed':p.publishing_allowed,'identity_verified':p.identity_verified,'frame':shown_frame,'broadcast_allowed':p.broadcast_allowed,'created_at':u.date_joined,'level':progress['level'],'earned_level':progress['earned_level'],'level_color':progress['level_color'],'vip_tier':progress['vip_tier']},'services':rows(Service.objects.filter(owner=u),['id','title','active','approved','price_cents','duration_minutes']),'bookings':rows(Booking.objects.filter(Q(buyer=u)|Q(service__owner=u)).order_by('-created_at'),['id','status','price_cents','created_at']),'benefits':rows(BenefitGrant.objects.filter(user=u,expires_at__gt=timezone.now()),['kind','value','expires_at']),'communication':{'sent':Message.objects.filter(sender=u).count(),'received':Message.objects.filter(recipient=u).count(),'delivered':Message.objects.filter(sender=u,delivered_at__isnull=False).count(),'read':Message.objects.filter(sender=u,read_at__isnull=False).count(),'calls':rows(InternalCall.objects.filter(Q(caller=u)|Q(callee=u)).order_by('-created_at'),['id','mode','status','created_at'])}}
+    # Read-only account view uses the same actual posted objects and frame
+    # authority as the public profile; no impersonation or access to private DMs.
+    from django.db.models import Count
+    from .commerce import grant_url
+    can_moderate_posts='store.view' in scopes(request.actor)
+    published_reels=Reel.objects.filter(owner=u).annotate(like_total=Count('likes')).order_by('-created_at')[:50]
+    d['reels']=[{
+        'id':r.pk,'caption':r.caption,'approved':r.approved,
+        'likes':r.like_total,'created_at':r.created_at,
+        'video_url':(grant_url(request,r.media) if r.media_id else r.video_url)
+            if (r.approved or can_moderate_posts) else '',
+    } for r in published_reels]
+    services_q=Service.objects.filter(owner=u).order_by('-created_at')[:50]
+    d['services']=[{
+        'id':o.pk,'title':o.title,'description':o.description,
+        'category':o.category,'price_cents':o.price_cents,
+        'duration_minutes':o.duration_minutes,'active':o.active,
+        'approved':o.approved,'created_at':o.created_at,
+        'image_url':(grant_url(request,o.image) if o.image_id else o.image_url)
+            if (o.approved and o.active or can_moderate_posts) else '',
+    } for o in services_q]
+    d['profile'].update({
+        'xp_points':progress['xp_points'],'next_level_xp':progress['next_level_xp'],
+        'owned_frames':progress['owned_frames'],
+        'followers':Follow.objects.filter(creator=u).count(),
+        'following':Follow.objects.filter(user=u).count(),
+        'services_count':Service.objects.filter(owner=u).count(),
+        'reels_count':Reel.objects.filter(owner=u).count(),
+    })
+    d['live_rooms']=rows(
+        LiveBroadcast.objects.filter(owner=u).order_by('-created_at'),
+        ['id','title','mode','status','viewers','created_at'])
+    # Financial history is only for MFA-authenticated finance-scoped admins.
     if 'finance.view' in scopes(request.actor):
         w=Wallet.objects.filter(user=u).first();d['wallet']={'balance_cents':w.balance_cents if w else 0,'reserved_cents':w.reserved_cents if w else 0};d['operations']=rows(FinancialOperation.objects.filter(Q(buyer=u)|Q(creator=u)).order_by('-created_at'),['id','kind','amount_cents','status','created_at'])
     return JsonResponse(d)
