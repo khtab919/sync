@@ -55,6 +55,10 @@ class ReferenceDesignTest {
         }
         compose.onNodeWithText("أهلًا بعودتك").assertExists()
         compose.onNodeWithText("الجنس").assertDoesNotExist()
+        compose.onNodeWithText("المسؤول يدخل من الشاشة نفسها بحسابه الإداري؛ تظهر لوحة الإدارة بعد الدخول والتحقق الثنائي.").assertDoesNotExist()
+        compose.onNodeWithText("البريد الإلكتروني").assertExists()
+        compose.onNodeWithText("كلمة المرور").assertExists()
+        compose.onNodeWithText("دخول").assertIsNotEnabled()
         screenshot("01-login")
         compose.onNodeWithText("جديد هنا؟ أنشئ حسابًا").performScrollTo().performClick()
         compose.onNodeWithText("Relaxia").assertExists()
