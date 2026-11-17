@@ -1642,3 +1642,45 @@ body.audio-mode #audioStage .audio-seat.gift-seat-glow {
   border:1px solid #B8D2F099;
   box-shadow:inset 0 4px 14px #FFFFFF3A,0 14px 25px #05132999;
 }
+
+/* rooms-controls-28: gift recipient is selected by seat, default host.
+   Remove the unused select and reduce vertical space without hiding cards. */
+#sheet[open]:has(.gift-target-summary) #sheetBody{
+  gap:7px;
+}
+#sheet .gift-balance{
+  min-height:32px;
+  padding:5px 10px;
+  border-radius:12px;
+  font-size:12px;
+}
+#sheet .gift-target-summary{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-height:34px;
+  padding:5px 10px;
+  border:1px solid #6EA9E16A;
+  border-radius:12px;
+  color:#F0F6FF;
+  background:#16365F;
+  font-size:13px;
+  font-weight:650;
+  text-align:center;
+}
+#sheet .gift-target-summary.gift-target-unavailable{
+  color:#F5C7A9;
+  background:#223352;
+  border-color:#D5A98180;
+  line-height:1.45;
+}
+#sheet .gift-tabs{
+  padding:0 0 4px;
+}
+#sheet .gift-grid .gift-card{
+  min-height:136px;
+}
+body.audio-mode #audioStage .audio-seat[data-identity]:focus-visible{
+  outline:2px solid #F2D19C;
+  outline-offset:3px;
+}
