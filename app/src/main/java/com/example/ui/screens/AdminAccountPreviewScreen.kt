@@ -138,9 +138,9 @@ internal fun AdminAccountPreviewScreen(snapshot: JSONObject, onBack: () -> Unit)
                                 Text("المستوى المكتسب: " + person.optInt("earned_level", 1))
                                 Text("الإطارات المملوكة: " +
                                     (person.optJSONArray("owned_frames")?.length() ?: 0))
-                                Text("التوثيق: " + if(person.optBoolean("identity_verified")) "موثق" else "غير موثق")
-                                Text("النشر: " + if(person.optBoolean("publishing_allowed")) "متاح" else "مقيد")
-                                Text("البث: " + if(person.optBoolean("broadcast_allowed")) "متاح" else "مقيد")
+                                Text("التوثيق: " + (if(person.optBoolean("identity_verified")) "موثق" else "غير موثق"))
+                                Text("النشر: " + (if(person.optBoolean("publishing_allowed")) "متاح" else "مقيد"))
+                                Text("البث: " + (if(person.optBoolean("broadcast_allowed")) "متاح" else "مقيد"))
                             } }
                             item { PreviewCard("النشاط") {
                                 Text("البثوث: " + rooms.size)
