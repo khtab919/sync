@@ -37,6 +37,18 @@ private val AdminRoyalPalette = darkColorScheme(
     error = Color(0xFFFFA8A8)
 )
 
+private val AdminLightPalette = lightColorScheme(
+    primary = Color(0xFF1C4B93),
+    onPrimary = Color.White,
+    background = Color(0xFFF4F7FE),
+    surface = Color.White,
+    onSurface = Color(0xFF152747),
+    surfaceVariant = Color(0xFFE5ECF8),
+    onSurfaceVariant = Color(0xFF4E617E),
+    outline = Color(0xFF7890AF),
+    error = Color(0xFFB52D3A)
+)
+
 private fun JSONObject.list(key:String="items"):List<JSONObject>{val a=optJSONArray(key)?:return emptyList();return (0 until a.length()).map{a.getJSONObject(it)}}
 private val adminLabels=mapOf("users" to "المستخدمون","creators" to "صنّاع المحتوى","active_users" to "النشطون خلال الفترة","online" to "متصلون الآن","live" to "البثوث الجارية","calls" to "المكالمات الجارية","bookings" to "الحجوزات الجديدة","pending_reports" to "البلاغات المعلقة","banned" to "الحسابات المحظورة","restricted" to "الحسابات المقيدة","pending_cases" to "طلبات الدعم","security_alerts" to "تنبيهات الأمان","failed_live" to "تعثر البث","revenue_cents" to "الإيراد المستحق · سنت","commission_cents" to "العمولة · سنت","pending_withdrawals" to "طلبات السحب","ban" to "حظر الحساب","warning" to "تحذير","messages" to "الرسائل","withdrawals" to "السحب","store" to "المتجر","payments" to "المدفوعات","owner" to "المالك الرئيسي","general" to "المدير العام","finance" to "المدير المالي","users" to "إدارة المستخدمين","live" to "إدارة البث","store" to "إدارة المتجر","support" to "الدعم الفني","role" to "الرتبة")
 private fun label(key:String)=adminLabels[key]?:mapOf("dashboard.view" to "عرض الإحصائيات","users.view" to "عرض الحسابات","users.edit" to "تعديل الحسابات","users.sanction" to "إدارة العقوبات","users.preview" to "معاينة الحسابات","finance.view" to "عرض الأموال","finance.adjust" to "طلب تعديل مالي","finance.approve" to "اعتماد مالي مستقل","live.view" to "عرض البث","live.moderate" to "الإشراف على البث","store.view" to "عرض الحجوزات","store.edit" to "إدارة المتجر","wheel.view" to "عرض العجلة","wheel.edit" to "إدارة العجلة","support.view" to "عرض طلبات الدعم","support.edit" to "معالجة الطلبات","roles.edit" to "إدارة الصلاحيات","audit.view" to "عرض سجل التدقيق","settings.edit" to "التحكم بالميزات","notices.send" to "إرسال إشعارات","benefits.view" to "عرض المزايا","benefits.edit" to "إدارة المزايا")[key]?:key
@@ -44,7 +56,7 @@ private data class AdminForm(val title:String,val fields:List<Pair<String,String
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-internal fun AdminCentre(api:LayaliApi,name:String,ownerId:Int,back:()->Unit){
+internal fun AdminCentre(api:LayaliApi,name:String,ownerId:Int,dark:Boolean,onThemeChange:(Boolean)->Unit,back:()->Unit){
  val scope=rememberCoroutineScope();var auth by remember{mutableStateOf<JSONObject?>(null)};var secret by remember{mutableStateOf("")};var code by remember{mutableStateOf("")};var password by remember{mutableStateOf("")}
  var page by remember{mutableStateOf("الرئيسية")};var data by remember{mutableStateOf(JSONObject())};var detail by remember{mutableStateOf<JSONObject?>(null)};var preview by remember{mutableStateOf<JSONObject?>(null)}
  var query by remember{mutableStateOf("")};var period by remember{mutableStateOf("day")};var revision by remember{mutableIntStateOf(0)};var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf("")};var success by remember{mutableStateOf("")};var form by remember{mutableStateOf<AdminForm?>(null)}
@@ -71,21 +83,29 @@ internal fun AdminCentre(api:LayaliApi,name:String,ownerId:Int,back:()->Unit){
  LaunchedEffect(page,detail?.optInt("id")){adminListState.scrollToItem(0)}
  LaunchedEffect(Unit){try{auth=api.request("/api/admin/auth")}catch(e:Exception){error="تعذر التحقق من صلاحية الإدارة."}}
  val context=androidx.compose.ui.platform.LocalContext.current
- DisposableEffect(Unit){val window=(context as? android.app.Activity)?.window;val existing=window?.attributes?.flags?:0;window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);onDispose{if(existing and android.view.WindowManager.LayoutParams.FLAG_SECURE==0)window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)}}
+ // Dark administration stays screen-protected. Light mode is deliberately
+ // screenshot-capable for the owner, and the previous window state is restored.
+ DisposableEffect(context,dark){
+    val window=(context as? android.app.Activity)?.window
+    val secure=android.view.WindowManager.LayoutParams.FLAG_SECURE
+    val originallySecure=((window?.attributes?.flags?:0) and secure)!=0
+    if(dark)window?.addFlags(secure) else window?.clearFlags(secure)
+    onDispose{if(originallySecure)window?.addFlags(secure) else window?.clearFlags(secure)}
+ }
  val verified=auth?.optBoolean("verified")==true
  val permissions=auth?.optJSONArray("permissions");fun can(s:String)=permissions!=null&&(0 until permissions.length()).any{permissions.optString(it)==s}
  val sections=listOf("الرئيسية" to "dashboard.view","الحسابات" to "users.view","الصلاحيات" to "roles.edit","المستويات وVIP" to "benefits.view","هدايا البث" to "live.view","العمليات الحالية" to "live.view","الدعم والبلاغات" to "support.view","حالات التواصل" to "support.view","العقوبات" to "users.sanction","الموافقات المالية" to (if(can("finance.approve"))"finance.approve"else"finance.adjust"),"حدود العجلة" to "wheel.view","سجل التدقيق" to "audit.view","التحكم العام" to "settings.edit","الإشعارات" to "notices.send").filter{can(it.second)}
  LaunchedEffect(verified){if(verified&&sections.none{it.first==page})page=sections.firstOrNull()?.first?:"الرئيسية"}
  LaunchedEffect(page,query,period,revision,verified){if(!verified)return@LaunchedEffect;do{try{val path=when(page){"هدايا البث"->"/api/admin/live/gifts";"الرئيسية"->"/api/admin/control/dashboard?period=$period";"الحسابات"->"/api/admin/accounts?q="+URLEncoder.encode(query,"UTF-8");"العقوبات"->"/api/admin/control/sanctions?q="+URLEncoder.encode(query,"UTF-8");"الدعم والبلاغات"->"/api/admin/control/cases";"حالات التواصل"->"/api/admin/control/communications";"الموافقات المالية"->"/api/admin/control/approvals";"الصلاحيات"->"/api/admin/control/roles";"المستويات وVIP"->"/api/admin/control/benefits";"حدود العجلة"->"/api/admin/control/wheel-limits";"سجل التدقيق"->"/api/admin/control/audit?q="+URLEncoder.encode(query,"UTF-8");"التحكم العام"->"/api/admin/control/settings";"الإشعارات"->"/api/admin/control/notices";else->"/api/admin/control/dashboard"};data=api.request(path);if(page=="الصلاحيات"&&custom.isEmpty()){val a=data.optJSONObject("roles")?.optJSONArray(selectedRole);if(a!=null)custom=(0 until a.length()).map{a.getString(it)}.toSet()}}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){if(e.message=="admin_mfa_required")auth=null;error="تعذر تحديث البيانات."};if(page=="الرئيسية")delay(15000)}while(page=="الرئيسية"&&verified)}
  BackHandler(enabled=verified&&!legacy){navigateBack()}
- if(legacy&&verified){MaterialTheme(colorScheme=AdminRoyalPalette){MobileAdminScreen(api,name,allowed=buildList{if(can("live.view"))add("البث المباشر");if(can("store.view")){add("الحجوزات");add("المحتوى")};if(can("finance.view")){add("السحب");add("الدفع");add("الطلبات")};if(can("wheel.view"))add("العجلة")},exit={legacy=false}){legacy=false}};return}
+ if(legacy&&verified){MaterialTheme(colorScheme=if(dark)AdminRoyalPalette else AdminLightPalette){MobileAdminScreen(api,name,allowed=buildList{if(can("live.view"))add("البث المباشر");if(can("store.view")){add("الحجوزات");add("المحتوى")};if(can("finance.view")){add("السحب");add("الدفع");add("الطلبات")};if(can("wheel.view"))add("العجلة")},exit={legacy=false}){legacy=false}};return}
  if(preview!=null){
-    MaterialTheme(colorScheme=AdminRoyalPalette) {
+    MaterialTheme(colorScheme=if(dark)AdminRoyalPalette else AdminLightPalette) {
         AdminAccountPreviewScreen(preview!!) { preview=null }
     }
     return
  }
- MaterialTheme(colorScheme=AdminRoyalPalette) {
+ MaterialTheme(colorScheme=if(dark)AdminRoyalPalette else AdminLightPalette) {
   Surface(Modifier.fillMaxSize(),color=MaterialTheme.colorScheme.background){
    Column(Modifier.fillMaxSize().safeDrawingPadding()){
     Surface(color=MaterialTheme.colorScheme.surface,tonalElevation=4.dp,shadowElevation=3.dp) {
@@ -99,6 +119,9 @@ internal fun AdminCentre(api:LayaliApi,name:String,ownerId:Int,back:()->Unit){
            style=MaterialTheme.typography.labelSmall,fontWeight=FontWeight.Bold)
         Text(if(detail!=null)"تفاصيل الحساب" else page,
            style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold)
+       }
+       TextButton(onClick={onThemeChange(!dark)}){
+          Text(if(dark)"نهاري · تصوير"else"ليلي · محمي",style=MaterialTheme.typography.labelMedium)
        }
        if(verified && page!="الرئيسية")
         TextButton(onClick={page="الرئيسية";detail=null;query=""}){Text("الرئيسية")}
