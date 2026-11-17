@@ -9,6 +9,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
@@ -35,6 +36,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.res.painterResource
+import com.example.R
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -354,19 +357,50 @@ private fun liveError(e:Exception)=when(e.message){
             val target=bootstrap.getString("url");if(trustedCallOrigin(target,baseUrl)&&allowedPath?.startsWith("/api/live/")==true&&allowedPath.endsWith("/room"))postUrl(target,("theme="+transportTheme+"&ticket="+URLEncoder.encode(bootstrap.getString("ticket"),"UTF-8")).toByteArray())else error="عنوان بث غير صالح."
             }})
             if(!pageReady){
-                Column(
-                    Modifier.fillMaxSize().background(Color(0xFF080F23)).padding(24.dp),
-                    verticalArrangement=Arrangement.Center,
-                    horizontalAlignment=Alignment.CenterHorizontally
+                // A branded loading layer, not a diagnostic page. Preserve
+                // the DOM/media readiness probes above; only presentation changes.
+                Box(
+                    Modifier.fillMaxSize().background(
+                        Brush.verticalGradient(listOf(
+                            Color(0xFF173A71),Color(0xFF10264B),Color(0xFF070F22)
+                        ))
+                    ),
+                    contentAlignment=Alignment.Center
                 ){
-                    CircularProgressIndicator(color=Color(0xFF9CC3FF))
-                    Spacer(Modifier.height(18.dp))
-                    Text("جارٍ تحميل غرفة البث…",color=Color.White)
-                    Spacer(Modifier.height(12.dp))
-                    Text("يتم التحقق من ملفات واجهة الغرفة قبل الاتصال بوسائط البث.",color=Color(0xFFB4C6E5),style=MaterialTheme.typography.bodySmall)
-                    Spacer(Modifier.height(16.dp))
-                    TextButton(onClick=retry){Text("إعادة الدخول بتذكرة جديدة",color=Color.White)}
-                    TextButton(onClick=finish){Text("إنهاء البث والرجوع",color=Color.White)}
+                    Column(
+                        horizontalAlignment=Alignment.CenterHorizontally,
+                        verticalArrangement=Arrangement.spacedBy(18.dp)
+                    ){
+                        Box(Modifier.size(130.dp),contentAlignment=Alignment.Center){
+                            Box(
+                                Modifier.size(112.dp).clip(RoundedCornerShape(34.dp))
+                                    .background(Brush.radialGradient(
+                                        listOf(Color(0xFF416BA8),Color(0xFF152F5C))
+                                    )),
+                                contentAlignment=Alignment.Center
+                            ){
+                                Image(painter=painterResource(R.drawable.relaxia_logo),
+                                    contentDescription="Relaxia",
+                                    modifier=Modifier.size(78.dp).clip(RoundedCornerShape(22.dp)))
+                            }
+                            CircularProgressIndicator(
+                                modifier=Modifier.size(128.dp),
+                                strokeWidth=2.5.dp,
+                                color=Color(0xFFA9CDFF),
+                                trackColor=Color(0x304F80BE)
+                            )
+                        }
+                        Text("RELAXIA",fontWeight=FontWeight.Bold,
+                            style=MaterialTheme.typography.titleMedium,
+                            color=Color(0xFFF0F5FF))
+                    }
+                    // Only leave/cancel is available during initialization.
+                    // Retry appears if a real media or connection error occurs.
+                    IconButton(onClick=finish,
+                        modifier=Modifier.align(Alignment.TopEnd).padding(12.dp)
+                            .size(46.dp).background(Color(0x55344D76),CircleShape)){
+                        Icon(Icons.Rounded.Close,"العودة من البث",tint=Color.White)
+                    }
                 }
             }
             // Native recovery strip remains visible even when the embedded WebView renderer goes blank.
