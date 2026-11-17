@@ -156,6 +156,19 @@ class StageTests(TestCase):
             gift=LiveGiftDefinition.objects.get(pk=code)
             self.assertEqual((gift.name,gift.price_cents,gift.effect, gift.enabled),(name,price,effect,True))
 
+    def test_gift_without_chosen_seat_defaults_to_host_not_to_sender(self):
+        row=self.stage()
+        Wallet.objects.filter(user=self.viewer).update(balance_cents=200)
+        payload={'action':'gift','gift_code':'gift_clap','price_cents':10,
+                 'combo_count':1,'confirmed':True,'request_key':str(uuid.uuid4())}
+        response=self.event(row,payload,self.viewer)
+        self.assertEqual(response.status_code,200,response.content)
+        gift=LiveGiftEvent.objects.get(broadcast=row)
+        self.assertEqual(gift.operation.creator_id,self.owner.pk)
+        self.assertEqual(Wallet.objects.get(user=self.viewer).balance_cents,190)
+        self.assertEqual(self.event(row,{**payload,'request_key':str(uuid.uuid4())},self.owner).status_code,400)
+        self.assertEqual(LiveGiftEvent.objects.filter(broadcast=row).count(),1)
+
     def test_combo_gift_settles_once_at_catalog_price_and_shows_correct_multiplier(self):
         row=self.stage()
         Wallet.objects.filter(user=self.viewer).update(balance_cents=60000)
