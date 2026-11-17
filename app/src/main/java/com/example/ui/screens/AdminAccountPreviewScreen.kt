@@ -1,239 +1,270 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import org.json.JSONArray
 import org.json.JSONObject
 
-/** Independent, read-only destination. The back control never scrolls off screen. */
+/** The customer's actual profile and activity in a read-only administrative viewport.
+ * The administrator's own session and permissions never become those of the customer.
+ * A persistent floating action returns to the same administrative account detail.
+ */
 @Composable
 internal fun AdminAccountPreviewScreen(snapshot: JSONObject, onBack: () -> Unit) {
     val person = snapshot.optJSONObject("profile") ?: JSONObject()
-    val displayName = person.optString("display_name").ifBlank {
-        person.optString("username", "مستخدم")
-    }
-    val services = snapshot.optJSONArray("services")
-    val reels = snapshot.optJSONArray("reels")
-    val liveRooms = snapshot.optJSONArray("live_rooms")
-    val operations = snapshot.optJSONArray("operations")
-    val benefits = snapshot.optJSONArray("benefits")
-    val bookings = snapshot.optJSONArray("bookings")
+    val name = person.optString("display_name").ifBlank { person.optString("username", "مستخدم") }
+    val services = snapshot.optJSONArray("services").previewRows()
+    val reels = snapshot.optJSONArray("reels").previewRows()
+    val rooms = snapshot.optJSONArray("live_rooms").previewRows()
+    val bookings = snapshot.optJSONArray("bookings").previewRows()
+    val benefits = snapshot.optJSONArray("benefits").previewRows()
+    val operations = snapshot.optJSONArray("operations").previewRows()
+    val wallet = snapshot.optJSONObject("wallet")
     val communication = snapshot.optJSONObject("communication")
+    val tabs = buildList {
+        addAll(listOf("حسابي", "الريلز", "الخدمات", "البثوث", "الحجوزات", "الامتيازات"))
+        if (wallet != null) add("الرصيد")
+    }
+    var selected by remember(person.optString("public_id")) { mutableStateOf("حسابي") }
+    val listState = rememberLazyListState()
+    LaunchedEffect(selected) { listState.scrollToItem(0) }
+
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Column(Modifier.fillMaxSize().safeDrawingPadding()) {
-            Surface(
-                color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 4.dp,
-                shadowElevation = 3.dp
-            ) {
-                Column(
-                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+        Box(Modifier.fillMaxSize().safeDrawingPadding()) {
+            Column(Modifier.fillMaxSize()) {
+                // This is intentionally a user-style profile, not an admin data table.
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text("الإدارة / الحسابات / المعاينة", style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text("معاينة الحساب", style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold)
-                        }
-                        Button(onClick = onBack) { Text("رجوع للحساب") }
-                    }
-                    Text("معاينة محتوى الحساب الحقيقي · للقراءة فقط، بلا انتحال أو اطلاع على الرسائل الخاصة",
-                        style = MaterialTheme.typography.bodySmall,
+                    Text("Relaxia", style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
+                    Text("معاينة آمنة", style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-            }
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                item {
-                    Card(shape = RoundedCornerShape(22.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                        Column(
-                            Modifier.fillMaxWidth().padding(18.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(9.dp)
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    tabs.forEach { tab ->
+                        FilterChip(selected == tab, onClick = { selected = tab },
+                            label = { Text(tab) })
+                    }
+                }
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(), state = listState,
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp,
+                        top = 14.dp, bottom = 100.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    item {
+                        Card(
+                            shape = RoundedCornerShape(24.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                         ) {
-                            RelaxiaAvatar(displayName, person.optInt("frame"),
-                                84, person.optString("avatar_url"))
-                            Text(displayName, style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold)
-                            Text("#" + person.optString("public_id", "—") +
-                                " · @" + person.optString("username"),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                verticalAlignment = Alignment.CenterVertically) {
-                                RelaxiaLevelBadge(person.optInt("level", 1))
-                                val vip = person.optInt("vip_tier")
-                                if (vip in 1..5) {
-                                    Text("VIP $vip", style = MaterialTheme.typography.titleSmall,
+                            Column(Modifier.fillMaxWidth().padding(20.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                RelaxiaAvatar(name, person.optInt("frame"), 92,
+                                    person.optString("avatar_url"))
+                                Text(name, style = MaterialTheme.typography.headlineSmall,
+                                    fontWeight = FontWeight.Bold)
+                                Text("@" + person.optString("username") +
+                                    "  ·  #" + person.optString("public_id"),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically) {
+                                    RelaxiaLevelBadge(person.optInt("level", 1))
+                                    val vip = person.optInt("vip_tier")
+                                    if (vip in 1..5) Text("VIP $vip", fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.primary)
                                 }
+                                if(person.optString("bio").isNotBlank()) Text(person.optString("bio"))
+                                Row(Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceEvenly) {
+                                    PreviewCounter("المتابعون", person.optInt("followers"))
+                                    PreviewCounter("يتابع", person.optInt("following"))
+                                    PreviewCounter("الريلز", person.optInt("reels_count"))
+                                    PreviewCounter("الخدمات", person.optInt("services_count"))
+                                }
                             }
-                            if (person.optString("bio").isNotBlank()) Text(person.optString("bio"))
-                            Text("المتابعون: " + person.optInt("followers") +
-                                "   •   يتابع: " + person.optInt("following"),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text("الريلز: " + person.optInt("reels_count") +
-                                "   •   الخدمات: " + person.optInt("services_count"),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text("الخبرة: " + person.optLong("xp_points") +
-                                " XP   •   المستوى المكتسب: " + person.optInt("earned_level", 1),
-                                style = MaterialTheme.typography.bodySmall)
-                            Text("الإطارات المملوكة: " + (person.optJSONArray("owned_frames")?.length() ?: 0),
-                                style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
 
+                    when(selected) {
+                        "حسابي" -> {
+                            item { PreviewCard("الملف الشخصي") {
+                                Text("الخبرة: " + person.optLong("xp_points") + " XP")
+                                Text("المستوى المكتسب: " + person.optInt("earned_level", 1))
+                                Text("الإطارات المملوكة: " +
+                                    (person.optJSONArray("owned_frames")?.length() ?: 0))
+                                Text("التوثيق: " + if(person.optBoolean("identity_verified")) "موثق" else "غير موثق")
+                                Text("النشر: " + if(person.optBoolean("publishing_allowed")) "متاح" else "مقيد")
+                                Text("البث: " + if(person.optBoolean("broadcast_allowed")) "متاح" else "مقيد")
+                            } }
+                            item { PreviewCard("النشاط") {
+                                Text("البثوث: " + rooms.size)
+                                Text("الحجوزات: " + bookings.size)
+                                Text("الرسائل: " + (communication?.optInt("sent") ?: 0) +
+                                    " مرسلة · " + (communication?.optInt("received") ?: 0) + " مستلمة")
+                                Text("محتوى الرسائل والمكالمات الخاصة غير متاح في المعاينة.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            } }
                         }
-                    }
-                }
-                item {
-                    AdminPreviewInformation("حالة الحساب") {
-                        Text(if (person.optBoolean("publishing_allowed")) "النشر متاح" else "النشر مقيد")
-                        Text(if (person.optBoolean("identity_verified")) "حساب موثق" else "غير موثق")
-                        Text(if (person.optBoolean("broadcast_allowed")) "البث متاح" else "البث موقوف")
-                        Text(if (person.optBoolean("creator")) "صانع محتوى" else "حساب عادي")
-                        Text("تاريخ التسجيل: " + person.optString("created_at"))
-                        Text(when(person.optString("gender")) {
-                            "male" -> "ذكر"; "female" -> "أنثى"; else -> "غير محدد"
-                        })
-                    }
-                }
-                item { Text("الخدمات", style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold) }
-                if (services == null || services.length() == 0) item {
-                    Text("لا توجد خدمات منشورة لهذا الحساب",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                } else items((0 until services.length()).map { services.getJSONObject(it) }) { service ->
-                    AdminPreviewInformation(service.optString("title")) {
-                        val picture = service.optString("image_url")
-                        if (picture.startsWith("https://")) {
-                            ReferenceImage(picture, Modifier.fillMaxWidth().height(160.dp))
+                        "الريلز" -> {
+                            if(reels.isEmpty()) item { PreviewEmpty("لا توجد ريلز منشورة") }
+                            items(reels, key = { "reel-" + it.optInt("id") }) { reel ->
+                                PreviewCard(reel.optString("caption").ifBlank { "ريلز" }) {
+                                    Text("الإعجابات: " + reel.optInt("likes"))
+                                    Text(if(reel.optBoolean("approved")) "منشور" else "غير منشور")
+                                    Text(reel.optString("created_at"),
+                                        style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
                         }
-                        Text(service.optString("description"))
-                        Text("النوع: " + service.optString("category") +
-                            " · السعر: " + service.optLong("price_cents") + " كوين" +
-                            " · المدة: " + service.optInt("duration_minutes") + " دقيقة")
-                        Text(if (service.optBoolean("active")) "الخدمة نشطة" else "الخدمة موقوفة",
-                            style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-                item { Text("الريلز والمنشورات", style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold) }
-                if(reels==null || reels.length()==0) item {
-                    Text("لا توجد ريلز لهذا الحساب",color=MaterialTheme.colorScheme.onSurfaceVariant)
-                } else items((0 until reels.length()).map{reels.getJSONObject(it)}){reel->
-                    AdminPreviewInformation("ريلز #"+reel.optInt("id")){
-                        Text(reel.optString("caption").ifBlank{"دون وصف"})
-                        Text("الإعجابات: "+reel.optInt("likes")+
-                            " · "+(if(reel.optBoolean("approved")) "منشور" else "قيد المراجعة"),
-                            style=MaterialTheme.typography.bodySmall)
-                        Text("تاريخ النشر: "+reel.optString("created_at"),
-                            style=MaterialTheme.typography.bodySmall)
-                    }
-                }
-                item { Text("الغرف والبثوث", style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold) }
-                if(liveRooms==null || liveRooms.length()==0)item{
-                    Text("لم ينشئ الحساب بثًا بعد",color=MaterialTheme.colorScheme.onSurfaceVariant)
-                }else items((0 until liveRooms.length()).map{liveRooms.getJSONObject(it)}){live->
-                    AdminPreviewInformation(live.optString("title").ifBlank{"بث مباشر"}){
-                        Text((if(live.optString("mode")=="audio") "صوتي" else "فيديو")+
-                            " · الحالة: "+live.optString("status"))
-                        Text("المشاهدون: "+live.optInt("viewers")+
-                            " · "+live.optString("created_at"),style=MaterialTheme.typography.bodySmall)
-                    }
-                }
-                item { Text("المكافآت والامتيازات", style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold) }
-                if (benefits == null || benefits.length() == 0) item {
-                    Text("لا توجد مكافآت مؤقتة نشطة",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                } else items((0 until benefits.length()).map { benefits.getJSONObject(it) }) { benefit ->
-                    val type = when (benefit.optString("kind")) {
-                        "vip" -> "VIP"; "level" -> "مستوى"; "frame" -> "إطار"; else -> "مكافأة"
-                    }
-                    AdminPreviewInformation("$type " + benefit.optInt("value")) {
-                        Text("تنتهي: " + benefit.optString("expires_at"),
-                            style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-                item {
-                    AdminPreviewInformation("ملخص النشاط") {
-                        Text("الحجوزات الظاهرة: " + (bookings?.length() ?: 0))
-                        Text("الرسائل المرسلة: " + (communication?.optInt("sent") ?: 0))
-                        Text("الرسائل المستلمة: " + (communication?.optInt("received") ?: 0))
-                        Text("لا تُعرض محتويات الرسائل أو المكالمات",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-                item { Text("الحجوزات", style=MaterialTheme.typography.titleMedium,
-                    fontWeight=FontWeight.SemiBold) }
-                if(bookings==null || bookings.length()==0)item{
-                    Text("لا توجد حجوزات مسجلة",color=MaterialTheme.colorScheme.onSurfaceVariant)
-                }else items((0 until bookings.length()).map{bookings.getJSONObject(it)}){booking->
-                    AdminPreviewInformation("حجز #"+booking.optString("id").take(8)){
-                        Text("الحالة: "+booking.optString("status")+
-                            " · القيمة: "+booking.optLong("price_cents")+" كوين")
-                    }
-                }
-                val wallet = snapshot.optJSONObject("wallet")
-                if (wallet != null) item {
-                    AdminPreviewInformation("المحفظة · للعرض فقط") {
-                        Text("الرصيد: " + wallet.optLong("balance_cents") + " كوين")
-                        Text("المحجوز: " + wallet.optLong("reserved_cents") + " كوين")
-                        Text("المتاح: " + (wallet.optLong("balance_cents") -
-                            wallet.optLong("reserved_cents")) + " كوين")
-                    }
-                }
-                if(operations!=null&&operations.length()>0){
-                    item{Text("السجل المالي · للمسؤول المخوّل فقط",
-                        style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.SemiBold)}
-                    items((0 until operations.length()).map{operations.getJSONObject(it)}){op->
-                        AdminPreviewInformation(op.optString("kind")){
-                            Text("المبلغ: "+op.optLong("amount_cents")+" كوين"+
-                                " · الحالة: "+op.optString("status"))
-                            Text(op.optString("created_at"),
-                                style=MaterialTheme.typography.bodySmall)
+                        "الخدمات" -> {
+                            if(services.isEmpty()) item { PreviewEmpty("لا توجد خدمات") }
+                            items(services, key = { "service-" + it.optInt("id") }) { service ->
+                                PreviewCard(service.optString("title")) {
+                                    val image = service.optString("image_url")
+                                    if (image.startsWith("https://"))
+                                        ReferenceImage(image, Modifier.fillMaxWidth().height(170.dp))
+                                    Text(service.optString("description"))
+                                    Text("السعر: " + service.optLong("price_cents") + " كوين")
+                                    Text("المدة: " + service.optInt("duration_minutes") + " دقيقة")
+                                    Text(if(service.optBoolean("active")) "متاحة" else "غير متاحة")
+                                }
+                            }
+                        }
+                        "البثوث" -> {
+                            if(rooms.isEmpty()) item { PreviewEmpty("لا توجد بثوث لهذا الحساب") }
+                            items(rooms, key = { "room-" + it.optString("id") }) { room ->
+                                PreviewCard(room.optString("title").ifBlank { "غرفة بث" }) {
+                                    Text(if(room.optString("mode")=="audio") "غرفة صوتية" else "بث فيديو")
+                                    Text("الحالة: " + room.optString("status") +
+                                        " · المشاهدون: " + room.optInt("viewers"))
+                                }
+                            }
+                        }
+                        "الحجوزات" -> {
+                            if(bookings.isEmpty()) item { PreviewEmpty("لا توجد حجوزات") }
+                            items(bookings, key = { "booking-" + it.optString("id") }) { booking ->
+                                PreviewCard("حجز #" + booking.optString("id").take(8)) {
+                                    Text("الحالة: " + booking.optString("status"))
+                                    Text("القيمة: " + booking.optLong("price_cents") + " كوين")
+                                }
+                            }
+                        }
+                        "الامتيازات" -> {
+                            if(benefits.isEmpty()) item { PreviewEmpty("لا توجد امتيازات حالية") }
+                            items(benefits, key = { "benefit-" + it.optString("id") }) { benefit ->
+                                PreviewCard(when(benefit.optString("kind")) {
+                                    "vip" -> "VIP"; "level" -> "مستوى"; "frame" -> "إطار"
+                                    else -> "ميزة"
+                                }) {
+                                    Text("القيمة: " + benefit.optInt("value"))
+                                    Text("تنتهي: " + benefit.optString("expires_at"))
+                                }
+                            }
+                        }
+                        "الرصيد" -> {
+                            if(wallet != null) {
+                                item { PreviewCard("المحفظة · عرض فقط") {
+                                    Text("الرصيد: " + wallet.optLong("balance_cents") + " كوين")
+                                    Text("المتاح: " + (wallet.optLong("balance_cents") -
+                                        wallet.optLong("reserved_cents")) + " كوين")
+                                    Text("المحجوز: " + wallet.optLong("reserved_cents") + " كوين")
+                                } }
+                                items(operations, key = { "op-" + it.optString("id") }) { op ->
+                                    PreviewCard(op.optString("kind")) {
+                                        Text("المبلغ: " + op.optLong("amount_cents") + " كوين")
+                                        Text("الحالة: " + op.optString("status"))
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
+            ExtendedFloatingActionButton(
+                onClick = onBack,
+                modifier = Modifier.align(Alignment.BottomStart).padding(18.dp),
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                icon = { Icon(Icons.Rounded.ArrowBack, contentDescription = null) },
+                text = { Text("العودة للإدارة") }
+            )
         }
     }
 }
 
+private fun JSONArray?.previewRows(): List<JSONObject> =
+    if(this == null) emptyList() else (0 until length()).mapNotNull { optJSONObject(it) }
+
 @Composable
-private fun AdminPreviewInformation(title: String, content: @Composable () -> Unit) {
-    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp),
+private fun PreviewCounter(label: String, value: Int) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(value.toString(), fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.titleMedium)
+        Text(label, style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun PreviewEmpty(message: String) {
+    Text(message, modifier = Modifier.fillMaxWidth().padding(18.dp),
+        color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+@Composable
+private fun PreviewCard(title: String, content: @Composable () -> Unit) {
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-            Text(title, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleSmall)
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(title, fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.titleMedium)
             content()
         }
     }
