@@ -123,6 +123,30 @@ class NativeAdminSecurityTests(TestCase):
         self.assertEqual(self.call(path,dict(p,amount_cents=600)).status_code,409)
         self.assertEqual(self.call(path,p).status_code,200);self.assertEqual(self.call(path,p).status_code,200)
         self.assertEqual(Wallet.objects.get(user=self.user).balance_cents,500);self.assertEqual(BalanceAdjustment.objects.count(),1)
+        detail=self.call(path).json()
+        self.assertEqual(detail['balance_cents'],500)
+        self.assertEqual(detail['credit_history'][0]['coins'],500)
+        self.assertEqual(detail['credit_history'][0]['administrator'],'super_admin')
+    def test_adjustment_only_staff_sees_own_pending_requests(self):
+        self.verify(self.owner)
+        AdminAccess.objects.filter(user=self.staff).update(
+            role='general', customized=True,
+            permissions=['users.view','finance.view','finance.adjust']
+        )
+        self.verify(self.staff)
+        from uuid import uuid4
+        target=f'/api/admin/accounts/{self.user.pk}'
+        a=self.call(target,{'action':'credit','amount_cents':100,
+                            'request_key':str(uuid4()),'reason':'Owner pending review'})
+        self.assertEqual(a.status_code,409)
+        b=self.call(target,{'action':'credit','amount_cents':200,
+                            'request_key':str(uuid4()),'reason':'Staff pending review'},self.staff)
+        self.assertEqual(b.status_code,409)
+        only_own=self.call('/api/admin/control/approvals',user=self.staff).json()['items']
+        self.assertEqual(len(only_own),1)
+        self.assertEqual(only_own[0]['requester_id'],self.staff.pk)
+        self.assertEqual(only_own[0]['payload']['amount_cents'],200)
+        self.assertEqual(Wallet.objects.get(user=self.user).balance_cents,0)
     def test_emergency_stop_and_appeals(self):
         self.verify(self.owner)
         self.assertEqual(self.call('/api/admin/control/settings',{'key':'withdrawals','enabled':False,'reason':'Investigate payment incident'}).status_code,200)
