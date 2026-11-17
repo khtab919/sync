@@ -242,43 +242,33 @@ function pkSheet(){const box=sheet('منافسة PK');note(box,'تحدٍّ با�
  const members=[];for(const s of state.speakers||[]){note(box,s.name);const select=document.createElement('select');for(const [v,t] of [['0','الفريق الأول'],['1','الفريق الثاني'],['','دون مشاركة']]){const o=new Option(t,v);select.add(o)}select.value=s.owner?'0':'1';box.append(select);members.push([s.user_id,select])}
  const duration=document.createElement('select');for(const n of [60,180,300])duration.add(new Option((n/60)+' دقيقة',String(n)));box.append(duration);
  button(box,'بدء المنافسة',async()=>{const teams=[[],[]];for(const [id,el] of members)if(el.value!=='')teams[Number(el.value)].push(id);await api({action:'pk_start',teams,duration:Number(duration.value)});$('sheet').close();await refresh()},'primary')}
-function giftSheet(){
+function giftSheet(preferredRecipientId=null){
+ const selectedSeatId=Number.isInteger(preferredRecipientId)?preferredRecipientId:null;
  const box=sheet('متجر الهدايا');
- note(box,'حدد المستلم والهدية والعدد. يُحتسب الإجمالي ويُؤكد قبل الخصم.');
+ // A seat chooses the recipient; without a seat the gift goes to the host.
+ // Clicking a seat NEVER sends money until the user explicitly confirms.
  const balance=document.createElement('div');balance.id='giftBalance';balance.className='gift-balance';
- balance.textContent='رصيدك المتاح: '+Number(state.available_coins||0).toLocaleString('ar')+' كوين';box.append(balance);
- const select=document.createElement('select');select.setAttribute('aria-label','مستلم الهدية');
- box.append(select);
- const recipientHint=document.createElement('p');
- recipientHint.className='gift-recipient-hint';
- recipientHint.setAttribute('role','status');
- recipientHint.setAttribute('aria-live','polite');
- box.append(recipientHint);
- let recipientSignature='';
+ balance.textContent='رصيدك: '+Number(state.available_coins||0).toLocaleString('ar')+' كوين';box.append(balance);
+ const target=document.createElement('div');
+ target.className='gift-target-summary';target.setAttribute('role','status');
+ target.setAttribute('aria-live','polite');box.append(target);
+ function recipientOf(snapshot){
+  const speakers=snapshot.speakers||[];
+  const host=speakers.find(s=>s.owner)||null;
+  const chosen=selectedSeatId==null?host:(speakers.find(s=>s.user_id===selectedSeatId)||host);
+  // No payment can ever target the sender; this must remain server enforced too.
+  return chosen&&chosen.user_id!==config.userId?chosen:null;
+ }
  function updateRecipients(snapshot){
-  if(!select.isConnected)return;
-  const receivers=(snapshot.speakers||[]).filter(s=>s.user_id!==config.userId && Number.isInteger(s.user_id));
-  const signature=JSON.stringify(receivers.map(s=>[s.user_id,s.name]));
-  if(signature===recipientSignature)return;
-  recipientSignature=signature;
-  const previous=select.value;
-  select.replaceChildren();
-  if(!receivers.length){
-   const option=new Option('لا يوجد مستلم متاح','');
-   option.disabled=true;option.selected=true;select.add(option);
-   select.disabled=true;
-   recipientHint.hidden=false;
-   // Use the real room participants, not a possibly stale owner UI flag.
-   const selfIsHost=(snapshot.speakers||[]).some(s=>s.owner && s.user_id===config.userId);
-   recipientHint.textContent=selfIsHost
-    ?'لا يمكنك إرسال هدية لنفسك. ستتمكن من الإرسال عند انضمام متحدث آخر.'
-    :'لا يوجد متحدث متاح لاستلام هدية الآن. تُحدّث القائمة تلقائيًا.';
+  if(!target.isConnected)return;
+  const receiver=recipientOf(snapshot);
+  if(receiver){
+   const bySeat=selectedSeatId!=null&&receiver.user_id===selectedSeatId&&!receiver.owner;
+   target.textContent='المستلم: '+receiver.name+(bySeat?' · المقعد المختار':' · المضيف');
+   target.classList.remove('gift-target-unavailable');
   }else{
-   receivers.forEach(s=>select.add(new Option(s.name,String(s.user_id))));
-   select.disabled=false;
-   select.value=receivers.some(s=>String(s.user_id)===previous)?previous:String(receivers[0].user_id);
-   recipientHint.hidden=true;
-   recipientHint.textContent='';
+   target.textContent='اضغط على مقعد متحدث آخر لإرسال هدية؛ لا يمكنك إرسالها لنفسك.';
+   target.classList.add('gift-target-unavailable');
   }
   refreshChoice();
  }
@@ -295,17 +285,18 @@ function giftSheet(){
  const checkout=document.createElement('div');checkout.className='gift-checkout';box.append(checkout);
  const summary=document.createElement('div');summary.className='gift-checkout-summary';checkout.append(summary);
  const send=button(checkout,'',async()=>{
-  if(!selected||!select.value)return;
+  const recipient=recipientOf(state);
+  if(!selected||!recipient)return;
   const total=selected.price_cents*comboCount;
   if(!Number.isSafeInteger(total)||total<=0||total>1000000)throw Error('invalid_gift_combo');
-  const receiver=select.selectedOptions[0]?.text||'المستلم';
+  const receiver=recipient.name;
   if(!confirm('تأكيد إرسال '+selected.name+' ×'+comboCount+' إلى '+receiver+' مقابل '+total.toLocaleString('ar')+' كوين؟'))return;
   // Each combination is one server-authorized financial operation.
-  const fingerprint=selected.code+':'+select.value+':'+selected.price_cents+':'+comboCount;
+  const fingerprint=selected.code+':'+recipient.user_id+':'+selected.price_cents+':'+comboCount;
   if(giftPending&&giftPending!==fingerprint)throw Error('pending_gift_retry');
   giftPending=fingerprint;giftKey=giftKey||crypto.randomUUID();
   try{
-   const result=await api({action:'gift',gift_code:selected.code,recipient_id:Number(select.value),
+   const result=await api({action:'gift',gift_code:selected.code,recipient_id:recipient.user_id,
        price_cents:selected.price_cents,combo_count:comboCount,confirmed:true,request_key:giftKey});
    giftKey=null;giftPending=null;
    drawState(result);
@@ -322,8 +313,8 @@ function giftSheet(){
   summary.textContent=selected
     ?selected.name+' ×'+comboCount+' · '+cost.toLocaleString('ar')+' كوين'
     :'لا توجد هدايا متاحة';
-  send.textContent=select.disabled?'لا يوجد مستلم':'تأكيد الإرسال';
-  send.disabled=!selected||!select.value||select.disabled||cost>1000000;
+  send.textContent=recipientOf(state)?'تأكيد الإرسال':'اختر مقعدًا';
+  send.disabled=!selected||!recipientOf(state)||cost>1000000;
   for(const el of grid.children)el.setAttribute('aria-pressed',String(el.dataset.giftCode===selected?.code));
   for(const el of counts.children)el.setAttribute('aria-pressed',String(Number(el.dataset.comboCount)===comboCount));
  }
@@ -331,7 +322,6 @@ function giftSheet(){
   const b=button(counts,'×'+n,()=>{comboCount=n;refreshChoice()});
   b.dataset.comboCount=String(n);
  }
- select.addEventListener('change',refreshChoice);
  function render(category){
   grid.replaceChildren();
   for(const tab of tabs.children)tab.setAttribute('aria-pressed',String(tab.dataset.category===category));
@@ -339,7 +329,7 @@ function giftSheet(){
   if(!filtered.some(g=>g.code===selected?.code))selected=filtered[0]||null;
   for(const g of filtered){
    const b=button(grid,'',()=>{selected=g;comboCount=1;refreshChoice()});
-   // The catalog remains browseable while waiting for an eligible recipient.
+   // Browse safely even when no eligible target exists; checkout stays locked.
    b.className='gift-card '+g.effect+(g.price_cents>=1000?' gift-premium':'');
    b.dataset.giftCode=g.code;
    b.setAttribute('aria-label',g.name+' · '+g.price_cents+' كوين');
@@ -391,10 +381,15 @@ function drawAudioSeats(result){
  box.classList.add('seat-grid');box.classList.toggle('solo-room',capacity===1);
  const nodes=document.createDocumentFragment();
  for(let i=0;i<capacity;i++){
-  const speaker=speakers[i],item=document.createElement('button');item.type='button';item.className='audio-person audio-seat';item.onclick=guestSheet;
+  const speaker=speakers[i],item=document.createElement('button');item.type='button';item.className='audio-person audio-seat';
+  // Occupied seat = choose gift recipient and open store; empty seat = request mic.
+  item.onclick=speaker&&speaker.user_id!==config.userId
+   ?()=>giftSheet(speaker.user_id)
+   :guestSheet;
   if(speaker){
    item.dataset.identity=speaker.identity;item.classList.toggle('speaking',activeSpeakerIds.has(speaker.identity));item.classList.toggle('host-seat',!!speaker.owner);
-   item.setAttribute('aria-label',speaker.name+(speaker.owner?' · صاحب الغرفة':''));
+   item.setAttribute('aria-label',speaker.name+(speaker.owner?' · صاحب الغرفة':'')+(speaker.user_id!==config.userId?' · إهداء':''));
+   if(speaker.user_id!==config.userId)item.title='إرسال هدية إلى '+speaker.name;
    const waves=document.createElement('div');waves.className='audio-waves';waves.setAttribute('aria-hidden','true');
    for(let n=0;n<3;n++)waves.append(document.createElement('span'));item.append(waves);
    const placeholder=document.createElement('div');placeholder.className='audio-placeholder';placeholder.textContent=(speaker.name||'م').slice(0,1);item.append(placeholder);
