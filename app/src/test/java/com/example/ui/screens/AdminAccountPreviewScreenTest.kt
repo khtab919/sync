@@ -34,8 +34,11 @@ class AdminAccountPreviewScreenTest {
         }
         compose.onNodeWithText("معاينة الحساب").assertIsDisplayed()
         compose.onNodeWithText("رجوع للحساب").assertIsDisplayed()
-        compose.onNodeWithText("قراءة فقط · لا يمكن التصرف باسم المستخدم أو الاطلاع على رسائله الخاصة")
+        compose.onNodeWithText("معاينة محتوى الحساب الحقيقي · للقراءة فقط، بلا انتحال أو اطلاع على الرسائل الخاصة")
             .assertIsDisplayed()
+        compose.onNodeWithText("الريلز والمنشورات").assertExists()
+        compose.onNodeWithText("الغرف والبثوث").assertExists()
+        compose.onNodeWithText("المحفظة · للعرض فقط").assertDoesNotExist()
         compose.onNodeWithText("رجوع للحساب").performClick()
         compose.runOnIdle { assertEquals(1, calls.get()) }
     }
