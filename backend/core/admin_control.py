@@ -181,7 +181,12 @@ def approvals(request):
             if a.status!='pending' or a.expires_at<=timezone.now():raise ApiError('approval_unavailable',409)
             if action not in ['approve','reject']:raise ApiError('invalid_action')
             a.status='approved' if action=='approve' else 'rejected';a.reviewer=request.actor;a.save(update_fields=['status','reviewer']);event(request.actor,'approval_'+action,a.pk,why)
-    return JsonResponse({'items':rows(AdminApproval.objects.order_by('-created_at'),['id','requester_id','reviewer_id','path','payload','target_user_id','reason','status','expires_at','used_at'])})
+    # Reviewers can inspect every request; requesters without finance.approve
+    # only see their own signed financial proposals.
+    approvals_q = AdminApproval.objects.order_by('-created_at')
+    if 'finance.approve' not in scopes(request.actor):
+        approvals_q = approvals_q.filter(requester=request.actor)
+    return JsonResponse({'items':rows(approvals_q,['id','requester_id','reviewer_id','path','payload','target_user_id','reason','status','expires_at','used_at'])})
 
 @endpoint(['GET','POST'])
 def settings_control(request):
