@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
@@ -32,6 +34,9 @@ internal fun AdminAccountPreviewScreen(snapshot: JSONObject, onBack: () -> Unit)
         person.optString("username", "مستخدم")
     }
     val services = snapshot.optJSONArray("services")
+    val reels = snapshot.optJSONArray("reels")
+    val liveRooms = snapshot.optJSONArray("live_rooms")
+    val operations = snapshot.optJSONArray("operations")
     val benefits = snapshot.optJSONArray("benefits")
     val bookings = snapshot.optJSONArray("bookings")
     val communication = snapshot.optJSONObject("communication")
@@ -55,7 +60,7 @@ internal fun AdminAccountPreviewScreen(snapshot: JSONObject, onBack: () -> Unit)
                         }
                         Button(onClick = onBack) { Text("رجوع للحساب") }
                     }
-                    Text("قراءة فقط · لا يمكن التصرف باسم المستخدم أو الاطلاع على رسائله الخاصة",
+                    Text("معاينة محتوى الحساب الحقيقي · للقراءة فقط، بلا انتحال أو اطلاع على الرسائل الخاصة",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -91,6 +96,18 @@ internal fun AdminAccountPreviewScreen(snapshot: JSONObject, onBack: () -> Unit)
                                 }
                             }
                             if (person.optString("bio").isNotBlank()) Text(person.optString("bio"))
+                            Text("المتابعون: " + person.optInt("followers") +
+                                "   •   يتابع: " + person.optInt("following"),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("الريلز: " + person.optInt("reels_count") +
+                                "   •   الخدمات: " + person.optInt("services_count"),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("الخبرة: " + person.optLong("xp_points") +
+                                " XP   •   المستوى المكتسب: " + person.optInt("earned_level", 1),
+                                style = MaterialTheme.typography.bodySmall)
+                            Text("الإطارات المملوكة: " + (person.optJSONArray("owned_frames")?.length() ?: 0),
+                                style = MaterialTheme.typography.bodySmall)
+
                         }
                     }
                 }
@@ -98,6 +115,9 @@ internal fun AdminAccountPreviewScreen(snapshot: JSONObject, onBack: () -> Unit)
                     AdminPreviewInformation("حالة الحساب") {
                         Text(if (person.optBoolean("publishing_allowed")) "النشر متاح" else "النشر مقيد")
                         Text(if (person.optBoolean("identity_verified")) "حساب موثق" else "غير موثق")
+                        Text(if (person.optBoolean("broadcast_allowed")) "البث متاح" else "البث موقوف")
+                        Text(if (person.optBoolean("creator")) "صانع محتوى" else "حساب عادي")
+                        Text("تاريخ التسجيل: " + person.optString("created_at"))
                         Text(when(person.optString("gender")) {
                             "male" -> "ذكر"; "female" -> "أنثى"; else -> "غير محدد"
                         })
@@ -110,8 +130,42 @@ internal fun AdminAccountPreviewScreen(snapshot: JSONObject, onBack: () -> Unit)
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else items((0 until services.length()).map { services.getJSONObject(it) }) { service ->
                     AdminPreviewInformation(service.optString("title")) {
-                        Text("السعر: " + service.optLong("price_cents") + " سنت" +
+                        val picture = service.optString("image_url")
+                        if (picture.startsWith("https://")) {
+                            ReferenceImage(picture, Modifier.fillMaxWidth().height(160.dp))
+                        }
+                        Text(service.optString("description"))
+                        Text("النوع: " + service.optString("category") +
+                            " · السعر: " + service.optLong("price_cents") + " كوين" +
                             " · المدة: " + service.optInt("duration_minutes") + " دقيقة")
+                        Text(if (service.optBoolean("active")) "الخدمة نشطة" else "الخدمة موقوفة",
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+                item { Text("الريلز والمنشورات", style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold) }
+                if(reels==null || reels.length()==0) item {
+                    Text("لا توجد ريلز لهذا الحساب",color=MaterialTheme.colorScheme.onSurfaceVariant)
+                } else items((0 until reels.length()).map{reels.getJSONObject(it)}){reel->
+                    AdminPreviewInformation("ريلز #"+reel.optInt("id")){
+                        Text(reel.optString("caption").ifBlank{"دون وصف"})
+                        Text("الإعجابات: "+reel.optInt("likes")+
+                            " · "+(if(reel.optBoolean("approved")) "منشور" else "قيد المراجعة"),
+                            style=MaterialTheme.typography.bodySmall)
+                        Text("تاريخ النشر: "+reel.optString("created_at"),
+                            style=MaterialTheme.typography.bodySmall)
+                    }
+                }
+                item { Text("الغرف والبثوث", style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold) }
+                if(liveRooms==null || liveRooms.length()==0)item{
+                    Text("لم ينشئ الحساب بثًا بعد",color=MaterialTheme.colorScheme.onSurfaceVariant)
+                }else items((0 until liveRooms.length()).map{liveRooms.getJSONObject(it)}){live->
+                    AdminPreviewInformation(live.optString("title").ifBlank{"بث مباشر"}){
+                        Text((if(live.optString("mode")=="audio") "صوتي" else "فيديو")+
+                            " · الحالة: "+live.optString("status"))
+                        Text("المشاهدون: "+live.optInt("viewers")+
+                            " · "+live.optString("created_at"),style=MaterialTheme.typography.bodySmall)
                     }
                 }
                 item { Text("المكافآت والامتيازات", style = MaterialTheme.typography.titleMedium,
@@ -138,11 +192,35 @@ internal fun AdminAccountPreviewScreen(snapshot: JSONObject, onBack: () -> Unit)
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
+                item { Text("الحجوزات", style=MaterialTheme.typography.titleMedium,
+                    fontWeight=FontWeight.SemiBold) }
+                if(bookings==null || bookings.length()==0)item{
+                    Text("لا توجد حجوزات مسجلة",color=MaterialTheme.colorScheme.onSurfaceVariant)
+                }else items((0 until bookings.length()).map{bookings.getJSONObject(it)}){booking->
+                    AdminPreviewInformation("حجز #"+booking.optString("id").take(8)){
+                        Text("الحالة: "+booking.optString("status")+
+                            " · القيمة: "+booking.optLong("price_cents")+" كوين")
+                    }
+                }
                 val wallet = snapshot.optJSONObject("wallet")
                 if (wallet != null) item {
                     AdminPreviewInformation("المحفظة · للعرض فقط") {
-                        Text("المتاح: " + wallet.optLong("balance_cents") + " سنت")
-                        Text("المحجوز: " + wallet.optLong("reserved_cents") + " سنت")
+                        Text("الرصيد: " + wallet.optLong("balance_cents") + " كوين")
+                        Text("المحجوز: " + wallet.optLong("reserved_cents") + " كوين")
+                        Text("المتاح: " + (wallet.optLong("balance_cents") -
+                            wallet.optLong("reserved_cents")) + " كوين")
+                    }
+                }
+                if(operations!=null&&operations.length()>0){
+                    item{Text("السجل المالي · للمسؤول المخوّل فقط",
+                        style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.SemiBold)}
+                    items((0 until operations.length()).map{operations.getJSONObject(it)}){op->
+                        AdminPreviewInformation(op.optString("kind")){
+                            Text("المبلغ: "+op.optLong("amount_cents")+" كوين"+
+                                " · الحالة: "+op.optString("status"))
+                            Text(op.optString("created_at"),
+                                style=MaterialTheme.typography.bodySmall)
+                        }
                     }
                 }
             }

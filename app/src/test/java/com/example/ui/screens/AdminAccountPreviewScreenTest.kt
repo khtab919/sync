@@ -34,8 +34,11 @@ class AdminAccountPreviewScreenTest {
         }
         compose.onNodeWithText("معاينة الحساب").assertIsDisplayed()
         compose.onNodeWithText("رجوع للحساب").assertIsDisplayed()
-        compose.onNodeWithText("قراءة فقط · لا يمكن التصرف باسم المستخدم أو الاطلاع على رسائله الخاصة")
+        compose.onNodeWithText("معاينة محتوى الحساب الحقيقي · للقراءة فقط، بلا انتحال أو اطلاع على الرسائل الخاصة")
             .assertIsDisplayed()
+        // Content below the viewport is lazily composed; confirm protected
+        // financial metadata is absent even for the preview-only screen.
+        compose.onNodeWithText("المحفظة · للعرض فقط").assertDoesNotExist()
         compose.onNodeWithText("رجوع للحساب").performClick()
         compose.runOnIdle { assertEquals(1, calls.get()) }
     }
