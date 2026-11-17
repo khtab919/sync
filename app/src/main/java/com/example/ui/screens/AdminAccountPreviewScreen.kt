@@ -150,7 +150,7 @@ internal fun AdminAccountPreviewScreen(snapshot: JSONObject, onBack: () -> Unit)
                     AdminPreviewInformation("ريلز #"+reel.optInt("id")){
                         Text(reel.optString("caption").ifBlank{"دون وصف"})
                         Text("الإعجابات: "+reel.optInt("likes")+
-                            " · "+if(reel.optBoolean("approved"))"منشور"else"قيد المراجعة",
+                            " · "+(if(reel.optBoolean("approved")) "منشور" else "قيد المراجعة"),
                             style=MaterialTheme.typography.bodySmall)
                         Text("تاريخ النشر: "+reel.optString("created_at"),
                             style=MaterialTheme.typography.bodySmall)
@@ -162,7 +162,7 @@ internal fun AdminAccountPreviewScreen(snapshot: JSONObject, onBack: () -> Unit)
                     Text("لم ينشئ الحساب بثًا بعد",color=MaterialTheme.colorScheme.onSurfaceVariant)
                 }else items((0 until liveRooms.length()).map{liveRooms.getJSONObject(it)}){live->
                     AdminPreviewInformation(live.optString("title").ifBlank{"بث مباشر"}){
-                        Text((if(live.optString("mode")=="audio")"صوتي"else"فيديو")+
+                        Text((if(live.optString("mode")=="audio") "صوتي" else "فيديو")+
                             " · الحالة: "+live.optString("status"))
                         Text("المشاهدون: "+live.optInt("viewers")+
                             " · "+live.optString("created_at"),style=MaterialTheme.typography.bodySmall)
