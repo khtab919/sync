@@ -19,7 +19,7 @@ class AdminAccountPreviewScreenTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
     @Test
-    fun accountPreviewHasPermanentReturnAndReadOnlyNotice() {
+    fun accountPreviewLooksLikeUserAccountWithPermanentAdminReturn() {
         val calls = AtomicInteger(0)
         val snapshot = JSONObject(
             """{"read_only":true,"profile":{"public_id":"58321",
@@ -32,14 +32,13 @@ class AdminAccountPreviewScreenTest {
                 AdminAccountPreviewScreen(snapshot) { calls.incrementAndGet() }
             }
         }
-        compose.onNodeWithText("معاينة الحساب").assertIsDisplayed()
-        compose.onNodeWithText("رجوع للحساب").assertIsDisplayed()
-        compose.onNodeWithText("معاينة محتوى الحساب الحقيقي · للقراءة فقط، بلا انتحال أو اطلاع على الرسائل الخاصة")
-            .assertIsDisplayed()
-        // Content below the viewport is lazily composed; confirm protected
-        // financial metadata is absent even for the preview-only screen.
-        compose.onNodeWithText("المحفظة · للعرض فقط").assertDoesNotExist()
-        compose.onNodeWithText("رجوع للحساب").performClick()
+        compose.onNodeWithText("Relaxia").assertIsDisplayed()
+        compose.onNodeWithText("مستخدم تجريبي").assertIsDisplayed()
+        compose.onNodeWithText("العودة للإدارة").assertIsDisplayed()
+        compose.onNodeWithText("الريلز").performClick()
+        compose.onNodeWithText("العودة للإدارة").assertIsDisplayed()
+        compose.onNodeWithText("المحفظة · عرض فقط").assertDoesNotExist()
+        compose.onNodeWithText("العودة للإدارة").performClick()
         compose.runOnIdle { assertEquals(1, calls.get()) }
     }
 }
