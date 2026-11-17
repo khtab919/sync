@@ -33,6 +33,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.VerticalPager
@@ -322,6 +323,12 @@ fun ServerAppScreen(baseUrl: String) {
     }},confirmButton={TextButton(onClick={insights=null}){Text("إغلاق")}}) }
     if(securityDialog)AccountSecurityDialog(api,!signedIn,{securityDialog=false}){signedIn=false;remembered=false;profile=JSONObject();page=""}
     val screen = page.ifBlank { destinations[tab] }
+    val mainListState = rememberLazyListState()
+    // The home feed must always open at the first card, not at a recycled
+    // scroll offset from another bottom-navigation destination.
+    LaunchedEffect(screen, signedIn) {
+        if (signedIn && screen == "تصفح") mainListState.scrollToItem(0)
+    }
     LaunchedEffect(signedIn,screen,foreground,revision){
         if(!signedIn || screen!="تصفح" || !foreground)return@LaunchedEffect
         while(true){
@@ -479,7 +486,7 @@ fun ServerAppScreen(baseUrl: String) {
             TextButton(onClick = { perform { api.request("/api/calls/${incoming.getString("id")}", "POST", JSONObject().put("action", "reject")); incomingCall = null } }, enabled = !submitting) { Text("رفض") }
         }) }
         if (screen=="لوحة الإدارة" && profile.optBoolean("is_admin")) {
-            AdminCentre(api,profile.optString("display_name"),profile.optInt("id")){back()}
+            AdminCentre(api,profile.optString("display_name"),profile.optInt("id"),dark=dark,onThemeChange={ selected -> dark=selected; prefs.edit().putBoolean("dark",selected).apply() }){back()}
             return@MyApplicationTheme
         }
         if (screen in listOf("شحن الرصيد", "تفعيل البائع", "يا نصيب", "العجلة")) {
@@ -490,7 +497,7 @@ fun ServerAppScreen(baseUrl: String) {
         if(screen=="الحسابات المحظورة"){BlockedAccounts(api){back()};return@MyApplicationTheme}
         if(screen=="سجل العمليات"){FinancialHistory(api){back()};return@MyApplicationTheme}
         if(screen=="الحجوزات"){BookingHistory(api,explore={tab=2;back();revision++}){back();revision++};return@MyApplicationTheme}
-        if(screen=="البث المباشر"){LiveLobby(api,baseUrl,{showCreator(it)},{buyCredits()}){back();revision++};return@MyApplicationTheme}
+        if(screen=="البث المباشر"){LiveLobby(api,baseUrl,{showCreator(it)},{buyCredits()},initialFilter="audio",initialCreate=true){back();revision++};return@MyApplicationTheme}
         if(screen=="الغرف الصوتية"){LiveLobby(api,baseUrl,{showCreator(it)},{buyCredits()},initialFilter="audio"){back();revision++};return@MyApplicationTheme}
         if (screen == "إضافة عرض") {
             SellerPublishScreen(api) { back(); revision++ }
@@ -645,7 +652,7 @@ fun ServerAppScreen(baseUrl: String) {
                         ) { Icon(Icons.Rounded.ArrowForward, "العودة للتصفح", tint=Color.White) }
                     }
                 } else PullToRefreshBox(isRefreshing = loading, onRefresh = { if (!loading) revision++ }, modifier = Modifier.weight(1f)) {
-                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = if(screen=="تصفح") 120.dp else 40.dp), verticalArrangement = Arrangement.spacedBy(if (screen == "تصفح") 5.dp else 12.dp)) {
+                LazyColumn(Modifier.fillMaxSize(), state=mainListState, contentPadding = PaddingValues(bottom = if(screen=="تصفح") 120.dp else 40.dp), verticalArrangement = Arrangement.spacedBy(if (screen == "تصفح") 5.dp else 12.dp)) {
                     if ((loading && rows.isEmpty() && screen in listOf("دردشة", "الحجوزات", "المحفوظات", "ريلز")) || (loading && services.isEmpty() && screen in listOf("تصفح", "العرض"))) item { LuxurySkeletonCards() }
                     when (screen) {
                         "تصفح" -> {
