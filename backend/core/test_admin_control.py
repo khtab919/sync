@@ -80,6 +80,29 @@ class NativeAdminSecurityTests(TestCase):
         r=self.call(f'/api/admin/control/preview/{self.user.pk}',{'reason':'Customer requested support'},self.staff)
         self.assertEqual(r.status_code,200);self.assertTrue(r.json()['read_only']);self.assertNotIn('PRIVATE_SECRET',r.content.decode());self.assertNotIn('wallet',r.json());self.assertNotIn('token',r.json());self.assertTrue(AdminEvent.objects.filter(action='account_preview',actor=self.staff).exists())
         self.assertEqual(self.call('/api/admin/accounts/'+str(self.user.pk),{'action':'credit','amount_cents':100},self.staff).status_code,403)
+    def test_preview_shows_real_public_content_without_impersonation_or_private_messages(self):
+        self.verify(self.staff)
+        Service.objects.create(owner=self.user,title='جلسة حقيقية',description='وصف الخدمة',
+            price_cents=250,duration_minutes=30,approved=True,active=True)
+        Reel.objects.create(owner=self.user,caption='مقطع حقيقي',
+            video_url='https://example.invalid/public.mp4',approved=True)
+        Follow.objects.create(user=self.owner,creator=self.user)
+        LiveBroadcast.objects.create(owner=self.user,title='جلسة صوتية',mode='audio')
+        Message.objects.create(sender=self.user,recipient=self.owner,body='PRIVATE_CHAT_BODY')
+        result=self.call(f'/api/admin/control/preview/{self.user.pk}',
+            {'reason':'Read-only support verification'},self.staff)
+        self.assertEqual(result.status_code,200,result.content)
+        data=result.json()
+        self.assertTrue(data['read_only'])
+        self.assertEqual(data['profile']['followers'],1)
+        self.assertIn('owned_frames',data['profile'])
+        self.assertEqual(data['services'][0]['title'],'جلسة حقيقية')
+        self.assertEqual(data['reels'][0]['caption'],'مقطع حقيقي')
+        self.assertEqual(data['live_rooms'][0]['mode'],'audio')
+        self.assertNotIn('PRIVATE_CHAT_BODY',result.content.decode())
+        self.assertNotIn('wallet',data)
+        self.assertNotIn('operations',data)
+
     def test_no_self_escalation_or_owner_changes(self):
         self.verify(self.staff);self.verify(self.owner)
         self.assertEqual(self.call('/api/admin/control/roles',{'user_id':self.staff.pk,'role':'general','permissions':SCOPES,'reason':'Attempt escalation'},self.staff).status_code,403)
