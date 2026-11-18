@@ -30,6 +30,20 @@
    return tracks;
   }catch(e){tracks.forEach(track=>{track.detach().forEach(el=>el.closest('.tile')?.remove());track.stop()});throw e}
  }
- root.RelaxiaMedia={prepare,frameReady,MediaFailure};
+ // Isolate audio mute from camera lifecycle. The LiveKit participant-wide
+ // convenience setter may create a new microphone track after WebView resume;
+ // the existing publication can be muted without recapturing either device.
+ async function setMicrophoneOnly(participant,sdk,enabled){
+  const source=sdk?.Track?.Source?.Microphone;
+  const publication=source&&participant?.getTrackPublication?.(source);
+  if(!publication?.track||typeof publication.mute!=='function'||typeof publication.unmute!=='function'){
+   throw new MediaFailure('microphone_toggle',{name:'NotFoundError'});
+  }
+  if(enabled)await publication.unmute();
+  else await publication.mute();
+  // Do not call setCameraEnabled, mute video or touch the local video element.
+  return !publication.isMuted;
+ }
+ root.RelaxiaMedia={prepare,frameReady,MediaFailure,setMicrophoneOnly};
  if(typeof module!=='undefined')module.exports=root.RelaxiaMedia;
 })(typeof window==='undefined'?globalThis:window);
