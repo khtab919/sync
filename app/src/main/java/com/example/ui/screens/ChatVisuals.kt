@@ -4,6 +4,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.luminance
@@ -37,8 +40,8 @@ import java.time.format.DateTimeFormatter
 internal data class ConversationColors(val background: Color, val incoming: Color, val accent: Color, val soft: Color)
 @Composable
 internal fun conversationColors(): ConversationColors = if (MaterialTheme.colorScheme.background.luminance() < .5f)
-    ConversationColors(Color(0xFF1B1418), Color(0xFF281E24), Color(0xFFA04B63), Color(0xFF3C2C35))
-else ConversationColors(Color(0xFFFAF6F2), Color(0xFFF2E9E7), Color(0xFF792D45), Color(0xFFF0E0E3))
+    ConversationColors(Color(0xFF09172D), Color(0xFF1D3050), Color(0xFF96BDF5), Color(0xFF273D5D))
+else ConversationColors(Color(0xFFF3F6FC), Color(0xFFE8EEF5), Color(0xFF1C4D93), Color(0xFFDDE8F8))
 
 @Composable
 internal fun ChatAvatar(name:String, size:Int, url:String="", online:Boolean=false) {
@@ -58,18 +61,27 @@ internal fun ChatAvatar(name:String, size:Int, url:String="", online:Boolean=fal
 internal fun ChatHeader(name: String, back: () -> Unit, call: () -> Unit, buy: () -> Unit, enabled: Boolean, handle: String = "", avatar: String = "", video: () -> Unit = call, verified: Boolean = false, priceCoins: Long = 0, online: Boolean = false, presenceKnown: Boolean = false, block: () -> Unit = {}) {
     val colors = conversationColors()
     Column(Modifier.background(colors.background).statusBarsPadding()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ChatAvatar(name, 44, avatar, online=presenceKnown && online)
+        Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            ChatAvatar(name, 42, avatar, online=presenceKnown && online)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     Text(name, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 18.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     if (verified) Icon(Icons.Rounded.Verified, "حساب معتمد", Modifier.size(18.dp), tint = colors.accent)
                 }
-                Text(if(presenceKnown && online) "متصل الآن" else if(presenceKnown) "غير متصل" else if(handle.isNotBlank() && handle != name) "@$handle" else "محادثة خاصة", style=LocalTextStyle.current.copy(textDirection=if(!presenceKnown&&handle.isNotBlank()&&handle!=name)androidx.compose.ui.text.style.TextDirection.Ltr else androidx.compose.ui.text.style.TextDirection.Rtl), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, maxLines = 1)
+                Text(buildString {
+                    if(handle.isNotBlank() && handle != name) append("@").append(handle)
+                    if(presenceKnown) {
+                        if(isNotEmpty()) append(" · ")
+                        append(if(online) "متصل الآن" else "غير متصل")
+                    }
+                    if(isEmpty()) append("محادثة خاصة")
+                }, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp,
+                    maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             }
-            FilledIconButton(video, enabled = enabled, modifier = Modifier.size(40.dp), shape = RoundedCornerShape(18.dp), colors = IconButtonDefaults.filledIconButtonColors(containerColor = colors.soft, contentColor = MaterialTheme.colorScheme.onSurface)) { Icon(Icons.Rounded.Videocam, "اتصال فيديو") }
-            FilledIconButton(call, enabled = enabled, modifier = Modifier.size(40.dp), shape = RoundedCornerShape(18.dp), colors = IconButtonDefaults.filledIconButtonColors(containerColor = colors.soft, contentColor = MaterialTheme.colorScheme.onSurface)) { Icon(Icons.Rounded.Call, "بدء اتصال") }
-            IconButton(back, modifier = Modifier.size(36.dp)) { Icon(Icons.Rounded.ArrowForward, "رجوع", tint = MaterialTheme.colorScheme.onSurface) }
+            FilledIconButton(video, enabled = enabled, modifier = Modifier.size(44.dp), shape = RoundedCornerShape(16.dp), colors = IconButtonDefaults.filledIconButtonColors(containerColor = colors.soft, contentColor = MaterialTheme.colorScheme.onSurface)) { Icon(Icons.Rounded.Videocam, "اتصال فيديو") }
+            FilledIconButton(call, enabled = enabled, modifier = Modifier.size(44.dp), shape = RoundedCornerShape(16.dp), colors = IconButtonDefaults.filledIconButtonColors(containerColor = colors.soft, contentColor = MaterialTheme.colorScheme.onSurface)) { Icon(Icons.Rounded.Call, "بدء اتصال") }
+            IconButton(block, modifier = Modifier.size(44.dp)) { Icon(Icons.Rounded.MoreVert, "خيارات الخصوصية", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+            IconButton(back, modifier = Modifier.size(44.dp)) { Icon(Icons.Rounded.ArrowForward, "رجوع", tint = MaterialTheme.colorScheme.onSurface) }
         }
         if(priceCoins > 0) Surface(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), shape = RoundedCornerShape(25.dp), color = colors.soft) {
             Row(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -81,11 +93,7 @@ internal fun ChatHeader(name: String, back: () -> Unit, call: () -> Unit, buy: (
                 Button(buy, enabled = enabled, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp), colors = ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = Color.White), shape = RoundedCornerShape(20.dp)) { Text("شراء رصيد", fontSize = 12.sp) }
             }
         }
-        else Row(Modifier.fillMaxWidth().padding(horizontal=16.dp),verticalAlignment=Alignment.CenterVertically) {
-            TextButton(block,contentPadding=PaddingValues(0.dp)){Text("خيارات الخصوصية",fontSize=11.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)}
-            Spacer(Modifier.weight(1f))
-            TextButton(buy,enabled=enabled,contentPadding=PaddingValues(horizontal=8.dp,vertical=0.dp)){Text("شراء رصيد",fontSize=12.sp,color=MaterialTheme.colorScheme.primary)}
-        }
+
     }
 }
 
@@ -103,7 +111,9 @@ internal fun ChatComposerWithActions(body: String, change: (String) -> Unit, bus
             if(body.isBlank()) FilledIconButton(record, enabled = !busy, modifier = Modifier.fillMaxSize(), shape = CircleShape, colors = IconButtonDefaults.filledIconButtonColors(containerColor = colors.accent, contentColor = Color.White)) { Icon(Icons.Rounded.MicNone, "تسجيل رسالة صوتية", Modifier.size(27.dp)) }
             else FilledIconButton(send, enabled = !busy, modifier = Modifier.fillMaxSize(), shape = CircleShape, colors = IconButtonDefaults.filledIconButtonColors(containerColor = colors.accent, contentColor = Color.White)) { Icon(Icons.Rounded.Send, "إرسال الرسالة", Modifier.size(24.dp)) }
         }
-        OutlinedTextField(body, change, placeholder = { Text("اكتب رسالة…", fontSize = 16.sp) }, minLines = 1, maxLines = 4, enabled = !busy, shape = RoundedCornerShape(28.dp), modifier = Modifier.weight(1f),
+        OutlinedTextField(body, change, placeholder = { Text("اكتب رسالة…", fontSize = 16.sp) }, minLines = 1, maxLines = 4, enabled = !busy, shape = RoundedCornerShape(26.dp), modifier = Modifier.weight(1f),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+            keyboardActions = KeyboardActions(onSend = { if(body.isNotBlank() && !busy) send() }),
             colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = Color.Transparent, focusedBorderColor = colors.accent.copy(alpha = .35f), unfocusedContainerColor = colors.incoming, focusedContainerColor = colors.incoming))
         if(gift!=null) IconButton(onClick=gift,enabled=!busy,modifier=Modifier.size(40.dp)) {
             Icon(Icons.Rounded.CardGiftcard,"إرسال هدية",tint=colors.accent)
@@ -126,7 +136,7 @@ internal fun ChatDayLabel(label: String) {
 @Composable
 internal fun ChatBubble(message: JSONObject, mine: Boolean, play: (String) -> Unit, join: (String) -> Unit, retry: (String) -> Unit = {}, remove: (String) -> Unit = {}, peerName: String = "", peerAvatar: String = "", unlock: () -> Unit = {}, reply: () -> Unit = {}, delete: () -> Unit = {}) {
     val colors = conversationColors()
-    val outgoing = Color(0xFF792D45)
+    val outgoing = Color(0xFF163E74)
     val bubbleColor by animateColorAsState(if(mine)outgoing else colors.incoming,animationSpec=androidx.compose.animation.core.tween(150),label="messageColor")
     val clipboard=LocalClipboardManager.current
     var showActions by remember{mutableStateOf(false)}
