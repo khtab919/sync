@@ -439,6 +439,7 @@ function preview(host,g){
  while(host.firstChild)host.removeChild(host.firstChild);
  return mountCanvas(host,resolve(g.code),true);
 }
+function thumbnail(canvas,code){requestAnimationFrame(()=>paint(canvas,resolve(code),.33))}
 function previewSound(code){cue(resolve(code))}
 function soundEnabled(){return !muteChoice}
 function setSound(enabled){
@@ -447,6 +448,6 @@ function setSound(enabled){
  if(enabled)context();
  return !muteChoice;
 }
-global.RelaxiaGiftCinema={play,preview,previewSound,stop,resolve,soundEnabled,setSound,
+global.RelaxiaGiftCinema={play,preview,previewSound,thumbnail,stop,resolve,soundEnabled,setSound,
  codes:KNOWN.slice(),engine:'procedural-3d',sound:'web-audio'};
 })(window);
