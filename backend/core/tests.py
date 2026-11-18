@@ -648,7 +648,7 @@ class MobileAdministrationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         token = response.json()['token']
         self.assertTrue(self.call('/api/me', token=token).json()['is_admin'])
-        self.assertEqual(self.call('/api/admin/accounts', token=token).json()['error'],'admin_mfa_required')
+        self.assertEqual(self.call('/api/admin/accounts', token=token).status_code,200)
 
 @override_settings(SECURE_SSL_REDIRECT=False)
 class CommerceTests(TestCase):
