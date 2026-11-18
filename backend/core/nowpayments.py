@@ -64,6 +64,90 @@ def create_invoice(request):
         raise ApiError('invoice_creation_pending',409)
 
 
+
+def direct_json(invoice, provider_data=None):
+    """Exact provider-issued TRC20 instructions; never invent the amount/address."""
+    data=invoice_json(invoice)
+    data.update({'pay_currency':'usdttrc20','network':'Tron','pay_amount':'',
+                 'pay_address':'','expires_at':invoice.quote.expires_at.isoformat()})
+    if provider_data is None:return data
+    if str(provider_data.get('pay_currency','')).lower()!='usdttrc20':
+        raise ApiError('invalid_payment_network',502)
+    address=str(provider_data.get('pay_address',''))
+    try:amount=Decimal(str(provider_data.get('pay_amount','')))
+    except InvalidOperation:raise ApiError('invalid_payment_amount',502)
+    if not re.fullmatch(r'T[1-9A-HJ-NP-Za-km-z]{33}',address):
+        raise ApiError('invalid_payment_address',502)
+    if not amount.is_finite() or amount<=0:
+        raise ApiError('invalid_payment_amount',502)
+    data.update({'pay_address':address,'pay_amount':str(provider_data['pay_amount'])})
+    return data
+
+
+@endpoint(['POST'])
+def direct_payment(request):
+    """Create a single native USDT-TRC20 payment for one immutable quote.
+
+    This endpoint never produces a checkout URL, never accepts a user-selected
+    crypto network and never credits coins without signed verification.
+    """
+    if not configured():raise ApiError('nowpayments_not_configured',409)
+    if set(request.payload.keys())!={'quote_id'}:
+        raise ApiError('unsupported_payment_option')
+    import uuid
+    quote_id=uuid.UUID(text(request.payload,'quote_id',36,36))
+    with transaction.atomic():
+        quote=TopUpQuote.objects.select_for_update().filter(
+            pk=quote_id,user=request.actor,method='nowpayments').first()
+        if not quote:raise ApiError('invalid_quote',404)
+        invoice=GatewayInvoice.objects.select_for_update().filter(quote=quote).first()
+        if invoice:
+            if invoice.payment_id and not invoice.invoice_url:
+                existing=True
+            else:
+                # Never convert an old hosted invoice into a new direct payment.
+                # Unknown creations require reconciliation rather than a second charge.
+                raise ApiError('invoice_already_created',409)
+        else:
+            if quote.expires_at<=timezone.now():raise ApiError('quote_expired',409)
+            invoice=GatewayInvoice.objects.create(quote=quote)
+            existing=False
+    if existing:
+        try:
+            details=provider_request('payment/'+invoice.payment_id)
+            return JsonResponse(direct_json(invoice,details))
+        except Exception:
+            raise ApiError('provider_check_pending',409)
+    try:
+        response=provider_request('payment',{
+            'price_amount':str(Decimal(quote.amount_cents)/100),
+            'price_currency':'usd',
+            'pay_currency':'usdttrc20',
+            'is_fixed_rate':True,
+            'order_id':str(quote.pk),
+            'order_description':'Relaxia '+str(quote.amount_cents)+' coins',
+            'ipn_callback_url':request.build_absolute_uri('/api/nowpayments/ipn')
+        })
+        # Validate provider values *before* returning any wallet address.
+        raw_id=str(response.get('payment_id',''))
+        if not raw_id.isdigit() or len(raw_id)>64:
+            raise ValueError('invalid payment id')
+        if str(response.get('order_id',''))!=str(quote.pk):
+            raise ValueError('payment order mismatch')
+        details=direct_json(invoice,response)
+        with transaction.atomic():
+            locked=GatewayInvoice.objects.select_for_update().get(pk=invoice.pk)
+            locked.payment_id=raw_id
+            locked.status='waiting'
+            locked.save(update_fields=['payment_id','status'])
+        details.update(invoice_json(locked))
+        return JsonResponse(details,status=201)
+    except Exception:
+        GatewayInvoice.objects.filter(pk=invoice.pk,payment_id__isnull=True,
+            credited_at__isnull=True).update(status='creation_unknown',review_required=True)
+        raise ApiError('payment_creation_pending',409)
+
+
 def apply_payment(data):
     import uuid
     quote_id=uuid.UUID(str(data.get('order_id','')))
@@ -76,6 +160,10 @@ def apply_payment(data):
         # The signed merchant order id is mandatory; invoice id is additionally bound when present.
         incoming_invoice=data.get('invoice_id')
         if incoming_invoice is not None and invoice.invoice_id is not None and str(incoming_invoice)!=invoice.invoice_id:raise ValueError('invoice mismatch')
+        if not invoice.invoice_url and invoice.payment_id and str(data.get('pay_currency','')).lower()!='usdttrc20':
+            raise ValueError('unexpected payment currency')
+        if invoice.payment_id and invoice.payment_id!=payment_id:
+            raise ValueError('payment id mismatch')
         if invoice.credited_at and invoice.payment_id!=payment_id:
             invoice.review_required=True;invoice.save(update_fields=['review_required']);return invoice
         price=Decimal(str(data.get('price_amount','0')))
@@ -121,9 +209,15 @@ def ipn(request):
 def status(request,quote_id):
     invoice=GatewayInvoice.objects.select_related('quote').filter(quote_id=quote_id,quote__user=request.actor).first()
     if not invoice:raise ApiError('invoice_unavailable',404)
+    details=None
     if invoice.payment_id and not invoice.credited_at and configured():
-        try:invoice=apply_payment(provider_request('payment/'+invoice.payment_id))
+        try:
+            details=provider_request('payment/'+invoice.payment_id)
+            invoice=apply_payment(details)
         except Exception:raise ApiError('provider_check_pending',409)
+    if invoice.payment_id and not invoice.invoice_url:
+        if invoice.credited_at:return JsonResponse(invoice_json(invoice))
+        return JsonResponse(direct_json(invoice,details))
     return JsonResponse(invoice_json(invoice))
 
 
