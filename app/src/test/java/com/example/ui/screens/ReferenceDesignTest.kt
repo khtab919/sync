@@ -157,14 +157,19 @@ class ReferenceDesignTest {
     }
 
     @Test fun sellerUploadsUsePhonePickerInsteadOfUrlField() {
-        compose.setContent { MyApplicationTheme { SellerPublishScreen(com.example.data.api.LayaliApi("https://example.invalid"), {}) } }
-        compose.onNodeWithText("مساحة النشر").assertExists()
+        compose.setContent { MyApplicationTheme { SellerPublishScreen(com.example.data.api.LayaliApi("https://example.invalid"), back = {}) } }
+        compose.onNodeWithText("إضافة عرض جديد").assertExists()
+        compose.onNodeWithText("خدمة أو منتج").assertExists()
+        compose.onNodeWithText("المدة (دقيقة)").assertExists()
+        compose.onNodeWithText("السعر ($)").assertExists()
         compose.onNodeWithText("رفع صورة من الهاتف · حتى 8MB").performScrollTo().assertExists()
         compose.onNodeWithText("رابط صورة HTTPS · اختياري").assertDoesNotExist()
-        compose.onNodeWithText("نشر الآن").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithText("نشر الآن").assertIsNotEnabled()
         screenshot("06-seller-upload")
-        compose.onNodeWithText("ريلز").performScrollTo().performClick()
+        compose.onNodeWithText("ريلز").performClick()
+        compose.onNodeWithText("مساحة النشر").assertExists()
         compose.onNodeWithText("اختيار فيديو MP4 من الهاتف · حتى 20MB").performScrollTo().assertExists()
+        compose.onNodeWithText("اكتب عنوان الريلز أو وصفاً قصيراً...").performScrollTo().assertExists()
         compose.onNodeWithText("نشر الآن").assertIsNotEnabled()
         screenshot("07-reel-upload")
     }
@@ -201,7 +206,8 @@ class ReferenceDesignTest {
         org.junit.Assert.assertEquals(1, sent)
         compose.onNodeWithContentDescription("إرسال صورة").assertExists()
         compose.onNodeWithContentDescription("تسجيل رسالة صوتية").assertExists()
-        compose.onNodeWithText("شراء رصيد").assertExists()
+        compose.onNodeWithContentDescription("خيارات الخصوصية").assertExists()
+        compose.onNodeWithContentDescription("اتصال فيديو").assertExists()
         screenshot("09-chat-layout")
     }
 

@@ -112,7 +112,6 @@ fun ServerAppScreen(baseUrl: String) {
     var page by rememberSaveable { mutableStateOf("") }
     var revision by remember { mutableIntStateOf(0) }
     var loading by remember { mutableStateOf(false) }
-    var uploadProgress by remember { mutableFloatStateOf(-1f) }
     var submitting by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf("") }
     var contentError by remember { mutableStateOf("") }
@@ -209,18 +208,6 @@ fun ServerAppScreen(baseUrl: String) {
             val uploaded=api.upload(context,uri,"avatar")
             profile=api.request("/api/me","PATCH",JSONObject().put("avatar_id",uploaded.getString("id")))
             avatarUrl=profile.optString("avatar_url");notice="تم رفع صورة الملف وحفظها."
-        }
-    }
-    val reelPicker = androidx.activity.compose.rememberLauncherForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.GetContent()
-    ) { uri ->
-        if (uri != null) perform {
-            // Upload/approval are enforced by the backend, never client-side.
-            val uploaded = try{api.upload(context, uri, "reel"){value->uploadProgress=value}}finally{uploadProgress=-1f}
-            val result = api.request("/api/reels", "POST", JSONObject().put("media_id", uploaded.getString("id")))
-            if (result.optString("status") != "published") throw IllegalStateException("reel_publish_unconfirmed")
-            page = ""; tab = 1; revision++
-            notice = "تم نشر الريل بنجاح."
         }
     }
     fun editProfile() {
@@ -499,8 +486,9 @@ fun ServerAppScreen(baseUrl: String) {
         if(screen=="الحجوزات"){BookingHistory(api,explore={tab=2;back();revision++}){back();revision++};return@MyApplicationTheme}
         if(screen=="البث المباشر"){LiveLobby(api,baseUrl,{showCreator(it)},{buyCredits()},initialFilter="audio",initialCreate=true){back();revision++};return@MyApplicationTheme}
         if(screen=="الغرف الصوتية"){LiveLobby(api,baseUrl,{showCreator(it)},{buyCredits()},initialFilter="audio"){back();revision++};return@MyApplicationTheme}
-        if (screen == "إضافة عرض") {
-            SellerPublishScreen(api) { back(); revision++ }
+        if(screen=="بدء غرفة صوتية"){LiveLobby(api,baseUrl,{showCreator(it)},{buyCredits()},initialFilter="audio",initialCreate=true){back();revision++};return@MyApplicationTheme}
+        if (screen == "إضافة عرض" || screen == "نشر ريلز") {
+            SellerPublishScreen(api, initialReel = screen == "نشر ريلز") { back(); revision++ }
             return@MyApplicationTheme
         }
         if (screen == "محادثة" && peerId.toIntOrNull() != null) {
@@ -606,7 +594,6 @@ fun ServerAppScreen(baseUrl: String) {
                     }
                 }
                 if(searchLoading)LuxuryLoadingStatus("جارٍ البحث")
-                if(uploadProgress>=0f)LinearProgressIndicator(progress={uploadProgress},modifier=Modifier.fillMaxWidth())
                 if (screen == "ريلز" && rows.isNotEmpty()) {
                     val pager = rememberPagerState(pageCount = { rows.size })
                     LaunchedEffect(rows, selectedReelId) {
@@ -664,7 +651,7 @@ fun ServerAppScreen(baseUrl: String) {
                                     onProfile = { page = ""; tab = 4 },
                                     onWallet = { open("المحفظة") },
                                     onLive = { open("البث المباشر") },
-                                    onAudio = { open("الغرف الصوتية") }
+                                    onAudio = { open("بدء غرفة صوتية") }
                                 )
                             }
                             // The feed starts immediately when there are no live rooms.
@@ -961,24 +948,6 @@ fun ServerAppScreen(baseUrl: String) {
                                 Text(if (row.optString("status") == "awaiting_payment") "بانتظار الدفع · لم يُؤكَّد الحجز بعد" else row.optString("status"), color = MaterialTheme.colorScheme.onSurfaceVariant)
                             } } } }
                         }
-                        "إضافة عرض" -> item { FormColumn {
-                            Text("اعرض خدمة أو جلسة أو منتجًا", style = MaterialTheme.typography.headlineMedium)
-                            Text("يمكن لجميع الحسابات النشطة نشر الخدمات مباشرة. يمكن للإدارة إخفاء المحتوى المخالف لاحقاً.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("خدمة", "منتج", "جلسة").forEach { kind -> FilterChip(offerKind == kind, { offerKind = kind }, label = { Text(kind) }) } }
-                            Field(title, { title = it }, "عنوان العرض")
-                            Field(description, { description = it }, "وصف العرض", lines = 4)
-                            Field(price, { price = it }, "السعر بالدولار", numeric = true)
-                            Field(image, { image = it }, "رابط صورة HTTPS · اختياري")
-                            ReferencePrimary("نشر الآن", !submitting) { perform {
-                                val result = api.request("/api/services", "POST", JSONObject().put("title", title).put("description", description).put("price_cents", cents(price)).put("category", offerKind).put("image_url", image))
-                                if(result.optString("status") == "published") {
-                                    title = ""; description = ""; price = ""; image = ""; page = ""; tab = 2; revision++
-                                    notice = "تم نشر عرضك بنجاح."
-                                } else {
-                                    notice = "تم حفظ العرض، لكن النشر لم يتأكد. تحقق من تحديث الخادم."
-                                }
-                            } }
-                        } }
                         "المحفظة" -> {
                             item { FormColumn {
                                 ReferenceCard { Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -1051,7 +1020,7 @@ fun ServerAppScreen(baseUrl: String) {
                     Surface(
                         onClick = {
                             showCreationSheet = false
-                            reelPicker.launch("video/mp4")
+                            open("نشر ريلز")
                         },
                         shape = RoundedCornerShape(16.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
