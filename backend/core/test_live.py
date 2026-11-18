@@ -51,6 +51,34 @@ class LiveBroadcastTests(TestCase):
         op=FinancialOperation.objects.get();self.assertEqual(op.status,'settled');self.assertEqual(op.creator_cents,80);self.assertEqual(op.platform_cents,20)
         self.assertEqual(Wallet.objects.get(user=self.owner).balance_cents,80);self.assertEqual(Wallet.objects.get(user=self.viewer).balance_cents,900)
         self.assertEqual(self.join(row).status_code,200);self.assertEqual(FinancialOperation.objects.count(),1)
+    def test_muting_audio_host_never_ends_live_room_or_hides_home_card(self):
+        p={'title':'Voice listening room','mode':'audio','max_speakers':8,
+           'max_viewers':8,'minimum_seconds':30,'gifts_enabled':True}
+        created=self.request('/api/live',p)
+        self.assertEqual(created.status_code,201,created.content)
+        row=LiveBroadcast.objects.get(pk=created.json()['id'])
+        self.join(row,self.owner)
+        self.parts=[{'identity':'host-'+str(self.owner.pk),
+                     'tracks':[{'type':'AUDIO','muted':False}]}]
+        live.synchronize(row,True)
+        row.refresh_from_db()
+        self.assertEqual(row.status,'active')
+        self.parts[0]['tracks'][0]['muted']=True
+        LiveBroadcast.objects.filter(pk=row.pk).update(last_checked_at=timezone.now()-timedelta(seconds=10))
+        row.refresh_from_db();live.synchronize(row,True)
+        row.refresh_from_db()
+        self.assertEqual(row.status,'active')
+        self.assertIsNone(row.host_missing_at,'mute does not count as lost host')
+        listing=self.request('/api/live',user=self.viewer)
+        self.assertEqual(listing.status_code,200)
+        self.assertIn(str(row.pk),[str(x['id']) for x in listing.json()['items']])
+        self.assertEqual(self.join(row).status_code,200,
+                         'other people can discover/join a deliberately muted voice room')
+        self.assertEqual(FinancialOperation.objects.count(),0)
+        self.parts=[]
+        live.synchronize(row,True);row.refresh_from_db()
+        self.assertEqual(row.status,'reconnecting','real disconnect still marks reconnecting')
+
     def test_video_requires_video_and_missing_media_does_not_accumulate_billable_time(self):
         row=self.create(True);self.join(row)
         admission=LiveAdmission.objects.get(broadcast=row,user=self.viewer)
