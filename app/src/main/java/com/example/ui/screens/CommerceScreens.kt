@@ -85,7 +85,7 @@ internal fun commerceError(e: Exception): String = when(e.message) {
 
 @Composable
 internal fun CommerceScreen(api: LayaliApi, kind: String, back: () -> Unit) {
-    if(kind == "شحن الرصيد") { CoinShopScreen(api, back); return }
+    if(kind == "شحن الرصيد") { NativeUsdtTopupScreen(api, back); return }
     val isWheel = kind == "العجلة" || kind == "يا نصيب"
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
