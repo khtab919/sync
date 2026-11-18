@@ -1557,6 +1557,22 @@ internal fun ReferenceLogin(register: Boolean, busy: Boolean, notice: String, us
             item{Column(Modifier.padding(horizontal=24.dp),verticalArrangement=Arrangement.spacedBy(14.dp)){
                 Text(if(register)"مساحتك تبدأ هنا"else"أهلًا بعودتك",style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold)
                 Text(if(register)"أنشئ حسابك بخطوات بسيطة."else"ادخل ببريدك الإلكتروني وكلمة المرور.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+                if (register) {
+                    val completed = listOf(
+                        username.trim().length >= 2,
+                        validEmail,
+                        password.length >= 8,
+                        gender in listOf("male", "female"),
+                        adultConfirmed
+                    ).count { it }
+                    LinearProgressIndicator(
+                        progress = { completed / 5f },
+                        modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(16.dp))
+                    )
+                    Text("اكتمال بيانات التسجيل: ${completed} من 5",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
                 if(notice.isNotBlank())Text(notice,color=MaterialTheme.colorScheme.error)
                 if(register)OutlinedTextField(username,onUsername,label={Text("الاسم الظاهر")},modifier=Modifier.fillMaxWidth(),singleLine=true,enabled=!busy,keyboardOptions=KeyboardOptions(imeAction=ImeAction.Next))
                 OutlinedTextField(email,onEmail,label={Text("البريد الإلكتروني")},modifier=Modifier.fillMaxWidth(),singleLine=true,enabled=!busy,keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Email,imeAction=ImeAction.Next))
