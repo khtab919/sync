@@ -65,6 +65,14 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
      assert.equal(await control.evaluate(el=>getComputedStyle(el).color),'rgb(255, 255, 255)','readable control foreground in '+theme);
      const icon=await control.locator('svg').boundingBox();assert.ok(icon.width>=20&&icon.height>=20,'icon has explicit bounds');
     }
+    if(theme==='light'){
+     const exitColor=await page.locator('#exit').evaluate(el=>getComputedStyle(el).color);
+     const viewerColor=await page.locator('#viewers').evaluate(el=>getComputedStyle(el).color);
+     const liveColor=await page.locator('.live-pill').evaluate(el=>getComputedStyle(el).color);
+     assert.equal(exitColor,'rgb(247, 251, 255)','day theme exit must be legible on navy glass');
+     assert.equal(viewerColor,'rgb(247, 251, 255)','day theme viewer counter must be legible');
+     assert.equal(liveColor,'rgb(247, 251, 255)','day theme live status must remain white');
+    }
     await page.evaluate(()=>{muted=true;updateQuickMic()});
     assert.equal(await page.locator('#micQuick').getAttribute('aria-label'),'تشغيل الميكروفون');
     assert.equal(await page.locator('#micQuick').getAttribute('aria-pressed'),'false');
