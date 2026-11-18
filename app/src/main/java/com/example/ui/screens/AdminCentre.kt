@@ -62,7 +62,7 @@ internal fun AdminCentre(api:LayaliApi,name:String,ownerId:Int,dark:Boolean,onTh
  var query by remember{mutableStateOf("")};var period by remember{mutableStateOf("day")};var revision by remember{mutableIntStateOf(0)};var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf("")};var success by remember{mutableStateOf("")};var form by remember{mutableStateOf<AdminForm?>(null)}
  var creditSignature by remember{mutableStateOf("")};var creditRequestKey by remember{mutableStateOf("")}
  var selectedRole by remember{mutableStateOf("support")};var roleUser by remember{mutableStateOf("")};var custom by remember{mutableStateOf(setOf<String>())};var legacy by remember{mutableStateOf(false)};var navigation by remember{mutableStateOf(false)}
- fun perform(block:suspend()->Unit){if(busy)return;busy=true;error="";success="";scope.launch{try{block()}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){if(e.message=="admin_mfa_required")auth=null;error=when(e.message){"admin_mfa_required"->"أعد التحقق برمز المصادقة للمتابعة.";"independent_approval_required"->"تم تسجيل طلب إضافة الرصيد. يلزم اعتماد مسؤول مالي آخر، ثم يُنفّذ الطلب من شاشة الموافقات.";"independent_reviewer_required"->"يجب أن يراجع الطلب مسؤول آخر لا تخصه العملية.";"invalid_totp"->"الرمز غير صحيح أو استُخدم سابقًا. انتظر الرمز التالي.";"too_many_attempts"->"تجاوزت المحاولات. انتظر 15 دقيقة.";else->"تعذر تنفيذ الطلب. تحقق من البيانات والصلاحية والاتصال."};if(e.message=="independent_approval_required"){page="الموافقات المالية";detail=null;revision++}}finally{busy=false}}}
+ fun perform(block:suspend()->Unit){if(busy)return;busy=true;error="";success="";scope.launch{try{block()}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){if(e.message=="admin_mfa_required")auth=null;error=when(e.message){"admin_mfa_required"->"أعد التحقق برمز المصادقة للمتابعة.";"invalid_credentials"->"كلمة المرور غير صحيحة. أدخل كلمة مرور حساب Relaxia الحالي.";"invalid_session","authentication_required"->"انتهت الجلسة. سجّل الخروج ثم ادخل مجددًا.";"server_unavailable"->"تعذر الاتصال بالخادم. تحقق من الشبكة ثم أعد المحاولة.";"mfa_setup_missing_key"->"لم يصل مفتاح المصادقة. أعد الضغط على إظهار المفتاح؛ لن يتغير المفتاح الحالي.";"independent_approval_required"->"تم تسجيل طلب إضافة الرصيد. يلزم اعتماد مسؤول مالي آخر، ثم يُنفّذ الطلب من شاشة الموافقات.";"independent_reviewer_required"->"يجب أن يراجع الطلب مسؤول آخر لا تخصه العملية.";"invalid_totp"->"الرمز غير صحيح أو استُخدم سابقًا. انتظر الرمز التالي.";"too_many_attempts"->"تجاوزت المحاولات. انتظر 15 دقيقة.";else->"تعذر تنفيذ الطلب. تحقق من البيانات والصلاحية والاتصال."};if(e.message=="independent_approval_required"){page="الموافقات المالية";detail=null;revision++}}finally{busy=false}}}
  fun post(path:String,payload:JSONObject){perform{
     val updated=api.request(path,"POST",payload)
     if(path.startsWith("/api/admin/accounts/")&&detail!=null)detail=updated
@@ -147,7 +147,71 @@ internal fun AdminCentre(api:LayaliApi,name:String,ownerId:Int,dark:Boolean,onTh
      Text("مرحبًا، $name · ملخص حالة المنصة والعمليات الجارية",
          color=MaterialTheme.colorScheme.onSurfaceVariant)
   }
- if(!verified){item{Text("التحقق الثنائي",style=MaterialTheme.typography.titleLarge);Text("استخدم تطبيق مصادقة. لا تشارك مفتاح الإعداد أو الرمز مع أحد.");if(auth?.optBoolean("enabled")==false&&secret.isBlank()){OutlinedTextField(password,{password=it},label={Text("كلمة المرور لتأكيد إعداد المصادقة")},visualTransformation=PasswordVisualTransformation(),modifier=Modifier.fillMaxWidth());Button({perform{secret=api.request("/api/admin/auth","POST",JSONObject().put("action","setup").put("password",password)).getString("secret");password=""}},enabled=!busy){Text("إعداد المصادقة")}};if(secret.isNotBlank()){Text("مفتاح الإعداد: $secret");TextButton({val clip=android.content.ClipData.newPlainText("Relaxia MFA",secret);if(android.os.Build.VERSION.SDK_INT>=33)clip.description.extras=android.os.PersistableBundle().apply{putBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE,true)};(context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(clip)}){Text("نسخ مفتاح الإعداد")}};OutlinedTextField(code,{code=it.filter{c->c.isDigit()}.take(6)},label={Text("رمز المصادقة · 6 أرقام")},modifier=Modifier.fillMaxWidth());Button({perform{api.request("/api/admin/auth","POST",JSONObject().put("action","verify").put("code",code));code="";secret="";auth=api.request("/api/admin/auth");revision++}},enabled=code.length==6&&!busy){Text("تحقق")}}}
+ if (!verified) {
+   item {
+     Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+       Text("التحقق الثنائي",style=MaterialTheme.typography.titleLarge)
+       Text("أنشئ المفتاح من داخل Relaxia ثم أضفه إلى تطبيق المصادقة. لا تشارك المفتاح أو الرمز مع أحد.")
+       if(auth?.optBoolean("enabled")==false && secret.isBlank()) {
+         OutlinedTextField(
+           value=password,
+           onValueChange={password=it},
+           label={Text("كلمة المرور لتأكيد إعداد المصادقة")},
+           visualTransformation=PasswordVisualTransformation(),
+           singleLine=true,
+           modifier=Modifier.fillMaxWidth()
+         )
+         Button(onClick={
+           perform {
+             val response=api.request("/api/admin/auth","POST",JSONObject().put("action","setup").put("password",password))
+             val receivedSecret=response.optString("secret")
+             if(receivedSecret.isBlank())throw IllegalStateException("mfa_setup_missing_key")
+             secret=receivedSecret
+             password=""
+           }
+         },enabled=!busy && password.isNotBlank()) {
+           Text(if(auth?.optBoolean("setup_pending")==true)"إظهار مفتاح المصادقة" else "إعداد المصادقة")
+         }
+         if(auth?.optBoolean("setup_pending")==true) {
+           Text("لديك إعداد سابق لم يكتمل. أدخل كلمة مرور الحساب لعرض مفتاحه من جديد دون تغييره.",
+             color=MaterialTheme.colorScheme.onSurfaceVariant,style=MaterialTheme.typography.bodySmall)
+         }
+       }
+       if(secret.isNotBlank()) {
+         Text("مفتاح المصادقة الخاص بهذا الحساب",fontWeight=FontWeight.Bold)
+         OutlinedCard(Modifier.fillMaxWidth()) {
+           Text(secret,modifier=Modifier.padding(16.dp),style=MaterialTheme.typography.titleMedium)
+         }
+         TextButton(onClick={
+           val clip=android.content.ClipData.newPlainText("Relaxia MFA",secret)
+           if(android.os.Build.VERSION.SDK_INT>=33)
+             clip.description.extras=android.os.PersistableBundle().apply {
+               putBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE,true)
+             }
+           (context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(clip)
+         }){Text("نسخ مفتاح الإعداد")}
+         Text("افتح Google Authenticator، اختر إدخال مفتاح إعداد، ثم أدخل الرمز المكوّن من 6 أرقام هنا.",
+           color=MaterialTheme.colorScheme.onSurfaceVariant,style=MaterialTheme.typography.bodySmall)
+       }
+       OutlinedTextField(
+         value=code,
+         onValueChange={code=it.filter{c->c.isDigit()}.take(6)},
+         label={Text("رمز المصادقة · 6 أرقام")},
+         singleLine=true,
+         modifier=Modifier.fillMaxWidth()
+       )
+       Button(onClick={
+         perform {
+           api.request("/api/admin/auth","POST",JSONObject().put("action","verify").put("code",code))
+           code=""
+           secret=""
+           auth=api.request("/api/admin/auth")
+           revision++
+         }
+       },enabled=code.length==6 && !busy){Text("تحقق")}
+     }
+   }
+ }
   else{
    if(detail==null)item{
      Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
