@@ -251,7 +251,7 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
                     color=MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(horizontal = 16.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if(nextOlder.isNotBlank()) item(key="older") {
                 TextButton(enabled=!loadingOlder,onClick={scope.launch{
                     loadingOlder=true
@@ -279,11 +279,11 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
     if(blockConfirm)AlertDialog(onDismissRequest={blockConfirm=false},title={Text("حظر $actualPeer")},text={Text("لن تتاح الرسائل والمكالمات والبث بينكما. يمكنك إلغاء الحظر من إعدادات الخصوصية.")},confirmButton={TextButton({blockConfirm=false;perform{api.request("/api/blocks","POST",JSONObject().put("user_id",peerId).put("blocked",true));back()}}){Text("حظر")}},dismissButton={TextButton({blockConfirm=false}){Text("إلغاء")}})
     if(paidCallChoices.isNotEmpty())AlertDialog(onDismissRequest={paidCallChoices=emptyList()},title={Text("اختر الحجز المقبول")},text={Column{paidCallChoices.forEach{booking->TextButton({paidCallChoices=emptyList();perform{val call=api.request("/api/calls","POST",JSONObject().put("peer_id",peerId).put("mode",pendingCallMode).put("booking_id",booking.getString("id")));openCall(call.getString("id"))}}){Text(booking.optString("title")+" · "+booking.optInt("duration_minutes")+" دقيقة")}}}},confirmButton={TextButton({paidCallChoices=emptyList()}){Text("إغلاق")}})
     if(staged) AlertDialog(onDismissRequest={staged=false;clearTemporary(stagedUri);stagedUri=null},title={Text("تأكيد الإرسال")},text={Column(verticalArrangement=Arrangement.spacedBy(10.dp)){
-        Text(if(stagedCost>0)"سيُخصم $stagedCost رصيد من رصيدك لإرسال هذه الرسالة. يصل لصاحب الحساب 80٪ من المبلغ."else"إرسال مرفق خاص إلى $actualPeer")
+        Text(if(stagedCost>0)"سيُخصم $stagedCost كوين بعد التأكيد لإرسال هذه الرسالة."else"إرسال مرفق خاص إلى $actualPeer")
         if(isSeller && stagedKind in listOf("chat_image","chat_video")) {
             Text("سعر فتح المرفق للمستلم · 0 للإرسال مجانًا")
             OutlinedTextField(mediaPriceInput,{mediaPriceInput=it.filter{c->c.isDigit()}.take(7)},label={Text("رصيد")},singleLine=true)
-            Text("تحصل على 80٪ عند الشراء. لا يُخصم من المستلم دون تأكيده.",style=MaterialTheme.typography.bodySmall)
+            Text("لا يُخصم سعر فتح المرفق من المستلم إلا بعد موافقته.",style=MaterialTheme.typography.bodySmall)
         }
     }},confirmButton={TextButton(onClick={
         val price=mediaPriceInput.toLongOrNull()
@@ -293,7 +293,7 @@ internal fun ConversationScreen(api: LayaliApi, peerId: Int, peerName: String, m
         else queueActual(stagedUri,stagedKind,stagedText,stagedCost,price)
         stagedUri=null
     }){Text(if(stagedCost>0)"تأكيد وخصم $stagedCost"else"إرسال")}},dismissButton={TextButton({staged=false;clearTemporary(stagedUri);stagedUri=null}){Text("إلغاء")}})
-    unlockTarget?.let { target -> AlertDialog(onDismissRequest={unlockTarget=null},title={Text("فتح المرفق الخاص")},text={Text("سيُخصم ${target.optLong("media_price_cents")} رصيد مرة واحدة من رصيدك. تحصل الجهة الناشرة على 80٪. يبقى المرفق متاحًا لك بعد الشراء.")},confirmButton={TextButton({unlockTarget=null;perform{api.request("/api/messages/${target.optInt("id")}/unlock","POST",JSONObject().put("price_cents",target.optLong("media_price_cents")))}}){Text("تأكيد الشراء")}},dismissButton={TextButton({unlockTarget=null}){Text("إلغاء")}}) }
+    unlockTarget?.let { target -> AlertDialog(onDismissRequest={unlockTarget=null},title={Text("فتح المرفق الخاص")},text={Text("سيُخصم ${target.optLong("media_price_cents")} كوين مرة واحدة بعد موافقتك. يبقى المرفق متاحًا لك بعد الشراء.")},confirmButton={TextButton({unlockTarget=null;perform{api.request("/api/messages/${target.optInt("id")}/unlock","POST",JSONObject().put("price_cents",target.optLong("media_price_cents")))}}){Text("تأكيد الشراء")}},dismissButton={TextButton({unlockTarget=null}){Text("إلغاء")}}) }
     if(chooseAttachment) AlertDialog(onDismissRequest={chooseAttachment=false},title={Text("إرسال مرفق")},text={Text("اختر صورة أو فيديو MP4. الحد الأقصى 8MB.")},confirmButton={TextButton({chooseAttachment=false;photo.launch("image/*")}){Text("صورة")}},dismissButton={TextButton({chooseAttachment=false;videoPicker.launch("video/mp4")}){Text("فيديو")}})
 
 }
