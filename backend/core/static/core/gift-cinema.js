@@ -363,7 +363,14 @@ function cue(code){
    note(ctx,start+.68,1180,start+1.05,.05,'triangle',680);
    return;
   }
-  if(code==='gift_blue_whale'||code==='gift_dolphin'){
+  if(code==='gift_dolphin'){
+   note(ctx,start,540,start+.42,.055,'sine',850);
+   note(ctx,start+.33,720,start+.71,.055,'sine',1100);
+   note(ctx,start+.68,900,start+1.03,.05,'sine',650);
+   noise(ctx,start+.08,.32,1900,.045);
+   return;
+  }
+  if(code==='gift_blue_whale'){
    note(ctx,start,160,start+1.5,.09,'sine',75);
    note(ctx,start+.38,330,start+1.62,.045,'sine',175);
    noise(ctx,start+.05,1.2,210,.05);
