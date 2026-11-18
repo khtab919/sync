@@ -29,7 +29,6 @@ import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.SmartDisplay
 import androidx.compose.material.icons.rounded.CheckCircle
-
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -175,7 +174,25 @@ internal fun CommerceScreen(api: LayaliApi, kind: String, back: () -> Unit) {
             }
         }
         if(confirmSpin) AlertDialog(onDismissRequest = { confirmSpin = false }, title = { Text("تأكيد اللفة المدفوعة") }, text = { Text(if(info.optBoolean("first_spin_guaranteed")) "سعر هذه اللفة ${info.optLong("cost_cents")} كوين وجائزتها المضمونة ${info.optLong("first_reward_cents")} كوين." else "سيُخصم ${info.optLong("cost_cents")} كوين من رصيدك. قد لا تحصل على جائزة؛ راجع احتمالات الجوائز قبل التأكيد.") }, confirmButton = { TextButton(onClick = { confirmSpin = false; perform {
-            val result = api.request("/api/promotion/wheel", "POST", JSONObject().put("request_key", wheelKey).put("rprivate val PublishNavy = Color(0xFF0F2342)
+            val result = api.request("/api/promotion/wheel", "POST", JSONObject().put("request_key", wheelKey).put("rules_version",2).put("config_version", info.optString("config_version")))
+            val prizes = info.optJSONArray("prizes")
+            var accumulated = 0f
+            var center = 0f
+            if(prizes != null) for(i in 0 until prizes.length()) {
+                val prize = prizes.getJSONObject(i)
+                val sweep = prize.optString("chance_percent").toFloatOrNull()?.times(3.6f) ?: 0f
+                if(prize.optLong("amount_cents") == result.optLong("prize_cents")) { center = accumulated + sweep / 2f; break }
+                accumulated += sweep
+            }
+            wheelRotation += 1800f + ((360f - center - wheelRotation % 360f + 360f) % 360f)
+            wheelKey = java.util.UUID.randomUUID().toString()
+            info = api.request("/api/promotion/wheel")
+            note = if(result.optLong("prize_cents")==0L) "بدون جائزة · حاول مجددًا" else "الجائزة: ${result.optLong("prize_cents")} كوين · الرصيد: ${result.optLong("balance_cents")} كوين"
+        } }) { Text("تأكيد الخصم واللفة") } }, dismissButton = { TextButton({ confirmSpin = false }) { Text("إلغاء") } })
+    }
+}
+
+private val PublishNavy = Color(0xFF0F2342)
 private val PublishSelected = Color(0xFFE8EEF5)
 private val PublishLine = Color(0xFF8390A3)
 private val PublishHint = Color(0xFF61718B)
@@ -462,7 +479,7 @@ private fun PublishInput(
         value = value, onValueChange = onChange,
         modifier = modifier,
         label = { Text(label, maxLines = 1) },
-        placeholder = if(hint.isBlank()) null else { { Text(hint) } },
+        placeholder = { if(hint.isNotBlank()) Text(hint) },
         shape = RoundedCornerShape(18.dp),
         minLines = lines, maxLines = if(lines == 1) 1 else 5,
         enabled = enabled,
@@ -543,21 +560,6 @@ private fun PublishMediaDropzone(
         }
     }
 }
-· حتى 20MB" else "رفع صورة من الهاتف · حتى 8MB") }
-        if(media.has("id") && !reel) ReferenceImage(media.optString("url"), Modifier.fillMaxWidth().height(200.dp))
-        Button(onClick = { perform {
-            val result = if(reel) api.request("/api/reels", "POST", JSONObject().put("media_id", media.getString("id")))
-            else api.request("/api/services", "POST", JSONObject().put("title", title).put("description", description).put("price_cents", BigDecimal(price).movePointRight(2).intValueExact()).put("category", category).put("image_id", media.getString("id")).put("duration_minutes",duration.toInt()).put("terms",terms))
-            if(result.optString("status") == "published") {
-                media = JSONObject(); title = ""; description = ""; price = ""
-                note = "تم نشر المحتوى بنجاح."
-            } else {
-                note = "تم حفظ الطلب، لكن ظهوره لم يتأكد بعد. تحقق من تحديث الخادم."
-            }
-        } }, enabled = !busy && media.has("id") && (reel || (title.length >= 3 && description.length >= 10 && price.isNotBlank()))) { Text("نشر الآن") }
-    } }
-}
-
 @Composable
 internal fun SupportFloatingButton() {
     var open by remember { mutableStateOf(false) }
