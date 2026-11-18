@@ -209,6 +209,8 @@ internal fun SellerPublishScreen(api: LayaliApi, initialReel: Boolean = false, b
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var caption by remember { mutableStateOf("") }
+    var reelPaid by remember { mutableStateOf(false) }
+    var reelPrice by remember { mutableStateOf("") }
     var duration by remember { mutableStateOf("30") }
     var terms by remember { mutableStateOf("") }
     var price by remember { mutableStateOf("") }
@@ -251,7 +253,9 @@ internal fun SellerPublishScreen(api: LayaliApi, initialReel: Boolean = false, b
     }.getOrDefault(false)
     val validOffer = title.trim().length >= 3 && description.trim().length >= 10 &&
         duration.toIntOrNull() in 1..1440 && validMoney
-    val publishEnabled = !busy && selectedMedia.has("id") && (reel || validOffer)
+    val validReelPrice = !reelPaid || reelPrice.toIntOrNull() in 1..1000000
+    val publishEnabled = !busy && selectedMedia.has("id") &&
+        (if(reel) validReelPrice else validOffer)
 
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -320,6 +324,18 @@ internal fun SellerPublishScreen(api: LayaliApi, initialReel: Boolean = false, b
                             label = "عنوان أو وصف الريلز",
                             hint = "اكتب عنوان الريلز أو وصفاً قصيراً...",
                             modifier = Modifier.fillMaxWidth(), lines = 2, enabled = !busy
+                        )
+                        Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,
+                            horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+                            Switch(checked=reelPaid,onCheckedChange={reelPaid=it},enabled=!busy)
+                            Text("ريلز مدفوع · عرض مموّه إلى حين الشراء",
+                                modifier=Modifier.weight(1f),style=MaterialTheme.typography.bodyMedium)
+                        }
+                        if(reelPaid)PublishInput(
+                            value=reelPrice,
+                            onChange={reelPrice=it.filter(Char::isDigit).take(7)},
+                            label="سعر فتح الريلز (كوين)",numeric=true,
+                            modifier=Modifier.fillMaxWidth(),enabled=!busy
                         )
                     } else {
                         PublishInput(
@@ -397,6 +413,7 @@ internal fun SellerPublishScreen(api: LayaliApi, initialReel: Boolean = false, b
                                         "/api/reels", "POST",
                                         JSONObject().put("media_id", reelMedia.getString("id"))
                                             .put("caption", caption.trim())
+                                            .put("price_cents", if(reelPaid)reelPrice.toInt()else 0)
                                     )
                                 } else {
                                     api.request(
@@ -411,7 +428,7 @@ internal fun SellerPublishScreen(api: LayaliApi, initialReel: Boolean = false, b
                                     )
                                 }
                                 if(response.optString("status") == "published") {
-                                    if(reel) { reelMedia = JSONObject(); caption = "" }
+                                    if(reel) { reelMedia = JSONObject(); caption = "";reelPaid=false;reelPrice="" }
                                     else {
                                         offerMedia = JSONObject(); title = ""; description = ""
                                         price = ""; duration = "30"; terms = ""
