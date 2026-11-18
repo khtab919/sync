@@ -499,8 +499,9 @@ fun ServerAppScreen(baseUrl: String) {
         if(screen=="الحجوزات"){BookingHistory(api,explore={tab=2;back();revision++}){back();revision++};return@MyApplicationTheme}
         if(screen=="البث المباشر"){LiveLobby(api,baseUrl,{showCreator(it)},{buyCredits()},initialFilter="audio",initialCreate=true){back();revision++};return@MyApplicationTheme}
         if(screen=="الغرف الصوتية"){LiveLobby(api,baseUrl,{showCreator(it)},{buyCredits()},initialFilter="audio"){back();revision++};return@MyApplicationTheme}
-        if (screen == "إضافة عرض") {
-            SellerPublishScreen(api) { back(); revision++ }
+        if(screen=="بدء غرفة صوتية"){LiveLobby(api,baseUrl,{showCreator(it)},{buyCredits()},initialFilter="audio",initialCreate=true){back();revision++};return@MyApplicationTheme}
+        if (screen == "إضافة عرض" || screen == "نشر ريلز") {
+            SellerPublishScreen(api, initialReel = screen == "نشر ريلز") { back(); revision++ }
             return@MyApplicationTheme
         }
         if (screen == "محادثة" && peerId.toIntOrNull() != null) {
@@ -664,7 +665,7 @@ fun ServerAppScreen(baseUrl: String) {
                                     onProfile = { page = ""; tab = 4 },
                                     onWallet = { open("المحفظة") },
                                     onLive = { open("البث المباشر") },
-                                    onAudio = { open("الغرف الصوتية") }
+                                    onAudio = { open("بدء غرفة صوتية") }
                                 )
                             }
                             // The feed starts immediately when there are no live rooms.
@@ -1051,7 +1052,7 @@ fun ServerAppScreen(baseUrl: String) {
                     Surface(
                         onClick = {
                             showCreationSheet = false
-                            reelPicker.launch("video/mp4")
+                            open("نشر ريلز")
                         },
                         shape = RoundedCornerShape(16.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
