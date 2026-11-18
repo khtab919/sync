@@ -57,7 +57,7 @@ test('live room controls are distinct: microphone uses audio-only helper, camera
  const mic=live.match(/\$\('mute'\)\.onclick=async\(\)=>\{([\s\S]*?)\n\};/);
  assert.ok(mic,'native room has a microphone control');
  assert.match(mic[1],/RelaxiaMedia\.setMicrophoneOnly/);
- assert.doesNotMatch(mic[1],/setCameraEnabled|restartTrack|\.remove\(|releasePrepared/);
+ assert.doesNotMatch(mic[1],/setCameraEnabled|restartTrack|\.stop\(|\.detach\(|releasePrepared/);
  assert.match(live,/\$\('camera'\)\.onclick=async/);
  assert.match(live,/if\(hidden\)\{\s*if\(cameraOff\|\|nativeCameraWasOn\)return/);
 });
