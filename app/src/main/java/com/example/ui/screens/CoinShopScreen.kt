@@ -43,10 +43,10 @@ private data class StorePackage(val coins:Int,val bonusPoints:Int){ val id:Strin
 private data class StorePaymentMethod(val code:String,val name:String,val description:String,val symbol:String,val enabled:Boolean)
 
 private fun storeMethods(info:JSONObject):List<StorePaymentMethod> = listOf(
+    StorePaymentMethod("stripe","فيزا / ماستركارد","بوابة الدفع العالمية · بطاقات بنكية","💳",info.optBoolean("stripe_enabled")),
+    StorePaymentMethod("nowpayments","بوابة الدفع الرقمية","NOWPayments · مدفوعات إلكترونية","✦",info.optBoolean("nowpayments_enabled")),
     StorePaymentMethod("usdt","USDT · BEP20","تحويل USDT على شبكة BNB Smart Chain","₮",info.optString("address").isNotBlank()),
-    StorePaymentMethod("shamcash","شام كاش","تحويل محلي مع إثبات الدفع","◈",info.optBoolean("shamcash_enabled")),
-    StorePaymentMethod("nowpayments","NOWPayments","فاتورة إلكترونية تؤكدها بوابة الدفع","✦",info.optBoolean("nowpayments_enabled")),
-    StorePaymentMethod("stripe","Visa / Mastercard · Stripe","دفع بالبطاقات عبر صفحة Stripe الآمنة","▣",info.optBoolean("stripe_enabled"))
+    StorePaymentMethod("shamcash","شام كاش","تحويل محلي مع إثبات الدفع","◈",info.optBoolean("shamcash_enabled"))
 )
 
 private fun storePackages(info:JSONObject):List<StorePackage>{
@@ -135,13 +135,14 @@ internal fun CoinPackage(coins:Int,bonus:Int,dollars:String,selected:Boolean,bad
 internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
     val context=LocalContext.current
     val scope=rememberCoroutineScope()
-    val uriHandler=LocalUriHandler.current
     var invoiceUrl by rememberSaveable{mutableStateOf("")}
+    var checkoutUrl by rememberSaveable{mutableStateOf("")}
+    var checkoutProvider by rememberSaveable{mutableStateOf("")}
     var info by remember{mutableStateOf(JSONObject())}
     var balance by remember{mutableStateOf<Long?>(null)}
     var rows by remember{mutableStateOf<List<JSONObject>>(emptyList())}
     var selected by rememberSaveable{mutableIntStateOf(1000)}
-    var method by rememberSaveable{mutableStateOf("usdt")}
+    var method by rememberSaveable{mutableStateOf("stripe")}
     var showPaymentSheet by rememberSaveable{mutableStateOf(false)}
     var quoteText by rememberSaveable{mutableStateOf("")}
     var submittedId by rememberSaveable { mutableStateOf("") }
@@ -183,6 +184,26 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
     LaunchedEffect(quoteText, submittedId, showOrders) { scrollState.scrollTo(0) }
 
     val showSelection=!showOrders && quote==null && submittedId.isBlank()
+    if(checkoutUrl.isNotBlank()){
+        PaymentCheckoutScreen(url=checkoutUrl,provider=checkoutProvider,
+            onClose={checkoutUrl=""},
+            onCheck={checkoutUrl="";perform{
+                val q=quote
+                if(q!=null){
+                    val rail=checkoutProvider
+                    val route=if(rail=="stripe")"/api/stripe/status/"else"/api/nowpayments/status/"
+                    val state=api.request(route+q.getString("id"))
+                    if(state.optBoolean("credited")){
+                        quoteText="";invoiceUrl="";reload()
+                        note="تم تأكيد الدفع وإضافة الكوينز بنجاح."
+                    }else{
+                        note="عملية الدفع بانتظار تأكيد بوابة الدفع. لا يُضاف الرصيد قبل التحقق."
+                    }
+                }
+            }}
+        )
+        return
+    }
     Surface(Modifier.fillMaxSize(),color=CoinNavy,contentColor=Color.White){
         Box(Modifier.fillMaxSize()
             .background(Brush.verticalGradient(listOf(Color(0xFF112D56),CoinNavy,Color(0xFF070E1C))))
@@ -271,8 +292,8 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
                 val viaStripe=rail=="stripe"
                 Text(if(viaStripe)"الدفع بالفيزا أو ماستركارد"else"دفع آمن عبر NOWPayments",style=MaterialTheme.typography.titleLarge)
                 Text(
-                    if(viaStripe)"سيُفتح Stripe Checkout خارج التطبيق. يُضاف الرصيد فقط بعد تأكيد Stripe الموقّع من الخادم؛ الرجوع إلى التطبيق لا يؤكد الدفع."
-                    else "تختار العملة في صفحة البوابة. الرصيد يضاف بعد اكتمال الدفع وتأكيد الخادم؛ العودة من صفحة الدفع وحدها لا تعتمد العملية.",
+                    if(viaStripe)"تُفتح صفحة الدفع الرسمية داخل Relaxia. يتم اعتماد الشحن فقط بعد إشعار الدفع الموقّع."
+                    else "تختار العملة داخل صفحة الدفع الرسمية. لا تُضاف الكوينز قبل تحقق الخادم من العملية.",
                     style=MaterialTheme.typography.bodySmall
                 )
                 Button(onClick={perform{
@@ -284,7 +305,8 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
                         else parsed.host in listOf("nowpayments.io","www.nowpayments.io")
                     require(parsed.scheme=="https"&&trusted&&parsed.userInfo==null)
                     invoiceUrl=link
-                    uriHandler.openUri(link)
+                    checkoutProvider=rail
+                    checkoutUrl=link
                 }},enabled=!busy,modifier=Modifier.fillMaxWidth().height(52.dp)){
                     Text(if(invoiceUrl.isBlank())"فتح بوابة الدفع"else"فتح صفحة الدفع مجددًا")
                 }
@@ -378,6 +400,20 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
                             Column(Modifier.weight(1f)){
                                 Text(option.name,fontWeight=FontWeight.SemiBold)
                                 Text(if(option.enabled)option.description else "غير مفعّل حاليًا",fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            if(option.code=="stripe"){
+                                Row(horizontalArrangement=Arrangement.spacedBy(4.dp),
+                                    verticalAlignment=Alignment.CenterVertically){
+                                    Surface(shape=RoundedCornerShape(6.dp),color=Color.White){
+                                        Text("VISA",color=Color(0xFF163F85),fontSize=11.sp,
+                                            fontWeight=FontWeight.ExtraBold,
+                                            modifier=Modifier.padding(horizontal=5.dp,vertical=3.dp))
+                                    }
+                                    Surface(shape=RoundedCornerShape(6.dp),color=Color.White){
+                                        Text("●●",color=Color(0xFFF18632),fontSize=14.sp,
+                                            modifier=Modifier.padding(horizontal=5.dp,vertical=2.dp))
+                                    }
+                                }
                             }
                             RadioButton(selected=method==option.code&&option.enabled,onClick=null,enabled=option.enabled)
                         }
