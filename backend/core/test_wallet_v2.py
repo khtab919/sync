@@ -144,10 +144,11 @@ class WalletV2Tests(TestCase):
         self.assertEqual(row.status, 'dispatch_review')
         self.assertEqual(Wallet.objects.get(user=self.user).reserved_cents, 1000)
         self.assertEqual(self.administration(row, 'dispatch').status_code, 409)
-        invalid = self.client.post('/api/nowpayments/payout-ipn', json.dumps(
-            {'status':'FINISHED'}), content_type='application/json',
-            HTTP_X_NOWPAYMENTS_SIG='b' * 128)
-        self.assertEqual(invalid.status_code, 503)  # No configured secret here.
+        with patch.dict('os.environ', {'NOWPAYMENTS_IPN_SECRET': ''}):
+            invalid = self.client.post('/api/nowpayments/payout-ipn', json.dumps(
+                {'status':'FINISHED'}), content_type='application/json',
+                HTTP_X_NOWPAYMENTS_SIG='b' * 128)
+        self.assertEqual(invalid.status_code, 503)
         self.assertEqual(Wallet.objects.get(user=self.user).balance_cents, 5000)
 
     def test_private_notification_read_state(self):
