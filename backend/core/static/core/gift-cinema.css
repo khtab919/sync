@@ -448,3 +448,64 @@ body.audio-mode #stage footer {
  #giftEffect .gift-3d-canvas{filter:none}
  #giftEffect .gift-cinema-aurora{filter:none}
 }
+
+
+/* Cinematic accents tied to the actual 3D motion, never a static illustration. */
+#giftEffect .gift-cinema-accents{
+ position:absolute;inset:0;overflow:visible;z-index:1;pointer-events:none;
+}
+#giftEffect .gift-cinema-spark{
+ position:absolute;top:47%;left:50%;
+ display:block;width:5px;height:11px;border-radius:8px;
+ background:linear-gradient(180deg,#FFF1C4,#D39D5D);
+ opacity:0;box-shadow:0 0 12px #FFE8B6A0;
+ transform:rotate(var(--spin,0deg)) translateY(0);
+ animation:giftMeteor 2.25s ease-in-out var(--lag,0s) infinite;
+}
+#giftEffect .gift-cinema-flight .gift-cinema-spark{
+ width:17px;height:3px;border-radius:90% 10% 80% 20%;
+ background:linear-gradient(90deg,#E7D5AE,transparent);
+ animation:giftFeather 2.05s ease-out var(--lag,0s) infinite;
+}
+#giftEffect .gift-cinema-ocean .gift-cinema-spark{
+ width:9px;height:9px;border-radius:50%;
+ border:1px solid #BBF5FFB8;background:#7EDAFF38;
+ box-shadow:0 0 10px #9BEFFF6A;
+ animation:giftBubble 2.4s ease-out var(--lag,0s) infinite;
+}
+#giftEffect .gift-cinema-roar .gift-cinema-spark{
+ width:8px;height:5px;background:#F6D9A5;
+ animation-duration:1.6s;
+}
+#giftEffect .gift-cinema-roar .gift-roar-ring{
+ position:absolute;top:48%;left:50%;width:115px;height:115px;
+ transform:translate(-50%,-50%) scale(.3);
+ border-radius:50%;
+ border:2px solid #F5D091B3;
+ box-shadow:0 0 24px #C5893785,inset 0 0 15px #F0BF7E30;
+ opacity:0;
+ animation:giftRoar 1.45s cubic-bezier(.16,.7,.17,1) var(--lag,0s) 2;
+}
+@keyframes giftMeteor{
+ 0%{opacity:0;transform:rotate(var(--spin)) translateY(0) scale(.2)}
+ 22%{opacity:.95}
+ 100%{opacity:0;transform:rotate(var(--spin)) translateY(calc(-1 * var(--spread))) scale(.8)}
+}
+@keyframes giftFeather{
+ 0%{opacity:0;transform:rotate(var(--spin)) translateY(-20px) translateX(0) scale(.2)}
+ 28%{opacity:.9}
+ 100%{opacity:0;transform:rotate(var(--spin)) translateY(calc(-1 * var(--spread))) translateX(34px) scale(.9)}
+}
+@keyframes giftBubble{
+ 0%{opacity:0;transform:rotate(var(--spin)) translateY(30px) scale(.35)}
+ 20%{opacity:.9}
+ 100%{opacity:0;transform:rotate(var(--spin)) translateY(calc(-1 * var(--spread))) scale(1.5)}
+}
+@keyframes giftRoar{
+ 0%{opacity:0;transform:translate(-50%,-50%) scale(.25)}
+ 15%{opacity:.86}
+ 100%{opacity:0;transform:translate(-50%,-50%) scale(2.45)}
+}
+@media(prefers-reduced-motion:reduce){
+ #giftEffect .gift-cinema-spark,#giftEffect .gift-roar-ring{animation:none!important;display:none!important}
+}
