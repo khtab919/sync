@@ -37,30 +37,13 @@ def verify_code(request,access):
 
 @endpoint(['GET','POST'])
 def authentication(request):
+    # Admin entrance is the ordinary signed-in account plus server role scopes.
+    # The previous TOTP setup/verify flow is permanently retired.
     if not scopes(request.actor):raise ApiError('administrator_required',403)
-    a,_=AdminAccess.objects.get_or_create(user=request.actor,defaults={'role':'owner' if request.actor.is_superuser else 'live'})
-    if request.method=='GET':return JsonResponse({'enabled':a.totp_enabled,'verified':bool(request.api_token.admin_verified_at and timezone.now()-request.api_token.admin_verified_at<timedelta(minutes=10)),'permissions':scopes(request.actor)})
-    action=request.payload.get('action')
-    if action=='setup':
-        if a.locked_until and a.locked_until>timezone.now():raise ApiError('too_many_attempts',429)
-        if a.totp_enabled:raise ApiError('mfa_already_enabled',409)
-        if not request.actor.check_password(request.payload.get('password','')):
-            with transaction.atomic():
-                a=AdminAccess.objects.select_for_update().get(pk=a.pk);a.failed_attempts+=1
-                if a.failed_attempts>=5:a.locked_until=timezone.now()+timedelta(minutes=15)
-                a.save(update_fields=['failed_attempts','locked_until'])
-            event(request.actor,'mfa_setup_denied',request.actor.pk,'Password verification failed','denied');raise ApiError('invalid_credentials',403)
-        with transaction.atomic():
-            a=AdminAccess.objects.select_for_update().get(pk=a.pk)
-            if a.totp_enabled:raise ApiError('mfa_already_enabled',409)
-            secret=pyotp.random_base32();a.totp_secret=cipher().encrypt(secret.encode()).decode();a.last_counter=-1;a.save(update_fields=['totp_secret','last_counter']);event(request.actor,'mfa_setup',request.actor.pk,'Enrollment started')
-        return JsonResponse({'secret':secret,'uri':pyotp.TOTP(secret).provisioning_uri(request.actor.username,issuer_name='Relaxia')})
-    if action=='verify':
-        with transaction.atomic():
-            a=AdminAccess.objects.select_for_update().get(pk=a.pk);valid=verify_code(request,a)
-        if not valid:raise ApiError('invalid_totp',403)
-        return JsonResponse({'verified':True})
-    raise ApiError('invalid_action')
+    if request.method=='GET':
+        return JsonResponse({'enabled':False,'verified':True,'permissions':scopes(request.actor)})
+    raise ApiError('totp_not_supported',410)
+
 
 @endpoint(['GET'])
 def dashboard(request):
@@ -155,7 +138,7 @@ def preview(request,user_id):
     d['live_rooms']=rows(
         LiveBroadcast.objects.filter(owner=u).order_by('-created_at'),
         ['id','title','mode','status','viewers','created_at'])
-    # Financial history is only for MFA-authenticated finance-scoped admins.
+    # Financial history remains visible only for finance-scoped administrators.
     if 'finance.view' in scopes(request.actor):
         w=Wallet.objects.filter(user=u).first();d['wallet']={'balance_cents':w.balance_cents if w else 0,'reserved_cents':w.reserved_cents if w else 0};d['operations']=rows(FinancialOperation.objects.filter(Q(buyer=u)|Q(creator=u)).order_by('-created_at'),['id','kind','amount_cents','status','created_at'])
     return JsonResponse(d)
