@@ -183,6 +183,13 @@ def apply_payment(data):
             from .promotions import grant
             grant(invoice.quote.user,invoice.quote.bonus_cents,'gateway:'+str(invoice.pk),'Verified gateway promotional points')
             wallet.save(update_fields=['balance_cents']);invoice.credited_at=timezone.now()
+            from .models import UserNotification
+            UserNotification.objects.create(
+                user=invoice.quote.user, kind='topup',
+                title='اكتمل إيداع الرصيد',
+                body='تمت إضافة الرصيد بعد تأكيد NOWPayments.',
+                reference=str(invoice.quote.pk)
+            )
         invoice.save(update_fields=['payment_id','status','credited_at'])
     return invoice
 
