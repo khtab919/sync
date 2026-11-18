@@ -4,7 +4,7 @@ on:
     paths:
       - .github/workflows/export-apksigner.yml
     branches:
-      - fix/relaxia-116-live-white-screen-20261112
+      - feat/relaxia-paid-content-profile-payments-20261118
   workflow_dispatch:
 permissions:
   contents: read
@@ -26,4 +26,4 @@ jobs:
         with:
           name: android-apksigner-for-qa
           path: verifier/
-          retention-days: 1
+          retention-days: 7
