@@ -275,7 +275,7 @@ function giftSheet(preferredRecipientId=null){
    target.textContent='المستلم: '+receiver.name+(bySeat?' · المقعد المختار':' · المضيف');
    target.classList.remove('gift-target-unavailable');
   }else{
-   target.textContent=selectedSeatId!=null?'غادر صاحب المقعد؛ أغلق المتجر واختر مستلمًا جديدًا.':'اختر مقعد متحدث آخر؛ لا يمكنك إرسال هدية إلى نفسك.';
+   target.textContent=selectedSeatId!=null?'غادر صاحب المقعد؛ أغلق المتجر واختر مستلمًا جديدًا.':'اختر مقعد متحدث آخر؛ لا يمكنك إرسال هدية لنفسك.';
    target.classList.add('gift-target-unavailable');
   }
   refreshChoice();
