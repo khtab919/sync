@@ -89,11 +89,12 @@ internal fun AdminCentre(api:LayaliApi,name:String,ownerId:Int,dark:Boolean,onTh
  val context=androidx.compose.ui.platform.LocalContext.current
  // Dark administration stays screen-protected. Light mode is deliberately
  // screenshot-capable for the owner, and the previous window state is restored.
- DisposableEffect(context,dark){
+ DisposableEffect(context,dark,auth?.optBoolean("verified")){
     val window=(context as? android.app.Activity)?.window
     val secure=android.view.WindowManager.LayoutParams.FLAG_SECURE
     val originallySecure=((window?.attributes?.flags?:0) and secure)!=0
-    if(dark)window?.addFlags(secure) else window?.clearFlags(secure)
+    // Even light admin mode must not capture a visible TOTP enrollment key.
+    if(dark || auth?.optBoolean("verified")!=true)window?.addFlags(secure) else window?.clearFlags(secure)
     onDispose{if(originallySecure)window?.addFlags(secure) else window?.clearFlags(secure)}
  }
  val verified=auth?.optBoolean("verified")==true
