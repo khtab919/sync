@@ -9,7 +9,7 @@ from .models import UploadSession,UploadChunk
 @endpoint(['POST'])
 def start(request):
     p=request.payload;purpose=p.get('purpose');size=p.get('size');digest=p.get('sha256','')
-    if purpose not in ('offer','receipt','chat_image','chat_audio','chat_video','reel','avatar'):raise ApiError('invalid_purpose')
+    if purpose not in ('offer','receipt','chat_image','chat_audio','chat_video','reel','avatar','paid_photo'):raise ApiError('invalid_purpose')
     maximum=20*1024*1024 if purpose=='reel' else 8*1024*1024
     if type(size) is not int or not 16<=size<=maximum:raise ApiError('file_too_large')
     if not isinstance(digest,str) or not re.fullmatch('[a-f0-9]{64}',digest):raise ApiError('invalid_digest')
@@ -68,7 +68,7 @@ def finish(request,upload_id):
 def authorize_purpose(user,purpose):
     from .models import Profile,AdminFeature
     from .admin_security import blocked
-    if purpose in ('offer','reel'):
+    if purpose in ('offer','reel','paid_photo'):
         if blocked(user,'store'):raise ApiError('feature_restricted',403)
         if AdminFeature.objects.filter(key='store',enabled=False).exists():raise ApiError('feature_maintenance',503)
         if not Profile.objects.filter(user=user,publishing_allowed=True).exists():raise ApiError('creator_account_required',403)
