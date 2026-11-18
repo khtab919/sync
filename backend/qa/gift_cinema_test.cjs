@@ -134,5 +134,5 @@ test('live gift UI has inline two-step confirmation, no recipient fallback and m
  assert.match(stage,/function syncRoomFooterMetrics/);
  assert.match(page,/gift-cinema\.js\?v=cinema-1/);
  assert.match(page,/gift-cinema\.css\?v=cinema-1/);
- assert.ok(page.indexOf('gift-cinema.js?v=cinema-1')<page.indexOf('live-stage.js?v=cinema-1'));
+ assert.ok(page.indexOf('gift-cinema.js?v=cinema-1')<page.indexOf('live-stage.js?v=cinema-mic-2'));
 });
