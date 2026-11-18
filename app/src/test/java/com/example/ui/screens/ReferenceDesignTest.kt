@@ -169,7 +169,7 @@ class ReferenceDesignTest {
         compose.onNodeWithText("ريلز").performClick()
         compose.onNodeWithText("مساحة النشر").assertExists()
         compose.onNodeWithText("اختيار فيديو MP4 من الهاتف · حتى 20MB").performScrollTo().assertExists()
-        compose.onNodeWithText("اكتب عنوان الريلز أو وصفاً قصيراً...").performScrollTo().assertExists()
+        compose.onNodeWithText("عنوان أو وصف الريلز").performScrollTo().assertExists()
         compose.onNodeWithText("نشر الآن").assertIsNotEnabled()
         screenshot("07-reel-upload")
     }
