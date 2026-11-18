@@ -9,6 +9,7 @@ config={'id':'room-test','owner':False,'ownerName':'مضيف تجريبي','owne
 print(render_to_string('core/live_room.html',{'config':config,'nonce':'qa','theme':'dark'}))`],{cwd:root,env:{...process.env,DJANGO_SETTINGS_MODULE:'config.settings',DJANGO_SECRET_KEY:'test-only',POSTGRES_PASSWORD:'test-only',LAYALI_TESTING:'1'},encoding:'utf8'}).replace(/<script src="[^\"]+"><\/script>/g,'').replace(/<link rel="stylesheet"[^>]+>/g,'');
 const css=fs.readFileSync(path.join(root,'core/static/core/live-stage.css'),'utf8');
 const cinemaCss=fs.readFileSync(path.join(root,'core/static/core/gift-cinema.css'),'utf8');
+const royalCss=fs.readFileSync(path.join(root,'core/static/core/relaxia-voice-royal.css'),'utf8');
 const cinemaJs=fs.readFileSync(path.join(root,'core/static/core/gift-cinema.js'),'utf8');
 const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8').replace('connect().catch(e=>{message(e);if(e.name!==\'MediaFailure\')reconnect()});','');
 (async()=>{
@@ -20,7 +21,7 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    await page.route('https://room.test/',route=>route.fulfill({contentType:'text/html',body:html}));
    // The luxury pack may not yet be present on a new server: no broken icons.
    await page.route('**/static/core/gifts/icons/*.webp',route=>route.fulfill({status:404,body:''}));
-   await page.goto('https://room.test/');await page.addStyleTag({content:css});await page.addStyleTag({content:cinemaCss});
+   await page.goto('https://room.test/');await page.addStyleTag({content:css});await page.addStyleTag({content:cinemaCss});await page.addStyleTag({content:royalCss});
    await page.evaluate(()=>{window.LivekitClient={Room:{},RoomEvent:{},Track:{},ConnectionState:{Connected:'connected'}};window.RelaxiaMedia={}});
    await page.addScriptTag({content:cinemaJs});await page.addScriptTag({content:js});
    assert.equal(await page.locator('.audio-seat').count(),8,'placeholder seats render before network response');
@@ -47,10 +48,18 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    assert.equal(await page.locator('#gift').isVisible(),false);
    assert.equal(await page.locator('#micQuick').isVisible(),false,'no duplicate quick microphone for audience');
    assert.equal(await page.locator('#bigGiftBtn').isVisible(),true);
+   assert.equal(await page.locator('#syriatelCashLink').isVisible(),true,'native Syriatel cash strip at bottom');
+   assert.match(await page.locator('#syriatelCashLink').innerText(),/0997991404/);
+   assert.equal(await page.locator('#requestMic').isVisible(),true,'request microphone appears for audience');
+   const cssSeats=await page.locator('#audioStage').evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(' ').length);
+   assert.equal(cssSeats,4,'eight seats arranged into four columns');
+   const chatStyle=await page.locator('#messages').evaluate(el=>getComputedStyle(el).overflowY);
+   assert.equal(chatStyle,'auto','messages remain scrollable');
+
    const actionRow=await page.locator('footer .quick-actions').boundingBox();
    const composerRow=await page.locator('footer #composer').boundingBox();
-   assert.ok(actionRow && composerRow && composerRow.y>=actionRow.y+actionRow.height-2,'comment input is on a dedicated row below controls');
-   assert.ok(composerRow.width >= width-30,'comment composer spans the mobile width');
+   assert.ok(actionRow && composerRow && Math.abs(composerRow.y-actionRow.y)<=8,'single aligned control row instead of stacked bars');
+   assert.ok(composerRow.width >= Math.max(90,width*.26),'comment input stays usable beside action icons');
 
    assert.equal(await page.locator('#viewers').isVisible(),true);
    assert.equal(await page.locator('#exit svg').count(),1,'use the consistent vector close icon');
@@ -72,9 +81,9 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
      const exitColor=await page.locator('#exit').evaluate(el=>getComputedStyle(el).color);
      const viewerColor=await page.locator('#viewers').evaluate(el=>getComputedStyle(el).color);
      const liveColor=await page.locator('.live-pill').evaluate(el=>getComputedStyle(el).color);
-     assert.equal(exitColor,'rgb(247, 251, 255)','day theme exit must be legible on navy glass');
-     assert.equal(viewerColor,'rgb(247, 251, 255)','day theme viewer counter must be legible');
-     assert.equal(liveColor,'rgb(247, 251, 255)','day theme live status must remain white');
+     assert.ok(exitColor==='rgb(255, 255, 255)' || exitColor==='rgb(247, 251, 255)','day theme exit must be legible on navy glass');
+     assert.ok(viewerColor==='rgb(255, 255, 255)' || viewerColor==='rgb(247, 251, 255)','day theme viewer counter must be legible');
+     assert.ok(liveColor==='rgb(255, 255, 255)' || liveColor==='rgb(247, 251, 255)','day theme live status must remain white');
     }
     await page.evaluate(()=>{muted=true;updateQuickMic()});
     assert.equal(await page.locator('#micQuick').getAttribute('aria-label'),'تشغيل الميكروفون');
@@ -141,7 +150,7 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
     await page.locator('#closeSheet').click();
    }
    const composerBounds=await page.locator('#composer').boundingBox();
-   assert.ok(composerBounds.width>=width-30,'composer spans the available viewport');
+   assert.ok(composerBounds.width>=Math.max(90,width*.26),'composer remains usable beside primary action row');
    await page.evaluate(()=>{api=async action=>{
     if(action?.action==='comment')throw Error('network');
     if(action)window.sent.push(action);
@@ -187,7 +196,7 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    assert.ok(layout.overflowX<=2,'room must fit phone width');
    assert.ok(layout.overflowY<=2,'room must not slide vertically');
    assert.ok(layout.seatsScrollable<=2,'audio seats must not scroll independently');
-   assert.equal(layout.actions,3,'only three distinct primary viewer actions');
+   assert.equal(layout.actions,4,'viewer actions: gifts, more, guests and request microphone');
    assert.equal(await page.locator('.comment-empty').count(),1,'comments have an honest empty state');
    await page.locator('#more').click();
    assert.ok(await page.getByText('التعليقات والتفاعل',{exact:true}).isVisible(),'settings are grouped by purpose');
