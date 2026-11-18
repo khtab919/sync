@@ -154,3 +154,48 @@ The coin shop includes an optional hosted NOWPayments invoice rail. Merchant API
 Invoices bind a private order UUID to an immutable server quote, snapshot amount/bonus, owner and invoice id. Only merchant-signed HMAC SHA-512 IPN data with matching order/price/currency and a completed `finished` payment with sufficient `actually_paid` can credit once. Pending/confirming/underpaid/forged/wrong-order callbacks never credit. Return/cancel URLs are informational and cannot affect money. Reused invoice creation returns the existing checkout; uncertain creation outcomes require review instead of automatically creating another invoice. Later refund/conflicting-payment events are flagged for operator review, never silently credited twice. IPN endpoint is `/api/nowpayments/ipn`; it verifies locally and avoids remote API requests inside the callback.
 
 Protocol references: https://documenter.getpostman.com/view/7907941/S1a32n38 and https://nowpayments.zendesk.com/hc/en-us/articles/21395546303389-IPN-and-how-to-setup . Provider merchant eligibility, fees, minimums and production credentials are controlled by NOWPayments; do not assume a successful mock integration means a live merchant account is approved.
+
+
+### Relaxia · gated USDT withdrawals (2026-11-18)
+
+This feature remains staged until it passes a real NOWPayments payout trial with an
+eligible merchant account. Native deposit payments continue to accept **only USDT
+TRC20**. Withdrawals may use **USDT TRC20** (`usdttrc20`) or **USDT BEP20**
+(`usdtbsc`). User-supplied addresses are syntax checked on both client and
+server; merchant/provider checks, minimums and fees are still required before
+enabling real payouts.
+
+Required **server-side** environment (do not ship in the APK or paste into chat):
+`NOWPAYMENTS_API_KEY`, `NOWPAYMENTS_IPN_SECRET`,
+`NOWPAYMENTS_PAYOUT_EMAIL`, `NOWPAYMENTS_PAYOUT_PASSWORD`.
+Payouts also require a public HTTPS callback at
+`/api/nowpayments/payout-ipn` and NOWPayments payout eligibility/balance.
+If credentials are missing, payout dispatch returns a disabled error and no
+crypto is transferred.
+
+User requests hold existing internal balance without debiting it. Finance admin
+reviews **approve** or **reject**. Approved requests can be **dispatched** to
+NOWPayments and verified with the provider's payout-specific code. A valid
+signed `FINISHED` webhook must match the payout ID, address, network,
+amount and transaction hash. Only then is the held internal balance debited
+once; refunds or undelivered payouts must never be self-declared paid.
+
+Unexpected provider response or network timeouts leave the request in
+`dispatch_review` with funds reserved. **Never retry dispatch blindly**:
+reconcile the merchant batch history first to avoid duplicate payouts.
+Provider rejections require finance reconciliation, not a fabricated reversal.
+Older withdrawal requests without an explicit network retain `legacy`
+status and cannot be approved without secure migration/review. No balances,
+original receipts, usernames or older transactions are rescaled/deleted by
+migration `0040`.
+
+New endpoints: `GET/POST /api/withdrawals`,
+`GET/POST /api/admin/payouts`, `GET/POST /api/notifications`, and
+`POST /api/nowpayments/payout-ipn`. User notification inbox and unread bell
+are account-specific; admin finance notices are private.
+Run `python backend/manage.py makemigrations --check --dry-run` and
+`python backend/manage.py test core` before deployment. Verify staging with
+real eligible merchant credentials, provider payout status, network fees,
+one approval/rejection each, and a small actual transfer; do not make such
+a transfer from the CI mocks.
+
