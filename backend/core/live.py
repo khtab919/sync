@@ -108,7 +108,17 @@ def synchronize(row,force=False):
     if host and (not host_admission or not host_admission.session_id or host_admission.session.expires_at<=now):
         provider('RemoveParticipant',{'room':room_name(row),'identity':'host-'+str(row.owner_id)},room_name(row));host=None
     required_types=('AUDIO','0') if row.mode=='audio' else ('VIDEO','1')
-    transmitting=bool(host and any(str(t.get('type','AUDIO')).upper() in required_types and not t.get('muted',False) for t in host.get('tracks',[])))
+    # A host muting their microphone must not make a voice room disappear
+    # from discovery or force-close it after 45 seconds. Keep settlement time
+    # separately dependent on genuinely unmuted audio/video transmission.
+    host_media_ready=bool(host and any(
+        str(t.get('type','AUDIO')).upper() in required_types and
+        (row.mode=='audio' or not t.get('muted',False))
+        for t in host.get('tracks',[])))
+    transmitting=bool(host and any(
+        str(t.get('type','AUDIO')).upper() in required_types and
+        not t.get('muted',False)
+        for t in host.get('tracks',[])))
     ids={str(p.get('identity')) for p in participants}
     invalid=[]
     with transaction.atomic():
@@ -118,7 +128,7 @@ def synchronize(row,force=False):
         previous=locked.last_checked_at
         previously_active=locked.status=='active'
         locked.last_checked_at=now
-        if transmitting:
+        if host_media_ready:
             locked.status='active';locked.started_at=locked.started_at or now;locked.host_missing_at=None
         else:
             locked.host_missing_at=locked.host_missing_at or now
