@@ -112,7 +112,6 @@ fun ServerAppScreen(baseUrl: String) {
     var page by rememberSaveable { mutableStateOf("") }
     var revision by remember { mutableIntStateOf(0) }
     var loading by remember { mutableStateOf(false) }
-    var uploadProgress by remember { mutableFloatStateOf(-1f) }
     var submitting by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf("") }
     var contentError by remember { mutableStateOf("") }
@@ -209,18 +208,6 @@ fun ServerAppScreen(baseUrl: String) {
             val uploaded=api.upload(context,uri,"avatar")
             profile=api.request("/api/me","PATCH",JSONObject().put("avatar_id",uploaded.getString("id")))
             avatarUrl=profile.optString("avatar_url");notice="تم رفع صورة الملف وحفظها."
-        }
-    }
-    val reelPicker = androidx.activity.compose.rememberLauncherForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.GetContent()
-    ) { uri ->
-        if (uri != null) perform {
-            // Upload/approval are enforced by the backend, never client-side.
-            val uploaded = try{api.upload(context, uri, "reel"){value->uploadProgress=value}}finally{uploadProgress=-1f}
-            val result = api.request("/api/reels", "POST", JSONObject().put("media_id", uploaded.getString("id")))
-            if (result.optString("status") != "published") throw IllegalStateException("reel_publish_unconfirmed")
-            page = ""; tab = 1; revision++
-            notice = "تم نشر الريل بنجاح."
         }
     }
     fun editProfile() {
@@ -607,7 +594,6 @@ fun ServerAppScreen(baseUrl: String) {
                     }
                 }
                 if(searchLoading)LuxuryLoadingStatus("جارٍ البحث")
-                if(uploadProgress>=0f)LinearProgressIndicator(progress={uploadProgress},modifier=Modifier.fillMaxWidth())
                 if (screen == "ريلز" && rows.isNotEmpty()) {
                     val pager = rememberPagerState(pageCount = { rows.size })
                     LaunchedEffect(rows, selectedReelId) {
