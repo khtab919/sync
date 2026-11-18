@@ -157,9 +157,9 @@ internal fun AdminAccountPreviewScreen(snapshot: JSONObject, onBack: () -> Unit)
                             item {
                                 ProfileHero(
                                     person = person,
-                                    own = false,
-                                    settings = { selectedTab = 0 },
-                                    editOrChat = { selectedTab = 3 },
+                                    own = true,
+                                    settings = { showInfo = true },
+                                    editOrChat = { showInfo = true },
                                     frameOrFollow = { showInfo = true }
                                 )
                             }
