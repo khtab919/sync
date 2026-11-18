@@ -20,8 +20,11 @@ class NativeAdminSecurityTests(TestCase):
         u=user or self.owner;kw={'HTTP_AUTHORIZATION':'Bearer '+self.tokens[u.pk]}
         return self.client.get(path,**kw) if data is None else self.client.post(path,json.dumps(data),content_type='application/json',**kw)
     def verify(self,u):
-        secret=pyotp.random_base32();AdminAccess.objects.update_or_create(user=u,defaults={'totp_secret':cipher().encrypt(secret.encode()).decode(),'last_counter':-1})
-        result=self.call('/api/admin/auth',{'action':'verify','code':pyotp.TOTP(secret).now()},u);self.assertEqual(result.status_code,200);return secret
+        result=self.call('/api/admin/auth',user=u)
+        self.assertEqual(result.status_code,200)
+        self.assertTrue(result.json()['verified'])
+        self.assertFalse(result.json()['enabled'])
+        return ''
     def test_owner_signs_into_android_account_api_then_enters_in_app_mfa(self):
         # The public login is shared by users and administrators. It must not
         # grant an admin role to registrants or bypass the extra MFA layer.
@@ -41,11 +44,8 @@ class NativeAdminSecurityTests(TestCase):
 
         entry = self.client.get('/api/admin/auth', **auth)
         self.assertEqual(entry.status_code, 200)
-        self.assertFalse(entry.json()['verified'])
-        self.assertEqual(
-            self.client.get('/api/admin/control/dashboard', **auth).json()['error'],
-            'admin_mfa_required',
-        )
+        self.assertTrue(entry.json()['verified'])
+        self.assertEqual(self.client.get('/api/admin/control/dashboard', **auth).status_code,200)
         customer = self.client.get(
             '/api/me', HTTP_AUTHORIZATION='Bearer ' + self.tokens[self.user.pk],
         ).json()
@@ -62,16 +62,14 @@ class NativeAdminSecurityTests(TestCase):
             self.assertFalse(r.json()['creator'])
         self.assertEqual(self.call(url,{'action':'publishing_on','reason':'Unauthorized permission request'},self.user).status_code,403)
 
-    def test_owner_requires_real_mfa_and_replay_is_rejected(self):
-        self.assertEqual(self.call('/api/admin/control/dashboard').json()['error'],'admin_mfa_required')
-        secret=self.verify(self.owner)
+    def test_admin_uses_authenticated_role_without_second_factor(self):
+        self.verify(self.owner)
         self.assertEqual(self.call('/api/admin/control/dashboard').status_code,200)
-        self.assertEqual(self.call('/api/admin/auth',{'action':'verify','code':pyotp.TOTP(secret).now()}).json()['error'],'invalid_totp')
-        a=AdminAccess.objects.get(user=self.owner);self.assertNotIn(secret,a.totp_secret)
-    def test_mfa_rate_limit_and_short_admin_session(self):
+        self.assertEqual(self.call('/api/admin/auth',{'action':'verify','code':'123456'}).status_code,410)
+        self.assertEqual(self.call('/api/admin/auth',{'action':'setup','password':'any'}).status_code,410)
+    def test_short_admin_session_still_expires(self):
         self.assertLessEqual((SessionToken.objects.get(user=self.owner).expires_at-timezone.now()).total_seconds(),3600)
-        for _ in range(5):self.call('/api/admin/auth',{'action':'setup','password':'wrong'})
-        self.assertEqual(self.call('/api/admin/auth',{'action':'setup','password':'strong-owner-password'}).status_code,429)
+        self.assertEqual(self.call('/api/admin/control/dashboard').status_code,200)
     def test_registration_cannot_create_reserved_owner(self):
         r=self.call('/api/register',{'gender':'male','username':'super_admin','password':'safe-long-pass','email':'test@example.com','adult_confirmed':True,'accept_non_explicit_policy':True,'is_superuser':True},self.user)
         self.assertEqual(r.status_code,409);self.user.refresh_from_db();self.assertFalse(self.user.is_staff)
@@ -140,8 +138,7 @@ class NativeAdminSecurityTests(TestCase):
         path=f'/api/admin/accounts/{self.user.pk}'
         p={'action':'credit','amount_cents':500,'request_key':str(uuid.uuid4()),
            'reason':'Audited manual balance credit'}
-        # A finance permission by itself cannot bypass TOTP.
-        self.assertEqual(self.call(path,p).json()['error'],'admin_mfa_required')
+        # Financial permissions and the immutable audit record remain required.
         self.verify(self.owner)
         first=self.call(path,p)
         self.assertEqual(first.status_code,200,first.content)
@@ -194,9 +191,10 @@ class NativeAdminSecurityTests(TestCase):
         self.assertEqual(self.call('/api/admin/control/settings',{'key':'withdrawals','enabled':False,'reason':'Investigate payment incident'}).status_code,200)
         self.assertEqual(self.call('/api/withdrawals',{'amount_cents':100,'destination':'test','request_key':'test'},self.user).status_code,503)
         self.assertEqual(self.call('/api/my-cases',{'body':'Please review restriction'},self.user).status_code,200)
-    def test_stale_mfa_cannot_change_settings_and_external_admin_disabled(self):
-        self.verify(self.owner);SessionToken.objects.filter(user=self.owner).update(admin_verified_at=timezone.now()-timedelta(minutes=11))
-        self.assertEqual(self.call('/api/admin/control/settings',{'key':'live','enabled':False,'reason':'Incident response'}).json()['error'],'admin_mfa_required')
+    def test_temporary_admin_session_can_change_settings_and_external_admin_disabled(self):
+        self.verify(self.owner)
+        self.assertEqual(self.call('/api/admin/control/settings',
+            {'key':'live','enabled':False,'reason':'Incident response'}).status_code,200)
         self.assertEqual(self.client.get('/admin/').status_code,404)
     def test_financial_report_and_preview_never_include_tokens_or_chat_bodies(self):
         self.verify(self.owner)
