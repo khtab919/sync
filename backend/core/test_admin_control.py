@@ -80,6 +80,29 @@ class NativeAdminSecurityTests(TestCase):
         r=self.call(f'/api/admin/control/preview/{self.user.pk}',{'reason':'Customer requested support'},self.staff)
         self.assertEqual(r.status_code,200);self.assertTrue(r.json()['read_only']);self.assertNotIn('PRIVATE_SECRET',r.content.decode());self.assertNotIn('wallet',r.json());self.assertNotIn('token',r.json());self.assertTrue(AdminEvent.objects.filter(action='account_preview',actor=self.staff).exists())
         self.assertEqual(self.call('/api/admin/accounts/'+str(self.user.pk),{'action':'credit','amount_cents':100},self.staff).status_code,403)
+    def test_preview_shows_real_public_content_without_impersonation_or_private_messages(self):
+        self.verify(self.staff)
+        Service.objects.create(owner=self.user,title='جلسة حقيقية',description='وصف الخدمة',
+            price_cents=250,duration_minutes=30,approved=True,active=True)
+        Reel.objects.create(owner=self.user,caption='مقطع حقيقي',
+            video_url='https://example.invalid/public.mp4',approved=True)
+        Follow.objects.create(user=self.owner,creator=self.user)
+        LiveBroadcast.objects.create(owner=self.user,title='جلسة صوتية',mode='audio')
+        Message.objects.create(sender=self.user,recipient=self.owner,body='PRIVATE_CHAT_BODY')
+        result=self.call(f'/api/admin/control/preview/{self.user.pk}',
+            {'reason':'Read-only support verification'},self.staff)
+        self.assertEqual(result.status_code,200,result.content)
+        data=result.json()
+        self.assertTrue(data['read_only'])
+        self.assertEqual(data['profile']['followers'],1)
+        self.assertIn('owned_frames',data['profile'])
+        self.assertEqual(data['services'][0]['title'],'جلسة حقيقية')
+        self.assertEqual(data['reels'][0]['caption'],'مقطع حقيقي')
+        self.assertEqual(data['live_rooms'][0]['mode'],'audio')
+        self.assertNotIn('PRIVATE_CHAT_BODY',result.content.decode())
+        self.assertNotIn('wallet',data)
+        self.assertNotIn('operations',data)
+
     def test_no_self_escalation_or_owner_changes(self):
         self.verify(self.staff);self.verify(self.owner)
         self.assertEqual(self.call('/api/admin/control/roles',{'user_id':self.staff.pk,'role':'general','permissions':SCOPES,'reason':'Attempt escalation'},self.staff).status_code,403)
@@ -112,17 +135,60 @@ class NativeAdminSecurityTests(TestCase):
         self.assertEqual(self.call('/api/upload', {'purpose': 'reel', 'data': 'not-base64'}, self.user).json()['error'], 'feature_restricted')
         self.assertNotEqual(self.call('/api/upload', {'purpose': 'avatar', 'data': 'not-base64'}, self.user).status_code, 403)
 
-    def test_financial_adjustment_requires_independent_exact_approval(self):
-        self.verify(self.owner);AdminAccess.objects.filter(user=self.staff).update(role='finance');self.verify(self.staff)
+    def test_financial_credit_immediately_settles_after_mfa_and_replay_is_safe(self):
         import uuid
-        path=f'/api/admin/accounts/{self.user.pk}';p={'action':'credit','amount_cents':500,'request_key':str(uuid.uuid4()),'reason':'Reviewed balance correction'}
-        r=self.call(path,p);self.assertEqual(r.status_code,409);self.assertEqual(Wallet.objects.get(user=self.user).balance_cents,0);pk=r.json()['approval_id']
-        self.assertEqual(self.call('/api/admin/control/approvals',{'id':pk,'action':'approve','reason':'Self review attempt'}).status_code,403)
-        self.assertEqual(self.call('/api/admin/control/approvals',{'id':pk,'action':'approve','reason':'Independent evidence checked'},self.staff).status_code,200)
-        p['approval_id']=pk
-        self.assertEqual(self.call(path,dict(p,amount_cents=600)).status_code,409)
-        self.assertEqual(self.call(path,p).status_code,200);self.assertEqual(self.call(path,p).status_code,200)
-        self.assertEqual(Wallet.objects.get(user=self.user).balance_cents,500);self.assertEqual(BalanceAdjustment.objects.count(),1)
+        path=f'/api/admin/accounts/{self.user.pk}'
+        p={'action':'credit','amount_cents':500,'request_key':str(uuid.uuid4()),
+           'reason':'Audited manual balance credit'}
+        # A finance permission by itself cannot bypass TOTP.
+        self.assertEqual(self.call(path,p).json()['error'],'admin_mfa_required')
+        self.verify(self.owner)
+        first=self.call(path,p)
+        self.assertEqual(first.status_code,200,first.content)
+        self.assertEqual(self.call(path,p).status_code,200)
+        self.assertEqual(Wallet.objects.get(user=self.user).balance_cents,500)
+        self.assertEqual(BalanceAdjustment.objects.count(),1)
+        self.assertFalse(AdminApproval.objects.filter(requester=self.owner).exists())
+        conflict=self.call(path,dict(p,amount_cents=700))
+        self.assertEqual(conflict.status_code,409)
+        self.assertEqual(conflict.json()['error'],'credit_request_conflict')
+        self.assertEqual(Wallet.objects.get(user=self.user).balance_cents,500)
+        self.assertTrue(AdminEvent.objects.filter(actor=self.owner,action__icontains='credit').exists() or
+                        AdminEvent.objects.filter(actor=self.owner,reason__icontains='Credit').exists())
+        detail=self.call(path).json()
+        self.assertEqual(detail['balance_cents'],500)
+        self.assertEqual(detail['credit_history'][0]['coins'],500)
+
+    def test_finance_adjust_authorized_staff_credits_directly_without_approver(self):
+        import uuid
+        self.verify(self.owner)
+        self.verify(self.staff)
+        path=f'/api/admin/accounts/{self.user.pk}'
+        p={'action':'credit','amount_cents':200,'request_key':str(uuid.uuid4()),
+           'reason':'Authorized staff adjustment'}
+        # Support role without finance.adjust cannot credit.
+        self.assertEqual(self.call(path,p,self.staff).status_code,403)
+        AdminAccess.objects.filter(user=self.staff).update(
+            role='general', customized=True,
+            permissions=['users.view','finance.view','finance.adjust']
+        )
+        result=self.call(path,p,self.staff)
+        self.assertEqual(result.status_code,200,result.content)
+        self.assertEqual(Wallet.objects.get(user=self.user).balance_cents,200)
+        self.assertEqual(self.call(path,p,self.staff).status_code,200)
+        self.assertEqual(BalanceAdjustment.objects.count(),1)
+        self.assertFalse(AdminApproval.objects.filter(requester=self.staff).exists())
+
+    def test_manual_credit_invalid_amount_never_credits(self):
+        import uuid
+        self.verify(self.owner)
+        path=f'/api/admin/accounts/{self.user.pk}'
+        for cents in (0,-5,1000001):
+            response=self.call(path,{'action':'credit','amount_cents':cents,
+                'request_key':str(uuid.uuid4()),'reason':'Invalid amount safeguard'})
+            self.assertEqual(response.status_code,400)
+        self.assertEqual(Wallet.objects.get(user=self.user).balance_cents,0)
+
     def test_emergency_stop_and_appeals(self):
         self.verify(self.owner)
         self.assertEqual(self.call('/api/admin/control/settings',{'key':'withdrawals','enabled':False,'reason':'Investigate payment incident'}).status_code,200)

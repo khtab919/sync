@@ -24,8 +24,8 @@ android {
       "LAYALI_API_URL must be an HTTPS origin"
     }
     buildConfigField("String", "LAYALI_API_URL", "\"$backendUrl\"")
-    versionCode = 40
-    versionName = "11.7.2"
+    versionCode = 46
+    versionName = "11.7.8"
     val revision = providers.environmentVariable("GITHUB_SHA").orElse("local").get().take(12)
     buildConfigField("String", "BUILD_REVISION", "\"$revision\"")
 
@@ -62,6 +62,8 @@ android {
 
   buildTypes {
     release {
+      isDebuggable = false
+      manifestPlaceholders["relaxiaAppLabel"] = "Relaxia"
       isCrunchPngs = false
       isMinifyEnabled = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")

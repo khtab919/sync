@@ -5,8 +5,30 @@ from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 from .models import (LiveAdmission,LiveBroadcast,LiveSeat,LiveRoomModerator,LiveGiftDefinition,
-                     LiveGiftEvent,LivePK,LiveComment,BenefitGrant,FinancialOperation)
+                     LiveGiftEvent,LivePK,LiveComment,BenefitGrant,FinancialOperation,Wallet)
 from .views import ApiError,User,text
+
+# Public gift SKU identifiers are independent of the legacy and admin catalogs.
+# Prices are always read from LiveGiftDefinition, never from the browser.
+LUXURY_GIFT_CODES = (
+    'gift_clap','gift_coffee','gift_flower','gift_chocolate','gift_rose','gift_teddy',
+    'gift_butterfly','gift_balloons','gift_heart','gift_bouquet','gift_cake','gift_dolphin',
+    'gift_star','gift_fireworks','gift_diamond','gift_crown','gift_supercar','gift_yacht',
+    'gift_eagle','gift_palace','gift_blue_whale'
+)
+
+def public_gift_catalog():
+    rows = LiveGiftDefinition.objects.filter(
+        enabled=True, code__in=LUXURY_GIFT_CODES
+    ).order_by('price_cents','code').values('code','name','symbol','price_cents','effect')
+    return [
+        {**row,
+         'category': 'luxury' if row['effect']=='depth' else row['effect'],
+         'icon_url': '/static/core/gifts/icons/'+row['code']+'.webp',
+         'animation_url': '/static/core/gifts/animations/'+row['code']+'.webp'}
+        for row in rows
+    ]
+
 
 
 def publishing(admission):
@@ -57,14 +79,17 @@ def snapshot(row,user):
     events=LiveGiftEvent.objects.filter(broadcast=row).select_related('operation__buyer__profile','operation__creator__profile').order_by('-pk')[:20]
     top=LiveGiftEvent.objects.filter(broadcast=row,operation__status='settled').values('operation__buyer_id','operation__buyer__profile__display_name','operation__buyer__username').annotate(total=Sum('operation__amount_cents')).order_by('-total')[:5]
     received=LiveGiftEvent.objects.filter(broadcast=row,operation__status='settled').aggregate(total=Sum('operation__amount_cents'),earnings=Sum('operation__creator_cents'))
-    return {'mode':row.mode,'max_speakers':row.max_speakers,'speakers':speakers,'can_publish':can_publish,'publish_sources':sources,
+    wallet=Wallet.objects.filter(user=user).values('balance_cents','reserved_cents').first()
+    available_coins=max(0,wallet['balance_cents']-wallet['reserved_cents']) if wallet else 0
+    return {'mode':row.mode,'max_speakers':(max(8,len(speakers)) if row.mode=='audio' else row.max_speakers),'speakers':speakers,'can_publish':can_publish,'publish_sources':sources,
             'seat_status':own.status if own else '', 'manage_room':manager,
             'seat_requests':[dict(person(s.admission.user),mode=s.mode) for s in seats if s.status=='pending'] if manager else [],
             'moderator_ids':list(LiveRoomModerator.objects.filter(broadcast=row).values_list('user_id',flat=True)) if row.owner_id==user.pk else [],
-            'gift_catalog':list(LiveGiftDefinition.objects.filter(enabled=True).order_by('price_cents').values('code','name','symbol','price_cents','effect')),
-            'gift_events':[{'id':g.pk,'code':g.gift_code,'sender':g.operation.buyer.profile.display_name or g.operation.buyer.username,'recipient':g.operation.creator.profile.display_name or g.operation.creator.username,'name':g.gift_name,'symbol':g.symbol,'effect':g.effect} for g in reversed(events)],
+            'gift_catalog':public_gift_catalog(),
+            'gift_events':[{'id':g.pk,'code':g.gift_code,'sender':g.operation.buyer.profile.display_name or g.operation.buyer.username,'recipient':g.operation.creator.profile.display_name or g.operation.creator.username,'name':g.gift_name,'symbol':g.symbol,'effect':g.effect,'combo_count':g.combo_count,'total_price_cents':g.operation.amount_cents} for g in reversed(events)],
             'top_supporters':[{'name':t['operation__buyer__profile__display_name'] or t['operation__buyer__username'],'total':t['total']} for t in top],
             'gift_total_cents':received['total'] or 0,'gift_goal_cents':row.gift_goal_cents,
+            'available_coins':available_coins,
             'earned_cents':received['earnings'] or 0 if row.owner_id==user.pk else None,'pk':pk_json(row),
             'pinned_comment':{'id':row.pinned_comment_id,'name':row.pinned_comment.user.profile.display_name or row.pinned_comment.user.username,'text':row.pinned_comment.text} if row.pinned_comment_id else None}
 
@@ -78,6 +103,11 @@ def action(request,row,a):
         gift=LiveGiftDefinition.objects.filter(pk=code,enabled=True).first()
         if not row.gifts_enabled or not gift:raise ApiError('gift_unavailable',409)
         if p.get('confirmed') is not True or type(p.get('price_cents')) is not int or p['price_cents']!=gift.price_cents:raise ApiError('price_confirmation_required',409)
+        combo=p.get('combo_count',1)
+        if type(combo) is not int or not 1<=combo<=99:raise ApiError('invalid_gift_combo')
+        # Only the server sets total: never accept client-supplied total_cost.
+        total=gift.price_cents*combo
+        if total<1 or total>1000000:raise ApiError('invalid_gift_combo')
         recipient_id=p.get('recipient_id',row.owner_id)
         if type(recipient_id) is not int or recipient_id==request.actor.pk:raise ApiError('invalid_gift_recipient')
         key=uuid.UUID(text(p,'request_key',36,36))
@@ -90,15 +120,15 @@ def action(request,row,a):
             if not target:raise ApiError('invalid_gift_recipient')
             eligible(target,True)
             from . import finance
-            op=finance.hold(request.actor,target,'live_gift',key,str(row.pk),gift.price_cents)
+            op=finance.hold(request.actor,target,'live_gift',key,str(row.pk),total)
             existing=LiveGiftEvent.objects.filter(operation=op).first()
             if existing:
-                if existing.gift_code!=gift.code:raise ApiError('payment_request_conflict',409)
+                if existing.gift_code!=gift.code or existing.combo_count!=combo:raise ApiError('payment_request_conflict',409)
                 return
             finance.settle(op)
             pk=LivePK.objects.filter(broadcast=row,cancelled_at__isnull=True,ends_at__gt=timezone.now()).order_by('-id').first()
             team=next((i for i,members in enumerate(pk.teams) if recipient_id in members),None) if pk else None
-            LiveGiftEvent.objects.create(broadcast=row,operation=op,gift_code=gift.code,gift_name=gift.name,symbol=gift.symbol,effect=gift.effect,pk_round=pk if team is not None else None,team=team)
+            LiveGiftEvent.objects.create(broadcast=row,operation=op,gift_code=gift.code,gift_name=gift.name,symbol=gift.symbol,effect=gift.effect,combo_count=combo,pk_round=pk if team is not None else None,team=team)
         return
     if kind=='pk_start':
         from .live import synchronize
@@ -107,7 +137,7 @@ def action(request,row,a):
         current=LiveBroadcast.objects.select_for_update().get(pk=row.pk);authorized(current,request.actor)
         if kind=='seat_request':
             eligible(request.actor,True)
-            if current.max_speakers<=1 or request.actor.pk==row.owner_id:raise ApiError('stage_unavailable',409)
+            if (min(current.max_speakers,8) if current.mode=='audio' else current.max_speakers)<=1 or request.actor.pk==row.owner_id:raise ApiError('stage_unavailable',409)
             mode=p.get('mode')
             if mode not in ('audio','video') or (row.mode=='audio' and mode!='audio'):raise ApiError('invalid_stage_mode')
             seat,_=LiveSeat.objects.get_or_create(admission=a,defaults={'mode':mode})
@@ -128,7 +158,7 @@ def action(request,row,a):
             if p.get('approve') is True:
                 eligible(seat.admission.user,True)
                 if seat.admission.banned:raise ApiError('broadcast_forbidden',403)
-                if seat.status!='approved' and LiveSeat.objects.filter(admission__broadcast=row,status='approved').count()>=current.max_speakers-1:raise ApiError('stage_full',409)
+                if seat.status!='approved' and LiveSeat.objects.filter(admission__broadcast=row,status='approved').count()>=(min(current.max_speakers,8) if current.mode=='audio' else current.max_speakers)-1:raise ApiError('stage_full',409)
                 seat.status='approved'
             else:
                 provider('RemoveParticipant',{'room':room_name(row),'identity':str(seat.admission_id)},room_name(row));seat.status='rejected'
@@ -150,7 +180,7 @@ def action(request,row,a):
             teams=p.get('teams');duration=p.get('duration')
             if not isinstance(teams,list) or len(teams)!=2 or any(not isinstance(t,list) or not t for t in teams):raise ApiError('invalid_pk_teams')
             flat=[u for t in teams for u in t]
-            if any(type(u) is not int for u in flat) or len(flat)!=len(set(flat)) or len(flat)>current.max_speakers or row.owner_id not in flat or type(duration) is not int or duration not in (60,180,300):raise ApiError('invalid_pk_teams')
+            if any(type(u) is not int for u in flat) or len(flat)!=len(set(flat)) or len(flat)>(min(current.max_speakers,8) if current.mode=='audio' else current.max_speakers) or row.owner_id not in flat or type(duration) is not int or duration not in (60,180,300):raise ApiError('invalid_pk_teams')
             permitted={row.owner_id}|set(LiveSeat.objects.filter(admission__broadcast=row,status='approved',admission__connected=True).values_list('admission__user_id',flat=True))
             if not set(flat)<=permitted:raise ApiError('invalid_pk_teams')
             if LivePK.objects.filter(broadcast=row,cancelled_at__isnull=True,ends_at__gt=timezone.now()).exists():raise ApiError('pk_already_active',409)

@@ -103,6 +103,14 @@ def account(request, user_id):
             if action != 'credit':
                 audit(request.actor, user, action)
     data = account_json(user)
+    from .admin_security import scopes
+    if 'finance.view' in scopes(request.actor):
+        data['credit_history'] = [
+            {'coins': a.amount_cents, 'reason': a.reason,
+             'administrator': a.administrator.username, 'at': a.created_at.isoformat()}
+            for a in BalanceAdjustment.objects.filter(user=user)
+                .select_related('administrator').order_by('-created_at')[:10]
+        ]
     data['services'] = list(Service.objects.filter(owner=user).values('id', 'title', 'approved', 'active')[:100])
     data['reels'] = list(Reel.objects.filter(owner=user).values('id', 'approved')[:100])
     return JsonResponse(redacted(data,request))

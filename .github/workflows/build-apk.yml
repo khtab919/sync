@@ -110,6 +110,11 @@ jobs:
       - name: Compile Android sources before signing validation
         run: gradle compileDebugKotlin "-PLAYALI_API_URL=${LAYALI_API_URL}" --no-daemon --stacktrace
 
+      # Run Android/Robolectric regression tests before requiring the production
+      # signing key, so UI regressions remain detectable in public CI.
+      - name: Test adult access age boundaries
+        run: gradle testDebugUnitTest --tests com.example.ui.auth.AdultWelcomeScreenTest --tests com.example.ui.screens.ReferenceDesignTest --tests com.example.data.api.SecureSessionStoreTest --no-daemon
+
       - name: Prepare Debug Keystore
         env:
           RELAXIA_KEYSTORE_BASE64: ${{ secrets.RELAXIA_KEYSTORE_BASE64 }}
@@ -130,9 +135,6 @@ jobs:
             echo '::error::Signing certificate differs from the delivered Relaxia 11.3 APK. Update cancelled to prevent package conflicts.'
             exit 1
           fi
-
-      - name: Test adult access age boundaries
-        run: gradle testDebugUnitTest --tests com.example.ui.auth.AdultWelcomeScreenTest --tests com.example.ui.screens.ReferenceDesignTest --tests com.example.data.api.SecureSessionStoreTest --no-daemon
 
       - name: Upload native design previews
         if: always()

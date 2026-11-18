@@ -278,6 +278,21 @@ class GatewayInvoice(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
 
+class StripeCheckout(models.Model):
+    """One Stripe Checkout Session per immutable authenticated top-up quote.
+
+    All wallet credits are granted from verified Stripe events, never returns.
+    """
+    quote = models.OneToOneField(TopUpQuote, on_delete=models.PROTECT)
+    session_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
+    session_url = models.URLField(max_length=2048, blank=True)
+    payment_intent_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
+    status = models.CharField(max_length=32, default='creating')
+    credited_at = models.DateTimeField(null=True, blank=True)
+    review_required = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
 class ChatCharge(models.Model):
     message = models.ForeignKey(Message,on_delete=models.PROTECT)
     kind = models.CharField(max_length=12,choices=[('message','Message'),('unlock','Unlock')])
@@ -500,6 +515,7 @@ class LiveGiftEvent(models.Model):
     gift_name=models.CharField(max_length=60)
     symbol=models.CharField(max_length=8)
     effect=models.CharField(max_length=10)
+    combo_count=models.PositiveSmallIntegerField(default=1)
     pk_round=models.ForeignKey(LivePK,on_delete=models.PROTECT,null=True)
     team=models.PositiveSmallIntegerField(null=True)
     created_at=models.DateTimeField(auto_now_add=True)

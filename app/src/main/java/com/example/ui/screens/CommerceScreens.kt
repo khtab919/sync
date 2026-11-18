@@ -6,6 +6,29 @@ import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.PhotoCamera
+import androidx.compose.material.icons.rounded.SmartDisplay
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -169,51 +192,374 @@ internal fun CommerceScreen(api: LayaliApi, kind: String, back: () -> Unit) {
     }
 }
 
+private val PublishNavy = Color(0xFF0F2342)
+private val PublishSelected = Color(0xFFE8EEF5)
+private val PublishLine = Color(0xFF8390A3)
+private val PublishHint = Color(0xFF61718B)
+
+/**
+ * One real publishing workflow for both entry points. The two drafts and uploaded
+ * media IDs stay separate when switching tabs, preventing an image from being
+ * submitted as a reel (or vice versa).
+ */
 @Composable
-internal fun SellerPublishScreen(api: LayaliApi, back: () -> Unit) {
+internal fun SellerPublishScreen(api: LayaliApi, initialReel: Boolean = false, back: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
+    var caption by remember { mutableStateOf("") }
     var duration by remember { mutableStateOf("30") }
     var terms by remember { mutableStateOf("") }
     var price by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("خدمة") }
-    var media by remember { mutableStateOf(JSONObject()) }
-    var reel by remember { mutableStateOf(false) }
+    var offerMedia by remember { mutableStateOf(JSONObject()) }
+    var reelMedia by remember { mutableStateOf(JSONObject()) }
+    var reel by remember(initialReel) { mutableStateOf(initialReel) }
     var busy by remember { mutableStateOf(false) }
+    var uploadProgress by remember { mutableFloatStateOf(-1f) }
     var note by remember { mutableStateOf("") }
-    fun perform(block: suspend () -> Unit) { if(busy) return; busy = true; scope.launch { try { block() } catch(e: CancellationException) { throw e } catch(e: Exception) { note = commerceError(e) } finally { busy = false } } }
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri -> if(uri != null) perform { media = api.upload(context, uri, if(reel) "reel" else "offer"); note = "تم رفع الملف." } }
-    Surface(Modifier.fillMaxSize()) { Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding().verticalScroll(rememberScrollState()).padding(22.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        TextButton(back, enabled = !busy) { Text("رجوع") }
-        Text("مساحة النشر", style = MaterialTheme.typography.headlineLarge)
-        Text("النشر متاح فوراً لجميع الحسابات النشطة · محتوى 18+ غير صريح")
-        Row { FilterChip(!reel, { reel = false; media = JSONObject() }, label = { Text("خدمة أو منتج") }, enabled = !busy); Spacer(Modifier.width(8.dp)); FilterChip(reel, { reel = true; media = JSONObject() }, label = { Text("ريلز") }, enabled = !busy) }
-        if(busy) LuxuryLoadingStatus("جارٍ التحميل")
-        if(note.isNotBlank()) Text(note)
-        if(!reel) {
-            Field(title, { title = it.take(150) }, "عنوان العرض")
-            if(!reel){Field(duration,{duration=it.filter{c->c.isDigit()}.take(4)},"مدة الخدمة بالدقائق",numeric=true);Field(terms,{terms=it.take(600)},"شروط الخدمة والإلغاء",lines=2)}
-            Field(description, { description = it.take(600) }, "وصف العرض", lines=3)
-            Field(price, { price = it }, "السعر بالدولار", numeric=true)
-            Row { listOf("خدمة", "جلسة", "منتج").forEach { c -> FilterChip(category == c, { category = c }, label = { Text(c) }) } }
+    var noteIsError by remember { mutableStateOf(false) }
+
+    fun perform(block: suspend () -> Unit) {
+        if (busy) return
+        busy = true
+        note = ""
+        noteIsError = false
+        scope.launch {
+            try { block() }
+            catch(e: CancellationException) { throw e }
+            catch(e: Exception) { note = commerceError(e); noteIsError = true }
+            finally { uploadProgress = -1f; busy = false }
         }
-        OutlinedButton(onClick = { picker.launch(if(reel) "video/mp4" else "image/*") }, enabled = !busy) { Text(if(reel) "اختيار فيديو MP4 من الهاتف · حتى 20MB" else "رفع صورة من الهاتف · حتى 8MB") }
-        if(media.has("id") && !reel) ReferenceImage(media.optString("url"), Modifier.fillMaxWidth().height(200.dp))
-        Button(onClick = { perform {
-            val result = if(reel) api.request("/api/reels", "POST", JSONObject().put("media_id", media.getString("id")))
-            else api.request("/api/services", "POST", JSONObject().put("title", title).put("description", description).put("price_cents", BigDecimal(price).movePointRight(2).intValueExact()).put("category", category).put("image_id", media.getString("id")).put("duration_minutes",duration.toInt()).put("terms",terms))
-            if(result.optString("status") == "published") {
-                media = JSONObject(); title = ""; description = ""; price = ""
-                note = "تم نشر المحتوى بنجاح."
-            } else {
-                note = "تم حفظ الطلب، لكن ظهوره لم يتأكد بعد. تحقق من تحديث الخادم."
+    }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if(uri != null) {
+            val chosenReel = reel
+            perform {
+                val uploaded = api.upload(context, uri, if(chosenReel) "reel" else "offer") {
+                    uploadProgress = it
+                }
+                if(chosenReel) reelMedia = uploaded else offerMedia = uploaded
+                note = if(chosenReel) "تم رفع الفيديو. يمكنك كتابة الوصف ثم النشر." else "تم رفع الصورة بنجاح."
             }
-        } }, enabled = !busy && media.has("id") && (reel || (title.length >= 3 && description.length >= 10 && price.isNotBlank()))) { Text("نشر الآن") }
-    } }
+        }
+    }
+    val selectedMedia = if(reel) reelMedia else offerMedia
+    val validMoney = runCatching {
+        BigDecimal(price.trim()).movePointRight(2).intValueExact() > 0
+    }.getOrDefault(false)
+    val validOffer = title.trim().length >= 3 && description.trim().length >= 10 &&
+        duration.toIntOrNull() in 1..1440 && validMoney
+    val publishEnabled = !busy && selectedMedia.has("id") && (reel || validOffer)
+
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            Column(
+                Modifier.fillMaxSize().safeDrawingPadding().imePadding()
+                    .padding(horizontal = 18.dp)
+            ) {
+                Box(Modifier.fillMaxWidth().height(62.dp), contentAlignment = Alignment.Center) {
+                    Text(
+                        if(reel) "مساحة النشر" else "إضافة عرض جديد",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center
+                    )
+                    IconButton(
+                        onClick = back, enabled = !busy,
+                        modifier = Modifier.align(Alignment.CenterStart).size(48.dp)
+                    ) {
+                        Icon(Icons.Rounded.ArrowBack, "رجوع", tint = PublishNavy)
+                    }
+                }
+                Row(
+                    Modifier.fillMaxWidth().padding(top = 5.dp, bottom = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    PublishSegment("خدمة أو منتج", !reel, !busy, Modifier.weight(1f)) {
+                        reel = false; note = ""
+                    }
+                    PublishSegment("ريلز", reel, !busy, Modifier.weight(1f)) {
+                        reel = true; note = ""
+                    }
+                }
+
+                Column(
+                    modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(13.dp)
+                ) {
+                    if(note.isNotBlank()) {
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = if(noteIsError) MaterialTheme.colorScheme.errorContainer
+                                else PublishSelected
+                        ) {
+                            Text(
+                                note, Modifier.fillMaxWidth().padding(12.dp),
+                                color = if(noteIsError) MaterialTheme.colorScheme.onErrorContainer
+                                    else PublishNavy, style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                    if(reel) {
+                        Text(
+                            "النشر متاح فوراً لجميع الحسابات النشطة · محتوى 18+ غير صريح",
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                        PublishMediaDropzone(
+                            selected = reelMedia.has("id"), isReel = true, enabled = !busy,
+                            modifier = Modifier.fillMaxWidth().height(250.dp)
+                        ) { picker.launch("video/mp4") }
+                        PublishInput(
+                            value = caption, onChange = { caption = it.take(500) },
+                            label = "عنوان أو وصف الريلز",
+                            hint = "اكتب عنوان الريلز أو وصفاً قصيراً...",
+                            modifier = Modifier.fillMaxWidth(), lines = 2, enabled = !busy
+                        )
+                    } else {
+                        PublishInput(
+                            value = title, onChange = { title = it.take(150) },
+                            label = "عنوان العرض",
+                            modifier = Modifier.fillMaxWidth(), enabled = !busy
+                        )
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            PublishInput(
+                                value = duration,
+                                onChange = { duration = it.filter(Char::isDigit).take(4) },
+                                label = "المدة (دقيقة)", numeric = true,
+                                modifier = Modifier.weight(1f), enabled = !busy
+                            )
+                            PublishInput(
+                                value = price,
+                                onChange = { price = it.filter { c -> c.isDigit() || c == '.' }.take(10) },
+                                label = "السعر ($)", numeric = true,
+                                modifier = Modifier.weight(1f), enabled = !busy
+                            )
+                        }
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            listOf("خدمة", "جلسة", "منتج").forEach { kind ->
+                                PublishSegment(
+                                    kind, category == kind, !busy, Modifier.weight(1f)
+                                ) { category = kind }
+                            }
+                        }
+                        PublishInput(
+                            value = description, onChange = { description = it.take(600) },
+                            label = "وصف العرض", lines = 3,
+                            modifier = Modifier.fillMaxWidth(), enabled = !busy
+                        )
+                        PublishInput(
+                            value = terms, onChange = { terms = it.take(600) },
+                            label = "شروط الخدمة والإلغاء", lines = 2,
+                            modifier = Modifier.fillMaxWidth(), enabled = !busy
+                        )
+                        PublishMediaDropzone(
+                            selected = offerMedia.has("id"), isReel = false, enabled = !busy,
+                            modifier = Modifier.fillMaxWidth().height(155.dp)
+                        ) { picker.launch("image/*") }
+                        if(offerMedia.has("id")) {
+                            val imageUrl = offerMedia.optString("url")
+                            if(imageUrl.isNotBlank())
+                                ReferenceImage(imageUrl, Modifier.fillMaxWidth().height(150.dp))
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                }
+
+                Column(
+                    Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    if(busy) {
+                        if(uploadProgress >= 0f) {
+                            LinearProgressIndicator(
+                                progress = { uploadProgress.coerceIn(0f, 1f) },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        } else LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    }
+                    Button(
+                        onClick = {
+                            perform {
+                                val response = if(reel) {
+                                    api.request(
+                                        "/api/reels", "POST",
+                                        JSONObject().put("media_id", reelMedia.getString("id"))
+                                            .put("caption", caption.trim())
+                                    )
+                                } else {
+                                    api.request(
+                                        "/api/services", "POST",
+                                        JSONObject().put("title", title.trim())
+                                            .put("description", description.trim())
+                                            .put("price_cents", BigDecimal(price.trim()).movePointRight(2).intValueExact())
+                                            .put("category", category)
+                                            .put("image_id", offerMedia.getString("id"))
+                                            .put("duration_minutes", duration.toInt())
+                                            .put("terms", terms.trim())
+                                    )
+                                }
+                                if(response.optString("status") == "published") {
+                                    if(reel) { reelMedia = JSONObject(); caption = "" }
+                                    else {
+                                        offerMedia = JSONObject(); title = ""; description = ""
+                                        price = ""; duration = "30"; terms = ""
+                                    }
+                                    note = "تم نشر المحتوى بنجاح."
+                                } else {
+                                    noteIsError = true
+                                    note = "تم إرسال الطلب، لكن النشر لم يتأكد بعد. تحقق من تحديث الخادم."
+                                }
+                            }
+                        },
+                        enabled = publishEnabled,
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = PublishNavy, contentColor = Color.White,
+                            disabledContainerColor = PublishNavy.copy(alpha = .3f)
+                        ),
+                        shape = RoundedCornerShape(17.dp)
+                    ) {
+                        Text(
+                            if(busy) "جارٍ النشر…" else "نشر الآن",
+                            fontWeight = FontWeight.Bold, fontSize = 16.sp
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
 
+@Composable
+private fun PublishSegment(
+    title: String, selected: Boolean, enabled: Boolean,
+    modifier: Modifier = Modifier, onClick: () -> Unit
+) {
+    val shape = RoundedCornerShape(16.dp)
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier.height(49.dp),
+        shape = shape,
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp, if(selected) PublishSelected else PublishLine
+        ),
+        color = if(selected) PublishSelected else Color.Transparent,
+        contentColor = PublishNavy
+    ) {
+        Box(Modifier.fillMaxSize().padding(horizontal = 5.dp), contentAlignment = Alignment.Center) {
+            Text(
+                title, fontWeight = if(selected) FontWeight.Bold else FontWeight.Medium,
+                fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+@Composable
+private fun PublishInput(
+    value: String, onChange: (String) -> Unit,
+    label: String, modifier: Modifier,
+    hint: String = "", lines: Int = 1, numeric: Boolean = false, enabled: Boolean = true
+) {
+    OutlinedTextField(
+        value = value, onValueChange = onChange,
+        modifier = modifier,
+        label = { Text(label, maxLines = 1) },
+        placeholder = { if(hint.isNotBlank()) Text(hint) },
+        shape = RoundedCornerShape(18.dp),
+        minLines = lines, maxLines = if(lines == 1) 1 else 5,
+        enabled = enabled,
+        keyboardOptions = KeyboardOptions(
+            keyboardType = if(numeric) KeyboardType.Decimal else KeyboardType.Text
+        ),
+        colors = OutlinedTextFieldDefaults.colors(
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            focusedContainerColor = MaterialTheme.colorScheme.surface,
+            unfocusedBorderColor = PublishLine.copy(alpha = .55f),
+            focusedBorderColor = PublishNavy
+        )
+    )
+}
+
+@Composable
+private fun PublishMediaDropzone(
+    selected: Boolean, isReel: Boolean, enabled: Boolean,
+    modifier: Modifier = Modifier, onPick: () -> Unit
+) {
+    val radius = 22.dp
+    Box(
+        modifier
+            .clip(RoundedCornerShape(radius))
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .drawBehind {
+                val stroke = 1.5.dp.toPx()
+                val inset = stroke / 2f
+                drawRoundRect(
+                    color = PublishLine,
+                    topLeft = Offset(inset, inset),
+                    size = Size(size.width - stroke, size.height - stroke),
+                    cornerRadius = CornerRadius(radius.toPx()),
+                    style = Stroke(
+                        width = stroke,
+                        pathEffect = PathEffect.dashPathEffect(
+                            floatArrayOf(10.dp.toPx(), 8.dp.toPx())
+                        )
+                    )
+                )
+            }
+            .clickable(enabled = enabled, onClick = onPick)
+            .padding(16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = PublishSelected,
+                modifier = Modifier.size(64.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        if(isReel) Icons.Rounded.SmartDisplay else Icons.Rounded.PhotoCamera,
+                        contentDescription = null,
+                        modifier = Modifier.size(30.dp), tint = PublishNavy
+                    )
+                }
+            }
+            Text(
+                when {
+                    selected && isReel -> "تم رفع الفيديو · اضغط للاستبدال"
+                    selected -> "تم رفع الصورة · اضغط للاستبدال"
+                    isReel -> "اختيار فيديو MP4 من الهاتف · حتى 20MB"
+                    else -> "رفع صورة من الهاتف · حتى 8MB"
+                },
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodyMedium,
+                color = PublishNavy, fontWeight = FontWeight.Medium
+            )
+            if(selected) Icon(
+                Icons.Rounded.CheckCircle, "الملف مرفوع",
+                tint = Color(0xFF2E795F), modifier = Modifier.size(18.dp)
+            )
+        }
+    }
+}
 @Composable
 internal fun SupportFloatingButton() {
     var open by remember { mutableStateOf(false) }

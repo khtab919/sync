@@ -33,6 +33,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.VerticalPager
@@ -111,7 +112,6 @@ fun ServerAppScreen(baseUrl: String) {
     var page by rememberSaveable { mutableStateOf("") }
     var revision by remember { mutableIntStateOf(0) }
     var loading by remember { mutableStateOf(false) }
-    var uploadProgress by remember { mutableFloatStateOf(-1f) }
     var submitting by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf("") }
     var contentError by remember { mutableStateOf("") }
@@ -208,18 +208,6 @@ fun ServerAppScreen(baseUrl: String) {
             val uploaded=api.upload(context,uri,"avatar")
             profile=api.request("/api/me","PATCH",JSONObject().put("avatar_id",uploaded.getString("id")))
             avatarUrl=profile.optString("avatar_url");notice="تم رفع صورة الملف وحفظها."
-        }
-    }
-    val reelPicker = androidx.activity.compose.rememberLauncherForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.GetContent()
-    ) { uri ->
-        if (uri != null) perform {
-            // Upload/approval are enforced by the backend, never client-side.
-            val uploaded = try{api.upload(context, uri, "reel"){value->uploadProgress=value}}finally{uploadProgress=-1f}
-            val result = api.request("/api/reels", "POST", JSONObject().put("media_id", uploaded.getString("id")))
-            if (result.optString("status") != "published") throw IllegalStateException("reel_publish_unconfirmed")
-            page = ""; tab = 1; revision++
-            notice = "تم نشر الريل بنجاح."
         }
     }
     fun editProfile() {
@@ -322,6 +310,12 @@ fun ServerAppScreen(baseUrl: String) {
     }},confirmButton={TextButton(onClick={insights=null}){Text("إغلاق")}}) }
     if(securityDialog)AccountSecurityDialog(api,!signedIn,{securityDialog=false}){signedIn=false;remembered=false;profile=JSONObject();page=""}
     val screen = page.ifBlank { destinations[tab] }
+    val mainListState = rememberLazyListState()
+    // The home feed must always open at the first card, not at a recycled
+    // scroll offset from another bottom-navigation destination.
+    LaunchedEffect(screen, signedIn) {
+        if (signedIn && screen == "تصفح") mainListState.scrollToItem(0)
+    }
     LaunchedEffect(signedIn,screen,foreground,revision){
         if(!signedIn || screen!="تصفح" || !foreground)return@LaunchedEffect
         while(true){
@@ -479,7 +473,7 @@ fun ServerAppScreen(baseUrl: String) {
             TextButton(onClick = { perform { api.request("/api/calls/${incoming.getString("id")}", "POST", JSONObject().put("action", "reject")); incomingCall = null } }, enabled = !submitting) { Text("رفض") }
         }) }
         if (screen=="لوحة الإدارة" && profile.optBoolean("is_admin")) {
-            AdminCentre(api,profile.optString("display_name"),profile.optInt("id")){back()}
+            AdminCentre(api,profile.optString("display_name"),profile.optInt("id"),dark=dark,onThemeChange={ selected -> dark=selected; prefs.edit().putBoolean("dark",selected).apply() }){back()}
             return@MyApplicationTheme
         }
         if (screen in listOf("شحن الرصيد", "تفعيل البائع", "يا نصيب", "العجلة")) {
@@ -490,10 +484,11 @@ fun ServerAppScreen(baseUrl: String) {
         if(screen=="الحسابات المحظورة"){BlockedAccounts(api){back()};return@MyApplicationTheme}
         if(screen=="سجل العمليات"){FinancialHistory(api){back()};return@MyApplicationTheme}
         if(screen=="الحجوزات"){BookingHistory(api,explore={tab=2;back();revision++}){back();revision++};return@MyApplicationTheme}
-        if(screen=="البث المباشر"){LiveLobby(api,baseUrl,{showCreator(it)},{buyCredits()}){back();revision++};return@MyApplicationTheme}
+        if(screen=="البث المباشر"){LiveLobby(api,baseUrl,{showCreator(it)},{buyCredits()},initialFilter="audio",initialCreate=true){back();revision++};return@MyApplicationTheme}
         if(screen=="الغرف الصوتية"){LiveLobby(api,baseUrl,{showCreator(it)},{buyCredits()},initialFilter="audio"){back();revision++};return@MyApplicationTheme}
-        if (screen == "إضافة عرض") {
-            SellerPublishScreen(api) { back(); revision++ }
+        if(screen=="بدء غرفة صوتية"){LiveLobby(api,baseUrl,{showCreator(it)},{buyCredits()},initialFilter="audio",initialCreate=true){back();revision++};return@MyApplicationTheme}
+        if (screen == "إضافة عرض" || screen == "نشر ريلز") {
+            SellerPublishScreen(api, initialReel = screen == "نشر ريلز") { back(); revision++ }
             return@MyApplicationTheme
         }
         if (screen == "محادثة" && peerId.toIntOrNull() != null) {
@@ -503,9 +498,11 @@ fun ServerAppScreen(baseUrl: String) {
             return@MyApplicationTheme
         }
         Scaffold(
+            contentWindowInsets = WindowInsets.safeDrawing,
+            floatingActionButtonPosition = FabPosition.Start,
             floatingActionButton = {
                 if (page.isBlank() && screen in listOf("تصفح", "العرض")) Column(verticalArrangement = Arrangement.spacedBy(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    SmallFloatingActionButton(onClick = { showCreationSheet = true }, modifier = Modifier.size(46.dp), shape = CircleShape, containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary) {
+                    SmallFloatingActionButton(onClick = { showCreationSheet = true }, modifier = Modifier.padding(start=16.dp,bottom=16.dp).size(46.dp), shape = CircleShape, containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary) {
                         Icon(Icons.Rounded.Edit, "إنشاء محتوى")
                     }
                 }
@@ -536,10 +533,13 @@ fun ServerAppScreen(baseUrl: String) {
             },
             bottomBar = {
                 if (page.isBlank() && (screen != "ريلز" || rows.isEmpty())) {
+                    Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).navigationBarsPadding()) {
+                    HorizontalDivider(thickness=1.dp,color=if(dark)Color(0xFF52627C) else Color(0xFFE5E7EB))
                     NavigationBar(
                         containerColor = MaterialTheme.colorScheme.surface,
-                        tonalElevation = 2.dp,
-                        modifier = Modifier.clip(RoundedCornerShape(topStart = 23.dp, topEnd = 23.dp)).height(72.dp)
+                        tonalElevation = 3.dp,
+                        windowInsets = WindowInsets(0,0,0,0),
+                        modifier = Modifier.clip(RoundedCornerShape(topStart = 23.dp, topEnd = 23.dp)).height(76.dp)
                     ) {
                         destinations.forEachIndexed { index, _ ->
                             val active = tab == index
@@ -567,18 +567,21 @@ fun ServerAppScreen(baseUrl: String) {
                                         })
                                 },
                                 label = {
-                                    Text(destinationLabels[index], fontSize = 10.sp,
+                                    Text(destinationLabels[index], fontSize = 11.sp,
                                         fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
                                         maxLines = 1)
                                 },
                                 colors = NavigationBarItemDefaults.colors(
-                                    indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-                                    selectedIconColor = MaterialTheme.colorScheme.primary,
-                                    selectedTextColor = MaterialTheme.colorScheme.primary
+                                    indicatorColor = if(dark)Color(0xFF263E73) else Color(0xFFDCE8FA),
+                                    selectedIconColor = if(dark)Color(0xFF95BDFF) else Color(0xFF1E40AF),
+                                    selectedTextColor = if(dark)Color(0xFF95BDFF) else Color(0xFF1E40AF),
+                                    unselectedIconColor = if(dark)Color(0xFFCAD6E7) else Color(0xFF4B5563),
+                                    unselectedTextColor = if(dark)Color(0xFFCAD6E7) else Color(0xFF4B5563)
                                 )
                             )
                         }
                     }
+                    } // navigationBarsPadding wrapper
                 }
             }
         ) { padding ->
@@ -591,7 +594,6 @@ fun ServerAppScreen(baseUrl: String) {
                     }
                 }
                 if(searchLoading)LuxuryLoadingStatus("جارٍ البحث")
-                if(uploadProgress>=0f)LinearProgressIndicator(progress={uploadProgress},modifier=Modifier.fillMaxWidth())
                 if (screen == "ريلز" && rows.isNotEmpty()) {
                     val pager = rememberPagerState(pageCount = { rows.size })
                     LaunchedEffect(rows, selectedReelId) {
@@ -637,7 +639,7 @@ fun ServerAppScreen(baseUrl: String) {
                         ) { Icon(Icons.Rounded.ArrowForward, "العودة للتصفح", tint=Color.White) }
                     }
                 } else PullToRefreshBox(isRefreshing = loading, onRefresh = { if (!loading) revision++ }, modifier = Modifier.weight(1f)) {
-                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(if (screen == "تصفح") 5.dp else 12.dp)) {
+                LazyColumn(Modifier.fillMaxSize(), state=mainListState, contentPadding = PaddingValues(bottom = if(screen=="تصفح") 120.dp else 40.dp), verticalArrangement = Arrangement.spacedBy(if (screen == "تصفح") 5.dp else 12.dp)) {
                     if ((loading && rows.isEmpty() && screen in listOf("دردشة", "الحجوزات", "المحفوظات", "ريلز")) || (loading && services.isEmpty() && screen in listOf("تصفح", "العرض"))) item { LuxurySkeletonCards() }
                     when (screen) {
                         "تصفح" -> {
@@ -649,7 +651,7 @@ fun ServerAppScreen(baseUrl: String) {
                                     onProfile = { page = ""; tab = 4 },
                                     onWallet = { open("المحفظة") },
                                     onLive = { open("البث المباشر") },
-                                    onAudio = { open("الغرف الصوتية") }
+                                    onAudio = { open("بدء غرفة صوتية") }
                                 )
                             }
                             // The feed starts immediately when there are no live rooms.
@@ -946,24 +948,6 @@ fun ServerAppScreen(baseUrl: String) {
                                 Text(if (row.optString("status") == "awaiting_payment") "بانتظار الدفع · لم يُؤكَّد الحجز بعد" else row.optString("status"), color = MaterialTheme.colorScheme.onSurfaceVariant)
                             } } } }
                         }
-                        "إضافة عرض" -> item { FormColumn {
-                            Text("اعرض خدمة أو جلسة أو منتجًا", style = MaterialTheme.typography.headlineMedium)
-                            Text("يمكن لجميع الحسابات النشطة نشر الخدمات مباشرة. يمكن للإدارة إخفاء المحتوى المخالف لاحقاً.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("خدمة", "منتج", "جلسة").forEach { kind -> FilterChip(offerKind == kind, { offerKind = kind }, label = { Text(kind) }) } }
-                            Field(title, { title = it }, "عنوان العرض")
-                            Field(description, { description = it }, "وصف العرض", lines = 4)
-                            Field(price, { price = it }, "السعر بالدولار", numeric = true)
-                            Field(image, { image = it }, "رابط صورة HTTPS · اختياري")
-                            ReferencePrimary("نشر الآن", !submitting) { perform {
-                                val result = api.request("/api/services", "POST", JSONObject().put("title", title).put("description", description).put("price_cents", cents(price)).put("category", offerKind).put("image_url", image))
-                                if(result.optString("status") == "published") {
-                                    title = ""; description = ""; price = ""; image = ""; page = ""; tab = 2; revision++
-                                    notice = "تم نشر عرضك بنجاح."
-                                } else {
-                                    notice = "تم حفظ العرض، لكن النشر لم يتأكد. تحقق من تحديث الخادم."
-                                }
-                            } }
-                        } }
                         "المحفظة" -> {
                             item { FormColumn {
                                 ReferenceCard { Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -1036,7 +1020,7 @@ fun ServerAppScreen(baseUrl: String) {
                     Surface(
                         onClick = {
                             showCreationSheet = false
-                            reelPicker.launch("video/mp4")
+                            open("نشر ريلز")
                         },
                         shape = RoundedCornerShape(16.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
@@ -1158,21 +1142,21 @@ private fun Story(name: String, frame: Int, imageUrl: String = "", click: () -> 
 @Composable
 private fun FeedCard(service: JSONObject, owner: () -> Unit, details: () -> Unit, react: (String) -> Unit, chat: () -> Unit) {
     Box(Modifier.padding(horizontal = 16.dp)) { ReferenceCard {
-        Row(Modifier.fillMaxWidth().padding(10.dp).clickable(onClick = owner), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal=14.dp,vertical=12.dp).clickable(onClick = owner), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             ReferenceAvatar(service.optString("owner_name"), service.optInt("owner_frame"), 44, service.optString("owner_avatar_url"))
             Column(Modifier.weight(1f)) { Text(service.optString("owner_name"), fontWeight = FontWeight.SemiBold); Text(service.optString("category", "خدمة"), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             IconButton(onClick = { react("save") }) { Icon(if (service.optBoolean("saved")) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder, "حفظ العرض") }
         }
         ReferenceImage(service.optString("image_url"), Modifier.fillMaxWidth().aspectRatio(1.55f).clip(RoundedCornerShape(15.dp)).clickable(onClick = details))
-        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { react("like") }) { Icon(if (service.optBoolean("liked")) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, "إعجاب", tint = if (service.optBoolean("liked")) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface) }
             Text(service.optInt("like_count").toString(), fontSize = 12.sp)
             IconButton(onClick = chat) { Icon(Icons.Rounded.ChatBubbleOutline, "محادثة صاحب الحساب") }
             Spacer(Modifier.weight(1f))
             TextButton(onClick = details) { Text("عرض التفاصيل") }
         }
-        Text(service.optString("title"), Modifier.padding(horizontal = 16.dp), fontWeight = FontWeight.SemiBold)
-        Text(service.optString("description"), Modifier.padding(start = 16.dp, end = 16.dp, bottom = 18.dp, top = 8.dp), maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(service.optString("title"), Modifier.padding(horizontal = 14.dp), fontWeight = FontWeight.SemiBold)
+        Text(service.optString("description"), Modifier.padding(start = 14.dp, end = 14.dp, bottom = 16.dp, top = 7.dp), maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     } }
 }
 @Composable
@@ -1339,28 +1323,30 @@ internal fun ProfileHero(
 @Composable
 internal fun ReferenceLogin(register: Boolean, busy: Boolean, notice: String, username: String, password: String, email: String, adultConfirmed: Boolean, onUsername: (String) -> Unit, onPassword: (String) -> Unit, onEmail: (String) -> Unit, onAdultConfirmed: (Boolean) -> Unit, toggle: () -> Unit, submit: () -> Unit, gender:String="", onGender:(String)->Unit={},onForgot:()->Unit={}) {
     var showPassword by remember { mutableStateOf(false) }
-    val ready=!busy && email.trim().contains("@") && password.isNotBlank() && (!register||(username.trim().length>=2&&password.length>=8&&adultConfirmed&&gender in listOf("male","female")))
+    // The same email/password form serves all users. The server decides role;
+    // administrator-only verification happens after successful sign-in.
+    val validEmail=android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()
+    val ready=!busy && validEmail && password.isNotBlank() && (!register||(username.trim().length>=2&&password.length>=8&&adultConfirmed&&gender in listOf("male","female")))
     Surface(Modifier.fillMaxSize(),color=MaterialTheme.colorScheme.background){
-        LazyColumn(Modifier.fillMaxSize().imePadding(),contentPadding=PaddingValues(bottom=28.dp),verticalArrangement=Arrangement.spacedBy(20.dp)){
-            item{Column(Modifier.fillMaxWidth().background(WisalInk,RoundedCornerShape(bottomEnd=40.dp)).statusBarsPadding().padding(24.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
+        LazyColumn(Modifier.fillMaxSize().imePadding(),contentPadding=PaddingValues(bottom=24.dp),verticalArrangement=Arrangement.spacedBy(14.dp)){
+            item{Column(Modifier.fillMaxWidth().background(WisalInk,RoundedCornerShape(bottomEnd=32.dp)).statusBarsPadding().padding(20.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
                 Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){Image(painterResource(R.drawable.relaxia_logo),"شعار Relaxia",Modifier.size(48.dp).clip(RoundedCornerShape(18.dp)));Spacer(Modifier.weight(1f));Text("18+",color=Color.White.copy(alpha=.8f))}
                 Text("Relaxia",color=Color.White,fontSize=30.sp,fontWeight=FontWeight.Bold)
                 Text("لحظات أقرب، بطريقتك.",color=Color.White.copy(alpha=.85f),fontSize=16.sp)
             }}
-            item{Column(Modifier.padding(horizontal=24.dp),verticalArrangement=Arrangement.spacedBy(16.dp)){
+            item{Column(Modifier.padding(horizontal=24.dp),verticalArrangement=Arrangement.spacedBy(14.dp)){
                 Text(if(register)"مساحتك تبدأ هنا"else"أهلًا بعودتك",style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold)
                 Text(if(register)"أنشئ حسابك بخطوات بسيطة."else"ادخل ببريدك الإلكتروني وكلمة المرور.",color=MaterialTheme.colorScheme.onSurfaceVariant)
-                if(!register) Text("المسؤول يدخل من الشاشة نفسها بحسابه الإداري؛ تظهر لوحة الإدارة بعد الدخول والتحقق الثنائي.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                 if(notice.isNotBlank())Text(notice,color=MaterialTheme.colorScheme.error)
-                if(register)OutlinedTextField(username,onUsername,label={Text("الاسم الظاهر")},modifier=Modifier.fillMaxWidth(),singleLine=true,keyboardOptions=KeyboardOptions(imeAction=ImeAction.Next))
-                OutlinedTextField(email,onEmail,label={Text("البريد الإلكتروني")},modifier=Modifier.fillMaxWidth(),singleLine=true,keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Email,imeAction=ImeAction.Next))
-                OutlinedTextField(password,onPassword,label={Text("كلمة المرور")},visualTransformation=if(showPassword)VisualTransformation.None else PasswordVisualTransformation(),trailingIcon={IconButton({showPassword=!showPassword}){Icon(if(showPassword)Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,if(showPassword)"إخفاء كلمة المرور"else"إظهار كلمة المرور")}},modifier=Modifier.fillMaxWidth(),singleLine=true,keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Password,imeAction=ImeAction.Done),keyboardActions=KeyboardActions(onDone={if(ready)submit()}))
+                if(register)OutlinedTextField(username,onUsername,label={Text("الاسم الظاهر")},modifier=Modifier.fillMaxWidth(),singleLine=true,enabled=!busy,keyboardOptions=KeyboardOptions(imeAction=ImeAction.Next))
+                OutlinedTextField(email,onEmail,label={Text("البريد الإلكتروني")},modifier=Modifier.fillMaxWidth(),singleLine=true,enabled=!busy,keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Email,imeAction=ImeAction.Next))
+                OutlinedTextField(password,onPassword,label={Text("كلمة المرور")},visualTransformation=if(showPassword)VisualTransformation.None else PasswordVisualTransformation(),trailingIcon={IconButton({showPassword=!showPassword}){Icon(if(showPassword)Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,if(showPassword)"إخفاء كلمة المرور"else"إظهار كلمة المرور")}},modifier=Modifier.fillMaxWidth(),singleLine=true,enabled=!busy,keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Password,imeAction=ImeAction.Done),keyboardActions=KeyboardActions(onDone={if(ready)submit()}))
                 if(register){
                     GenderChoice(gender,onGender)
                     Text("8 خانات أو أكثر. يمكنك اختيار اسم المستخدم لاحقًا من ملفك.",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
                     Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){Checkbox(adultConfirmed,onAdultConfirmed);Text("أؤكد أن عمري 18 عامًا أو أكثر وأوافق على ضوابط المحتوى غير الصريح.",Modifier.weight(1f),style=MaterialTheme.typography.bodyMedium)}
                 }
-                if(busy)LuxuryLoadingStatus("جارٍ التحميل")
+                if(busy)LuxuryLoadingStatus(if(register)"جارٍ إنشاء الحساب…"else"جارٍ تسجيل الدخول…")
                 if(!register)TextButton(onClick=onForgot,enabled=!busy){Text("نسيت كلمة المرور؟")}
                 ReferencePrimary(if(register)"إنشاء حساب"else"دخول",ready){submit()}
                 TextButton(toggle,enabled=!busy,modifier=Modifier.align(Alignment.CenterHorizontally)){Text(if(register)"لديك حساب؟ تسجيل الدخول"else"جديد هنا؟ أنشئ حسابًا")}
@@ -1374,6 +1360,7 @@ private fun formatReelTime(ms: Long): String {
     return "${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}"
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ReelItemView(
     row: JSONObject,
@@ -1569,7 +1556,15 @@ private fun ReelItemView(
                         }
                     },
                     enabled = durationMs > 0,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    thumb = {
+                        Box(Modifier.size(8.dp).background(Color.White, CircleShape))
+                    },
+                    track = { sliderState ->
+                        Box(Modifier.fillMaxWidth().height(2.dp).background(Color.White.copy(alpha = 0.25f))) {
+                            Box(Modifier.fillMaxWidth(sliderState.value.coerceIn(0f, 1f)).height(2.dp).background(Color.White))
+                        }
+                    }
                 )
                 Row(
                     Modifier.fillMaxWidth(),
@@ -1633,20 +1628,11 @@ private fun ReelItemView(
                     36,
                     row.optString("avatar_url")
                 )
-                Text(
-                    row.optString("owner_name"),
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
                 if (row.optBoolean("identity_verified")) {
                     Icon(Icons.Rounded.Verified, "حساب موثق", tint = Color(0xFFDCE8FD), modifier = Modifier.size(17.dp))
                 }
             }
-            val handle = row.optString("owner_username")
-            if (handle.isNotBlank()) Text("@$handle", color = Color.White.copy(alpha = .85f), fontSize = 12.sp)
+            // Keep the avatar profile action without showing names over the video.
             if (viewerId > 0 && row.optInt("owner_id") != viewerId && row.optInt("owner_id") > 0) {
                 OutlinedButton(
                     onClick = {

@@ -29,6 +29,7 @@
         </service>
         <activity
             android:name=".MainActivity"
+            android:windowSoftInputMode="adjustResize"
             android:launchMode="singleTop"
             android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize"
             android:exported="true"

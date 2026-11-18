@@ -5,9 +5,13 @@ const {Room,RoomEvent,Track,ConnectionState}=LivekitClient;
 let room,closed=false,muted=false,speakerMuted=false,cameraOff=false,facing='user',commentsVisible=true,lastComments='',leaving=false,retrying=false,polling=false;
 let activeSpeakerIds=new Set(),audioSeatSignature='',reconnectSince=0,controlFailures=0,connecting=false;
 function updateRoomViewport(){
- const height=window.visualViewport?.height||window.innerHeight;
- // Preserve truly tiny viewports so Android's native stage-height recovery can detect and repair them.
- document.documentElement.style.setProperty('--room-viewport-height',Math.max(1,Math.round(height))+'px');
+ // Account for a virtual keyboard which can shrink the visual viewport
+ // independently of the layout viewport on Android WebView.
+ const visual=window.visualViewport;
+ const layoutHeight=document.documentElement.clientHeight||window.innerHeight;
+ const visible=visual?Math.min(layoutHeight,visual.height):layoutHeight;
+ const height=Math.max(1,Math.round(visible));
+ document.documentElement.style.setProperty('--room-viewport-height',height+'px');
 }
 updateRoomViewport();
 window.visualViewport?.addEventListener('resize',updateRoomViewport,{passive:true});
@@ -27,6 +31,8 @@ window.visualViewport?.addEventListener('resize',syncRoomFooterMetrics,{passive:
 window.addEventListener('resize',syncRoomFooterMetrics,{passive:true});
 requestAnimationFrame(syncRoomFooterMetrics);
 let state={},speaking=false,activating=false,latestGift=0,haveGiftBaseline=false,giftQueue=[],effectBusy=false,giftKey=null,giftPending=null,quality=720,serverOffset=0;
+// Keep the current gift recipient list in sync with server-approved speakers.
+let activeGiftRecipientSync=null;
 let preparedTracks=[],mediaFault=false,mediaReady=false;
 const path='/api/live/'+config.id+'/control';
 document.body.classList.toggle('audio-mode',config.mode==='audio');
@@ -40,14 +46,21 @@ function mediaMessage(e){
  const reasons={NotAllowedError:'تحقق من أذونات التطبيق والكاميرا في Android.',NotReadableError:'قد تكون الكاميرا أو الميكروفون مستخدمة في تطبيق آخر.',NotFoundError:'لم يعثر الجهاز على الكاميرا أو الميكروفون.'};
  $('status').textContent=(labels[e.stage]||'تعذر تجهيز البث')+' · '+(reasons[e.reason]||'أعد المحاولة أو ارجع وافتح البث مجددًا.');$('retryMedia').hidden=false;diagnostic(e.stage,'failed',e.reason);
 }
-function message(e){if(e.name==='MediaFailure'){mediaMessage(e);return}$('connection').classList.remove('is-ready');$('status').textContent=({'insufficient_balance':'رصيدك لا يكفي. اشحن من المحفظة قبل إرسال الهدية.','broadcast_ended':'انتهى البث','stage_full':'اكتملت مقاعد الضيوف','pending_gift_retry':'أعد محاولة الهدية السابقة أولًا لتجنب خصم غير واضح.','media_permission_required':'لم تمنح إذن الميكروفون أو الكاميرا. يمكنك الاستمرار بالمشاهدة.','stage_unavailable':'طلبات الانضمام غير متاحة في هذا البث','price_confirmation_required':'تغير السعر؛ افتح الهدايا مجددًا','invalid_pk_teams':'اختر متحدثين متصلين في فريقين مختلفين','slow_down':'انتظر قليلًا قبل إعادة الطلب','pk_already_active':'هناك منافسة جارية بالفعل'})[e.message]||'تعذّر تنفيذ الطلب. تحقق من الاتصال.'}
+function message(e){if(e.name==='MediaFailure'){mediaMessage(e);return}$('connection').classList.remove('is-ready');$('status').textContent=({'insufficient_balance':'رصيدك لا يكفي. اشحن من المحفظة قبل إرسال الهدية.','broadcast_ended':'انتهى البث','stage_full':'اكتملت مقاعد الضيوف','pending_gift_retry':'أعد محاولة الهدية السابقة أولًا لتجنب خصم غير واضح.','invalid_gift_combo':'عدد الهدايا أو الإجمالي غير مسموح.','payment_request_conflict':'طلب الهدية تغيّر. تحقق من العملية السابقة قبل إعادة الإرسال.','media_permission_required':'لم تمنح إذن الميكروفون أو الكاميرا. يمكنك الاستمرار بالمشاهدة.','stage_unavailable':'طلبات الانضمام غير متاحة في هذا البث','price_confirmation_required':'تغير السعر؛ افتح الهدايا مجددًا','invalid_pk_teams':'اختر متحدثين متصلين في فريقين مختلفين','slow_down':'انتظر قليلًا قبل إعادة الطلب','pk_already_active':'هناك منافسة جارية بالفعل'})[e.message]||'تعذّر تنفيذ الطلب. تحقق من الاتصال.'}
 function releasePrepared(){for(const track of preparedTracks){track.detach().forEach(el=>el.closest('.tile')?.remove());track.stop()}preparedTracks=[]}
 function stop(label){releasePrepared();if(closed)return;closed=true;room?.removeAllListeners();room?.disconnect();document.querySelectorAll('audio[data-live-remote]').forEach(el=>el.remove());$('ended').hidden=false;$('endedTitle').textContent=label;document.querySelectorAll('footer button,footer input').forEach(el=>el.disabled=true);$('video').replaceChildren();if($('sheet').open)$('sheet').close()}
 function leave(){releasePrepared();document.querySelectorAll('audio[data-live-remote]').forEach(el=>el.remove());if(window.LayaliLive){leaving=true;closed=true;room?.disconnect();window.LayaliLive.closeRoom()}else stop('غادرت البث')}
 $('closeEnded').onclick=()=>window.LayaliLive?window.LayaliLive.closeRoom():history.back();
+// Fixed vector paths keep microphone/speaker states legible on Android WebView.
+function setMediaControlIcon(button,kind,off){
+ const paths=kind==='mic'
+  ? '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/>'
+  : '<path d="M11 5 6 9H3v6h3l5 4zM15 8a6 6 0 0 1 0 8M18 5a10 10 0 0 1 0 14"/>';
+ button.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+paths+(off?'<path d="m3 3 18 18"/>':'')+'</svg>';
+}
 function updateSpeakerControl(){
  const button=$('speaker');if(!button)return;
- button.textContent=speakerMuted?'🔇':'🔊';
+ setMediaControlIcon(button,'speaker',speakerMuted);
  button.setAttribute('aria-label',speakerMuted?'تشغيل صوت الغرفة':'كتم صوت الغرفة');
  button.setAttribute('aria-pressed',String(speakerMuted));
  button.title=speakerMuted?'تشغيل صوت الغرفة':'كتم صوت الغرفة';
@@ -129,7 +142,46 @@ async function connect(token=config.token){
  finally{connecting=false}
 }
 async function reconnect(){if(retrying||connecting||closed||leaving)return;retrying=true;try{for(let attempt=0;attempt<6&&!closed&&!leaving;attempt++){$('connection').classList.remove('is-ready');$('status').textContent='إعادة الاتصال…';await new Promise(r=>setTimeout(r,Math.min(5000,1000*(attempt+1))));try{const fresh=await api({action:'token'});state.can_publish=fresh.can_publish;state.publish_sources=fresh.publish_sources;if(closed||leaving)return;room?.removeAllListeners();await room?.disconnect();document.querySelectorAll('audio').forEach(el=>el.remove());$('video').replaceChildren();if(state.can_publish===false&&!config.owner)speaking=false;await connect(fresh.token);return}catch(e){if(e.name==='MediaFailure'){mediaMessage(e);return}if(['broadcast_forbidden','broadcast_ended','live_authorization_required','admission_refunded','feature_restricted','broadcast_permission_required'].includes(e.message)){stop('انتهت صلاحية البث');return}}}if(!closed&&!leaving){$('status').textContent='تعذّر الاتصال. جرّب إعادة الاتصال دون شراء دخول جديد.';$('reconnectAction').hidden=false}}finally{retrying=false}}
-function sheet(title){$('sheetTitle').textContent=title;$('sheetBody').replaceChildren();if(!$('sheet').open)$('sheet').showModal();return $('sheetBody')}
+// Android System WebView can calculate a tiny CSS dialog max-height when
+// visualViewport collapses or the stage was resized by Gboard. Position the
+// modal in real, measured CSS pixels instead of relying on bottom/inset/100dvh.
+function positionRoomSheet(){
+ const modal=$('sheet');
+ if(!modal?.open)return;
+ const layoutHeight=Math.max(document.documentElement.clientHeight||0,window.innerHeight||0);
+ const visual=window.visualViewport;
+ const usableVisual=visual && visual.height>=240 && visual.height<=layoutHeight+2;
+ const height=usableVisual?Math.min(layoutHeight,visual.height):layoutHeight;
+ if(height<160)return;
+ const offsetTop=usableVisual?Math.max(0,visual.offsetTop||0):0;
+ const inset=8;
+ const sheetHeight=Math.max(180,Math.min(760,Math.floor(height*.78)));
+ const top=Math.max(inset,Math.floor(offsetTop+height-sheetHeight-inset));
+ const bounds={
+  position:'fixed',top:top+'px',bottom:'auto',
+  left:'10px',right:'10px',margin:'0 auto',
+  width:'calc(100% - 20px)',height:sheetHeight+'px',
+  maxHeight:sheetHeight+'px',minHeight:'0px',
+  overflowY:'auto',overscrollBehavior:'contain'
+ };
+ for(const [key,value] of Object.entries(bounds))modal.style.setProperty(key.replace(/[A-Z]/g,c=>'-'+c.toLowerCase()),value,'important');
+ modal.scrollTop=Math.max(0,modal.scrollTop);
+}
+window.addEventListener('resize',positionRoomSheet,{passive:true});
+window.visualViewport?.addEventListener('resize',positionRoomSheet,{passive:true});
+window.visualViewport?.addEventListener('scroll',positionRoomSheet,{passive:true});
+function sheet(title){
+ if(title!=='متجر الهدايا')activeGiftRecipientSync=null;
+ // Dismiss the IME before opening every room menu, not just gifts.
+ if(document.activeElement?.id==='text')document.activeElement.blur();
+ const modal=$('sheet');
+ $('sheetTitle').textContent=title;
+ $('sheetBody').replaceChildren();
+ if(!modal.open)modal.showModal();
+ positionRoomSheet();
+ modal.scrollTop=0;
+ return $('sheetBody');
+}
 function button(box,label,fn,cls=''){const b=document.createElement('button');b.textContent=label;b.className=cls;b.onclick=async()=>{if(b.disabled)return;b.disabled=true;try{await fn()}catch(e){message(e)}finally{b.disabled=false}};box.appendChild(b);return b}
 function note(box,text){const p=document.createElement('p');p.textContent=text;box.appendChild(p)}
 function sectionHeading(box,title){const h=document.createElement('h3');h.className='room-setting-heading';h.textContent=title;box.append(h)}
@@ -190,45 +242,136 @@ function pkSheet(){const box=sheet('منافسة PK');note(box,'تحدٍّ با�
  const members=[];for(const s of state.speakers||[]){note(box,s.name);const select=document.createElement('select');for(const [v,t] of [['0','الفريق الأول'],['1','الفريق الثاني'],['','دون مشاركة']]){const o=new Option(t,v);select.add(o)}select.value=s.owner?'0':'1';box.append(select);members.push([s.user_id,select])}
  const duration=document.createElement('select');for(const n of [60,180,300])duration.add(new Option((n/60)+' دقيقة',String(n)));box.append(duration);
  button(box,'بدء المنافسة',async()=>{const teams=[[],[]];for(const [id,el] of members)if(el.value!=='')teams[Number(el.value)].push(id);await api({action:'pk_start',teams,duration:Number(duration.value)});$('sheet').close();await refresh()},'primary')}
-function giftSheet(){
- const box=sheet('متجر الهدايا');note(box,'اختر المستلم والهدية. يظهر السعر قبل التأكيد؛ يحصل المستلم على 80٪.');
- const select=document.createElement('select');select.setAttribute('aria-label','مستلم الهدية');
- for(const speaker of state.speakers||[])if(speaker.user_id!==config.userId)select.add(new Option(speaker.name,String(speaker.user_id)));
- box.append(select);
- if(!select.options.length)note(box,'لا يوجد مستلم آخر على الميكروفون حاليًا.');
+function giftSheet(preferredRecipientId=null){
+ const selectedSeatId=Number.isInteger(preferredRecipientId)?preferredRecipientId:null;
+ const box=sheet('متجر الهدايا');
+ // A seat chooses the recipient; without a seat the gift goes to the host.
+ // Clicking a seat NEVER sends money until the user explicitly confirms.
+ const balance=document.createElement('div');balance.id='giftBalance';balance.className='gift-balance';
+ balance.textContent='رصيدك: '+Number(state.available_coins||0).toLocaleString('ar')+' كوين';box.append(balance);
+ const target=document.createElement('div');
+ target.className='gift-target-summary';target.setAttribute('role','status');
+ target.setAttribute('aria-live','polite');box.append(target);
+ function recipientOf(snapshot){
+  const speakers=snapshot.speakers||[];
+  const host=speakers.find(s=>s.owner)||null;
+  const chosen=selectedSeatId==null?host:(speakers.find(s=>s.user_id===selectedSeatId)||host);
+  // No payment can ever target the sender; this must remain server enforced too.
+  return chosen&&chosen.user_id!==config.userId?chosen:null;
+ }
+ function updateRecipients(snapshot){
+  if(!target.isConnected)return;
+  const receiver=recipientOf(snapshot);
+  if(receiver){
+   const bySeat=selectedSeatId!=null&&receiver.user_id===selectedSeatId&&!receiver.owner;
+   target.textContent='المستلم: '+receiver.name+(bySeat?' · المقعد المختار':' · المضيف');
+   target.classList.remove('gift-target-unavailable');
+  }else{
+   target.textContent='اضغط على مقعد متحدث آخر لإرسال هدية؛ لا يمكنك إرسالها لنفسك.';
+   target.classList.add('gift-target-unavailable');
+  }
+  refreshChoice();
+ }
  const tabs=document.createElement('div');tabs.className='gift-tabs';box.append(tabs);
  const grid=document.createElement('div');grid.className='gift-grid';box.append(grid);
+ const catalog=(Array.isArray(state.gift_catalog)?state.gift_catalog:[])
+  .filter(g=>/^gift_[a-z_]+$/.test(g.code))
+  .sort((a,b)=>a.price_cents-b.price_cents);
+ let selected=catalog[0]||null,comboCount=1;
+ const picker=document.createElement('div');picker.className='gift-combo-picker';box.append(picker);
+ const comboTitle=document.createElement('div');comboTitle.className='gift-combo-title';
+ comboTitle.textContent='إرسال متتابع';picker.append(comboTitle);
+ const counts=document.createElement('div');counts.className='gift-combo-counts';picker.append(counts);
+ const checkout=document.createElement('div');checkout.className='gift-checkout';box.append(checkout);
+ const summary=document.createElement('div');summary.className='gift-checkout-summary';checkout.append(summary);
+ const send=button(checkout,'',async()=>{
+  const recipient=recipientOf(state);
+  if(!selected||!recipient)return;
+  const total=selected.price_cents*comboCount;
+  if(!Number.isSafeInteger(total)||total<=0||total>1000000)throw Error('invalid_gift_combo');
+  const receiver=recipient.name;
+  if(!confirm('تأكيد إرسال '+selected.name+' ×'+comboCount+' إلى '+receiver+' مقابل '+total.toLocaleString('ar')+' كوين؟'))return;
+  // Each combination is one server-authorized financial operation.
+  const fingerprint=selected.code+':'+recipient.user_id+':'+selected.price_cents+':'+comboCount;
+  if(giftPending&&giftPending!==fingerprint)throw Error('pending_gift_retry');
+  giftPending=fingerprint;giftKey=giftKey||crypto.randomUUID();
+  try{
+   const result=await api({action:'gift',gift_code:selected.code,recipient_id:recipient.user_id,
+       price_cents:selected.price_cents,combo_count:comboCount,confirmed:true,request_key:giftKey});
+   giftKey=null;giftPending=null;
+   drawState(result);
+   $('sheet').close();
+  }catch(error){
+   if(['insufficient_balance','price_confirmation_required','gift_unavailable','invalid_gift_combo','payment_request_conflict'].includes(error.message)){
+    giftKey=null;giftPending=null;
+   }
+   throw error;
+  }
+ },'primary gift-send');
+ function refreshChoice(){
+  const cost=selected?selected.price_cents*comboCount:0;
+  summary.textContent=selected
+    ?selected.name+' ×'+comboCount+' · '+cost.toLocaleString('ar')+' كوين'
+    :'لا توجد هدايا متاحة';
+  send.textContent=recipientOf(state)?'تأكيد الإرسال':'اختر مقعدًا';
+  send.disabled=!selected||!recipientOf(state)||cost>1000000;
+  for(const el of grid.children)el.setAttribute('aria-pressed',String(el.dataset.giftCode===selected?.code));
+  for(const el of counts.children)el.setAttribute('aria-pressed',String(Number(el.dataset.comboCount)===comboCount));
+ }
+ for(const n of [1,10,66,99]){
+  const b=button(counts,'×'+n,()=>{comboCount=n;refreshChoice()});
+  b.dataset.comboCount=String(n);
+ }
  function render(category){
-  grid.replaceChildren();for(const tab of tabs.children)tab.setAttribute('aria-pressed',String(tab.dataset.category===category));
-  const catalog=(state.gift_catalog||[]).filter(g=>category==='all'||g.effect===category);
-  for(const g of catalog){
-   const b=button(grid,'',async()=>{
-    if(!select.value)return;
-    if(!confirm('إرسال '+g.name+' إلى '+select.selectedOptions[0].text+' مقابل '+g.price_cents+' كوين؟'))return;
-    const fingerprint=g.code+':'+select.value+':'+g.price_cents;
-    if(giftPending&&giftPending!==fingerprint)throw Error('pending_gift_retry');
-    giftPending=fingerprint;giftKey=giftKey||crypto.randomUUID();
-    try{const result=await api({action:'gift',gift_code:g.code,recipient_id:Number(select.value),price_cents:g.price_cents,confirmed:true,request_key:giftKey});giftKey=null;giftPending=null;drawState(result);$('sheet').close()}
-    catch(e){if(['insufficient_balance','price_confirmation_required','gift_unavailable'].includes(e.message)){giftKey=null;giftPending=null}throw e}
-   });
-   b.disabled=!select.options.length;b.className='gift-card '+g.effect;b.setAttribute('aria-label',g.name+' · '+g.price_cents+' كوين');
-   const icon=document.createElement('span');icon.className='gift-art';icon.textContent=g.symbol;
-   const medallion=document.createElement('span');medallion.className='gift-medallion';medallion.append(icon);
+  grid.replaceChildren();
+  for(const tab of tabs.children)tab.setAttribute('aria-pressed',String(tab.dataset.category===category));
+  const filtered=catalog.filter(g=>category==='all'||g.category===category);
+  if(!filtered.some(g=>g.code===selected?.code))selected=filtered[0]||null;
+  for(const g of filtered){
+   const b=button(grid,'',()=>{selected=g;comboCount=1;refreshChoice()});
+   // Browse safely even when no eligible target exists; checkout stays locked.
+   b.className='gift-card '+g.effect+(g.price_cents>=1000?' gift-premium':'');
+   b.dataset.giftCode=g.code;
+   b.setAttribute('aria-label',g.name+' · '+g.price_cents+' كوين');
+   const medallion=document.createElement('span');medallion.className='gift-medallion';
+   const icon=document.createElement('img');
+   icon.className='gift-art gift-webp';
+   icon.alt=''; // Card aria-label describes the gift; no broken image alt text.
+   icon.loading='lazy';icon.decoding='async';
+   icon.onerror=()=>{
+    icon.onerror=null;icon.remove();
+    medallion.classList.add('gift-art-unavailable');
+    // A temporary non-emoji mark, removed when the original luxury asset is installed.
+    const placeholder=document.createElement('span');
+    placeholder.className='gift-art-fallback';
+    placeholder.textContent=(g.name||'هدية').trim().slice(0,2);
+    placeholder.setAttribute('aria-hidden','true');
+    medallion.append(placeholder);
+   };
+   medallion.append(icon);
+   icon.src='/static/core/gifts/icons/'+g.code+'.webp';
    b.classList.add('gift-'+String(g.code).replace(/[^a-z0-9_-]/g,''));
    const name=document.createElement('strong');name.textContent=g.name;
-   const price=document.createElement('small');price.textContent=g.price_cents.toLocaleString('ar')+' كوين';
+   const price=document.createElement('small');price.className='gift-price';price.textContent=g.price_cents.toLocaleString('ar')+' كوين';
+   const coin=document.createElement('span');coin.className='gift-price-coin';coin.setAttribute('aria-hidden','true');
+   price.append(coin);
    b.append(medallion,name,price);
   }
-  if(!catalog.length)note(grid,'لا توجد هدايا متاحة في هذا القسم.');
+  if(!filtered.length)note(grid,'لا توجد هدايا متاحة في هذا القسم.');
+  refreshChoice();
  }
- for(const [key,label] of [['all','الكل'],['simple','بسيطة'],['animated','متحركة'],['depth','فاخرة']]){
-  const tab=button(tabs,label,()=>render(key));tab.dataset.category=key;
+ for(const [key,label] of [['all','الكل'],['simple','سريعة'],['animated','متحركة'],['luxury','فاخرة']]){
+  const tab=button(tabs,label,()=>render(key));
+  tab.dataset.category=key;
  }
- render('all');note(box,'أكبر الداعمين');for(const supporter of state.top_supporters||[])note(box,supporter.name+' · '+supporter.total+' كوين');
+ render('all');
+ activeGiftRecipientSync=updateRecipients;
+ updateRecipients(state);
+ sectionHeading(box,'أكبر الداعمين');
+ for(const supporter of state.top_supporters||[])note(box,supporter.name+' · '+supporter.total+' كوين');
 }
 function drawAudioSeats(result){
- const box=$('audioStage'),capacity=Math.max(1,Math.min(15,result.max_speakers||config.maxSpeakers||1));
- const speakers=result.speakers||[];
+ const box=$('audioStage'),speakers=result.speakers||[],capacity=Math.max(8,speakers.length);
  const signature=JSON.stringify([capacity,speakers.map(s=>[s.identity,s.name,s.owner,s.avatar_url])]);
  if(signature===audioSeatSignature&&box.querySelectorAll('.audio-seat').length===capacity){
   box.querySelectorAll('.audio-seat[data-identity]').forEach(item=>item.classList.toggle('speaking',activeSpeakerIds.has(item.dataset.identity)));
@@ -238,10 +381,15 @@ function drawAudioSeats(result){
  box.classList.add('seat-grid');box.classList.toggle('solo-room',capacity===1);
  const nodes=document.createDocumentFragment();
  for(let i=0;i<capacity;i++){
-  const speaker=speakers[i],item=document.createElement('button');item.type='button';item.className='audio-person audio-seat';item.onclick=guestSheet;
+  const speaker=speakers[i],item=document.createElement('button');item.type='button';item.className='audio-person audio-seat';
+  // Occupied seat = choose gift recipient and open store; empty seat = request mic.
+  item.onclick=speaker&&speaker.user_id!==config.userId
+   ?()=>giftSheet(speaker.user_id)
+   :guestSheet;
   if(speaker){
-   item.dataset.identity=speaker.identity;item.classList.toggle('speaking',activeSpeakerIds.has(speaker.identity));
-   item.setAttribute('aria-label',speaker.name+(speaker.owner?' · صاحب الغرفة':''));
+   item.dataset.identity=speaker.identity;item.classList.toggle('speaking',activeSpeakerIds.has(speaker.identity));item.classList.toggle('host-seat',!!speaker.owner);
+   item.setAttribute('aria-label',speaker.name+(speaker.owner?' · صاحب الغرفة':'')+(speaker.user_id!==config.userId?' · إهداء':''));
+   if(speaker.user_id!==config.userId)item.title='إرسال هدية إلى '+speaker.name;
    const waves=document.createElement('div');waves.className='audio-waves';waves.setAttribute('aria-hidden','true');
    for(let n=0;n<3;n++)waves.append(document.createElement('span'));item.append(waves);
    const placeholder=document.createElement('div');placeholder.className='audio-placeholder';placeholder.textContent=(speaker.name||'م').slice(0,1);item.append(placeholder);
@@ -253,7 +401,7 @@ function drawAudioSeats(result){
    const role=document.createElement('small');role.textContent=speaker.owner?'المضيف':String(i+1);item.append(role);
   }else{
    item.classList.add('empty-seat');item.setAttribute('aria-label','مقعد '+(i+1)+' · طلب الميكروفون');
-   const circle=document.createElement('span');circle.className='seat-plus';circle.textContent='+';
+   const circle=document.createElement('span');circle.className='seat-plus';circle.setAttribute('aria-hidden','true');circle.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 10v2a7 7 0 0 0 11.3 5.5M12 19v2M8.5 21h7M19 11v6M16 14h6"/></svg>';
    // Empty seats show one clear action; the seat number remains in aria-label.
    item.append(circle);
   }
@@ -265,7 +413,7 @@ function updateQuickMic(){
  const button=$('micQuick');if(!button)return;
  // Viewers already have the guest seat button. Only speakers need a quick mic.
  button.hidden=!speaking;
- button.textContent=speaking?(muted?'🔇':'🎙'):'🎙';
+ setMediaControlIcon(button,'mic',muted);
  button.setAttribute('aria-pressed',String(speaking&&!muted));
  button.setAttribute('aria-label',speaking?(muted?'تشغيل الميكروفون':'كتم الميكروفون'):'المقاعد وطلب التحدث');
 }
@@ -336,21 +484,74 @@ function moreSheet(){
 }
 function qualitySheet(){const box=sheet('جودة الفيديو');note(box,'تتكيّف جودة النقل تلقائيًا. 1080p تعتمد على الكاميرا والجهاز والشبكة.');for(const q of [360,720,1080])button(box,q+'p',async()=>{const track=room.localParticipant.getTrackPublication(Track.Source.Camera)?.track;if(!track)throw Error('camera_unavailable');await track.restartTrack({resolution:{width:Math.round(q*16/9),height:q,frameRate:q===360?20:30},facingMode:facing});quality=q;$('sheet').close()})}
 function playEffects(){
- if(effectBusy||!giftQueue.length)return;effectBusy=true;
- const g=giftQueue.shift(),box=$('giftEffect');box.replaceChildren();
+ if(effectBusy||!giftQueue.length)return;
+ effectBusy=true;
+ const g=giftQueue.shift(),box=$('giftEffect');
+ box.replaceChildren();
  const effect=['simple','animated','depth'].includes(g.effect)?g.effect:'simple';
+ const combo=Math.max(1,Math.min(99,Number(g.combo_count)||1));
  box.className='gift-show '+effect;
  if(g.code==='whale'||g.code==='lion')box.classList.add('show-'+g.code);
- const icon=document.createElement('span');icon.className='gift-hero';icon.textContent=g.symbol;
+ if(['falcon_gold','royal_yacht','cyber_supercar','emperor_crown','knight_sword','meteor_shower','crystal_hearts'].includes(g.code))
+  box.classList.add('show-'+g.code);
+ if(effect==='depth')box.classList.add('gift-fullscreen');
+ const icon=document.createElement('img');
+ icon.className='gift-hero gift-effect-art';
+ icon.src='/static/core/gifts/animations/'+String(g.code).replace(/[^a-z0-9_]/g,'')+'.webp?play='+g.id;
+ icon.alt=g.name;
+ icon.decoding='async';
+ let triedStaticGiftArt=false;
+ icon.onerror=()=>{
+  if(!triedStaticGiftArt){
+   triedStaticGiftArt=true;
+   icon.src='/static/core/gifts/icons/'+String(g.code).replace(/[^a-z0-9_]/g,'')+'.webp';
+   return;
+  }
+  icon.onerror=null;
+  const fallback=document.createElement('span');
+  fallback.className='gift-effect-fallback';
+  fallback.textContent=g.name||'هدية';
+  icon.replaceWith(fallback);
+ };
  const label=document.createElement('strong');label.textContent=g.sender+' أرسل '+g.name;
  const recipient=document.createElement('small');recipient.textContent='إلى '+g.recipient;
- if(effect!=='simple'){const particles=document.createElement('div');particles.className='gift-particles';particles.setAttribute('aria-hidden','true');for(let i=0;i<8;i++){const star=document.createElement('i');star.textContent=g.code==='whale'?'○':'✦';particles.append(star)}box.append(particles)}
- box.append(icon,label,recipient);box.hidden=false;
+ if(effect!=='simple'||g.code==='meteor_shower'){
+  const particles=document.createElement('div');particles.className='gift-particles';
+  particles.setAttribute('aria-hidden','true');
+  for(let i=0;i<(effect==='depth'?28:12);i++){
+   const spark=document.createElement('i');
+   spark.textContent=g.code==='whale'?'○':(g.code==='crystal_hearts'?'◆':'✦');
+   spark.style.setProperty('--spark-angle',(i*137.5)+'deg');
+   spark.style.setProperty('--spark-distance',(35+(i%5)*18)+'px');
+   spark.style.animationDelay=((i%10)*.095)+'s';
+   particles.append(spark);
+  }
+  box.append(particles);
+ }
+ box.append(icon,label,recipient);
+ if(combo>1){
+  const banner=document.createElement('div');
+  banner.className='gift-combo-banner';
+  banner.textContent='×'+combo+' · '+(Number(g.total_price_cents)||0).toLocaleString('ar')+' كوين';
+  box.append(banner);
+ }
+ const activeSeat=(state.speakers||[]).find(s=>s.name===g.recipient);
+ const targetSeat=activeSeat&&Array.from(document.querySelectorAll('#audioStage .audio-seat[data-identity]')).find(el=>el.dataset.identity===activeSeat.identity);
+ if(targetSeat&&effect==='animated')targetSeat.classList.add('gift-seat-glow');
+ box.hidden=false;
  const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
- setTimeout(()=>{box.hidden=true;effectBusy=false;playEffects()},reduced?1600:effect==='simple'?1600:effect==='depth'?3800:2600);
+ const duration=reduced?1100:effect==='simple'?2000:effect==='depth'?4500:3000;
+ setTimeout(()=>{
+  box.hidden=true;
+  if(targetSeat)targetSeat.classList.remove('gift-seat-glow');
+  effectBusy=false;
+  playEffects();
+ },duration);
 }
-function drawState(result){state=result;updateQuickMic();document.querySelectorAll('.tile').forEach(t=>{const speaker=result.speakers?.find(s=>s.identity===t.dataset.identity);if(speaker)t.querySelector('small').textContent=speaker.name});serverOffset=Date.parse(result.server_time)-Date.now();const vCount=result.viewers||0;if($('viewerCount'))$('viewerCount').textContent=vCount>=1000?(vCount/1000).toFixed(1)+'K':vCount;else $('viewers').textContent=vCount+' مشاهد';$('viewers').title=vCount+' مشاهد';$('follow').textContent=result.following?'تتابعه':'متابعة';const host=result.speakers?.[0];$('badge').textContent=host&&Number(host.level)>0?('المستوى '+Math.floor(Number(host.level))+(host.vip?' · VIP':'')):(host?.vip?'VIP':'');
- const signature=JSON.stringify(result.comments);if(lastComments!==signature){lastComments=signature;const box=$('messages');const nearBottom=box.scrollHeight-box.clientHeight-box.scrollTop<38,previousScroll=box.scrollTop;box.replaceChildren();for(const c of result.comments||[]){const p=document.createElement('div');p.className='comment-bubble';const av=document.createElement('div');av.className='comment-avatar';av.textContent=(c.name||'U').slice(0,1);const body=document.createElement('div');body.className='comment-body';const name=document.createElement('span');name.className='comment-author';name.textContent=c.name+': ';body.append(name,document.createTextNode(c.text));p.append(av,body);if(result.manage_room){const manage=document.createElement('button');manage.type='button';manage.className='comment-actions';manage.textContent='⋯';manage.setAttribute('aria-label','إدارة تعليق '+(c.name||''));manage.onclick=()=>commentActionsSheet(c);p.append(manage)}box.append(p)}if(!(result.comments||[]).length){const blank=document.createElement('p');blank.className='comment-empty';blank.textContent='لا توجد تعليقات بعد · ابدأ الحوار';box.append(blank)}box.scrollTop=nearBottom?box.scrollHeight:Math.min(previousScroll,Math.max(0,box.scrollHeight-box.clientHeight))}
+function drawState(result){state=result;
+ if($('sheet')?.open&&$('sheetTitle')?.textContent==='متجر الهدايا'&&activeGiftRecipientSync)activeGiftRecipientSync(result);
+ const wallet=document.getElementById('giftBalance');if(wallet)wallet.textContent='رصيدك المتاح: '+Number(result.available_coins||0).toLocaleString('ar')+' كوين';updateQuickMic();document.querySelectorAll('.tile').forEach(t=>{const speaker=result.speakers?.find(s=>s.identity===t.dataset.identity);if(speaker)t.querySelector('small').textContent=speaker.name});serverOffset=Date.parse(result.server_time)-Date.now();const vCount=result.viewers||0;if($('viewerCount'))$('viewerCount').textContent=vCount>=1000?(vCount/1000).toFixed(1)+'K':vCount;else $('viewers').textContent=vCount+' مشاهد';$('viewers').title=vCount+' مشاهد';$('follow').textContent=result.following?'تتابعه':'متابعة';const host=result.speakers?.[0];$('badge').textContent=host&&Number(host.level)>0?('المستوى '+Math.floor(Number(host.level))+(host.vip?' · VIP':'')):(host?.vip?'VIP':'');
+ const signature=JSON.stringify([!!result.manage_room,result.comments||[]]);if(lastComments!==signature){lastComments=signature;const box=$('messages');const nearBottom=box.scrollHeight-box.clientHeight-box.scrollTop<38,previousScroll=box.scrollTop;box.replaceChildren();for(const c of result.comments||[]){const p=document.createElement('div');p.className='comment-bubble';const av=document.createElement('div');av.className='comment-avatar';av.textContent=(c.name||'U').slice(0,1);const body=document.createElement('div');body.className='comment-body';const name=document.createElement('span');name.className='comment-author';name.textContent=c.name+': ';body.append(name,document.createTextNode(c.text));p.append(av,body);if(result.manage_room){const manage=document.createElement('button');manage.type='button';manage.className='comment-actions';manage.textContent='⋯';manage.setAttribute('aria-label','إدارة تعليق '+(c.name||''));manage.onclick=()=>commentActionsSheet(c);p.append(manage)}box.append(p)}if(!(result.comments||[]).length){const blank=document.createElement('p');blank.className='comment-empty';blank.textContent='لا توجد تعليقات بعد · ابدأ الحوار';box.append(blank)}box.scrollTop=nearBottom?box.scrollHeight:Math.min(previousScroll,Math.max(0,box.scrollHeight-box.clientHeight))}
  $('pinned').hidden=!result.pinned_comment||!commentsVisible;if(result.pinned_comment)$('pinned').textContent='مثبّت · '+result.pinned_comment.name+': '+result.pinned_comment.text;
  $('goal').hidden=!result.gift_goal_cents;if(result.gift_goal_cents){if($('goalText'))$('goalText').textContent=(result.gift_total_cents||0)+' / '+result.gift_goal_cents;if($('goalProgress'))$('goalProgress').style.width=Math.min(100,Math.round(((result.gift_total_cents||0)/result.gift_goal_cents)*100))+'%';else $('goal').textContent='هدف الهدايا '+(result.gift_total_cents||0)+' / '+result.gift_goal_cents;}
  $('pk').hidden=!result.pk;document.body.classList.toggle('has-pk',!!result.pk);if(result.pk){const pk=result.pk;const teams=pk.teams.map(team=>team.map(id=>result.speakers?.find(s=>s.user_id===id)?.name||'مشارك').join(' + '));$('pkTeams').replaceChildren();for(let i=0;i<2;i++){const span=document.createElement('span');span.title=teams[i];span.textContent=(i===0?'الفريق الأول':'الفريق الثاني')+' · '+pk.scores[i];$('pkTeams').append(span)}const total=pk.scores[0]+pk.scores[1];$('pkProgress').value=total?pk.scores[0]/total*100:50;pkClock()}
@@ -404,18 +605,44 @@ $('composer').onsubmit=async e=>{
  sendingComment=true;send.disabled=true;$('composer').classList.add('is-sending');
  commentNotice('جارٍ إرسال التعليق…');
  try{
-  await api({action:'comment',text:content});
-  input.value='';commentNotice('تم إرسال التعليق');
-  // A successful send is not undone by a later polling failure.
-  await refresh().catch(()=>{});
+  const result=await api({action:'comment',text:content});
+  // Successful POST already contains the saved comment and latest room state.
+  // A second fetch is unnecessary and may fail after a successful write.
+  // Do not erase a second message typed while the first POST was in flight.
+  if(input.value.trim()===content)input.value='';
+  drawState(result);
+  commentNotice('تم إرسال التعليق');
  }catch(error){
-  // Preserve the draft for retry; never silently discard a failed comment.
-  commentNotice('تعذر الإرسال. التعليق محفوظ؛ حاول مجددًا.',true);
- }finally{sendingComment=false;send.disabled=false;$('composer').classList.remove('is-sending')}
+  const reason=error?.message||'';
+  const detail=reason==='slow_down'?'أرسلت تعليقات كثيرة. حاول بعد قليل.'
+   :reason==='live_authorization_required'?'انتهت صلاحية الغرفة؛ أعد الدخول دون دفع جديد.'
+   :error?.name==='AbortError'?'انقطع الاتصال. تحقق من ظهور التعليق قبل إعادة المحاولة.'
+   :'تعذر إرسال التعليق. احتفظنا بنصك؛ حاول مجددًا.';
+  commentNotice(detail,true);
+ }finally{
+  sendingComment=false;send.disabled=false;$('composer').classList.remove('is-sending');
+ }
 };
+$('text').setAttribute('enterkeyhint','send');
+$('text').addEventListener('keydown',event=>{
+ if(event.key==='Enter'&&!event.isComposing&&event.keyCode!==229){
+  event.preventDefault();
+  if(!$('sendComment').disabled){
+   const form=$('composer');
+   if(typeof form.requestSubmit==='function')form.requestSubmit($('sendComment'));
+   else $('sendComment').click(); // Compatibility for older Android WebView.
+  }
+ }
+});
 $('text').addEventListener('input',()=>commentNotice(''));
-$('text').addEventListener('focus',()=>document.body.classList.add('chat-focused'));
-$('text').addEventListener('blur',()=>document.body.classList.remove('chat-focused'));
+$('text').addEventListener('focus',()=>{
+ document.body.classList.add('chat-focused');
+ requestAnimationFrame(()=>{updateRoomViewport();syncRoomFooterMetrics()});
+});
+$('text').addEventListener('blur',()=>{
+ document.body.classList.remove('chat-focused');
+ requestAnimationFrame(()=>{updateRoomViewport();syncRoomFooterMetrics()});
+});
 $('mute').onclick=async()=>{try{await room.localParticipant.setMicrophoneEnabled(muted);muted=!muted;$('mute').textContent=muted?'تشغيل الميكروفون':'كتم الميكروفون';updateQuickMic()}catch(e){message(e)}};
 $('camera').onclick=async()=>{try{await room.localParticipant.setCameraEnabled(cameraOff);cameraOff=!cameraOff;$('camera').textContent=cameraOff?'تشغيل الفيديو':'إيقاف الفيديو';if(!cameraOff){const track=room.localParticipant.getTrackPublication(Track.Source.Camera)?.track;if(track)renderTrack(track,room.localParticipant,true)}else document.querySelectorAll('.tile').forEach(t=>{if(t.dataset.identity===room.localParticipant.identity)t.remove()});layout()}catch(e){message(e)}};
 $('switch').onclick=async()=>{try{const next=facing==='user'?'environment':'user';await room.localParticipant.getTrackPublication(Track.Source.Camera)?.track?.restartTrack({facingMode:next});facing=next;document.querySelectorAll('.tile').forEach(t=>{if(t.dataset.identity===room.localParticipant.identity)t.querySelector('video').style.transform=facing==='user'?'scaleX(-1)':''})}catch(e){$('status').textContent='الكاميرا الأخرى غير متاحة'}};
@@ -460,7 +687,7 @@ if($('emojiBtn'))$('emojiBtn').onclick=()=>{
 layout();updateQuickMic();window.relaxiaStageLoaded=true;
 // These seats use room metadata; they are placeholders, not fabricated online users.
 if(config.mode==='audio')drawAudioSeats({
- max_speakers:config.maxSpeakers||15,
+ max_speakers:8,
  speakers:[{identity:'host-'+config.ownerId,name:config.ownerName,owner:true,avatar_url:config.ownerAvatar||''}]
 });
 // Load seats, audience and chat before LiveKit connects, including recovery states.

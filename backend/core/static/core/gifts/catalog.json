@@ -1,0 +1,175 @@
+{
+  "catalog_version": 1,
+  "currency": "coins",
+  "total_items": 21,
+  "gifts": [
+    {
+      "id": "gift_clap",
+      "name": "تصفيق",
+      "price_coins": 10,
+      "category": "simple",
+      "icon": "/static/core/gifts/icons/gift_clap.webp",
+      "animation": "/static/core/gifts/animations/gift_clap.webp"
+    },
+    {
+      "id": "gift_coffee",
+      "name": "قهوة",
+      "price_coins": 25,
+      "category": "simple",
+      "icon": "/static/core/gifts/icons/gift_coffee.webp",
+      "animation": "/static/core/gifts/animations/gift_coffee.webp"
+    },
+    {
+      "id": "gift_flower",
+      "name": "زهرة",
+      "price_coins": 50,
+      "category": "simple",
+      "icon": "/static/core/gifts/icons/gift_flower.webp",
+      "animation": "/static/core/gifts/animations/gift_flower.webp"
+    },
+    {
+      "id": "gift_chocolate",
+      "name": "شوكولاتة",
+      "price_coins": 75,
+      "category": "simple",
+      "icon": "/static/core/gifts/icons/gift_chocolate.webp",
+      "animation": "/static/core/gifts/animations/gift_chocolate.webp"
+    },
+    {
+      "id": "gift_rose",
+      "name": "وردة",
+      "price_coins": 100,
+      "category": "simple",
+      "icon": "/static/core/gifts/icons/gift_rose.webp",
+      "animation": "/static/core/gifts/animations/gift_rose.webp"
+    },
+    {
+      "id": "gift_teddy",
+      "name": "دبدوب",
+      "price_coins": 250,
+      "category": "simple",
+      "icon": "/static/core/gifts/icons/gift_teddy.webp",
+      "animation": "/static/core/gifts/animations/gift_teddy.webp"
+    },
+    {
+      "id": "gift_butterfly",
+      "name": "فراشة",
+      "price_coins": 150,
+      "category": "animated",
+      "icon": "/static/core/gifts/icons/gift_butterfly.webp",
+      "animation": "/static/core/gifts/animations/gift_butterfly.webp"
+    },
+    {
+      "id": "gift_balloons",
+      "name": "بالونات",
+      "price_coins": 200,
+      "category": "animated",
+      "icon": "/static/core/gifts/icons/gift_balloons.webp",
+      "animation": "/static/core/gifts/animations/gift_balloons.webp"
+    },
+    {
+      "id": "gift_heart",
+      "name": "قلب",
+      "price_coins": 300,
+      "category": "animated",
+      "icon": "/static/core/gifts/icons/gift_heart.webp",
+      "animation": "/static/core/gifts/animations/gift_heart.webp"
+    },
+    {
+      "id": "gift_bouquet",
+      "name": "باقة ورد",
+      "price_coins": 500,
+      "category": "animated",
+      "icon": "/static/core/gifts/icons/gift_bouquet.webp",
+      "animation": "/static/core/gifts/animations/gift_bouquet.webp"
+    },
+    {
+      "id": "gift_cake",
+      "name": "كعكة",
+      "price_coins": 750,
+      "category": "animated",
+      "icon": "/static/core/gifts/icons/gift_cake.webp",
+      "animation": "/static/core/gifts/animations/gift_cake.webp"
+    },
+    {
+      "id": "gift_dolphin",
+      "name": "دلفين",
+      "price_coins": 3000,
+      "category": "animated",
+      "icon": "/static/core/gifts/icons/gift_dolphin.webp",
+      "animation": "/static/core/gifts/animations/gift_dolphin.webp"
+    },
+    {
+      "id": "gift_star",
+      "name": "نجمة",
+      "price_coins": 1000,
+      "category": "luxury",
+      "icon": "/static/core/gifts/icons/gift_star.webp",
+      "animation": "/static/core/gifts/animations/gift_star.webp"
+    },
+    {
+      "id": "gift_fireworks",
+      "name": "ألعاب نارية",
+      "price_coins": 1500,
+      "category": "luxury",
+      "icon": "/static/core/gifts/icons/gift_fireworks.webp",
+      "animation": "/static/core/gifts/animations/gift_fireworks.webp"
+    },
+    {
+      "id": "gift_diamond",
+      "name": "ألماسة",
+      "price_coins": 2000,
+      "category": "luxury",
+      "icon": "/static/core/gifts/icons/gift_diamond.webp",
+      "animation": "/static/core/gifts/animations/gift_diamond.webp"
+    },
+    {
+      "id": "gift_crown",
+      "name": "تاج ملكي",
+      "price_coins": 2500,
+      "category": "luxury",
+      "icon": "/static/core/gifts/icons/gift_crown.webp",
+      "animation": "/static/core/gifts/animations/gift_crown.webp"
+    },
+    {
+      "id": "gift_supercar",
+      "name": "سيارة رياضية",
+      "price_coins": 4000,
+      "category": "luxury",
+      "icon": "/static/core/gifts/icons/gift_supercar.webp",
+      "animation": "/static/core/gifts/animations/gift_supercar.webp"
+    },
+    {
+      "id": "gift_yacht",
+      "name": "يخت",
+      "price_coins": 5000,
+      "category": "luxury",
+      "icon": "/static/core/gifts/icons/gift_yacht.webp",
+      "animation": "/static/core/gifts/animations/gift_yacht.webp"
+    },
+    {
+      "id": "gift_eagle",
+      "name": "نسر",
+      "price_coins": 6000,
+      "category": "luxury",
+      "icon": "/static/core/gifts/icons/gift_eagle.webp",
+      "animation": "/static/core/gifts/animations/gift_eagle.webp"
+    },
+    {
+      "id": "gift_palace",
+      "name": "قصر",
+      "price_coins": 7500,
+      "category": "luxury",
+      "icon": "/static/core/gifts/icons/gift_palace.webp",
+      "animation": "/static/core/gifts/animations/gift_palace.webp"
+    },
+    {
+      "id": "gift_blue_whale",
+      "name": "الحوت الأزرق",
+      "price_coins": 10000,
+      "category": "luxury",
+      "icon": "/static/core/gifts/icons/gift_blue_whale.webp",
+      "animation": "/static/core/gifts/animations/gift_blue_whale.webp"
+    }
+  ]
+}

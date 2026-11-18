@@ -55,6 +55,10 @@ class ReferenceDesignTest {
         }
         compose.onNodeWithText("أهلًا بعودتك").assertExists()
         compose.onNodeWithText("الجنس").assertDoesNotExist()
+        compose.onNodeWithText("المسؤول يدخل من الشاشة نفسها بحسابه الإداري؛ تظهر لوحة الإدارة بعد الدخول والتحقق الثنائي.").assertDoesNotExist()
+        compose.onNodeWithText("البريد الإلكتروني").assertExists()
+        compose.onNodeWithText("كلمة المرور").assertExists()
+        compose.onNodeWithText("دخول").assertIsNotEnabled()
         screenshot("01-login")
         compose.onNodeWithText("جديد هنا؟ أنشئ حسابًا").performScrollTo().performClick()
         compose.onNodeWithText("Relaxia").assertExists()
@@ -153,14 +157,19 @@ class ReferenceDesignTest {
     }
 
     @Test fun sellerUploadsUsePhonePickerInsteadOfUrlField() {
-        compose.setContent { MyApplicationTheme { SellerPublishScreen(com.example.data.api.LayaliApi("https://example.invalid"), {}) } }
-        compose.onNodeWithText("مساحة النشر").assertExists()
+        compose.setContent { MyApplicationTheme { SellerPublishScreen(com.example.data.api.LayaliApi("https://example.invalid"), back = {}) } }
+        compose.onNodeWithText("إضافة عرض جديد").assertExists()
+        compose.onNodeWithText("خدمة أو منتج").assertExists()
+        compose.onNodeWithText("المدة (دقيقة)").assertExists()
+        compose.onNodeWithText("السعر ($)").assertExists()
         compose.onNodeWithText("رفع صورة من الهاتف · حتى 8MB").performScrollTo().assertExists()
         compose.onNodeWithText("رابط صورة HTTPS · اختياري").assertDoesNotExist()
-        compose.onNodeWithText("نشر الآن").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithText("نشر الآن").assertIsNotEnabled()
         screenshot("06-seller-upload")
-        compose.onNodeWithText("ريلز").performScrollTo().performClick()
+        compose.onNodeWithText("ريلز").performClick()
+        compose.onNodeWithText("مساحة النشر").assertExists()
         compose.onNodeWithText("اختيار فيديو MP4 من الهاتف · حتى 20MB").performScrollTo().assertExists()
+        compose.onNodeWithText("اكتب عنوان الريلز أو وصفاً قصيراً...").performScrollTo().assertExists()
         compose.onNodeWithText("نشر الآن").assertIsNotEnabled()
         screenshot("07-reel-upload")
     }
@@ -197,7 +206,8 @@ class ReferenceDesignTest {
         org.junit.Assert.assertEquals(1, sent)
         compose.onNodeWithContentDescription("إرسال صورة").assertExists()
         compose.onNodeWithContentDescription("تسجيل رسالة صوتية").assertExists()
-        compose.onNodeWithText("شراء رصيد").assertExists()
+        compose.onNodeWithContentDescription("خيارات الخصوصية").assertExists()
+        compose.onNodeWithContentDescription("اتصال فيديو").assertExists()
         screenshot("09-chat-layout")
     }
 
@@ -234,7 +244,7 @@ class ReferenceDesignTest {
         var chosen=false
         compose.setContent { MyApplicationTheme { Surface(Modifier.fillMaxSize(),color=MaterialTheme.colorScheme.background) { Column(Modifier.padding(22.dp)) { CoinPackage(2500,100,"25.00",true,null){chosen=true} } } } }
         screenshot("12-coin-package")
-        compose.onNodeWithText(java.text.NumberFormat.getIntegerInstance(java.util.Locale.US).format(2500)).assertExists()
+        compose.onNodeWithText(java.text.NumberFormat.getIntegerInstance(java.util.Locale.US).format(2500)+" كوين").assertExists()
         compose.onNodeWithText("+100 نقطة ترويجية").performClick()
         org.junit.Assert.assertTrue(chosen)
         screenshot("12-coin-package")
@@ -320,12 +330,12 @@ class ReferenceDesignTest {
                 }
             }
         }
-        compose.onNodeWithText("1,000").assertExists()
-        compose.onNodeWithText("10.00 USD").assertExists()
+        compose.onNodeWithText("1,000 كوين").assertExists()
+        compose.onNodeWithText("USD 10.00").assertExists()
         screenshot("18-coin-package-light")
         compose.runOnIdle { dark = true }
-        compose.onNodeWithText("1,000").assertExists()
-        compose.onNodeWithText("10.00 USD").assertExists()
+        compose.onNodeWithText("1,000 كوين").assertExists()
+        compose.onNodeWithText("USD 10.00").assertExists()
         screenshot("19-coin-package-dark")
     }
 

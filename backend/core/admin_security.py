@@ -110,8 +110,13 @@ def financial_target(request):
     return None
 
 def approval_required(request,target):
-    from .models import BalanceAdjustment
-    if request.payload.get('action')=='credit' and BalanceAdjustment.objects.filter(administrator=request.actor,request_key=request.payload.get('request_key')).exists():return False
+    # Manual credit is a deliberately single-admin operation. The authenticated
+    # route still requires finance.adjust and *fresh* administrator MFA, and the
+    # account handler validates amount, UUID idempotency, locks the wallet and
+    # emits an immutable adjustment and audit record. Other financial operations
+    # (refunds, payouts and proof-approved top-ups) retain two-person approval.
+    if request.path.startswith('/api/admin/accounts/') and request.payload.get('action') == 'credit':
+        return False
     return target is not None
 
 def prepare_approval(request,target):
