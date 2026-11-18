@@ -301,12 +301,11 @@ class NativeAdminSecurityTests(TestCase):
         c=InternalCall.objects.create(caller=self.user,callee=self.staff,status='accepted')
         self.assertEqual(self.call('/api/admin/control/settings',{'key':'calls','enabled':False,'reason':'Emergency call shutdown'}).status_code,200)
         c.refresh_from_db();self.assertEqual(c.status,'ended')
-    def test_console_recovery_revokes_sessions_and_is_audited(self):
-        from django.core.management import call_command
-        from io import StringIO
+    def test_totp_enrollment_retired_but_owner_session_is_scoped(self):
         self.verify(self.owner)
-        with patch('builtins.input',side_effect=['Lost authenticator; console recovery','super_admin']):call_command('reset_admin_mfa','super_admin',stdout=StringIO())
-        self.assertFalse(SessionToken.objects.filter(user=self.owner).exists());self.assertFalse(AdminAccess.objects.get(user=self.owner).totp_enabled);self.assertTrue(AdminEvent.objects.filter(action='console_mfa_recovery').exists())
+        self.assertEqual(self.call('/api/admin/auth',{'action':'setup','password':'any'}).status_code,410)
+        self.assertEqual(self.call('/api/admin/auth').json()['verified'],True)
+        self.assertIn('finance.adjust',self.call('/api/admin/auth').json()['permissions'])
 
     def test_payment_emergency_blocks_new_service_reservations(self):
         import uuid
