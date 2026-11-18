@@ -8,6 +8,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
@@ -69,6 +71,9 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
     var liveRoom by remember{mutableStateOf<JSONObject?>(null)}
     var payout by remember{mutableStateOf<JSONObject?>(null)}
     var payoutReference by remember{mutableStateOf("")}
+    var adminNotices by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var unreadAdminNotices by remember { mutableIntStateOf(0) }
+    var showAdminNotices by remember { mutableStateOf(false) }
     var payoutVerified by remember{mutableStateOf(false)}
     var refundBooking by remember{mutableStateOf<JSONObject?>(null)}
     var refundReason by remember{mutableStateOf("")}
@@ -141,6 +146,13 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
         catch(e: Exception) { accounts = emptyList(); content = emptyList(); error = message(e) }
         finally { loading = false }
     }
+    LaunchedEffect(revision) {
+        try {
+            val response = api.request("/api/notifications")
+            adminNotices = response.adminItems()
+            unreadAdminNotices = response.optInt("unread")
+        } catch (_: Exception) { }
+    }
     BackHandler(enabled = liveRoom != null || selected != null || exit != null) {
         when {
             liveRoom != null -> liveRoom = null
@@ -172,7 +184,45 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         LazyColumn(Modifier.fillMaxSize().safeDrawingPadding(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             item {
-                Text("إدارة Relaxia", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    Text("إدارة Relaxia", Modifier.weight(1f),
+                        style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+                    BadgedBox(badge = {
+                        if (unreadAdminNotices > 0) Badge {
+                            Text(if(unreadAdminNotices > 99) "99+" else unreadAdminNotices.toString())
+                        }
+                    }) {
+                        IconButton(onClick = { showAdminNotices = !showAdminNotices }) {
+                            Icon(Icons.Rounded.Notifications, "إشعارات الإدارة")
+                        }
+                    }
+                }
+                if (showAdminNotices) {
+                    Card(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("إشعارات الإدارة", style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold)
+                            if (adminNotices.isEmpty()) Text("لا توجد إشعارات جديدة.")
+                            adminNotices.take(10).forEach { notification ->
+                                Text(notification.optString("title"), fontWeight = FontWeight.SemiBold)
+                                Text(notification.optString("body"), style = MaterialTheme.typography.bodySmall)
+                                if (notification.isNull("read_at")) TextButton(onClick = {
+                                    perform {
+                                        api.request("/api/notifications", "POST", JSONObject()
+                                            .put("ids", org.json.JSONArray().put(notification.optInt("id"))))
+                                        revision++
+                                    }
+                                }) { Text("تعليم كمقروء") }
+                                HorizontalDivider()
+                            }
+                            TextButton(onClick = {
+                                showAdminNotices = false
+                                section = "السحب"
+                                revision++
+                            }) { Text("مراجعة طلبات السحب") }
+                        }
+                    }
+                }
                 Text("مرحبًا، $adminName", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if(exit!=null)TextButton(onClick=exit){Text("العودة لمركز الإدارة")}
                 TextButton(onClick = logout, enabled = !busy) { Text("تسجيل الخروج") }
@@ -219,8 +269,8 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
             if(section=="السحب"){
                 if(content.isEmpty())item{Text("لا توجد طلبات سحب.")}
                 items(content,key={it.getString("id")}){row->Card(Modifier.fillMaxWidth()){Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
-                    Text(row.optString("name"));Text(cents(row.optLong("amount_cents")));Text(row.optString("destination"));Text(operationLabel(row.optString("status")));Text(row.optString("payout_reference"))
-                    if(row.optString("status")=="pending")Button({payout=row;payoutReference="";payoutVerified=false},enabled=!busy){Text("مراجعة طلب السحب")}
+                    Text(row.optString("name"));Text(cents(row.optLong("amount_cents")));Text(row.optString("destination"));Text(if(row.optString("network")=="usdtbsc")"USDT BEP20"else "USDT TRC20");Text(operationLabel(row.optString("status")));Text(row.optString("payout_reference"))
+                    if(row.optString("status") in listOf("pending","approved","verification_required"))Button({payout=row;payoutReference=""},enabled=!busy){Text("إدارة طلب السحب")}
                 }}}
             }
             val account = selected
@@ -382,8 +432,65 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
         }, dismissButton = { TextButton(onClick = { confirmation = null }, enabled = !busy) { Text("إلغاء") } }) }
     }
     liveStop?.let{row->AlertDialog(onDismissRequest={liveStop=null},title={Text("إيقاف البث للجميع")},text={Text("سيُغلق البث وتُعاد الحجوزات المالية التي لم تستوفِ مدة الخدمة. لا يُحفظ فيديو.")},confirmButton={TextButton({liveStop=null;perform{securePost("/api/admin/live",JSONObject().put("action","end").put("id",row.getString("id")));revision++}}){Text("إيقاف")}},dismissButton={TextButton({liveStop=null}){Text("إلغاء")}})}
-    payout?.let{row->AlertDialog(onDismissRequest={payout=null},title={Text("التحقق من السحب")},text={Column(verticalArrangement=Arrangement.spacedBy(8.dp)){Text(row.optString("name"));Text(cents(row.optLong("amount_cents")));Text(row.optString("destination"));Text("نفّذ التحويل الخارجي أولًا ثم سجّل مرجعه. هذا الزر لا يرسل الأموال تلقائيًا.");OutlinedTextField(payoutReference,{payoutReference=it.take(300)},label={Text("مرجع التحويل المنفذ")});Row{Checkbox(payoutVerified,{payoutVerified=it});Text("تحققت من تنفيذ التحويل")}}},confirmButton={TextButton({payout=null;perform{securePost("/api/admin/payouts",JSONObject().put("id",row.getString("id")).put("action","paid").put("paid_verified",true).put("payout_reference",payoutReference));revision++}},enabled=payoutVerified&&payoutReference.length>=6&&!busy){Text("اعتماد السحب")}},dismissButton={TextButton({payout=null;perform{securePost("/api/admin/payouts",JSONObject().put("id",row.getString("id")).put("action","reject"));revision++}},enabled=!busy){Text("رفض وإعادة الحجز")}})}
 
+    payout?.let { row ->
+        val status = row.optString("status")
+        val network = if (row.optString("network") == "usdtbsc") "USDT BEP20" else "USDT TRC20"
+        AlertDialog(
+            onDismissRequest = { payout = null },
+            title = { Text("مراجعة سحب USDT") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(row.optString("name"), fontWeight = FontWeight.Bold)
+                    Text(cents(row.optLong("amount_cents")))
+                    Text(network)
+                    Text("عنوان الاستلام: " + row.optString("destination"))
+                    Text(when (status) {
+                        "pending" -> "الموافقة الإدارية لا تعني تنفيذ التحويل. راجع البيانات أولًا."
+                        "approved" -> "سيتم إرسال طلب التحويل إلى NOWPayments بعد تأكيدك."
+                        "verification_required" -> "أدخل رمز التحقق الذي أرسلته بوابة الدفع إلى حساب التاجر."
+                        else -> "ستُحدّث حالة السحب بعد التحقق من مزود الدفع."
+                    }, style = MaterialTheme.typography.bodyMedium)
+                    if(status == "verification_required") {
+                        OutlinedTextField(payoutReference, { payoutReference = it.filter(Char::isDigit).take(20) },
+                            label = { Text("رمز التحقق من NOWPayments") }, singleLine = true)
+                    }
+                }
+            },
+            confirmButton = {
+                val action = when(status) {
+                    "pending" -> "approve"
+                    "approved" -> "dispatch"
+                    "verification_required" -> "verify"
+                    else -> ""
+                }
+                if(action.isNotEmpty()) TextButton(
+                    onClick = {
+                        val payload = JSONObject().put("id", row.getString("id")).put("action", action)
+                        if(action == "verify") payload.put("verification_code", payoutReference)
+                        payout = null
+                        perform { securePost("/api/admin/payouts", payload); revision++ }
+                    },
+                    enabled = !busy && (action != "verify" || payoutReference.length in 4..20)
+                ) {
+                    Text(when(action) {
+                        "approve" -> "موافقة الإدارة"
+                        "dispatch" -> "إرسال إلى بوابة الدفع"
+                        else -> "تأكيد رمز البوابة"
+                    })
+                }
+            },
+            dismissButton = {
+                if(status == "pending" || status == "approved") {
+                    TextButton(onClick = {
+                        payout = null
+                        perform { securePost("/api/admin/payouts",
+                            JSONObject().put("id", row.getString("id")).put("action", "reject")); revision++ }
+                    }, enabled = !busy) { Text("رفض وإعادة الرصيد") }
+                } else TextButton(onClick = { payout = null }) { Text("إغلاق") }
+            }
+        )
+    }
     refundBooking?.let{row->AlertDialog(onDismissRequest={refundBooking=null},title={Text("استرداد الحجز")},text={Column{Text(row.optString("title"));Text(cents(row.optLong("price_cents")));OutlinedTextField(refundReason,{refundReason=it.take(300)},label={Text("سبب القرار بعد المراجعة")})}},confirmButton={TextButton({refundBooking=null;perform{securePost("/api/admin/bookings",JSONObject().put("id",row.getString("id")).put("action","refund").put("reason",refundReason));revision++}},enabled=refundReason.trim().length>=3&&!busy){Text("إعادة المبلغ")}},dismissButton={TextButton({refundBooking=null}){Text("إلغاء")}})}
     livePriceTarget?.let{row->AlertDialog(onDismissRequest={livePriceTarget=null},title={Text("سعر دخول البث")},text={Column{Text("يمكن التعديل قبل بيع أي تذكرة فقط، حفاظًا على السعر المتفق عليه.");OutlinedTextField(livePriceInput,{livePriceInput=it.filter{c->c.isDigit()}.take(7)},label={Text("السعر من الرصيد")})}},confirmButton={TextButton({livePriceTarget=null;perform{securePost("/api/admin/live",JSONObject().put("id",row.getString("id")).put("action","price").put("price_cents",livePriceInput.toLong()));revision++}},enabled=(livePriceInput.toLongOrNull()?:0L) in 1L..1000000L&&!busy){Text("حفظ")}},dismissButton={TextButton({livePriceTarget=null}){Text("إلغاء")}})}
 

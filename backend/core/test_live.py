@@ -103,13 +103,34 @@ class LiveBroadcastTests(TestCase):
         self.assertEqual(self.request(f'/api/messages/{sent["id"]}/action',{'action':'delete'},self.viewer).status_code,200)
         self.assertEqual(self.request('/api/blocks',{'user_id':self.owner.pk,'blocked':True},self.viewer).status_code,200)
         self.assertEqual(self.request(f'/api/messages/{self.owner.pk}',{'body':'Blocked'},self.viewer).status_code,403)
-    def test_payout_requires_verified_external_reference_and_is_idempotent(self):
-        wallet=Wallet.objects.get(user=self.viewer);wallet.reserved_cents=100;wallet.save()
-        w=Withdrawal.objects.create(user=self.viewer,amount_cents=100,destination='test destination',request_key=uuid.uuid4())
-        p={'id':str(w.pk),'action':'paid','payout_reference':'external-test-ref'}
-        self.assertEqual(self.request('/api/admin/payouts',p,self.admin).status_code,409);p['paid_verified']=True;p['reason']='Explicit live administration fixture';p=reviewed_payload(self.admin,'/api/admin/payouts',p,self.viewer.pk)
-        self.assertEqual(self.request('/api/admin/payouts',p,self.admin).status_code,200);self.assertEqual(self.request('/api/admin/payouts',p,self.admin).status_code,200)
-        self.assertEqual(Wallet.objects.get(user=self.viewer).balance_cents,900)
+    def test_payout_requires_gateway_confirmation_before_wallet_debit(self):
+        wallet=Wallet.objects.get(user=self.viewer)
+        wallet.reserved_cents=100
+        wallet.save(update_fields=['reserved_cents'])
+        w=Withdrawal.objects.create(
+            user=self.viewer,amount_cents=100,
+            network='usdttrc20',destination='T'+'A'*33,request_key=uuid.uuid4())
+        # The legacy administrative 'paid' checkbox must never debit money.
+        old={'id':str(w.pk),'action':'paid','paid_verified':False,
+             'payout_reference':'external-test-ref'}
+        self.assertEqual(self.request('/api/admin/payouts',old,self.admin).status_code,400)
+        old['paid_verified']=True
+        self.assertEqual(self.request('/api/admin/payouts',old,self.admin).status_code,409)
+        self.assertEqual(Wallet.objects.get(user=self.viewer).balance_cents,1000)
+
+        # Approval is only a stage, not proof of a blockchain transfer.
+        self.assertEqual(self.request('/api/admin/payouts',{
+            'id':str(w.pk),'action':'approve'},self.admin).status_code,200)
+        self.assertEqual(Wallet.objects.get(user=self.viewer).reserved_cents,100)
+        self.assertEqual(Wallet.objects.get(user=self.viewer).balance_cents,1000)
+
+        # A rejected, not-yet-dispatched payout releases the original reserve.
+        self.assertEqual(self.request('/api/admin/payouts',{
+            'id':str(w.pk),'action':'reject'},self.admin).status_code,200)
+        self.assertEqual(self.request('/api/admin/payouts',{
+            'id':str(w.pk),'action':'reject'},self.admin).status_code,409)
+        wallet.refresh_from_db()
+        self.assertEqual((wallet.balance_cents,wallet.reserved_cents),(1000,0))
 
     def test_live_moderator_cannot_access_account_money(self):
         from django.contrib.auth.models import Permission

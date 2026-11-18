@@ -166,6 +166,9 @@ fun ServerAppScreen(baseUrl: String) {
     var profileEmail by rememberSaveable { mutableStateOf("") }
     var chatPrice by rememberSaveable { mutableStateOf("") }
     var destination by rememberSaveable { mutableStateOf("") }
+    var withdrawalNetwork by rememberSaveable { mutableStateOf("usdttrc20") }
+    var recentTransactions by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var unreadNotifications by remember { mutableIntStateOf(0) }
     var requestKey by rememberSaveable { mutableStateOf(UUID.randomUUID().toString()) }
     var reportKind by rememberSaveable { mutableStateOf("service") }
     var reportId by rememberSaveable { mutableStateOf("") }
@@ -394,6 +397,12 @@ fun ServerAppScreen(baseUrl: String) {
         catch (e: Exception) { walletError = "تعذّر تحديث الرصيد"; if (api.token == null) signedIn = false }
         finally { walletLoading = false }
     }
+    LaunchedEffect(signedIn, profile.optInt("id"), revision) {
+        if (signedIn) runCatching {
+            unreadNotifications = api.request("/api/notifications").optInt("unread")
+        }
+        else unreadNotifications = 0
+    }
     var loadedRowsScreen by remember { mutableStateOf("") }
     LaunchedEffect(screen, signedIn, revision) {
         if (!signedIn) return@LaunchedEffect
@@ -423,7 +432,16 @@ fun ServerAppScreen(baseUrl: String) {
                 "محادثة" -> rows = api.request("/api/messages/$peerId").rows()
                 "المحفوظات" -> rows = api.request("/api/saved").rows()
                 "الحجوزات" -> rows = api.request("/api/bookings").rows()
-                "المحفظة" -> { rows = api.request("/api/withdrawals").rows() }
+                "المحفظة" -> {
+                    rows = api.request("/api/withdrawals").rows()
+                    recentTransactions = try { api.request("/api/financial-history").rows().take(6) }
+                        catch (_: Exception) { emptyList() }
+                }
+                "الإشعارات" -> {
+                    val result = api.request("/api/notifications")
+                    rows = result.rows()
+                    unreadNotifications = result.optInt("unread")
+                }
                 "الدعم وخدمة العملاء" -> rows = api.request("/api/support").rows()
             }
         } catch (e: CancellationException) { throw e }
@@ -575,6 +593,17 @@ fun ServerAppScreen(baseUrl: String) {
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
                     actions = {
                         if (screen in listOf("العرض", "دردشة")) IconButton(onClick={buyCredits()}){Icon(Icons.Rounded.AccountBalanceWallet,"الرصيد",Modifier.size(22.dp))}
+                        if (screen in listOf("تصفح", "المحفظة")) {
+                            BadgedBox(badge = {
+                                if (unreadNotifications > 0) Badge {
+                                    Text(if (unreadNotifications > 99) "99+" else unreadNotifications.toString())
+                                }
+                            }) {
+                                IconButton(onClick = { open("الإشعارات") }) {
+                                    Icon(Icons.Rounded.Notifications, "الإشعارات")
+                                }
+                            }
+                        }
                     when (screen) {
                             "تصفح" -> HomeToolbarActions({showCreationSheet=true},{buyCredits()},{open("المحفوظات")},{revision++},{open("الدعم وخدمة العملاء")})
                             "العرض" -> {
@@ -583,7 +612,7 @@ fun ServerAppScreen(baseUrl: String) {
                             }
                             "دردشة" -> IconButton(onClick = { open("محادثة جديدة") }) { Icon(Icons.Rounded.EditNote, "محادثة جديدة") }
                         }
-                        if ((screen in destinations && screen != "تصفح") || screen in listOf("المحفوظات", "الحجوزات", "المحفظة", "محادثة", "الدعم وخدمة العملاء"))
+                        if ((screen in destinations && screen != "تصفح") || screen in listOf("المحفوظات", "الحجوزات", "المحفظة", "الإشعارات", "محادثة", "الدعم وخدمة العملاء"))
                             IconButton(enabled = !loading, onClick = { revision++ }) { Icon(Icons.Rounded.Refresh, "تحديث") }
                     }
                 )
@@ -1062,26 +1091,103 @@ fun ServerAppScreen(baseUrl: String) {
                                 Text(if (row.optString("status") == "awaiting_payment") "بانتظار الدفع · لم يُؤكَّد الحجز بعد" else row.optString("status"), color = MaterialTheme.colorScheme.onSurfaceVariant)
                             } } } }
                         }
+
                         "المحفظة" -> {
                             item { FormColumn {
-                                ReferenceCard { Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                ReferenceCard { Column(Modifier.padding(22.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                     Text("الرصيد المتاح", color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     Text(usd(wallet.optLong("available_cents")), fontSize = 32.sp, fontWeight = FontWeight.Bold)
-                                    Text("محجوز: ${usd(wallet.optLong("reserved_cents"))}", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text("نقاط ترويجية منفصلة: ${wallet.optLong("promotional_points")} · غير قابلة للسحب",style=MaterialTheme.typography.bodySmall)
+                                    Text("المبلغ المحجوز: ${usd(wallet.optLong("reserved_cents"))}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("نقاط ترويجية: ${wallet.optLong("promotional_points")} · غير قابلة للسحب",
+                                        style = MaterialTheme.typography.bodySmall)
                                 } }
-                                ReferenceRow(Icons.Rounded.ReceiptLong,"سجل العمليات والإيصالات"){open("سجل العمليات")}
-                                ReferencePrimary("شراء رصيد", !submitting) { buyCredits() }
-                                Text("الشحن يعتمد بعد تحقق الإدارة من التحويل. طلب السحب يحجز الرصيد للمراجعة ولا ينفّذ تحويلًا تلقائيًا.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                ReferencePrimary("شحن الكوينز · USDT TRC20", !submitting) { buyCredits() }
+                                ReferenceRow(Icons.Rounded.ReceiptLong, "سجل العمليات والإيصالات") { open("سجل العمليات") }
+                                Text("سحب USDT", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                                Text("اختر الشبكة المطابقة لعنوانك. تعتمد الإدارة طلب السحب قبل تنفيذ التحويل عبر بوابة الدفع.",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    FilterChip(withdrawalNetwork == "usdttrc20", {
+                                        withdrawalNetwork = "usdttrc20"; destination = ""; requestKey = UUID.randomUUID().toString()
+                                    }, label = { Text("Tron · TRC20") })
+                                    FilterChip(withdrawalNetwork == "usdtbsc", {
+                                        withdrawalNetwork = "usdtbsc"; destination = ""; requestKey = UUID.randomUUID().toString()
+                                    }, label = { Text("BNB · BEP20") })
+                                }
                                 Field(price, { price = it; requestKey = UUID.randomUUID().toString() }, "مبلغ السحب بالدولار", numeric = true)
-                                Field(destination, { destination = it; requestKey = UUID.randomUUID().toString() }, "جهة استلام الأموال")
-                                ReferencePrimary("طلب سحب", !submitting) { perform {
-                                    api.request("/api/withdrawals", "POST", JSONObject().put("amount_cents", cents(price)).put("destination", destination).put("request_key", requestKey))
-                                    price = ""; destination = ""; requestKey = UUID.randomUUID().toString(); revision++; notice = "سُجّل الطلب للمراجعة. لم يتم تحويل الأموال."
+                                Field(destination, { destination = it.trim(); requestKey = UUID.randomUUID().toString() },
+                                    if (withdrawalNetwork == "usdttrc20") "عنوان TRC20 يبدأ T" else "عنوان BEP20 يبدأ 0x")
+                                val validDestination = if (withdrawalNetwork == "usdttrc20")
+                                    destination.matches(Regex("T[1-9A-HJ-NP-Za-km-z]{33}"))
+                                else destination.matches(Regex("0x[a-fA-F0-9]{40}"))
+                                if (destination.isNotBlank() && !validDestination)
+                                    Text("عنوان المحفظة لا يطابق الشبكة", color = MaterialTheme.colorScheme.error)
+                                ReferencePrimary("طلب سحب", !submitting && validDestination && (price.toDoubleOrNull() ?: 0.0) > 0.0) { perform {
+                                    api.request("/api/withdrawals", "POST",
+                                        JSONObject().put("amount_cents", cents(price))
+                                            .put("destination", destination)
+                                            .put("network", withdrawalNetwork)
+                                            .put("request_key", requestKey))
+                                    price = ""; destination = ""; requestKey = UUID.randomUUID().toString()
+                                    revision++; notice = "سُجّل الطلب للمراجعة. لم تُرسل الأموال بعد."
                                 } }
-                                Text("طلبات السحب", style = MaterialTheme.typography.titleLarge)
+                                Text("المعاملات الأخيرة", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                                if (recentTransactions.isEmpty() && !loading)
+                                    Text("لا توجد معاملات حديثة.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                             } }
-                            items(rows) { row -> Box(Modifier.padding(horizontal = 22.dp)) { ReferenceCard { Text("${usd(row.optLong("amount_cents"))} · ${if (row.optString("status") == "pending") "قيد المراجعة" else row.optString("status")}", Modifier.padding(18.dp)) } } }
+                            items(recentTransactions) { row ->
+                                Box(Modifier.padding(horizontal = 18.dp)) { ReferenceCard {
+                                    Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Column {
+                                            Text(when(row.optString("kind")) {
+                                                "withdrawal" -> "سحب USDT"
+                                                "topup" -> "إيداع رصيد"
+                                                else -> "حركة مالية"
+                                            }, fontWeight = FontWeight.SemiBold)
+                                            Text(row.optString("status"), style = MaterialTheme.typography.bodySmall)
+                                        }
+                                        Text(usd(row.optLong("amount_cents")), fontWeight = FontWeight.Bold)
+                                    }
+                                } }
+                            }
+                            item { Text("طلبات السحب", Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
+                                style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+                            items(rows) { row -> Box(Modifier.padding(horizontal = 18.dp)) {
+                                ReferenceCard { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text(usd(row.optLong("amount_cents")), fontWeight = FontWeight.Bold)
+                                    Text(when(row.optString("status")) {
+                                        "pending" -> "قيد مراجعة الإدارة"
+                                        "approved" -> "موافقة الإدارة · بانتظار إرسال التحويل"
+                                        "dispatching", "dispatch_review", "verification_required" -> "بانتظار تحقق بوابة الدفع"
+                                        "processing" -> "التحويل قيد التنفيذ"
+                                        "paid" -> "اكتمل السحب"
+                                        "rejected" -> "مرفوض · أعيد الرصيد"
+                                        else -> "قيد المراجعة"
+                                    })
+                                    Text(if(row.optString("network") == "usdtbsc") "USDT · BEP20" else "USDT · TRC20",
+                                        style = MaterialTheme.typography.bodySmall)
+                                    if(row.optString("payout_reference").isNotBlank())
+                                        Text("معرّف التحويل: " + row.optString("payout_reference"),
+                                            style = MaterialTheme.typography.bodySmall)
+                                } }
+                            } }
+                        }
+                        "الإشعارات" -> {
+                            if(rows.isEmpty() && !loading && contentError.isBlank()) item {
+                                ReferenceEmpty(Icons.Rounded.NotificationsNone, "لا توجد إشعارات",
+                                    "ستظهر هنا إشعارات المعاملات.")
+                            }
+                            items(rows) { row -> Box(Modifier.padding(horizontal = 18.dp)) {
+                                ReferenceCard { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text(row.optString("title"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                    Text(row.optString("body"))
+                                    if (row.isNull("read_at")) TextButton(onClick = { perform {
+                                        api.request("/api/notifications", "POST",
+                                            JSONObject().put("ids", org.json.JSONArray().put(row.optInt("id"))))
+                                        revision++
+                                    } }) { Text("تعليم كمقروء") }
+                                } }
+                            } }
                         }
                         "إرسال بلاغ" -> item { FormColumn {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("service" to "عرض", "reel" to "ريل", "user" to "حساب", "message" to "رسالة").forEach { (kind, label) -> FilterChip(reportKind == kind, { reportKind = kind }, label = { Text(label) }) } }
@@ -1451,6 +1557,22 @@ internal fun ReferenceLogin(register: Boolean, busy: Boolean, notice: String, us
             item{Column(Modifier.padding(horizontal=24.dp),verticalArrangement=Arrangement.spacedBy(14.dp)){
                 Text(if(register)"مساحتك تبدأ هنا"else"أهلًا بعودتك",style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold)
                 Text(if(register)"أنشئ حسابك بخطوات بسيطة."else"ادخل ببريدك الإلكتروني وكلمة المرور.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+                if (register) {
+                    val completed = listOf(
+                        username.trim().length >= 2,
+                        validEmail,
+                        password.length >= 8,
+                        gender in listOf("male", "female"),
+                        adultConfirmed
+                    ).count { it }
+                    LinearProgressIndicator(
+                        progress = { completed / 5f },
+                        modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(16.dp))
+                    )
+                    Text("اكتمال بيانات التسجيل: ${completed} من 5",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
                 if(notice.isNotBlank())Text(notice,color=MaterialTheme.colorScheme.error)
                 if(register)OutlinedTextField(username,onUsername,label={Text("الاسم الظاهر")},modifier=Modifier.fillMaxWidth(),singleLine=true,enabled=!busy,keyboardOptions=KeyboardOptions(imeAction=ImeAction.Next))
                 OutlinedTextField(email,onEmail,label={Text("البريد الإلكتروني")},modifier=Modifier.fillMaxWidth(),singleLine=true,enabled=!busy,keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Email,imeAction=ImeAction.Next))
