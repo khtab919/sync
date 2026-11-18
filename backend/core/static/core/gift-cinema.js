@@ -403,11 +403,16 @@ function mountCanvas(host,code,preview){
  canvas.className=preview?'gift-3d-canvas preview':'gift-3d-canvas';
  canvas.setAttribute('aria-label',(preview?'معاينة حركة ثلاثية الأبعاد: ':'هدية ثلاثية الأبعاد: ')+code);
  canvas.setAttribute('role','img');host.append(canvas);
- let stopped=false,raf=0,start=performance.now();
+ let stopped=false,raf=0,start=performance.now(),lastPaint=-100;
  function loop(now){
   if(stopped||!canvas.isConnected)return;
   const elapsed=(now-start)/1000,normalized=hasMotion()?elapsed/(preview?4.0:4.1):.45;
-  paint(canvas,code,preview?normalized%1:Math.min(1,normalized));
+  // Cap procedural 3D to 30 fps, leaving headroom for LiveKit video decoding.
+  if(now-lastPaint>=33){
+   lastPaint=now;
+   if(!preview||!canvas.closest?.('dialog')||canvas.closest('dialog').open)
+    paint(canvas,code,preview?normalized%1:Math.min(1,normalized));
+  }
   if(preview||normalized<1)raf=requestAnimationFrame(loop);
  }
  raf=requestAnimationFrame(loop);
