@@ -126,6 +126,8 @@ fun ServerAppScreen(baseUrl: String) {
     var creator by remember { mutableStateOf(JSONObject()) }
     var creatorContent by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var showBlockConfirmation by remember { mutableStateOf(false) }
+    var showReportConfirmation by remember { mutableStateOf(false) }
+    var accountReportReason by remember { mutableStateOf("") }
     val chatState = rememberSaveableStateHolder()
     var purchaseReturn by rememberSaveable { mutableStateOf("") }
     var walletAccountId by remember { mutableIntStateOf(0) }
@@ -310,6 +312,29 @@ fun ServerAppScreen(baseUrl: String) {
         Text("الريلز: "+data.optInt("reels"));Text("الإعجابات: "+data.optInt("likes"));Text("مشاهدون مختلفون: "+data.optInt("viewers"));Text("ثواني مشاهدة مسجّلة: "+data.optLong("watch_seconds"))
         Text("المشاهدات المسجّلة من مستخدمين دخلوا حساباتهم، ولا تُستخدم لاحتساب أرباح.",style=MaterialTheme.typography.bodySmall)
     }},confirmButton={TextButton(onClick={insights=null}){Text("إغلاق")}}) }
+    if(showReportConfirmation && signedIn){
+        AlertDialog(onDismissRequest={showReportConfirmation=false},
+            title={Text("الإبلاغ عن الحساب")},
+            text={
+                OutlinedTextField(
+                    value=accountReportReason,
+                    onValueChange={accountReportReason=it.take(500)},
+                    label={Text("سبب البلاغ")},
+                    minLines=3,modifier=Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton={TextButton(enabled=accountReportReason.trim().length>=3,
+                onClick={showReportConfirmation=false;perform{
+                    api.request("/api/reports","POST",JSONObject()
+                        .put("target_type","user")
+                        .put("target_id",creator.optInt("id"))
+                        .put("reason",accountReportReason.trim()))
+                    notice="تم إرسال البلاغ إلى الإدارة."
+                    accountReportReason=""
+                }}){Text("إرسال البلاغ")}},
+            dismissButton={TextButton(onClick={showReportConfirmation=false}){Text("إلغاء")}}
+        )
+    }
     if(showBlockConfirmation && signedIn){
         AlertDialog(
             onDismissRequest={showBlockConfirmation=false},
@@ -881,7 +906,7 @@ fun ServerAppScreen(baseUrl: String) {
                                         Icon(Icons.Rounded.Block,null)
                                         Text("حظر الحساب")
                                     }
-                                    OutlinedButton(onClick={open("الإبلاغ عن حساب")}){
+                                    OutlinedButton(onClick={showReportConfirmation=true}){
                                         Text("الإبلاغ")
                                     }
                                 }
