@@ -77,8 +77,10 @@ def media_file(request, media_id):
             viewer = User.objects.filter(pk=data['viewer'], is_active=True).first()
             if viewer and viewer.pk!=media.owner_id and viewer.is_staff and not media.purpose.startswith('chat_'):
                 from .models import SessionToken
-                session=SessionToken.objects.filter(pk=data.get('admin_session'),user=viewer,expires_at__gt=timezone.now(),admin_verified_at__gt=timezone.now()-timedelta(hours=1)).first()
-                if not session:return HttpResponse(status=403)
+                from .admin_security import scopes
+                session=SessionToken.objects.filter(pk=data.get('admin_session'),user=viewer,expires_at__gt=timezone.now()).first()
+                if not session or not (set(scopes(viewer)) & {'store.view','finance.view'}):
+                    return HttpResponse(status=403)
             if data['media'] != str(media.pk) or not may_read(media, viewer):
                 return HttpResponse(status=403)
         except (signing.BadSignature, KeyError, ValueError):
