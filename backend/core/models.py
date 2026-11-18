@@ -101,8 +101,39 @@ class Reel(models.Model):
     media = models.OneToOneField("UploadedMedia", null=True, blank=True, on_delete=models.PROTECT)
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     video_url = models.URLField(max_length=500)
+    price_cents = models.PositiveIntegerField(default=0)
+    preview = models.ForeignKey("UploadedMedia",null=True,blank=True,on_delete=models.PROTECT,related_name="reel_previews")
+    active = models.BooleanField(default=True)
     approved = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class PaidPost(models.Model):
+    """Real paid photo, never sent to unpaid clients, with blurred preview only."""
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    media = models.OneToOneField("UploadedMedia", on_delete=models.PROTECT, related_name="paid_post_original")
+    preview = models.OneToOneField("UploadedMedia", on_delete=models.PROTECT, related_name="paid_post_preview")
+    caption = models.CharField(max_length=500,blank=True)
+    price_cents = models.PositiveIntegerField()
+    active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class ContentUnlock(models.Model):
+    """Exactly one settled charge per paid post or reel and buyer."""
+    buyer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    reel = models.ForeignKey(Reel, null=True, blank=True, on_delete=models.PROTECT)
+    post = models.ForeignKey(PaidPost, null=True, blank=True, on_delete=models.PROTECT)
+    operation = models.OneToOneField("FinancialOperation", on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["buyer","reel"],name="one_paid_reel_unlock"),
+            models.UniqueConstraint(fields=["buyer","post"],name="one_paid_photo_unlock"),
+            models.CheckConstraint(
+                condition=(Q(reel__isnull=False,post__isnull=True)|Q(reel__isnull=True,post__isnull=False)),
+                name="one_media_content_kind"),
+        ]
 
 class ReelLike(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
