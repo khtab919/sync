@@ -67,6 +67,13 @@ class Wallet(models.Model):
 class Withdrawal(models.Model):
     payout_reference=models.CharField(max_length=300,blank=True)
     processed_at=models.DateTimeField(null=True,blank=True)
+    network=models.CharField(max_length=16,default='legacy')
+    reviewed_by=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT,
+        null=True,blank=True,related_name='reviewed_withdrawals')
+    reviewed_at=models.DateTimeField(null=True,blank=True)
+    provider_batch_id=models.CharField(max_length=64,null=True,blank=True,unique=True)
+    provider_withdrawal_id=models.CharField(max_length=64,null=True,blank=True,unique=True)
+    provider_status=models.CharField(max_length=32,blank=True)
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     amount_cents = models.PositiveIntegerField()
@@ -76,6 +83,19 @@ class Withdrawal(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         constraints = [models.UniqueConstraint(fields=['user', 'request_key'], name='unique_withdrawal_request')]
+
+class UserNotification(models.Model):
+    user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT,related_name='relaxia_notices')
+    kind=models.CharField(max_length=32,default='wallet')
+    title=models.CharField(max_length=120)
+    body=models.CharField(max_length=500)
+    reference=models.CharField(max_length=100,blank=True)
+    read_at=models.DateTimeField(null=True,blank=True)
+    created_at=models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes=[models.Index(fields=['user','-created_at'],name='user_notice_recent')]
+
 
 class Message(models.Model):
     reply_to=models.ForeignKey("self",null=True,blank=True,on_delete=models.PROTECT)
