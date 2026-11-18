@@ -663,7 +663,32 @@ $('text').addEventListener('blur',()=>{
  document.body.classList.remove('chat-focused');
  requestAnimationFrame(()=>{updateRoomViewport();syncRoomFooterMetrics()});
 });
-$('mute').onclick=async()=>{try{await room.localParticipant.setMicrophoneEnabled(muted);muted=!muted;$('mute').textContent=muted?'تشغيل الميكروفون':'كتم الميكروفون';updateQuickMic()}catch(e){message(e)}};
+// Keep microphone and camera independent, including during rapid taps.
+let micToggleBusy=false;
+$('mute').onclick=async()=>{
+ if(micToggleBusy||!speaking||!room?.localParticipant)return;
+ micToggleBusy=true;
+ const button=$('mute'),quick=$('micQuick');
+ button.disabled=true;if(quick)quick.disabled=true;
+ try{
+  const targetEnabled=muted;
+  const enabled=await RelaxiaMedia.setMicrophoneOnly(room.localParticipant,LivekitClient,targetEnabled);
+  muted=!enabled;
+  button.textContent=muted?'تشغيل الميكروفون':'كتم الميكروفون';
+  button.setAttribute('aria-label',button.textContent);
+  button.setAttribute('aria-pressed',String(!muted));
+  updateQuickMic();
+  // This is only feedback: the camera and its preview are never modified here.
+  commentNotice(muted?'تم كتم الميكروفون · الفيديو مستمر':'تم تشغيل الميكروفون');
+ }catch(error){
+  if(error?.stage==='microphone_toggle'){
+   $('connection').classList.remove('is-ready');
+   $('status').textContent='الميكروفون غير جاهز؛ الفيديو لم يتوقف. أعد الاتصال إن استمرت المشكلة.';
+  }else message(error);
+ }finally{
+  micToggleBusy=false;button.disabled=false;if(quick)quick.disabled=false;
+ }
+};
 $('camera').onclick=async()=>{try{await room.localParticipant.setCameraEnabled(cameraOff);cameraOff=!cameraOff;$('camera').textContent=cameraOff?'تشغيل الفيديو':'إيقاف الفيديو';if(!cameraOff){const track=room.localParticipant.getTrackPublication(Track.Source.Camera)?.track;if(track)renderTrack(track,room.localParticipant,true)}else document.querySelectorAll('.tile').forEach(t=>{if(t.dataset.identity===room.localParticipant.identity)t.remove()});layout()}catch(e){message(e)}};
 $('switch').onclick=async()=>{try{const next=facing==='user'?'environment':'user';await room.localParticipant.getTrackPublication(Track.Source.Camera)?.track?.restartTrack({facingMode:next});facing=next;document.querySelectorAll('.tile').forEach(t=>{if(t.dataset.identity===room.localParticipant.identity)t.querySelector('video').style.transform=facing==='user'?'scaleX(-1)':''})}catch(e){$('status').textContent='الكاميرا الأخرى غير متاحة'}};
 $('exit').onclick=()=>{if(config.owner){if(confirm('مغادرتك تنهي البث. هل تريد الإنهاء؟'))api({action:'end'}).then(leave).catch(message)}else leave()};
@@ -714,11 +739,25 @@ if(config.mode==='audio')drawAudioSeats({
 if(!polling){polling=true;poll()}
 window.addEventListener('pagehide',()=>{leaving=true;releasePrepared();room?.disconnect()});connect().catch(e=>{message(e);if(e.name!=='MediaFailure')reconnect()});
 
-// Native lifecycle: keep audio connected, release camera while the app is hidden.
-let nativeCameraWasOn=false;
-window.setNativeBackground=async hidden=>{
- try {
-  if(hidden){nativeCameraWasOn=!!room?.localParticipant?.isCameraEnabled;if(nativeCameraWasOn)await room.localParticipant.setCameraEnabled(false)}
-  else if(nativeCameraWasOn){nativeCameraWasOn=false;await room.localParticipant.setCameraEnabled(true)}
- }catch(error){message(error)}
+// Android background privacy: release camera only when the app really stops,
+// not when the user taps microphone controls. Restore and reattach on resume.
+let nativeCameraWasOn=false,nativeBackgroundTransition=Promise.resolve();
+window.setNativeBackground=hidden=>{
+ nativeBackgroundTransition=nativeBackgroundTransition.catch(()=>{}).then(async()=>{
+  const local=room?.localParticipant;
+  if(!local||config.mode==='audio'||!speaking)return;
+  if(hidden){
+   if(cameraOff||nativeCameraWasOn)return;
+   nativeCameraWasOn=!!local.isCameraEnabled;
+   if(nativeCameraWasOn)await local.setCameraEnabled(false);
+  }else if(nativeCameraWasOn){
+   if(cameraOff){nativeCameraWasOn=false;return;}
+   await local.setCameraEnabled(true);
+   nativeCameraWasOn=false;
+   // LiveKit may replace the video track on Android after backgrounding.
+   const track=local.getTrackPublication(Track.Source.Camera)?.track;
+   if(track&&!closed&&!leaving)renderTrack(track,local,true);
+  }
+ }).catch(error=>{message(error)});
+ return nativeBackgroundTransition;
 };
