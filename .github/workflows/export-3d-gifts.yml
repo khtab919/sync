@@ -13,6 +13,13 @@ on:
       - 'backend/core/templates/core/live_room.html'
       - 'backend/core/live_stage.py'
       - 'backend/core/static/core/gifts/catalog.json'
+  pull_request:
+    paths:
+      - '.github/workflows/export-3d-gifts.yml'
+      - 'backend/core/static/core/gift-cinema.js'
+      - 'backend/core/static/core/gift-cinema.css'
+      - 'backend/core/static/core/live-stage.js'
+      - 'backend/core/templates/core/live_room.html'
   workflow_dispatch:
 
 permissions:
