@@ -68,6 +68,29 @@ class NativeAdminSecurityTests(TestCase):
         self.assertEqual(self.call('/api/admin/control/dashboard').status_code,200)
         self.assertEqual(self.call('/api/admin/auth',{'action':'verify','code':pyotp.TOTP(secret).now()}).json()['error'],'invalid_totp')
         a=AdminAccess.objects.get(user=self.owner);self.assertNotIn(secret,a.totp_secret)
+    def test_pending_mfa_setup_is_recoverable_in_app_with_password(self):
+        first=self.call('/api/admin/auth',{'action':'setup','password':'strong-owner-password'})
+        self.assertEqual(first.status_code,200,first.content)
+        secret=first.json()['secret']
+        status=self.call('/api/admin/auth')
+        self.assertTrue(status.json()['setup_pending'])
+        self.assertNotIn('secret',status.json())
+        self.assertNotIn(secret,status.content.decode())
+
+        # An interrupted response must not rotate the enrollment on retry.
+        second=self.call('/api/admin/auth',{'action':'setup','password':'strong-owner-password'})
+        self.assertEqual(second.status_code,200,second.content)
+        self.assertEqual(second.json()['secret'],secret)
+        self.assertEqual(second['Cache-Control'],'no-store')
+        self.assertEqual(AdminEvent.objects.filter(actor=self.owner,action='mfa_setup').count(),1)
+        self.assertEqual(AdminEvent.objects.filter(actor=self.owner,action='mfa_setup_resumed').count(),1)
+
+        wrong=self.call('/api/admin/auth',{'action':'setup','password':'wrong'})
+        self.assertEqual(wrong.status_code,403)
+        self.assertNotIn('secret',wrong.json())
+        self.assertEqual(self.call('/api/admin/auth',{'action':'verify','code':pyotp.TOTP(secret).now()}).status_code,200)
+        self.assertFalse(self.call('/api/admin/auth').json()['setup_pending'])
+
     def test_mfa_rate_limit_and_short_admin_session(self):
         self.assertLessEqual((SessionToken.objects.get(user=self.owner).expires_at-timezone.now()).total_seconds(),3600)
         for _ in range(5):self.call('/api/admin/auth',{'action':'setup','password':'wrong'})
