@@ -104,7 +104,7 @@ internal fun AdminCentre(api:LayaliApi,name:String,ownerId:Int,dark:Boolean,onTh
  BackHandler(enabled=verified&&!legacy){navigateBack()}
  if(legacy&&verified){MaterialTheme(colorScheme=if(dark)AdminRoyalPalette else AdminLightPalette){MobileAdminScreen(api,name,allowed=buildList{if(can("live.view"))add("البث المباشر");if(can("store.view")){add("الحجوزات");add("المحتوى")};if(can("finance.view")){add("السحب");add("الدفع");add("الطلبات")};if(can("wheel.view"))add("العجلة")},exit={legacy=false}){legacy=false}};return}
  if(preview!=null){
-    MaterialTheme(colorScheme=if(dark)AdminRoyalPalette else AdminLightPalette) {
+    MaterialTheme(colorScheme=AdminLightPalette) {
         AdminAccountPreviewScreen(preview!!) { preview=null }
     }
     return
