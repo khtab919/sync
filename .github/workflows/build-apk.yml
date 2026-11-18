@@ -134,7 +134,7 @@ jobs:
       - name: Upload unsigned APK for trusted offline signing
         uses: actions/upload-artifact@v4
         with:
-          name: Relaxia-11.7.8-PaidMedia-unsigned
+          name: Relaxia-11.7.9-NativeTRC20-unsigned
           path: app/build/outputs/apk/release/app-release-unsigned.apk
           retention-days: 7
 
