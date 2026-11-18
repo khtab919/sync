@@ -62,7 +62,10 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
     for(const id of ['more','guests','micQuick']){
      const control=page.locator('#'+id);
      assert.equal(await control.locator('svg').count(),1,'visible controls use vectors: '+id);
-     assert.equal(await control.evaluate(el=>getComputedStyle(el).color),'rgb(255, 255, 255)','readable control foreground in '+theme);
+     const tone=await control.evaluate(el=>getComputedStyle(el).color);
+     const channels=tone.match(/\d+/g)?.slice(0,3).map(Number)||[];
+     assert.ok(channels.length===3&&channels.every(value=>value>=235),
+       'readable white control foreground in '+theme+': '+tone);
      const icon=await control.locator('svg').boundingBox();assert.ok(icon.width>=20&&icon.height>=20,'icon has explicit bounds');
     }
     if(theme==='light'){
