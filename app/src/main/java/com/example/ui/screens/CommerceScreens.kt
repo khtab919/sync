@@ -72,7 +72,8 @@ internal fun commerceError(e: Exception): String = when(e.message) {
     "message_unavailable" -> "المرفق غير متاح لهذا الحساب."
     "insufficient_balance", "insufficient_funds" -> "الرصيد المتاح لا يكفي."
     "nowpayments_not_configured" -> "بوابة NOWPayments تنتظر إعداد مفاتيح حساب التاجر."
-    "invoice_creation_pending" -> "تعذّر تأكيد إنشاء الفاتورة. راجع الدعم قبل تكرار الدفع."
+    "invoice_creation_pending", "payment_creation_pending", "invoice_already_created" -> "هذه الفاتورة قيد التحقق. لا تنشئ تحويلًا جديدًا قبل مراجعة طلباتي أو الدعم."
+    "invalid_payment_network", "invalid_payment_address", "invalid_payment_amount" -> "تعذّر التحقق من تفاصيل الدفع على شبكة Tron. لم يتم إنشاء تعليمات تحويل."
     "quote_expired" -> "انتهت مهلة هذا الطلب. أنشئ طلب شراء جديدًا."
     "provider_check_pending" -> "التحقق من البوابة لم يكتمل بعد. حاول لاحقًا."
     "update_app_for_wheel_rules" -> "حدّث التطبيق لعرض قواعد العجلة الجديدة قبل الدفع."
@@ -85,7 +86,7 @@ internal fun commerceError(e: Exception): String = when(e.message) {
 
 @Composable
 internal fun CommerceScreen(api: LayaliApi, kind: String, back: () -> Unit) {
-    if(kind == "شحن الرصيد") { CoinShopScreen(api, back); return }
+    if(kind == "شحن الرصيد") { NativeUsdtTopupScreen(api, back); return }
     val isWheel = kind == "العجلة" || kind == "يا نصيب"
     val context = LocalContext.current
     val scope = rememberCoroutineScope()

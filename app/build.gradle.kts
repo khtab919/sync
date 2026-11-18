@@ -24,8 +24,8 @@ android {
       "LAYALI_API_URL must be an HTTPS origin"
     }
     buildConfigField("String", "LAYALI_API_URL", "\"$backendUrl\"")
-    versionCode = 46
-    versionName = "11.7.8"
+    versionCode = 47
+    versionName = "11.7.9"
     val revision = providers.environmentVariable("GITHUB_SHA").orElse("local").get().take(12)
     buildConfigField("String", "BUILD_REVISION", "\"$revision\"")
 
@@ -145,6 +145,7 @@ dependencies {
   // implementation(libs.firebase.appcheck.recaptcha)
   // implementation(libs.firebase.appcheck.debug)
   // Resilient vertically cropped reels playback with network/range handling.
+  implementation("com.google.zxing:core:3.5.3")
   implementation("androidx.media3:media3-exoplayer:1.11.1")
   implementation("androidx.media3:media3-ui:1.11.1")
   implementation(libs.kotlinx.coroutines.android)
