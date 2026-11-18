@@ -124,6 +124,8 @@ fun ServerAppScreen(baseUrl: String) {
     var rows by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var selected by remember { mutableStateOf(JSONObject()) }
     var creator by remember { mutableStateOf(JSONObject()) }
+    var creatorContent by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var showBlockConfirmation by remember { mutableStateOf(false) }
     val chatState = rememberSaveableStateHolder()
     var purchaseReturn by rememberSaveable { mutableStateOf("") }
     var walletAccountId by remember { mutableIntStateOf(0) }
@@ -308,6 +310,22 @@ fun ServerAppScreen(baseUrl: String) {
         Text("الريلز: "+data.optInt("reels"));Text("الإعجابات: "+data.optInt("likes"));Text("مشاهدون مختلفون: "+data.optInt("viewers"));Text("ثواني مشاهدة مسجّلة: "+data.optLong("watch_seconds"))
         Text("المشاهدات المسجّلة من مستخدمين دخلوا حساباتهم، ولا تُستخدم لاحتساب أرباح.",style=MaterialTheme.typography.bodySmall)
     }},confirmButton={TextButton(onClick={insights=null}){Text("إغلاق")}}) }
+    if(showBlockConfirmation && signedIn){
+        AlertDialog(
+            onDismissRequest={showBlockConfirmation=false},
+            title={Text("حظر الحساب؟")},
+            text={Text("سيتم إخفاء منشورات هذا الحساب ومنعه من مراسلتك أو التواصل معك.")},
+            confirmButton={TextButton(onClick={
+                showBlockConfirmation=false
+                perform{
+                    api.request("/api/blocks","POST",JSONObject()
+                        .put("user_id",creator.optInt("id")).put("blocked",true))
+                    page="";tab=0;revision++
+                }
+            }){Text("حظر")}},
+            dismissButton={TextButton(onClick={showBlockConfirmation=false}){Text("إلغاء")}}
+        )
+    }
     if(securityDialog)AccountSecurityDialog(api,!signedIn,{securityDialog=false}){signedIn=false;remembered=false;profile=JSONObject();page=""}
     val screen = page.ifBlank { destinations[tab] }
     val mainListState = rememberLazyListState()
@@ -359,11 +377,21 @@ fun ServerAppScreen(baseUrl: String) {
         try {
             when (screen) {
                 "تصفح", "العرض", "صفحة المذيعة" -> {
-                    if(screen=="صفحة المذيعة"){val result=api.request("/api/services?owner="+creator.optInt("id"));services=result.rows();nextServices=result.optString("next_cursor").takeUnless{it=="null"}.orEmpty()}
+                    if(screen=="صفحة المذيعة"){
+                        val id=creator.optInt("id")
+                        val result=api.request("/api/services?owner="+id)
+                        services=result.rows()
+                        nextServices=result.optString("next_cursor").takeUnless{it=="null"}.orEmpty()
+                        creatorContent=api.request("/api/creators/"+id+"/content").rows()
+                    }
                     creators = api.request("/api/creators").rows()
                     if (screen == "صفحة المذيعة") creator = (creators+accountMatches).firstOrNull { it.optInt("id") == creator.optInt("id") } ?: creator
                 }
-                "حسابي" -> { profile = api.request("/api/me"); services = api.request("/api/services?owner="+profile.optInt("id")).rows() }
+                "حسابي" -> {
+                    profile = api.request("/api/me")
+                    services = api.request("/api/services?owner="+profile.optInt("id")).rows()
+                    creatorContent=api.request("/api/creators/"+profile.optInt("id")+"/content").rows()
+                }
                 "ريلز" -> { val result=api.request("/api/reels"+(if(directReel.isNotBlank())"?reel_id=$directReel"else if(savedReels)"?saved=1"else ""));rows=result.rows();directReel="";nextReels=result.optString("next_cursor").takeUnless{it=="null"}.orEmpty() }
                 "دردشة" -> {val result=api.request("/api/conversations");rows=result.rows();nextConversations=result.optString("next_cursor").takeUnless{it=="null"}.orEmpty()}
                 "محادثة جديدة" -> creators = api.request("/api/creators").rows()
@@ -487,6 +515,10 @@ fun ServerAppScreen(baseUrl: String) {
         if(screen=="البث المباشر"){LiveLobby(api,baseUrl,{showCreator(it)},{buyCredits()},initialFilter="audio",initialCreate=true){back();revision++};return@MyApplicationTheme}
         if(screen=="الغرف الصوتية"){LiveLobby(api,baseUrl,{showCreator(it)},{buyCredits()},initialFilter="audio"){back();revision++};return@MyApplicationTheme}
         if(screen=="بدء غرفة صوتية"){LiveLobby(api,baseUrl,{showCreator(it)},{buyCredits()},initialFilter="audio",initialCreate=true){back();revision++};return@MyApplicationTheme}
+        if(screen=="نشر صورة مدفوعة"){
+            PaidPhotoPublishScreen(api){back();revision++}
+            return@MyApplicationTheme
+        }
         if (screen == "إضافة عرض" || screen == "نشر ريلز") {
             SellerPublishScreen(api, initialReel = screen == "نشر ريلز") { back(); revision++ }
             return@MyApplicationTheme
@@ -842,10 +874,58 @@ fun ServerAppScreen(baseUrl: String) {
                                     }
                                 }
                             }
-                            item { Row(Modifier.padding(horizontal = 22.dp), verticalAlignment = Alignment.CenterVertically) { Text(if (own) "عروضي" else "العروض", Modifier.weight(1f), style = MaterialTheme.typography.headlineMedium); if (own) TextButton(onClick = { open("إضافة عرض") }) { Icon(Icons.Rounded.Add, null, Modifier.size(18.dp)); Text("إضافة") } } }
-                            val offers = services.filter { it.optInt("owner_id") == person.optInt("id") }
-                            if (offers.isEmpty() && !loading) item { ReferenceEmpty(Icons.Rounded.Storefront, "اعرض خدمة، جلسة، أو منتجًا", "تظهر العروض المنشورة هنا مباشرة.") }
-                            items(offers) { offer -> Box(Modifier.padding(horizontal = 20.dp)) { OfferCard(offer) { showService(offer) } } }
+                            if(!own) item {
+                                Row(Modifier.fillMaxWidth().padding(horizontal=20.dp,vertical=8.dp),
+                                    horizontalArrangement=Arrangement.SpaceEvenly){
+                                    OutlinedButton(onClick={showBlockConfirmation=true}){
+                                        Icon(Icons.Rounded.Block,null)
+                                        Text("حظر الحساب")
+                                    }
+                                    OutlinedButton(onClick={open("الإبلاغ عن حساب")}){
+                                        Text("الإبلاغ")
+                                    }
+                                }
+                            }
+                            item {
+                                Row(Modifier.fillMaxWidth().padding(horizontal=20.dp,vertical=8.dp),
+                                    verticalAlignment=Alignment.CenterVertically){
+                                    Text("المنشورات والريلز والخدمات",
+                                        modifier=Modifier.weight(1f),
+                                        style=MaterialTheme.typography.titleLarge,
+                                        fontWeight=FontWeight.Bold)
+                                    if(own)TextButton(onClick={open("نشر صورة مدفوعة")}){
+                                        Icon(Icons.Rounded.Add,null)
+                                        Text("صورة مدفوعة")
+                                    }
+                                }
+                            }
+                            if(creatorContent.isEmpty()&&!loading)item{
+                                ReferenceEmpty(Icons.Rounded.Storefront,
+                                    "لا يوجد محتوى منشور بعد","ستظهر الصور والريلز والخدمات هنا.")
+                            }
+                            items(creatorContent,key={it.optString("kind")+":"+it.optInt("id")}){content->
+                                Box(Modifier.fillMaxWidth().padding(horizontal=18.dp,vertical=5.dp)){
+                                    CreatorContentCard(
+                                        api=api,item=content,mine=own,
+                                        onChanged={updated->
+                                            creatorContent=creatorContent.map{
+                                                if(it.optString("kind")==updated.optString("kind")
+                                                    &&it.optInt("id")==updated.optInt("id"))updated else it
+                                            }
+                                            revision++
+                                        },
+                                        onDeleted={
+                                            creatorContent=creatorContent.filterNot{
+                                                it.optString("kind")==content.optString("kind")
+                                                    &&it.optInt("id")==content.optInt("id")
+                                            }
+                                            revision++
+                                        },
+                                        onPlayReel={id->directReel=id.toString();page="";tab=1},
+                                        onOpenService={offer->showService(offer)}
+                                    )
+                                }
+                            }
 
 
                         }
