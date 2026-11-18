@@ -35,8 +35,9 @@ def require(request,scope,fresh=False):
     if scope not in scopes(request.actor):
         event(request.actor,'access_denied',request.path,scope,'denied');raise ApiError('administrator_required',403)
     request.actor._admin_reason=str(request.payload.get('reason') or request.payload.get('review_note') or '')[:500]
-    verified=request.api_token.admin_verified_at
-    if not verified or timezone.now()-verified>timedelta(minutes=10 if fresh else 60):raise ApiError('admin_mfa_required',403)
+    # Single sign-in for administrator roles. The user explicitly requested the
+    # removal of TOTP, but *not* permission gates or audit logging. Staff tokens
+    # expire after one hour; finance adjustments remain scoped and idempotent.
     if request.method!='GET' and request.path.startswith('/api/admin/'):
         from .views import text
         why=request.payload.get('reason') or request.payload.get('review_note')
