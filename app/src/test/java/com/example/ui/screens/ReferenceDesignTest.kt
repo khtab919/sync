@@ -157,7 +157,7 @@ class ReferenceDesignTest {
     }
 
     @Test fun sellerUploadsUsePhonePickerInsteadOfUrlField() {
-        compose.setContent { MyApplicationTheme { SellerPublishScreen(com.example.data.api.LayaliApi("https://example.invalid"), {}) } }
+        compose.setContent { MyApplicationTheme { SellerPublishScreen(com.example.data.api.LayaliApi("https://example.invalid"), back = {}) } }
         compose.onNodeWithText("إضافة عرض جديد").assertExists()
         compose.onNodeWithText("خدمة أو منتج").assertExists()
         compose.onNodeWithText("المدة (دقيقة)").assertExists()
