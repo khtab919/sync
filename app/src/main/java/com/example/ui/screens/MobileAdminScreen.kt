@@ -8,6 +8,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
@@ -69,6 +71,9 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
     var liveRoom by remember{mutableStateOf<JSONObject?>(null)}
     var payout by remember{mutableStateOf<JSONObject?>(null)}
     var payoutReference by remember{mutableStateOf("")}
+    var adminNotices by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var unreadAdminNotices by remember { mutableIntStateOf(0) }
+    var showAdminNotices by remember { mutableStateOf(false) }
     var payoutVerified by remember{mutableStateOf(false)}
     var refundBooking by remember{mutableStateOf<JSONObject?>(null)}
     var refundReason by remember{mutableStateOf("")}
@@ -141,6 +146,13 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
         catch(e: Exception) { accounts = emptyList(); content = emptyList(); error = message(e) }
         finally { loading = false }
     }
+    LaunchedEffect(revision) {
+        try {
+            val response = api.request("/api/notifications")
+            adminNotices = response.adminItems()
+            unreadAdminNotices = response.optInt("unread")
+        } catch (_: Exception) { }
+    }
     BackHandler(enabled = liveRoom != null || selected != null || exit != null) {
         when {
             liveRoom != null -> liveRoom = null
@@ -172,7 +184,45 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         LazyColumn(Modifier.fillMaxSize().safeDrawingPadding(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             item {
-                Text("إدارة Relaxia", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    Text("إدارة Relaxia", Modifier.weight(1f),
+                        style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+                    BadgedBox(badge = {
+                        if (unreadAdminNotices > 0) Badge {
+                            Text(if(unreadAdminNotices > 99) "99+" else unreadAdminNotices.toString())
+                        }
+                    }) {
+                        IconButton(onClick = { showAdminNotices = !showAdminNotices }) {
+                            Icon(Icons.Rounded.Notifications, "إشعارات الإدارة")
+                        }
+                    }
+                }
+                if (showAdminNotices) {
+                    Card(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("إشعارات الإدارة", style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold)
+                            if (adminNotices.isEmpty()) Text("لا توجد إشعارات جديدة.")
+                            adminNotices.take(10).forEach { notification ->
+                                Text(notification.optString("title"), fontWeight = FontWeight.SemiBold)
+                                Text(notification.optString("body"), style = MaterialTheme.typography.bodySmall)
+                                if (notification.isNull("read_at")) TextButton(onClick = {
+                                    perform {
+                                        api.request("/api/notifications", "POST", JSONObject()
+                                            .put("ids", org.json.JSONArray().put(notification.optInt("id"))))
+                                        revision++
+                                    }
+                                }) { Text("تعليم كمقروء") }
+                                HorizontalDivider()
+                            }
+                            TextButton(onClick = {
+                                showAdminNotices = false
+                                section = "السحب"
+                                revision++
+                            }) { Text("مراجعة طلبات السحب") }
+                        }
+                    }
+                }
                 Text("مرحبًا، $adminName", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if(exit!=null)TextButton(onClick=exit){Text("العودة لمركز الإدارة")}
                 TextButton(onClick = logout, enabled = !busy) { Text("تسجيل الخروج") }
