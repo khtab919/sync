@@ -549,7 +549,8 @@ def reels(request):
         price=request.payload.get('price_cents',0)
         if type(price) is not int or not 0<=price<=1000000:
             raise ApiError('invalid_price_cents')
-        caption=text(request.payload,'caption',0,500)
+        caption=request.payload.get('caption','')
+        if not isinstance(caption,str) or len(caption)>500:raise ApiError('invalid_caption')
         with transaction.atomic():
             existing=Reel.objects.filter(media=media).first()
             if existing:
