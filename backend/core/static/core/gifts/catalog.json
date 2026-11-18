@@ -1,5 +1,5 @@
 {
-  "catalog_version": 1,
+  "catalog_version": 2,
   "currency": "coins",
   "total_items": 21,
   "gifts": [
@@ -9,7 +9,10 @@
       "price_coins": 10,
       "category": "simple",
       "icon": "/static/core/gifts/icons/gift_clap.webp",
-      "animation": "/static/core/gifts/animations/gift_clap.webp"
+      "animation": "/static/core/gifts/animations/gift_clap.webp",
+      "animation_type": "procedural_3d",
+      "animated": true,
+      "audio_id": "gift_clap"
     },
     {
       "id": "gift_coffee",
@@ -17,7 +20,10 @@
       "price_coins": 25,
       "category": "simple",
       "icon": "/static/core/gifts/icons/gift_coffee.webp",
-      "animation": "/static/core/gifts/animations/gift_coffee.webp"
+      "animation": "/static/core/gifts/animations/gift_coffee.webp",
+      "animation_type": "procedural_3d",
+      "animated": true,
+      "audio_id": "gift_coffee"
     },
     {
       "id": "gift_flower",
@@ -25,7 +31,10 @@
       "price_coins": 50,
       "category": "simple",
       "icon": "/static/core/gifts/icons/gift_flower.webp",
-      "animation": "/static/core/gifts/animations/gift_flower.webp"
+      "animation": "/static/core/gifts/animations/gift_flower.webp",
+      "animation_type": "procedural_3d",
+      "animated": true,
+      "audio_id": "gift_flower"
     },
     {
       "id": "gift_chocolate",
@@ -33,7 +42,10 @@
       "price_coins": 75,
       "category": "simple",
       "icon": "/static/core/gifts/icons/gift_chocolate.webp",
-      "animation": "/static/core/gifts/animations/gift_chocolate.webp"
+      "animation": "/static/core/gifts/animations/gift_chocolate.webp",
+      "animation_type": "procedural_3d",
+      "animated": true,
+      "audio_id": "gift_chocolate"
     },
     {
       "id": "gift_rose",
@@ -41,7 +53,10 @@
       "price_coins": 100,
       "category": "simple",
       "icon": "/static/core/gifts/icons/gift_rose.webp",
-      "animation": "/static/core/gifts/animations/gift_rose.webp"
+      "animation": "/static/core/gifts/animations/gift_rose.webp",
+      "animation_type": "procedural_3d",
+      "animated": true,
+      "audio_id": "gift_rose"
     },
     {
       "id": "gift_teddy",
@@ -49,7 +64,10 @@
       "price_coins": 250,
       "category": "simple",
       "icon": "/static/core/gifts/icons/gift_teddy.webp",
-      "animation": "/static/core/gifts/animations/gift_teddy.webp"
+      "animation": "/static/core/gifts/animations/gift_teddy.webp",
+      "animation_type": "procedural_3d",
+      "animated": true,
+      "audio_id": "gift_teddy"
     },
     {
       "id": "gift_butterfly",
@@ -57,7 +75,10 @@
       "price_coins": 150,
       "category": "animated",
       "icon": "/static/core/gifts/icons/gift_butterfly.webp",
-      "animation": "/static/core/gifts/animations/gift_butterfly.webp"
+      "animation": "/static/core/gifts/animations/gift_butterfly.webp",
+      "animation_type": "procedural_3d",
+      "animated": true,
+      "audio_id": "gift_butterfly"
     },
     {
       "id": "gift_balloons",
@@ -65,7 +86,10 @@
       "price_coins": 200,
       "category": "animated",
       "icon": "/static/core/gifts/icons/gift_balloons.webp",
-      "animation": "/static/core/gifts/animations/gift_balloons.webp"
+      "animation": "/static/core/gifts/animations/gift_balloons.webp",
+      "animation_type": "procedural_3d",
+      "animated": true,
+      "audio_id": "gift_balloons"
     },
     {
       "id": "gift_heart",
@@ -73,7 +97,10 @@
       "price_coins": 300,
       "category": "animated",
       "icon": "/static/core/gifts/icons/gift_heart.webp",
-      "animation": "/static/core/gifts/animations/gift_heart.webp"
+      "animation": "/static/core/gifts/animations/gift_heart.webp",
+      "animation_type": "procedural_3d",
+      "animated": true,
+      "audio_id": "gift_heart"
     },
     {
       "id": "gift_bouquet",
@@ -81,7 +108,10 @@
       "price_coins": 500,
       "category": "animated",
       "icon": "/static/core/gifts/icons/gift_bouquet.webp",
-      "animation": "/static/core/gifts/animations/gift_bouquet.webp"
+      "animation": "/static/core/gifts/animations/gift_bouquet.webp",
+      "animation_type": "procedural_3d",
+      "animated": true,
+      "audio_id": "gift_bouquet"
     },
     {
       "id": "gift_cake",
@@ -89,7 +119,10 @@
       "price_coins": 750,
       "category": "animated",
       "icon": "/static/core/gifts/icons/gift_cake.webp",
-      "animation": "/static/core/gifts/animations/gift_cake.webp"
+      "animation": "/static/core/gifts/animations/gift_cake.webp",
+      "animation_type": "procedural_3d",
+      "animated": true,
+      "audio_id": "gift_cake"
     },
     {
       "id": "gift_dolphin",
@@ -97,7 +130,10 @@
       "price_coins": 3000,
       "category": "animated",
       "icon": "/static/core/gifts/icons/gift_dolphin.webp",
-      "animation": "/static/core/gifts/animations/gift_dolphin.webp"
+      "animation": "/static/core/gifts/animations/gift_dolphin.webp",
+      "animation_type": "procedural_3d",
+      "animated": true,
+      "audio_id": "gift_dolphin"
     },
     {
       "id": "gift_star",
@@ -105,7 +141,10 @@
       "price_coins": 1000,
       "category": "luxury",
       "icon": "/static/core/gifts/icons/gift_star.webp",
-      "animation": "/static/core/gifts/animations/gift_star.webp"
+      "animation": "/static/core/gifts/animations/gift_star.webp",
+      "animation_type": "procedural_3d",
+      "animated": true,
+      "audio_id": "gift_star"
     },
     {
       "id": "gift_fireworks",
@@ -113,7 +152,10 @@
       "price_coins": 1500,
       "category": "luxury",
       "icon": "/static/core/gifts/icons/gift_fireworks.webp",
-      "animation": "/static/core/gifts/animations/gift_fireworks.webp"
+      "animation": "/static/core/gifts/animations/gift_fireworks.webp",
+      "animation_type": "procedural_3d",
+      "animated": true,
+      "audio_id": "gift_fireworks"
     },
     {
       "id": "gift_diamond",
@@ -121,7 +163,10 @@
       "price_coins": 2000,
       "category": "luxury",
       "icon": "/static/core/gifts/icons/gift_diamond.webp",
-      "animation": "/static/core/gifts/animations/gift_diamond.webp"
+      "animation": "/static/core/gifts/animations/gift_diamond.webp",
+      "animation_type": "procedural_3d",
+      "animated": true,
+      "audio_id": "gift_diamond"
     },
     {
       "id": "gift_crown",
@@ -129,7 +174,10 @@
       "price_coins": 2500,
       "category": "luxury",
       "icon": "/static/core/gifts/icons/gift_crown.webp",
-      "animation": "/static/core/gifts/animations/gift_crown.webp"
+      "animation": "/static/core/gifts/animations/gift_crown.webp",
+      "animation_type": "procedural_3d",
+      "animated": true,
+      "audio_id": "gift_crown"
     },
     {
       "id": "gift_supercar",
@@ -137,7 +185,10 @@
       "price_coins": 4000,
       "category": "luxury",
       "icon": "/static/core/gifts/icons/gift_supercar.webp",
-      "animation": "/static/core/gifts/animations/gift_supercar.webp"
+      "animation": "/static/core/gifts/animations/gift_supercar.webp",
+      "animation_type": "procedural_3d",
+      "animated": true,
+      "audio_id": "gift_supercar"
     },
     {
       "id": "gift_yacht",
@@ -145,7 +196,10 @@
       "price_coins": 5000,
       "category": "luxury",
       "icon": "/static/core/gifts/icons/gift_yacht.webp",
-      "animation": "/static/core/gifts/animations/gift_yacht.webp"
+      "animation": "/static/core/gifts/animations/gift_yacht.webp",
+      "animation_type": "procedural_3d",
+      "animated": true,
+      "audio_id": "gift_yacht"
     },
     {
       "id": "gift_eagle",
@@ -153,7 +207,10 @@
       "price_coins": 6000,
       "category": "luxury",
       "icon": "/static/core/gifts/icons/gift_eagle.webp",
-      "animation": "/static/core/gifts/animations/gift_eagle.webp"
+      "animation": "/static/core/gifts/animations/gift_eagle.webp",
+      "animation_type": "procedural_3d",
+      "animated": true,
+      "audio_id": "gift_eagle"
     },
     {
       "id": "gift_palace",
@@ -161,7 +218,10 @@
       "price_coins": 7500,
       "category": "luxury",
       "icon": "/static/core/gifts/icons/gift_palace.webp",
-      "animation": "/static/core/gifts/animations/gift_palace.webp"
+      "animation": "/static/core/gifts/animations/gift_palace.webp",
+      "animation_type": "procedural_3d",
+      "animated": true,
+      "audio_id": "gift_palace"
     },
     {
       "id": "gift_blue_whale",
@@ -169,7 +229,14 @@
       "price_coins": 10000,
       "category": "luxury",
       "icon": "/static/core/gifts/icons/gift_blue_whale.webp",
-      "animation": "/static/core/gifts/animations/gift_blue_whale.webp"
+      "animation": "/static/core/gifts/animations/gift_blue_whale.webp",
+      "animation_type": "procedural_3d",
+      "animated": true,
+      "audio_id": "gift_blue_whale"
     }
-  ]
+  ],
+  "animation_engine": "procedural_3d_meshes_canvas",
+  "sound_engine": "web_audio_unique_by_gift",
+  "animation_runtime": "/static/core/gift-cinema.js",
+  "sound_policy": "User-toggleable; playback requires supported Web Audio and permitted user interaction"
 }
