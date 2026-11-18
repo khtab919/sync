@@ -545,12 +545,29 @@ def reels(request):
         media = UploadedMedia.objects.filter(pk=uuid.UUID(text(request.payload, 'media_id', 36, 36)), owner=request.actor, purpose='reel').first()
         if not media:
             raise ApiError('invalid_media')
-        reel,created = Reel.objects.get_or_create(media=media, defaults={'owner':request.actor,'video_url':request.build_absolute_uri(f'/api/media/{media.pk}'),'approved':True,'caption':str(request.payload.get('caption',''))[:500]})
+        from .paid_content import _photo_preview
+        price=request.payload.get('price_cents',0)
+        if type(price) is not int or not 0<=price<=1000000:
+            raise ApiError('invalid_price_cents')
+        caption=text(request.payload,'caption',0,500)
+        with transaction.atomic():
+            existing=Reel.objects.filter(media=media).first()
+            if existing:
+                if existing.price_cents!=price or existing.caption!=caption:
+                    raise ApiError('media_already_published',409)
+                return JsonResponse({'id':existing.pk,'status':'published'})
+            preview=_photo_preview(media) if price>0 else None
+            reel=Reel.objects.create(
+                owner=request.actor,media=media,
+                video_url=request.build_absolute_uri(f'/api/media/{media.pk}'),
+                approved=True,caption=caption,price_cents=price,preview=preview
+            )
         return JsonResponse({'id': reel.pk, 'status': 'published'}, status=201)
     from .feed_ranking import rank_feed
     from .models import ReelPreference
-    queryset=Reel.objects.filter(approved=True,owner__is_active=True).exclude(owner_id__in=visible_owners(request.actor)).select_related('owner','owner__profile')
+    queryset=Reel.objects.filter(approved=True,active=True,owner__is_active=True).exclude(owner_id__in=visible_owners(request.actor)).select_related('owner','owner__profile')
     queryset=queryset.exclude(pk__in=ReelPreference.objects.filter(user=request.actor,hidden=True).values('reel_id'))
+    if request.GET.get('owner'):queryset=queryset.filter(owner_id=int(request.GET['owner']))
     if request.GET.get('saved')=='1':queryset=queryset.filter(pk__in=ReelPreference.objects.filter(user=request.actor,saved=True).values('reel_id'))
     if request.GET.get('reel_id'):queryset=queryset.filter(pk=int(request.GET['reel_id']))
     q=request.GET.get('q','').strip().removeprefix('@')[:100]
@@ -575,7 +592,8 @@ def reels(request):
     for reel in reels:
         owner_profile = reel.owner.profile
         items.append({
-            'saved':reel.pk in saved_ids, 'share_url':request.build_absolute_uri('/s/reel/'+str(reel.pk)), 'caption':reel.caption, 'id': reel.pk, 'owner_id': reel.owner_id, 'video_url': reel.video_url,
+            'saved':reel.pk in saved_ids, 'share_url':request.build_absolute_uri('/s/reel/'+str(reel.pk)), 'caption':reel.caption, 'id': reel.pk, 'owner_id': reel.owner_id,
+            **__import__('core.paid_content',fromlist=['reel_json']).reel_json(reel,request),
             'owner_name': owner_profile.display_name or reel.owner.username,
             'owner_username': reel.owner.username,
             'owner_public_id': owner_profile.public_id,
@@ -592,7 +610,7 @@ def reels(request):
 @endpoint(['POST'])
 def reel_like(request, reel_id):
     reel = Reel.objects.filter(
-        pk=reel_id, approved=True, owner__is_active=True
+        pk=reel_id, approved=True, active=True, owner__is_active=True
     ).first()
     if reel is None or reel.owner_id in visible_owners(request.actor):
         raise ApiError('reel_unavailable', 404)
@@ -701,3 +719,48 @@ def search_accounts(request):
     bans=AccountSanction.objects.filter(kind='ban',revoked_at__isnull=True).filter(Q(expires_at__isnull=True)|Q(expires_at__gt=timezone.now())).values('user_id')
     users=users.exclude(pk__in=blocked_ids).exclude(pk__in=bans).select_related('profile').order_by('id')[:50]
     return JsonResponse({'items':[profile_json(u,request.actor) for u in users]})
+
+
+@endpoint(['PATCH','DELETE'])
+def reel_detail(request,reel_id):
+    row=Reel.objects.filter(pk=reel_id,owner=request.actor).first()
+    if row is None:raise ApiError('reel_unavailable',404)
+    if request.method=='DELETE':
+        row.active=False;row.save(update_fields=['active'])
+        return JsonResponse({'deleted':True})
+    if set(request.payload)-{'caption','price_cents'}:raise ApiError('unsupported_reel_field')
+    if 'caption' in request.payload:row.caption=text(request.payload,'caption',0,500)
+    if 'price_cents' in request.payload:
+        value=request.payload['price_cents']
+        if type(value) is not int or not 0<=value<=1000000:raise ApiError('invalid_price_cents')
+        if value>0 and row.preview_id is None:
+            from .paid_content import _photo_preview
+            row.preview=_photo_preview(row.media)
+        row.price_cents=value
+    row.save(update_fields=['caption','price_cents','preview'])
+    return JsonResponse({'id':row.pk,'status':'updated'})
+
+
+@endpoint(['PATCH','DELETE'])
+def service_detail(request,service_id):
+    row=Service.objects.filter(pk=service_id,owner=request.actor).first()
+    if row is None:raise ApiError('service_unavailable',404)
+    if request.method=='DELETE':
+        row.active=False;row.save(update_fields=['active'])
+        return JsonResponse({'deleted':True})
+    p=request.payload
+    if set(p)-{'title','description','price_cents','duration_minutes','terms','category'}:
+        raise ApiError('unsupported_service_field')
+    if 'title' in p:row.title=text(p,'title',3,150)
+    if 'description' in p:row.description=text(p,'description',10,600)
+    if 'price_cents' in p:row.price_cents=amount(p,'price_cents')
+    if 'duration_minutes' in p:
+        if type(p['duration_minutes']) is not int or not 1<=p['duration_minutes']<=1440:
+            raise ApiError('invalid_duration')
+        row.duration_minutes=p['duration_minutes']
+    if 'terms' in p:row.terms=text(p,'terms',0,600)
+    if 'category' in p:
+        if p['category'] not in ('خدمة','جلسة','منتج'):raise ApiError('invalid_category')
+        row.category=p['category']
+    row.save(update_fields=['title','description','price_cents','duration_minutes','terms','category'])
+    return JsonResponse(service_json(row,request.actor))
