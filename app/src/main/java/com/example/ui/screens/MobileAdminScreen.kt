@@ -59,6 +59,10 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
     var paymentRate by remember { mutableStateOf("1") }
     var paymentInstructions by remember { mutableStateOf("") }
     var paymentEnabled by remember { mutableStateOf(false) }
+    var syriatelEnabled by remember { mutableStateOf(false) }
+    var syriatelNumber by remember { mutableStateOf("0997991404") }
+    var syriatelRate by remember { mutableStateOf("0") }
+    var syriatelInstructions by remember { mutableStateOf("") }
     var wheelStep by remember { mutableStateOf("") }
     var wheelMaximum by remember { mutableStateOf("") }
     var firstReward by remember { mutableStateOf("") }
@@ -133,6 +137,12 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
             } else if (section == "الدفع") {
                 val data=api.request("/api/admin/payment-settings")
                 gatewayConfigured=data.optBoolean("nowpayments_configured");paymentAccount=data.optString("account");paymentCurrency=data.optString("currency","USD");paymentRate=data.optString("rate","1");paymentInstructions=data.optString("instructions");paymentEnabled=data.optBoolean("enabled")
+                data.optJSONObject("syriatel_cash")?.let { cash ->
+                    syriatelEnabled=cash.optBoolean("enabled")
+                    syriatelNumber=cash.optString("number","0997991404")
+                    syriatelRate=cash.optString("syp_per_usd","0")
+                    syriatelInstructions=cash.optString("instructions")
+                }
             } else if(section=="البث المباشر") {
                 val data=api.request("/api/admin/live");content=data.adminItems()
                 val reports=data.optJSONArray("pending_reports")
@@ -366,6 +376,32 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
                     if(paymentCurrency=="SYP")OutlinedTextField(paymentRate,{paymentRate=it},label={Text("ليرة سورية لكل دولار من الرصيد")},modifier=Modifier.fillMaxWidth())
                     OutlinedTextField(paymentInstructions,{paymentInstructions=it.take(500)},label={Text("تعليمات الدفع")},modifier=Modifier.fillMaxWidth())
                     Button(onClick={perform { securePost("/api/admin/payment-settings",JSONObject().put("enabled",paymentEnabled).put("account",paymentAccount).put("currency",paymentCurrency).put("rate",paymentRate).put("instructions",paymentInstructions));success="تم حفظ بيانات الاستلام." }},enabled=!busy){Text("حفظ")}
+                    HorizontalDivider(Modifier.padding(vertical=10.dp))
+                    Text("سيريتيل كاش · دفع يدوي",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold)
+                    Text("يُعرض الرقم للعميل، ثم يرفع إيصالًا برقم العملية. لا تُمنح كوينز إلا بعد تحقق المسؤول من وصول المبلغ.",
+                        style=MaterialTheme.typography.bodySmall)
+                    Row(verticalAlignment=Alignment.CenterVertically){
+                        Switch(syriatelEnabled,{syriatelEnabled=it},enabled=!busy)
+                        Text("تفعيل سيريتيل كاش")
+                    }
+                    OutlinedTextField(syriatelNumber,{syriatelNumber=it.filter(Char::isDigit).take(10)},
+                        label={Text("رقم سيريتيل كاش")},singleLine=true,modifier=Modifier.fillMaxWidth())
+                    OutlinedTextField(syriatelRate,{syriatelRate=it},
+                        label={Text("عدد الليرات السورية مقابل 1 USD رصيد داخلي")},
+                        singleLine=true,modifier=Modifier.fillMaxWidth())
+                    OutlinedTextField(syriatelInstructions,{syriatelInstructions=it.take(500)},
+                        label={Text("تعليمات الدفع اليدوي")},modifier=Modifier.fillMaxWidth())
+                    Button(onClick={perform {
+                        securePost("/api/admin/payment-settings",JSONObject().put("syriatel_cash",
+                            JSONObject().put("enabled",syriatelEnabled)
+                                .put("number",syriatelNumber)
+                                .put("syp_per_usd",syriatelRate)
+                                .put("instructions",syriatelInstructions)))
+                        success="تم حفظ إعدادات سيريتيل كاش. يرجى اختبار دفعة صغيرة والتحقق من الإيصال قبل الاعتماد."
+                    }},enabled=!busy&&syriatelNumber.length==10&&
+                        (!syriatelEnabled||(syriatelRate.toBigDecimalOrNull()?.signum()?:0)>0)){
+                        Text("حفظ إعدادات سيريتيل كاش")
+                    }
                 }
             } else if (section == "الطلبات") {
                 if(requests.isEmpty() && !loading) item { Text("لا توجد طلبات دفع أو بائعين.") }
