@@ -127,6 +127,16 @@ def preview(request,user_id):
         'image_url':(grant_url(request,o.image) if o.image_id else o.image_url)
             if (o.approved and o.active or can_moderate_posts) else '',
     } for o in services_q]
+    # Authorised, audited account preview shows the owner's own paid photos
+    # without changing the administrator's session or spending any balance.
+    # Grant URLs are scoped to the current authorised viewer.
+    d['paid_photos'] = [{
+        'id':post.pk, 'caption':post.caption,
+        'price_cents':post.price_cents,
+        'created_at':post.created_at,
+        'active':post.active,
+        'media_url':grant_url(request,post.media),
+    } for post in PaidPost.objects.filter(owner=u).select_related('media').order_by('-created_at')[:50]]
     d['profile'].update({
         'xp_points':progress['xp_points'],'next_level_xp':progress['next_level_xp'],
         'owned_frames':progress['owned_frames'],
