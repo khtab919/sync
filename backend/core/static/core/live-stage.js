@@ -32,7 +32,7 @@ window.addEventListener('resize',syncRoomFooterMetrics,{passive:true});
 requestAnimationFrame(syncRoomFooterMetrics);
 let state={},speaking=false,activating=false,latestGift=0,haveGiftBaseline=false,giftQueue=[],effectBusy=false,giftKey=null,giftPending=null,quality=720,serverOffset=0;
 // Keep the current gift recipient list in sync with server-approved speakers.
-let activeGiftRecipientSync=null;
+let activeGiftRecipientSync=null,activeGiftPreviewCleanup=null;
 let preparedTracks=[],mediaFault=false,mediaReady=false;
 const path='/api/live/'+config.id+'/control';
 document.body.classList.toggle('audio-mode',config.mode==='audio');
@@ -171,7 +171,10 @@ window.addEventListener('resize',positionRoomSheet,{passive:true});
 window.visualViewport?.addEventListener('resize',positionRoomSheet,{passive:true});
 window.visualViewport?.addEventListener('scroll',positionRoomSheet,{passive:true});
 function sheet(title){
- if(title!=='متجر الهدايا')activeGiftRecipientSync=null;
+ if(title!=='متجر الهدايا'){
+  activeGiftRecipientSync=null;
+  activeGiftPreviewCleanup?.();activeGiftPreviewCleanup=null;
+ }
  // Dismiss the IME before opening every room menu, not just gifts.
  if(document.activeElement?.id==='text')document.activeElement.blur();
  const modal=$('sheet');
@@ -221,7 +224,11 @@ function commentActionsSheet(comment){
  button(box,'تثبيت التعليق',async()=>{await api({action:'pin_comment',comment_id:comment.id});$('sheet').close();await refresh()});
  button(box,'حذف التعليق',()=>confirmActionSheet('حذف التعليق','سيُحذف التعليق من الغرفة بعد تأكيدك.',async()=>{await api({action:'delete_comment',comment_id:comment.id});await refresh()}),'danger');
 }
-$('closeSheet').onclick=()=>$('sheet').close();$('sheet').addEventListener('click',e=>{if(e.target===$('sheet'))$('sheet').close()});
+$('closeSheet').onclick=()=>$('sheet').close();
+$('sheet').addEventListener('close',()=>{
+ activeGiftRecipientSync=null;
+ activeGiftPreviewCleanup?.();activeGiftPreviewCleanup=null;
+});$('sheet').addEventListener('click',e=>{if(e.target===$('sheet'))$('sheet').close()});
 async function consent(mode){
  if(!window.LayaliLive?.requestPublishPermissions)return true;
  return new Promise(resolve=>{const timer=setTimeout(()=>{window.removeEventListener('publishpermissions',done);resolve(false)},60000);function done(e){clearTimeout(timer);window.removeEventListener('publishpermissions',done);resolve(e.detail===true)}window.addEventListener('publishpermissions',done);window.LayaliLive.requestPublishPermissions(mode)})
@@ -346,6 +353,7 @@ function giftSheet(preferredRecipientId=null){
    previewName.textContent=selected?.name||'اختر هدية';
    previewButton.disabled=!selected;
    if(selected&&window.RelaxiaGiftCinema)previewCleanup=window.RelaxiaGiftCinema.preview(previewArt,selected);
+   activeGiftPreviewCleanup=previewCleanup;
    lastPreview=selected?.code||'';
   }
   for(const el of grid.children)el.setAttribute('aria-pressed',String(el.dataset.giftCode===selected?.code));
