@@ -5,6 +5,7 @@
 <title>Relaxia · مباشر</title>
 <link rel="stylesheet" href="/static/core/live-stage.css?v=rooms-controls-28">
 <link rel="stylesheet" href="/static/core/gift-cinema.css?v=cinema-1">
+<link rel="stylesheet" href="/static/core/relaxia-voice-royal.css?v=voice-30">
 <body{% if config.mode == "audio" %} class="audio-mode"{% endif %}>
 <main id="stage">
   <div id="video" aria-label="البث المباشر"{% if config.mode == "audio" %} hidden{% endif %}></div>
@@ -32,6 +33,7 @@
         <strong id="name">{{ config.ownerName }}</strong>
         <small id="title">ID: {{ config.ownerPublicId|default:"—" }}</small>
       </span>
+      <span id="hostLevel" class="host-level-chip" hidden></span>
     </button>
     <button id="follow" class="accent" hidden>متابعة</button>
   </header>
@@ -65,6 +67,7 @@
         <button id="gift" class="tool-circle" type="button" aria-label="هدية" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="10" width="17" height="11" rx="2"/><path d="M2.5 10h19V7H2.5zM12 7v14M12 7c-4 0-6.5-1-6.5-3.2 0-2.9 4.3-2.7 6.5 3.2zm0 0c4 0 6.5-1 6.5-3.2 0-2.9-4.3-2.7-6.5 3.2z"/></svg></button>
         <button id="speaker" class="tool-circle" type="button" aria-label="كتم صوت الغرفة" hidden>🔊</button>
         <button id="guests" class="tool-circle" type="button" aria-label="المقاعد والضيوف"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 20v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/><circle cx="9.5" cy="7.5" r="3.5"/><path d="M17 4.4a3.4 3.4 0 0 1 0 6.6M20.5 20v-2a4 4 0 0 0-3-3.87"/></svg></button>
+        <button id="requestMic" class="request-mic-pill" type="button">طلب الانضمام</button>
         <button id="micQuick" class="tool-circle" type="button" aria-label="المقاعد وطلب التحدث"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg></button>
         <button id="share" class="tool-circle" type="button" aria-label="مشاركة" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4 10 14"/><path d="M20 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h5"/></svg></button>
         <button id="bigGiftBtn" class="gift-fab" aria-label="إرسال هدية"{% if not config.gifts %} hidden{% endif %}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="10" width="17" height="11" rx="2"/><path d="M2.5 10h19V7H2.5zM12 7v14M12 7c-4 0-6.5-1-6.5-3.2 0-2.9 4.3-2.7 6.5 3.2zm0 0c4 0 6.5-1 6.5-3.2 0-2.9-4.3-2.7-6.5 3.2z"/></svg></button>
@@ -75,6 +78,13 @@
         <button id="sendComment" type="submit" class="composer-send" aria-label="إرسال التعليق"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 14-8-4 16-4-7-6-1zM11 13l8-9"/></svg></button>
       </form>
     </div>
+    {% if config.mode == "audio" %}
+    <button id="syriatelCashLink" type="button" class="cash-payment-strip"
+        aria-label="فتح طريقة شحن سيريتيل كاش داخل التطبيق">
+      <span class="cash-wallet-icon" aria-hidden="true">▣</span>
+      <span>بوابة الدفع: سيريتيل كاش <b dir="ltr">0997991404</b></span>
+    </button>
+    {% endif %}
   </footer>
 
   <div id="ended" hidden>
