@@ -164,7 +164,7 @@ class ReferenceDesignTest {
         compose.onNodeWithText("السعر ($)").assertExists()
         compose.onNodeWithText("رفع صورة من الهاتف · حتى 8MB").performScrollTo().assertExists()
         compose.onNodeWithText("رابط صورة HTTPS · اختياري").assertDoesNotExist()
-        compose.onNodeWithText("نشر الآن").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithText("نشر الآن").assertIsNotEnabled()
         screenshot("06-seller-upload")
         compose.onNodeWithText("ريلز").performClick()
         compose.onNodeWithText("مساحة النشر").assertExists()
