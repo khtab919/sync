@@ -103,7 +103,11 @@
     document.getElementById('status').textContent = 'تعذر تشغيل واجهة البث. ارجع وأعد الدخول؛ وإذا تكرر الخطأ يلزم فحص ملفات الخادم وتحديث Android System WebView.';
   }
   window.addEventListener('error', function (event) {
-    if (!window.relaxiaStageLoaded && (event.target.tagName === 'SCRIPT' || event.target === window)) failed();
+    if (window.relaxiaStageLoaded) return;
+    if (event.target === window) { failed(); return; }
+    if (event.target.tagName === 'SCRIPT' &&
+        /(?:livekit-client\.umd\.min|live-media|live-stage)\.js(?:\?|$)/.test(event.target.src || '')) failed();
+    // Gift cinema is optional: an unavailable gift visual must not black out the broadcast.
   }, true);
   window.addEventListener('load', function () { if (!window.relaxiaStageLoaded) failed(); });
   timer = setTimeout(function () { if (!window.relaxiaStageLoaded) failed(); }, 20000);
