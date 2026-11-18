@@ -104,3 +104,22 @@ class PaidContentTests(TestCase):
             {'title':'New Offer'},self.tseller)
         self.assertEqual(update.status_code,200,update.content)
         self.assertEqual(Service.objects.get(pk=service.pk).title,'New Offer')
+
+    def test_creator_content_with_published_service_returns_200_for_owner_and_visitor(self):
+        # Regression: serializing a service must receive request.actor, not request.
+        # Otherwise /api/creators/<id>/content returns invalid_input (HTTP 400).
+        service = Service.objects.create(
+            owner=self.seller, title='جلسة منشورة', description='خدمة حساب',
+            price_cents=200, approved=True, active=True,
+        )
+        path='/api/creators/'+str(self.seller.pk)+'/content'
+        for token in (self.tbuyer, self.tseller):
+            response=self.req(path, token=token)
+            self.assertEqual(response.status_code,200,response.content)
+            matching=[
+                item for item in response.json()['items']
+                if item['kind']=='service' and item['id']==service.pk
+            ]
+            self.assertEqual(len(matching),1)
+            self.assertEqual(matching[0]['title'],'جلسة منشورة')
+            self.assertEqual(matching[0]['price_cents'],200)
