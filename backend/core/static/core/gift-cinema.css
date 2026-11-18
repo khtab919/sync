@@ -509,3 +509,28 @@ body.audio-mode #stage footer {
 @media(prefers-reduced-motion:reduce){
  #giftEffect .gift-cinema-spark,#giftEffect .gift-roar-ring{animation:none!important;display:none!important}
 }
+
+
+/* Screenshot QA on 320px light-mode WebView: keep the dark glass header
+   readable. Earlier light-mode overrides painted burgundy glyphs on navy. */
+html[data-theme=light] body.audio-mode #stage header {
+ color:#F7FBFF!important;
+ background:linear-gradient(160deg,rgba(5,29,65,.94),rgba(15,56,104,.92))!important;
+ border-color:#99BEE58A!important;
+}
+html[data-theme=light] body.audio-mode #stage header #exit {
+ color:#F7FBFF!important;
+ border-color:#92BCE78A!important;
+ background:rgba(13,49,93,.96)!important;
+}
+html[data-theme=light] body.audio-mode #stage header #exit svg,
+html[data-theme=light] body.audio-mode #stage header #viewers,
+html[data-theme=light] body.audio-mode #stage header #viewers svg,
+html[data-theme=light] body.audio-mode #stage header .live-pill,
+html[data-theme=light] body.audio-mode #stage header #name {
+ color:#F7FBFF!important;
+ stroke:#F7FBFF;
+}
+html[data-theme=light] body.audio-mode #stage header .live-pill{
+ background:linear-gradient(145deg,#C42E4A,#E14B5D)!important;
+}
