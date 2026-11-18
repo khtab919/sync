@@ -39,7 +39,14 @@ def verify_code(request,access):
 def authentication(request):
     if not scopes(request.actor):raise ApiError('administrator_required',403)
     a,_=AdminAccess.objects.get_or_create(user=request.actor,defaults={'role':'owner' if request.actor.is_superuser else 'live'})
-    if request.method=='GET':return JsonResponse({'enabled':a.totp_enabled,'verified':bool(request.api_token.admin_verified_at and timezone.now()-request.api_token.admin_verified_at<timedelta(minutes=10)),'permissions':scopes(request.actor)})
+    if request.method=='GET':
+        # Indicate a pending setup without leaking its secret to GET callers.
+        return JsonResponse({
+            'enabled': a.totp_enabled,
+            'verified': bool(request.api_token.admin_verified_at and timezone.now()-request.api_token.admin_verified_at < timedelta(minutes=10)),
+            'permissions': scopes(request.actor),
+            'setup_pending': bool(a.totp_secret and not a.totp_enabled),
+        })
     action=request.payload.get('action')
     if action=='setup':
         if a.locked_until and a.locked_until>timezone.now():raise ApiError('too_many_attempts',429)
@@ -53,8 +60,20 @@ def authentication(request):
         with transaction.atomic():
             a=AdminAccess.objects.select_for_update().get(pk=a.pk)
             if a.totp_enabled:raise ApiError('mfa_already_enabled',409)
-            secret=pyotp.random_base32();a.totp_secret=cipher().encrypt(secret.encode()).decode();a.last_counter=-1;a.save(update_fields=['totp_secret','last_counter']);event(request.actor,'mfa_setup',request.actor.pk,'Enrollment started')
-        return JsonResponse({'secret':secret,'uri':pyotp.TOTP(secret).provisioning_uri(request.actor.username,issuer_name='Relaxia')})
+            if a.totp_secret:
+                # Recover an enrollment if its previous response was lost;
+                # verifying the account password is mandatory for each attempt.
+                secret=cipher().decrypt(a.totp_secret.encode()).decode()
+                event(request.actor,'mfa_setup_resumed',request.actor.pk,'Existing enrollment displayed in app')
+            else:
+                secret=pyotp.random_base32()
+                a.totp_secret=cipher().encrypt(secret.encode()).decode()
+                a.last_counter=-1
+                a.save(update_fields=['totp_secret','last_counter'])
+                event(request.actor,'mfa_setup',request.actor.pk,'Enrollment started')
+        response=JsonResponse({'secret':secret,'uri':pyotp.TOTP(secret).provisioning_uri(request.actor.username,issuer_name='Relaxia')})
+        response['Cache-Control']='no-store'
+        return response
     if action=='verify':
         with transaction.atomic():
             a=AdminAccess.objects.select_for_update().get(pk=a.pk);valid=verify_code(request,a)
