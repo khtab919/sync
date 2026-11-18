@@ -428,6 +428,27 @@ function play(host,g){
  box.className='gift-cinema-stage gift-tone-'+code;
  const glow=global.document.createElement('div');glow.className='gift-cinema-aurora';
  box.append(glow);
+ const type=code==='gift_lion'?'roar':(code==='gift_eagle'||code==='gift_falcon')?'flight':
+    (code==='gift_blue_whale'||code==='gift_dolphin')?'ocean':'royal';
+ const accents=global.document.createElement('div');
+ accents.className='gift-cinema-accents gift-cinema-'+type;
+ accents.setAttribute('aria-hidden','true');
+ for(let i=0;i<(type==='royal'?10:16);i++){
+  const spark=global.document.createElement('i');
+  spark.className='gift-cinema-spark';
+  spark.style.setProperty('--spin',Math.round(i*137.51)+'deg');
+  spark.style.setProperty('--spread',(45+i%6*13)+'px');
+  spark.style.setProperty('--lag',((i%9)*.095)+'s');
+  accents.append(spark);
+ }
+ if(type==='roar'){
+  for(let i=0;i<3;i++){
+   const ring=global.document.createElement('span');
+   ring.className='gift-roar-ring';ring.style.setProperty('--lag',(i*.32)+'s');
+   accents.append(ring);
+  }
+ }
+ box.append(accents);
  const stopCanvas=mountCanvas(box,code,false);
  const info=global.document.createElement('div');info.className='gift-cinema-caption';
  const symbol=global.document.createElement('span');symbol.className='gift-cinema-symbol';symbol.textContent='✦';
