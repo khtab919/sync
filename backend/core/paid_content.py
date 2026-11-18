@@ -110,7 +110,8 @@ def paid_posts(request):
     media=UploadedMedia.objects.filter(pk=media_id,owner=request.actor,purpose='paid_photo').first()
     if not media:raise ApiError('invalid_paid_photo',403)
     cost=amount(request.payload,'price_cents')
-    caption=text(request.payload,'caption',0,500)
+    caption=request.payload.get('caption','')
+    if not isinstance(caption,str) or len(caption)>500:raise ApiError('invalid_caption')
     with transaction.atomic():
         existing=PaidPost.objects.filter(media=media).first()
         if existing:
