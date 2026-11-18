@@ -4,6 +4,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Relaxia · مباشر</title>
 <link rel="stylesheet" href="/static/core/live-stage.css?v=rooms-controls-28">
+<link rel="stylesheet" href="/static/core/gift-cinema.css?v=cinema-1">
 <body{% if config.mode == "audio" %} class="audio-mode"{% endif %}>
 <main id="stage">
   <div id="video" aria-label="البث المباشر"{% if config.mode == "audio" %} hidden{% endif %}></div>
@@ -102,7 +103,11 @@
     document.getElementById('status').textContent = 'تعذر تشغيل واجهة البث. ارجع وأعد الدخول؛ وإذا تكرر الخطأ يلزم فحص ملفات الخادم وتحديث Android System WebView.';
   }
   window.addEventListener('error', function (event) {
-    if (!window.relaxiaStageLoaded && (event.target.tagName === 'SCRIPT' || event.target === window)) failed();
+    if (window.relaxiaStageLoaded) return;
+    if (event.target === window) { failed(); return; }
+    if (event.target.tagName === 'SCRIPT' &&
+        /(?:livekit-client\.umd\.min|live-media|live-stage)\.js(?:\?|$)/.test(event.target.src || '')) failed();
+    // Gift cinema is optional: an unavailable gift visual must not black out the broadcast.
   }, true);
   window.addEventListener('load', function () { if (!window.relaxiaStageLoaded) failed(); });
   timer = setTimeout(function () { if (!window.relaxiaStageLoaded) failed(); }, 20000);
@@ -113,6 +118,7 @@
 </script>
 <script src="/static/core/livekit-client.umd.min.js"></script>
 <script src="/static/core/live-media.js?v=rooms-controls-28"></script>
-<script src="/static/core/live-stage.js?v=rooms-controls-28"></script>
+<script src="/static/core/gift-cinema.js?v=cinema-1"></script>
+<script src="/static/core/live-stage.js?v=cinema-1"></script>
 </body>
 </html>

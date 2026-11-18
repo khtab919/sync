@@ -6,8 +6,10 @@ const root=path.resolve(__dirname,'..');
 const html=execFileSync(process.env.TEST_PYTHON||'python',['-c',`import django;django.setup()
 from django.template.loader import render_to_string
 config={'id':'room-test','owner':False,'ownerName':'مضيف تجريبي','ownerId':1,'ownerPublicId':'58321','userId':2,'userName':'زائر تجريبي','mode':'audio','maxSpeakers':8,'title':'غرفة الأصدقاء','gifts':True,'private':False}
-print(render_to_string('core/live_room.html',{'config':config,'nonce':'qa','theme':'dark'}))`],{cwd:root,env:{...process.env,DJANGO_SETTINGS_MODULE:'config.settings',DJANGO_SECRET_KEY:'test-only',POSTGRES_PASSWORD:'test-only',LAYALI_TESTING:'1'},encoding:'utf8'}).replace(/<script src="[^\"]+"><\/script>/g,'').replace(/<link rel="stylesheet"[^>]+>/,'');
+print(render_to_string('core/live_room.html',{'config':config,'nonce':'qa','theme':'dark'}))`],{cwd:root,env:{...process.env,DJANGO_SETTINGS_MODULE:'config.settings',DJANGO_SECRET_KEY:'test-only',POSTGRES_PASSWORD:'test-only',LAYALI_TESTING:'1'},encoding:'utf8'}).replace(/<script src="[^\"]+"><\/script>/g,'').replace(/<link rel="stylesheet"[^>]+>/g,'');
 const css=fs.readFileSync(path.join(root,'core/static/core/live-stage.css'),'utf8');
+const cinemaCss=fs.readFileSync(path.join(root,'core/static/core/gift-cinema.css'),'utf8');
+const cinemaJs=fs.readFileSync(path.join(root,'core/static/core/gift-cinema.js'),'utf8');
 const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8').replace('connect().catch(e=>{message(e);if(e.name!==\'MediaFailure\')reconnect()});','');
 (async()=>{
  const browser=await chromium.launch({headless:true,...(process.env.CAPTURE_CHROMIUM?{executablePath:process.env.CAPTURE_CHROMIUM}:{}),args:['--no-sandbox']});
@@ -18,9 +20,9 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    await page.route('https://room.test/',route=>route.fulfill({contentType:'text/html',body:html}));
    // The luxury pack may not yet be present on a new server: no broken icons.
    await page.route('**/static/core/gifts/icons/*.webp',route=>route.fulfill({status:404,body:''}));
-   await page.goto('https://room.test/');await page.addStyleTag({content:css});
+   await page.goto('https://room.test/');await page.addStyleTag({content:css});await page.addStyleTag({content:cinemaCss});
    await page.evaluate(()=>{window.LivekitClient={Room:{},RoomEvent:{},Track:{},ConnectionState:{Connected:'connected'}};window.RelaxiaMedia={}});
-   await page.addScriptTag({content:js});
+   await page.addScriptTag({content:cinemaJs});await page.addScriptTag({content:js});
    assert.equal(await page.locator('.audio-seat').count(),8,'placeholder seats render before network response');
    await page.evaluate(()=>{
     window.sent=[];room={state:'connected',localParticipant:{}};
@@ -60,8 +62,19 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
     for(const id of ['more','guests','micQuick']){
      const control=page.locator('#'+id);
      assert.equal(await control.locator('svg').count(),1,'visible controls use vectors: '+id);
-     assert.equal(await control.evaluate(el=>getComputedStyle(el).color),'rgb(255, 255, 255)','readable control foreground in '+theme);
+     const tone=await control.evaluate(el=>getComputedStyle(el).color);
+     const channels=tone.match(/\d+/g)?.slice(0,3).map(Number)||[];
+     assert.ok(channels.length===3&&channels.every(value=>value>=235),
+       'readable white control foreground in '+theme+': '+tone);
      const icon=await control.locator('svg').boundingBox();assert.ok(icon.width>=20&&icon.height>=20,'icon has explicit bounds');
+    }
+    if(theme==='light'){
+     const exitColor=await page.locator('#exit').evaluate(el=>getComputedStyle(el).color);
+     const viewerColor=await page.locator('#viewers').evaluate(el=>getComputedStyle(el).color);
+     const liveColor=await page.locator('.live-pill').evaluate(el=>getComputedStyle(el).color);
+     assert.equal(exitColor,'rgb(247, 251, 255)','day theme exit must be legible on navy glass');
+     assert.equal(viewerColor,'rgb(247, 251, 255)','day theme viewer counter must be legible');
+     assert.equal(liveColor,'rgb(247, 251, 255)','day theme live status must remain white');
     }
     await page.evaluate(()=>{muted=true;updateQuickMic()});
     assert.equal(await page.locator('#micQuick').getAttribute('aria-label'),'تشغيل الميكروفون');
@@ -210,16 +223,17 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    assert.equal(await page.locator('.gift-medallion').count(),2,'real gifts use dimensional artwork');
    const whaleCard=page.locator('.gift-card[data-gift-code="gift_blue_whale"]');
    assert.equal(await whaleCard.getAttribute('aria-label'),'الحوت الأزرق · 10000 كوين');
-   await whaleCard.locator('.gift-art-fallback').waitFor({state:'visible'});
-   assert.equal(await whaleCard.locator('.gift-art-fallback').innerText(),'الحو'.slice(0,2),'missing WebP uses legible gift mark, never a broken-image symbol');
-   assert.equal(await whaleCard.locator('img.gift-webp').count(),0,'failed gift image is removed from the card');
+   assert.equal(await whaleCard.locator('canvas.gift-card-3d').count(),1,'all gifts use rendered 3D thumbnails');
+   assert.equal(await page.locator('.gift-preview canvas.gift-3d-canvas.preview').count(),1,'selected gift plays a 3D model preview');
+   assert.equal(await page.locator('img.gift-webp').count(),0,'gift card no longer depends on an image file');
    await whaleCard.click();
    assert.equal(await whaleCard.getAttribute('aria-pressed'),'true','selected gift is highlighted');
    await page.getByRole('button',{name:'×10',exact:true}).click();
    assert.ok((await page.locator('.gift-checkout-summary').innerText()).includes((100000).toLocaleString('ar')),'gift checkout computes unit price times combo');
-   page.once('dialog',d=>d.dismiss());await page.locator('.gift-send').click();
-   assert.equal(await page.evaluate(()=>sent.filter(a=>a.action==='gift').length),0,'cancelling confirmation does not send or debit');
-   page.once('dialog',d=>d.accept());await page.locator('.gift-send').click();
+   await page.locator('.gift-send').click();
+   assert.equal(await page.evaluate(()=>sent.filter(a=>a.action==='gift').length),0,'review click never spends money');
+   assert.equal(await page.locator('.gift-send').innerText(),'إرسال الآن','second click explicitly confirms');
+   await page.locator('.gift-send').click();
    assert.equal(await page.evaluate(()=>sent.filter(a=>a.action==='gift').length),1,'confirmed combo sends one operation');
    const gift=await page.evaluate(()=>sent.find(a=>a.action==='gift'));
    assert.equal(gift.price_cents,10000);assert.equal(gift.combo_count,10);assert.equal(gift.recipient_id,1);assert.ok(gift.request_key);
@@ -241,7 +255,12 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    assert.ok((await page.locator('.gift-target-summary').innerText()).includes('ضيف معتمد'),'selected speaker is the gift recipient');
    assert.equal(await page.locator('.gift-send').isEnabled(),true,'another speaker can receive gift');
    assert.equal(await page.evaluate(()=>sent.filter(a=>a.action==='gift').length),sentBeforeSeat,'seat tap never charges coins');
-   page.once('dialog',d=>d.accept());
+   await page.evaluate(()=>{qaRoom={...qaRoom,speakers:[qaRoom.speakers[0]]};drawState(qaRoom)});
+   assert.equal(await page.locator('.gift-send').isDisabled(),true,'left seat must not default to host');
+   assert.match(await page.locator('.gift-target-summary').innerText(),/غادر صاحب المقعد/);
+   await page.evaluate(()=>{qaRoom={...qaRoom,speakers:[qaRoom.speakers[0],{identity:'guest-3',user_id:3,name:'ضيف معتمد',owner:false,mode:'audio',avatar_url:''}]};drawState(qaRoom)});
+   await page.locator('.gift-send').click();
+   assert.equal(await page.evaluate(()=>sent.filter(a=>a.action==='gift').length),sentBeforeSeat,'first seat gift tap only reviews price');
    await page.locator('.gift-send').click();
    const sentGifts=await page.evaluate(()=>sent.filter(a=>a.action==='gift'));
    assert.equal(sentGifts[sentGifts.length-1].recipient_id,3,'gift goes to chosen approved seat only after confirmation');
@@ -249,11 +268,12 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    if(process.env.LIVE_PREVIEW_DIR){fs.mkdirSync(process.env.LIVE_PREVIEW_DIR,{recursive:true});await page.screenshot({path:path.join(process.env.LIVE_PREVIEW_DIR,`audio-room-${width}.png`)});await page.locator('#bigGiftBtn').click();await page.getByRole('button',{name:'فاخرة',exact:true}).click();await page.screenshot({path:path.join(process.env.LIVE_PREVIEW_DIR,`audio-gifts-${width}.png`)});await page.locator('#closeSheet').click();}
    await page.evaluate(()=>{giftQueue=[{code:'gift_blue_whale',name:'الحوت الأزرق',symbol:'🐋',effect:'depth',sender:'داعم تجريبي',recipient:'مضيف تجريبي',combo_count:10,total_price_cents:100000}];playEffects()});
    assert.ok((await page.locator('#giftEffect').getAttribute('class')).includes('gift-fullscreen'),'depth gifts receive full-screen effect');
-   assert.equal(await page.locator('#giftEffect .gift-combo-banner').innerText(),'×10 · '+(100000).toLocaleString('ar')+' كوين');
-   assert.equal(await page.locator('#giftEffect .gift-particles i').count(),28,'premium gifts have complete particle animation');
+   assert.equal(await page.locator('#giftEffect canvas.gift-3d-canvas').count(),1,'effect is animated 3D canvas, not static WebP');
+   assert.equal(await page.locator('#giftEffect .gift-cinema-combo').innerText(),'×10','combo visible');
+   assert.equal(await page.locator('#giftEffect img').count(),0,'effect needs no static image asset');
    if(process.env.LIVE_PREVIEW_DIR)await page.screenshot({path:path.join(process.env.LIVE_PREVIEW_DIR,`whale-effect-${width}.png`)});
    await page.close();
   }
-  console.log('PASS: 8 seats at 320/360/430px, five-digit ID, speaker mute/unmute, emoji picker, comment and like, guest request, gift confirmation/cancellation, whale effect. Synthetic UI only.');
+  console.log('PASS: 8 seats at 320/360/430px, five-digit ID, speaker mute/unmute, emoji picker, comment and like, guest request, two-tap confirmation, procedural whale, safe seat selection. Synthetic UI only.');
  }finally{await browser.close()}
 })().catch(e=>{console.error(e);process.exitCode=1});

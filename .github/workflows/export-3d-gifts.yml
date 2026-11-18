@@ -1,0 +1,100 @@
+name: Export Relaxia 3D Gifts Server ZIP
+
+on:
+  push:
+    branches:
+      - feat/relaxia-cinematic-3d-gifts-live-ui-20261118
+    paths:
+      - '.github/workflows/export-3d-gifts.yml'
+      - 'backend/core/static/core/gift-cinema.js'
+      - 'backend/core/static/core/gift-cinema.css'
+      - 'backend/core/static/core/live-stage.js'
+      - 'backend/core/static/core/live-stage.css'
+      - 'backend/core/templates/core/live_room.html'
+      - 'backend/core/live_stage.py'
+      - 'backend/core/static/core/gifts/catalog.json'
+  pull_request:
+    paths:
+      - '.github/workflows/export-3d-gifts.yml'
+      - 'backend/core/static/core/gift-cinema.js'
+      - 'backend/core/static/core/gift-cinema.css'
+      - 'backend/core/static/core/live-stage.js'
+      - 'backend/core/templates/core/live_room.html'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify shipped files
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check backend/core/static/core/gift-cinema.js
+          node --check backend/core/static/core/live-stage.js
+          python3 -m py_compile backend/core/live_stage.py
+          python3 - <<'PY'
+          import json, pathlib
+          doc=json.loads(pathlib.Path('backend/core/static/core/gifts/catalog.json').read_text())
+          assert doc['total_items']==21 and len(doc['gifts'])==21
+          assert all(g['animated'] and g['audio_id']==g['id'] for g in doc['gifts'])
+          print("Verified gifts:",len(doc['gifts']))
+          PY
+      - name: Package drop-in update at repository root
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cat > INSTALL-RELAXIA-GIFTS-AR.txt <<'EOF'
+          تحديث هدايا Relaxia ثلاثية الأبعاد — ملفات الخادم
+          ================================================
+          هذه الحزمة ليست APK. تحتوي على محرك المجسمات والأصوات، شاشة الغرفة،
+          ملفات CSS/JS، تعريفات الهدايا وتحديث بيانات الكتالوج في Django.
+
+          قبل التثبيت:
+          1) تأكد أن الخادم يعمل من نسخة مشروع khtab919/sync الصحيحة وأن المجلد
+             backend/core موجود في جذر المشروع. لا تستخدم ملف ZIP على مجلد آخر.
+          2) انسخ ملفات backend/core الحالية وقاعدة البيانات احتياطياً.
+          3) اختبر الحزمة في نسخة تجريبية، خصوصاً الغرف والهدايا المدفوعة.
+
+          مثال عند وجود المشروع في /opt/layali:
+             cd /opt/layali
+             unzip -t Relaxia-3D-Gifts-Server.zip
+             unzip -o Relaxia-3D-Gifts-Server.zip
+
+          بعد استخراج الملفات:
+          - أعد تجميع ملفات static بالطريقة المعتمدة في Docker/Django لمشروعك.
+          - أعد تشغيل خدمة Django في Docker بالطريقة المعتمدة لديك.
+          - اختبر غرف الصوت والفيديو وتجربة إرسال هدية منخفضة السعر في بيئة تجريبية.
+          - لا تنشر هذه الحزمة وحدها إن كان الخادم على إصدار قديم غير متوافق
+            مع مسارات live_stage.py أو live_room.html.
+          - لا توجد مفاتيح دفع أو توقيع داخل الحزمة.
+
+          المصدر: feat/relaxia-cinematic-3d-gifts-live-ui-20261118
+          قاعدة الأسعار والتسوية من الخادم؛ مجرد معاينة الرسوم لا تخصم كوينز.
+          EOF
+          zip -9 -q dist/Relaxia-3D-Gifts-Server.zip \
+            INSTALL-RELAXIA-GIFTS-AR.txt \
+            backend/core/static/core/gift-cinema.js \
+            backend/core/static/core/gift-cinema.css \
+            backend/core/static/core/live-stage.js \
+            backend/core/static/core/live-stage.css \
+            backend/core/static/core/live-media.js \
+            backend/core/static/core/gifts/catalog.json \
+            backend/core/templates/core/live_room.html \
+            backend/core/live_stage.py
+          unzip -t dist/Relaxia-3D-Gifts-Server.zip
+          cd dist
+          sha256sum Relaxia-3D-Gifts-Server.zip > SHA256SUMS.txt
+      - name: Upload deployable ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: Relaxia-3D-Gifts-Server-Package
+          path: |
+            dist/Relaxia-3D-Gifts-Server.zip
+            dist/SHA256SUMS.txt
+          retention-days: 30

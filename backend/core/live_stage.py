@@ -25,7 +25,11 @@ def public_gift_catalog():
         {**row,
          'category': 'luxury' if row['effect']=='depth' else row['effect'],
          'icon_url': '/static/core/gifts/icons/'+row['code']+'.webp',
-         'animation_url': '/static/core/gifts/animations/'+row['code']+'.webp'}
+         'animation_url': '/static/core/gifts/animations/'+row['code']+'.webp',
+         'motion_engine':'procedural_3d',
+         'sound_engine':'web_audio',
+         'sound_id':row['code']}
+
         for row in rows
     ]
 

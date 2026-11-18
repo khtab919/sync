@@ -1,0 +1,31 @@
+name: Gift cinema 3D and audio QA
+on:
+  push:
+    paths:
+      - 'backend/core/static/core/gift-cinema.js'
+      - 'backend/core/static/core/gift-cinema.css'
+      - 'backend/core/static/core/live-stage.js'
+      - 'backend/core/templates/core/live_room.html'
+      - 'backend/qa/gift_cinema_test.cjs'
+      - '.github/workflows/gift-cinema-qa.yml'
+  pull_request:
+    paths:
+      - 'backend/core/static/core/gift-cinema.js'
+      - 'backend/core/static/core/gift-cinema.css'
+      - 'backend/core/static/core/live-stage.js'
+      - 'backend/core/templates/core/live_room.html'
+      - 'backend/qa/gift_cinema_test.cjs'
+      - '.github/workflows/gift-cinema-qa.yml'
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check backend/core/static/core/gift-cinema.js
+      - run: node --check backend/core/static/core/live-stage.js
+      - run: node --test backend/qa/gift_cinema_test.cjs
