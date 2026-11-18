@@ -145,6 +145,7 @@ dependencies {
   // implementation(libs.firebase.appcheck.recaptcha)
   // implementation(libs.firebase.appcheck.debug)
   // Resilient vertically cropped reels playback with network/range handling.
+  implementation("com.google.zxing:core:3.5.3")
   implementation("androidx.media3:media3-exoplayer:1.11.1")
   implementation("androidx.media3:media3-ui:1.11.1")
   implementation(libs.kotlinx.coroutines.android)
