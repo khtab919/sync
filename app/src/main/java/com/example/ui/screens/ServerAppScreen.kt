@@ -677,7 +677,16 @@ fun ServerAppScreen(baseUrl: String) {
                                 onCreator = { showCreator(row.optInt("owner_id")) },
                                 api = api,
                                 onHidden = {rows=rows.filterNot{it.optInt("id")==row.optInt("id")}},
-                                viewerId = profile.optInt("id")
+                                viewerId = profile.optInt("id"),
+                                onUnlocked = { changed ->
+                                    rows=rows.map{before->
+                                        if(before.optInt("id")==changed.optInt("id"))
+                                            JSONObject(before.toString())
+                                                .put("locked",false)
+                                                .put("video_url",changed.optString("video_url"))
+                                        else before
+                                    }
+                                }
                             )
                         }
                         Text(
@@ -1474,8 +1483,10 @@ private fun ReelItemView(
     onCreator: () -> Unit,
     api: LayaliApi,
     viewerId: Int,
-    onHidden: () -> Unit = {}
+    onHidden: () -> Unit = {},
+    onUnlocked: (JSONObject) -> Unit = {}
 ) {
+    val locked = row.optBoolean("locked")
     val url = row.optString("video_url")
     val context = LocalContext.current
     var isPlaying by remember(url) { mutableStateOf(active) }
@@ -1512,6 +1523,33 @@ private fun ReelItemView(
     LaunchedEffect(heartPulse) {
         if (heartPulse > 0) { showHeart = true; delay(700); showHeart = false }
     }
+    var unlockDialog by remember(row.optInt("id")) { mutableStateOf(false) }
+    var unlockBusy by remember(row.optInt("id")) { mutableStateOf(false) }
+    var unlockError by remember(row.optInt("id")) { mutableStateOf("") }
+    val unlockKey = remember(row.optInt("id")) { java.util.UUID.randomUUID().toString() }
+    if(unlockDialog)AlertDialog(
+        onDismissRequest={unlockDialog=false},
+        title={Text("تأكيد فتح الريلز")},
+        text={Text("سيتم خصم "+row.optInt("price_cents")+" كوين لمشاهدة هذا الريلز مرة واحدة.")},
+        confirmButton={TextButton(onClick={
+            unlockDialog=false
+            if(!unlockBusy){
+                unlockBusy=true;unlockError=""
+                scope.launch{
+                    try{
+                        val result=api.request("/api/content/reel/"+row.optInt("id")+"/unlock",
+                            "POST",JSONObject()
+                                .put("price_cents",row.optInt("price_cents"))
+                                .put("request_key",unlockKey))
+                        onUnlocked(result.getJSONObject("item"))
+                    }catch(e:CancellationException){throw e}
+                    catch(e:Exception){unlockError=e.message?:"تعذّر الدفع"}
+                    finally{unlockBusy=false}
+                }
+            }
+        }){Text("تأكيد الدفع")}},
+        dismissButton={TextButton(onClick={unlockDialog=false}){Text("إلغاء")}}
+    )
     var actions by remember { mutableStateOf(false) }
     var saved by remember(row.optInt("id")) { mutableStateOf(row.optBoolean("saved")) }
     var actionBusy by remember { mutableStateOf(false) }
@@ -1529,7 +1567,7 @@ private fun ReelItemView(
     LaunchedEffect(active) { isPlaying = active }
     // A player is owned by the current page only. Swiping releases its decoder.
     val player = remember(url, active, retryKey) {
-        if (active && url.startsWith("https://")) {
+        if (active && !locked && url.startsWith("https://")) {
             ExoPlayer.Builder(context).build().apply {
                 repeatMode = Player.REPEAT_MODE_ONE
                 setMediaItem(MediaItem.fromUri(url))
@@ -1602,6 +1640,11 @@ private fun ReelItemView(
             )
         })
 
+        if(locked){
+            val cover=row.optString("preview_url")
+            if(cover.startsWith("https://"))ReferenceImage(cover,Modifier.fillMaxSize())
+            Box(Modifier.fillMaxSize().background(Color(0x77051530)))
+        }
         // Gradient scrims
         Box(
             modifier = Modifier
@@ -1619,7 +1662,23 @@ private fun ReelItemView(
                 )
         )
 
-        if(active && (playbackError != null || !url.startsWith("https://"))) {
+        if(locked){
+            Column(Modifier.align(Alignment.Center).padding(25.dp),
+                horizontalAlignment=Alignment.CenterHorizontally,
+                verticalArrangement=Arrangement.spacedBy(14.dp)){
+                Icon(Icons.Rounded.Lock,"ريلز مدفوع",Modifier.size(50.dp),tint=Color.White)
+                Text("ريلز مدفوع · محتوى مموّه",color=Color.White,
+                    fontWeight=FontWeight.Bold,fontSize=19.sp)
+                Text("سعر الفتح: "+row.optInt("price_cents")+" كوين",color=Color(0xFFD9E6FA))
+                Button(onClick={unlockDialog=true},enabled=!unlockBusy,
+                    colors=ButtonDefaults.buttonColors(containerColor=Color(0xFF1D4F92))){
+                    Text("فتح الريلز")
+                }
+                if(unlockError.isNotBlank())Text(unlockError,color=Color(0xFFFFC1C1))
+                if(unlockBusy)CircularProgressIndicator(color=Color.White)
+            }
+        }
+        if(active && !locked && (playbackError != null || !url.startsWith("https://"))) {
             Column(
                 modifier = Modifier.align(Alignment.Center).padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -1636,7 +1695,7 @@ private fun ReelItemView(
                     retryKey++
                 }) { Text("إعادة المحاولة") }
             }
-        } else if(active && buffering) {
+        } else if(active && !locked && buffering) {
             CircularProgressIndicator(
                 modifier = Modifier.align(Alignment.Center),
                 color = Color.White
@@ -1644,7 +1703,7 @@ private fun ReelItemView(
         }
 
         // Real player controls; no invented duration, likes or viewer counts.
-        if (active && playbackError == null && !buffering) {
+        if (active && !locked && playbackError == null && !buffering) {
             Column(
                 Modifier.align(Alignment.BottomCenter)
                     .fillMaxWidth()
@@ -1695,7 +1754,7 @@ private fun ReelItemView(
             modifier = Modifier.align(Alignment.Center).size(92.dp))
 
         // Center Play icon when paused
-        if (!isPlaying) {
+        if (!isPlaying && !locked) {
             Surface(
                 color = Color(0x66000000),
                 shape = CircleShape,
