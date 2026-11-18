@@ -50,9 +50,9 @@ class SyriatelCashTests(TestCase):
         self.assertEqual(setting.syriatel_cash_syp_per_usd, Decimal('15000'))
 
     def test_immutable_quote_receipt_reference_and_no_auto_credit(self):
-        settings=PaymentSettings.objects.create(
-            syriatel_cash_enabled=True, syriatel_cash_number='0997991404',
-            syriatel_cash_syp_per_usd=Decimal('12000'))
+        settings,_=PaymentSettings.objects.update_or_create(pk=1,defaults={
+            'syriatel_cash_enabled':True, 'syriatel_cash_number':'0997991404',
+            'syriatel_cash_syp_per_usd':Decimal('12000')})
         quote = self.request('/api/topup-quotes',{'method':'syriatelcash','amount_cents':500})
         self.assertEqual(quote.status_code,201,quote.content)
         offer=quote.json()
