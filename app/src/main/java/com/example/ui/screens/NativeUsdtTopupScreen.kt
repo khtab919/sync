@@ -55,6 +55,7 @@ internal fun NativeUsdtTopupScreen(api: LayaliApi, back: () -> Unit) {
     var paymentVisible by rememberSaveable { mutableStateOf(false) }
     var completed by rememberSaveable { mutableStateOf(false) }
     var showOrders by remember { mutableStateOf(false) }
+    var showHelp by remember { mutableStateOf(false) }
     var orders by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var balance by remember { mutableLongStateOf(0L) }
     var busy by remember { mutableStateOf(false) }
@@ -149,7 +150,7 @@ internal fun NativeUsdtTopupScreen(api: LayaliApi, back: () -> Unit) {
                         .padding(horizontal = 18.dp, vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(15.dp)
                 ) {
-                    StepHeader("1", "أرسل بالضبط", onHelp = { showOrders = true })
+                    StepHeader("1", "أرسل بالضبط", onHelp = { showHelp = true })
                     TopupPanel {
                         Row(
                             Modifier.fillMaxWidth().padding(18.dp),
@@ -325,7 +326,8 @@ internal fun NativeUsdtTopupScreen(api: LayaliApi, back: () -> Unit) {
                     Text("صلاحية الفاتورة: 30:00 بعد إنشاء الطلب",
                         color = SoftText, style = MaterialTheme.typography.bodySmall)
                     Button(onClick = {
-                        if (payment != null && !completed && payAddress.isNotBlank()) {
+                        if (payment != null && !completed && payAddress.isNotBlank() &&
+                            quote?.optInt("amount_cents") == usdAmount * 100) {
                             paymentVisible = true
                         } else runAction {
                             val q = api.request("/api/topup-quotes", "POST",
@@ -366,6 +368,13 @@ internal fun NativeUsdtTopupScreen(api: LayaliApi, back: () -> Unit) {
             }
         }
     }
+
+    if (showHelp) AlertDialog(
+        onDismissRequest = { showHelp = false },
+        title = { Text("طريقة الدفع") },
+        text = { Text("انسخ مبلغ USDT الدقيق وعنوان محفظة Tron من الفاتورة، ثم حوّل عبر شبكة TRC20 فقط. يُضاف الرصيد تلقائيًا بعد تأكيد الدفع.") },
+        confirmButton = { TextButton(onClick = { showHelp = false }) { Text("فهمت") } }
+    )
 
     if (showOrders) {
         AlertDialog(
