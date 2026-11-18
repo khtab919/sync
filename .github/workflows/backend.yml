@@ -49,6 +49,7 @@ jobs:
         with:
           node-version: '22'
       - run: node --test backend/qa/live_media_test.cjs
+      - run: node --test backend/qa/gift_cinema_test.cjs
       - name: Test actual WebRTC audio and video through TURN
         env:
           CALL_SMOKE_CONFIG: ${{ runner.temp }}/relaxia-call-smoke.json
