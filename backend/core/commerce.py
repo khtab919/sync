@@ -43,6 +43,14 @@ def may_read(media, user):
         if not row or row.deleted_at:return False
         from .models import ChatCharge
         return not row.media_price_cents or ChatCharge.objects.filter(message=row,buyer=user,kind='unlock').exists()
+    if media.purpose in ('paid_photo','reel'):
+        from .paid_content import _content_access
+        if media.purpose=='paid_photo':
+            post=__import__('core.models',fromlist=['PaidPost']).PaidPost.objects.filter(media=media).select_related('owner').first()
+            return bool(post and _content_access(user,post.owner,post))
+        posted=Reel.objects.filter(media=media).select_related('owner').first()
+        if posted and posted.price_cents>0:
+            return _content_access(user,posted.owner,posted)
     from .admin_security import scopes
     allowed=scopes(user)
     return (media.purpose=='receipt' and 'finance.view' in allowed) or (media.purpose in ['offer','reel'] and 'store.view' in allowed)
@@ -52,7 +60,17 @@ def media_file(request, media_id):
     media = UploadedMedia.objects.select_related('owner').filter(pk=media_id).first()
     if media is None:
         return HttpResponse(status=404)
-    public = media.owner.is_active and ((media.purpose=='avatar' and Profile.objects.filter(user=media.owner,avatar_url__endswith=f'/api/media/{media.pk}').exists()) or Service.objects.filter(image=media, active=True, approved=True).exists() or Reel.objects.filter(media=media, approved=True).exists())
+    from .models import PaidPost
+    # Never return paid originals as a public static resource. Only the downscaled
+    # blurred cover is public; paid originals require a short signed viewer grant.
+    public = media.owner.is_active and (
+        (media.purpose=='avatar' and Profile.objects.filter(user=media.owner,avatar_url__endswith=f'/api/media/{media.pk}').exists())
+        or Service.objects.filter(image=media,active=True,approved=True).exists()
+        or (media.purpose=='paid_preview' and (
+            PaidPost.objects.filter(preview=media,active=True).exists()
+            or Reel.objects.filter(preview=media,approved=True,active=True).exists()))
+        or Reel.objects.filter(media=media,approved=True,active=True,price_cents=0).exists()
+    )
     if not public:
         try:
             data = signing.loads(request.GET.get('grant', ''), salt='media-access', max_age=600)
@@ -122,9 +140,9 @@ def media_file(request, media_id):
 @endpoint(['POST'])
 def upload(request):
     purpose = request.payload.get('purpose')
-    if purpose not in ('offer', 'receipt', 'chat_image', 'chat_audio', 'chat_video', 'reel', 'avatar'):
+    if purpose not in ('offer', 'receipt', 'chat_image', 'chat_audio', 'chat_video', 'reel', 'avatar','paid_photo'):
         raise ApiError('invalid_purpose')
-    if purpose in ('offer', 'reel') and not Profile.objects.filter(user=request.actor, publishing_allowed=True).exists():
+    if purpose in ('offer', 'reel','paid_photo') and not Profile.objects.filter(user=request.actor, publishing_allowed=True).exists():
         raise ApiError('creator_account_required', 403)
     encoded = text(request.payload, 'data', 4, 28 * 1024 * 1024)
     try:
@@ -134,7 +152,7 @@ def upload(request):
     maximum = 20 * 1024 * 1024 if purpose == 'reel' else 8 * 1024 * 1024
     if not 16 <= len(raw) <= maximum:
         raise ApiError('file_too_large')
-    if purpose in ('offer', 'receipt', 'chat_image', 'avatar'):
+    if purpose in ('offer', 'receipt', 'chat_image', 'avatar','paid_photo'):
         from PIL import Image, UnidentifiedImageError
         try:
             with Image.open(io.BytesIO(raw)) as image:
