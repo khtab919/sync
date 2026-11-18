@@ -337,7 +337,7 @@ function giftSheet(preferredRecipientId=null){
     ?selected.name+' ×'+comboCount+' · '+cost.toLocaleString('ar')+' كوين'
     :'لا توجد هدايا متاحة';
   send.textContent=!recipient?'اختر مستلمًا':readyFingerprint===current?'إرسال الآن':'مراجعة الإرسال';
-  send.disabled=!selected||!recipient||cost>1000000||giftPending!=null;
+  send.disabled=!selected||!recipient||cost>1000000||(giftPending&&giftPending!==current);
   confirmation.textContent=readyFingerprint===current
    ?'تأكيد: '+selected.name+' إلى '+recipient.name+' بمبلغ '+cost.toLocaleString('ar')+' كوين.'
    :'راجع المستلم والسعر. لا يُخصم الرصيد إلا بعد الضغط على «إرسال الآن».';
