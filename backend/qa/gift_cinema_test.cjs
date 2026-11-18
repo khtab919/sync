@@ -41,7 +41,7 @@ function harness(){
  }
  function element(tag='div'){
   return{
-   tagName:tag,children:[],style:{},isConnected:false,
+   tagName:tag,children:[],style:{setProperty(){}},isConnected:false,
    className:'',textContent:'',width:0,height:0,attrs:{},
    append(...items){this.children.push(...items);for(const item of items)item.isConnected=true;},
    remove(){this.isConnected=false;this.children=[]},
