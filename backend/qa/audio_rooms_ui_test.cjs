@@ -245,7 +245,7 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    assert.ok(await page.getByRole('button',{name:'حذف هذا التعليق للجميع',exact:true}).isVisible(),'moderator can delete offender message');
    assert.match(await page.locator('#sheetBody').innerText(),/LV 7/,'moderation sheet contains real level');
    await page.getByRole('button',{name:'حذف هذا التعليق للجميع',exact:true}).click();
-   await page.getByRole('button',{name:'تأكيد',exact:true}).click();
+   await page.getByRole('button',{name:'تأكيد الإجراء',exact:true}).click();
    assert.equal(await page.evaluate(()=>sent.filter(a=>a.action==='delete_comment').length),1);
    await page.evaluate(()=>{qaRoom={...qaRoom,manage_room:false,comments:[]};drawState(qaRoom)});
    await page.evaluate(()=>{const before=document.querySelector('.audio-seat');window.seatBefore=before;drawAudioSeats({max_speakers:8,speakers:[{identity:'host-1',name:'مضيف تجريبي',owner:true,avatar_url:''}]})});
