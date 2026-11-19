@@ -22,6 +22,8 @@ class Migration(migrations.Migration):
             field=models.CharField(max_length=150,blank=True)),
         migrations.AddField(model_name='livebroadcast',name='control_revision',
             field=models.PositiveIntegerField(default=0)),
+        migrations.AddField(model_name='liveseat',name='seat_number',
+            field=models.PositiveSmallIntegerField(null=True,blank=True)),
         migrations.AddField(model_name='liveadmission',name='forced_mic_mute',
             field=models.BooleanField(default=False)),
         migrations.AddField(model_name='liveadmission',name='password_verified_at',
