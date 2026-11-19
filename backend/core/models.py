@@ -569,6 +569,7 @@ class PromotionalGrant(models.Model):
 
 class LiveSeat(models.Model):
     admission=models.OneToOneField(LiveAdmission,on_delete=models.CASCADE)
+    seat_number=models.PositiveSmallIntegerField(null=True,blank=True)
     mode=models.CharField(max_length=5,choices=[('audio','صوت'),('video','فيديو')])
     status=models.CharField(max_length=10,default='pending')
     updated_at=models.DateTimeField(auto_now=True)
