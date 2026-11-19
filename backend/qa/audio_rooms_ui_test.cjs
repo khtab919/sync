@@ -10,7 +10,10 @@ print(render_to_string('core/live_room.html',{'config':config,'nonce':'qa','them
 const css=fs.readFileSync(path.join(root,'core/static/core/live-stage.css'),'utf8');
 const cinemaCss=fs.readFileSync(path.join(root,'core/static/core/gift-cinema.css'),'utf8');
 const royalCss=fs.readFileSync(path.join(root,'core/static/core/relaxia-voice-royal.css'),'utf8');
+const layoutCss=fs.readFileSync(path.join(root,'core/static/core/room-layout-v2.css'),'utf8');
 const cinemaJs=fs.readFileSync(path.join(root,'core/static/core/gift-cinema.js'),'utf8');
+const moderationJs=fs.readFileSync(path.join(root,'core/static/core/room-moderation-ui.js'),'utf8');
+const moderationCss=fs.readFileSync(path.join(root,'core/static/core/room-moderation-ui.css'),'utf8');
 const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8').replace('connect().catch(e=>{message(e);if(e.name!==\'MediaFailure\')reconnect()});','');
 (async()=>{
  const browser=await chromium.launch({headless:true,...(process.env.CAPTURE_CHROMIUM?{executablePath:process.env.CAPTURE_CHROMIUM}:{}),args:['--no-sandbox']});
@@ -21,9 +24,11 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    await page.route('https://room.test/',route=>route.fulfill({contentType:'text/html',body:html}));
    // The luxury pack may not yet be present on a new server: no broken icons.
    await page.route('**/static/core/gifts/icons/*.webp',route=>route.fulfill({status:404,body:''}));
-   await page.goto('https://room.test/');await page.addStyleTag({content:css});await page.addStyleTag({content:cinemaCss});await page.addStyleTag({content:royalCss});
+   await page.goto('https://room.test/');await page.addStyleTag({content:css});await page.addStyleTag({content:cinemaCss});await page.addStyleTag({content:royalCss});await page.addStyleTag({content:moderationCss});await page.addStyleTag({content:layoutCss});
    await page.evaluate(()=>{window.LivekitClient={Room:{},RoomEvent:{},Track:{},ConnectionState:{Connected:'connected'}};window.RelaxiaMedia={}});
-   await page.addScriptTag({content:cinemaJs});await page.addScriptTag({content:js});
+   await page.addScriptTag({content:cinemaJs});
+   await page.addScriptTag({content:js});
+   await page.addScriptTag({content:moderationJs});
    assert.equal(await page.locator('.audio-seat').count(),8,'placeholder seats render before network response');
    await page.evaluate(()=>{
     window.sent=[];room={state:'connected',localParticipant:{}};
@@ -36,7 +41,7 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    assert.equal(await page.locator('.empty-seat .seat-plus svg').count(),7,'all empty seats use consistent microphone SVG icons');
    assert.ok(await page.locator('.host-seat').count()===1,'host uses distinct decorated seat');
    assert.ok(!(await page.locator('body').innerText()).includes('80٪'),'the live room never reveals payout percentages');
-   assert.equal(await page.locator('.empty-seat').first().getAttribute('aria-label'),'مقعد 2 · طلب الميكروفون');
+   assert.equal(await page.locator('.empty-seat').first().getAttribute('aria-label'),'مقعد 1 · طلب الميكروفون');
    assert.equal(await page.locator('#title').innerText(),'ID: 58321');
    assert.ok(!(await page.locator('#badge').innerText()).includes('undefined'),'level must not expose undefined placeholders');
    await page.evaluate(async()=>{qaRoom.status='starting';reconnectSince=Date.now()-13000;await refresh()});
@@ -48,9 +53,32 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    assert.equal(await page.locator('#gift').isVisible(),false);
    assert.equal(await page.locator('#micQuick').isVisible(),false,'no duplicate quick microphone for audience');
    assert.equal(await page.locator('#bigGiftBtn').isVisible(),true);
-   assert.equal(await page.locator('#syriatelCashLink').isVisible(),true,'native Syriatel cash strip at bottom');
-   assert.match(await page.locator('#syriatelCashLink').innerText(),/0997991404/);
+   assert.equal(await page.locator('#syriatelCashLink').count(),0,'payment destination must never appear in live room');
    assert.equal(await page.locator('#requestMic').isVisible(),true,'request microphone appears for audience');
+   const zones=await page.evaluate(()=>{
+    const stage=document.getElementById('stage').getBoundingClientRect();
+    const header=document.querySelector('#stage header').getBoundingClientRect();
+    const seats=document.getElementById('audioStage').getBoundingClientRect();
+    const chat=document.getElementById('messages').getBoundingClientRect();
+    const dock=document.querySelector('#stage footer').getBoundingClientRect();
+    return {
+     headerTop:(header.top-stage.top)/stage.height,
+     seatsTop:(seats.top-stage.top)/stage.height,
+     seatsHeight:seats.height/stage.height,
+     chatTop:(chat.top-stage.top)/stage.height,
+     chatHeight:chat.height/stage.height,
+     dockHeight:dock.height/stage.height,
+     seatsBottom:seats.bottom,chatBottom:chat.bottom,dockTop:dock.top
+    }
+   });
+   assert.ok(Math.abs(zones.seatsTop-.10)<.022,'seats start under the 10% header');
+   assert.ok(Math.abs(zones.seatsHeight-.32)<.022,'seats occupy 32%');
+   assert.ok(Math.abs(zones.chatTop-.42)<.022&&Math.abs(zones.chatHeight-.46)<.022,'comments occupy 46% after seats');
+   assert.ok(Math.abs(zones.dockHeight-.12)<.022,'dock takes 12%');
+   assert.ok(zones.seatsBottom<=zones.chatTop*height+4,'seats never overlap comments');
+   assert.ok(zones.chatBottom<=zones.dockTop+4,'comments never overlap dock');
+   const giftCss=await page.evaluate(()=>getComputedStyle(document.getElementById('sheet')).height);
+   assert.ok(giftCss,'gift sheet styling stays reachable');
    const cssSeats=await page.locator('#audioStage').evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(' ').length);
    assert.equal(cssSeats,4,'eight seats arranged into four columns');
    const chatStyle=await page.locator('#messages').evaluate(el=>getComputedStyle(el).overflowY);
@@ -124,8 +152,8 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    // Simulate Gboard reducing the viewport before the native keyboard test.
    await page.setViewportSize({width,height:440});
    await page.locator('#text').focus();
-   assert.equal(await page.locator('body').evaluate(el=>el.classList.contains('chat-focused')),true,'keyboard focus adjusts the room layout');
-   assert.equal(await page.locator('#audioStage').isVisible(),false,'keyboard prioritizes comments over seats on short screens');
+   assert.equal(await page.locator('body').evaluate(el=>el.classList.contains('chat-focused')),false,'keyboard focus must never hide seats');
+   assert.equal(await page.locator('#audioStage').isVisible(),true,'eight seats remain visible while typing');
    assert.equal(await page.locator('.quick-actions').isVisible(),true,'room action menus stay tappable while typing');
    await page.locator('#more').click();
    assert.equal(await page.locator('#sheet').evaluate(el=>el.open),true,'more menu opens with keyboard focused');
@@ -208,7 +236,7 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    assert.equal(await page.locator('#messages').isVisible(),true,'comments can be restored');
    assert.equal(await page.locator('body').evaluate(el=>el.classList.contains('comments-hidden')),false,'chat area restores after re-enabling comments');
    await page.evaluate(()=>{
-    qaRoom={...qaRoom,manage_room:true,comments:[{id:451,name:'عضو',text:'رسالة للاختبار'}]};
+    qaRoom={...qaRoom,manage_room:true,comments:[{id:451,user_id:3,name:'عضو',text:'رسالة للاختبار',level:7,selected_frame:120,vip_tier:0,avatar_url:''}]};
     drawState(qaRoom);
    });
    assert.equal(await page.locator('.comment-actions').count(),1,'moderation actions are not repeated inline');
@@ -218,8 +246,11 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    await page.evaluate(()=>{qaRoom={...qaRoom,manage_room:true};drawState(qaRoom)});
    assert.equal(await page.locator('.comment-actions').count(),1,'moderation controls return only with permission');
    await page.locator('.comment-actions').click();
-   await page.getByRole('button',{name:'تثبيت التعليق',exact:true}).click();
-   assert.equal(await page.evaluate(()=>sent.filter(a=>a.action==='pin_comment').length),1);
+   assert.ok(await page.getByRole('button',{name:'حذف هذا التعليق للجميع',exact:true}).isVisible(),'moderator can delete offender message');
+   assert.match(await page.locator('#sheetBody').innerText(),/LV 7/,'moderation sheet contains real level');
+   await page.getByRole('button',{name:'حذف هذا التعليق للجميع',exact:true}).click();
+   await page.getByRole('button',{name:'تأكيد الإجراء',exact:true}).click();
+   assert.equal(await page.evaluate(()=>sent.filter(a=>a.action==='delete_comment').length),1);
    await page.evaluate(()=>{qaRoom={...qaRoom,manage_room:false,comments:[]};drawState(qaRoom)});
    await page.evaluate(()=>{const before=document.querySelector('.audio-seat');window.seatBefore=before;drawAudioSeats({max_speakers:8,speakers:[{identity:'host-1',name:'مضيف تجريبي',owner:true,avatar_url:''}]})});
    assert.equal(await page.evaluate(()=>seatBefore===document.querySelector('.audio-seat')),true,'poll must not rebuild unchanged seats');
@@ -233,7 +264,7 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    const whaleCard=page.locator('.gift-card[data-gift-code="gift_blue_whale"]');
    assert.equal(await whaleCard.getAttribute('aria-label'),'الحوت الأزرق · 10000 كوين');
    assert.equal(await whaleCard.locator('canvas.gift-card-3d').count(),1,'all gifts use rendered 3D thumbnails');
-   assert.equal(await page.locator('.gift-preview canvas.gift-3d-canvas.preview').count(),1,'selected gift plays a 3D model preview');
+   assert.equal(await page.locator('.gift-preview canvas.gift-choice-icon').count(),1,'selected gift icon appears beside sound preview');
    assert.equal(await page.locator('img.gift-webp').count(),0,'gift card no longer depends on an image file');
    await whaleCard.click();
    assert.equal(await whaleCard.getAttribute('aria-pressed'),'true','selected gift is highlighted');
@@ -252,7 +283,12 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    await page.evaluate(()=>{config.userId=1;qaRoom={...qaRoom,speakers:[{identity:'host-1',user_id:1,name:'مضيف تجريبي',owner:true,mode:'audio',avatar_url:''}]};drawState(qaRoom)});
    await page.locator('#bigGiftBtn').click();
    assert.equal(await page.locator('select[aria-label="مستلم الهدية"]').count(),0,'no redundant recipient dropdown in gift sheet');
-   assert.ok((await page.locator('.gift-target-summary').innerText()).includes('لنفسك'),'self gifting clearly blocked');
+   const qaSelfTarget=await page.locator('.gift-target-summary').evaluate(el=>({
+      innerText:el.innerText,text:el.textContent,hidden:el.hidden,
+      recipient:window.qaRoom?.speakers?.[0]?.user_id,currentUser:config.userId
+   }));
+   assert.ok(qaSelfTarget.text.includes('لنفسك'),
+      'self gifting clearly blocked: '+JSON.stringify(qaSelfTarget));
    assert.equal(await page.locator('.gift-card').first().isEnabled(),true,'gift catalog stays browseable');
    assert.equal(await page.locator('.gift-send').isDisabled(),true,'no charge without eligible target');
    await page.evaluate(()=>{qaRoom={...qaRoom,speakers:[...qaRoom.speakers,{identity:'guest-3',user_id:3,name:'ضيف معتمد',owner:false,mode:'audio',avatar_url:''}]};drawState(qaRoom)});

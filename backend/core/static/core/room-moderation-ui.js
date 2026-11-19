@@ -85,8 +85,36 @@
  function showUser(user,message=null){
    const id=Number(user?.user_id);
    if(!Number.isInteger(id)||id<1)return;
+   // Always resolve the current account snapshot, never the label or level
+   // that was stored when this sheet was first opened.
+   const liveIdentity=(state.speakers||[]).find(item=>item.user_id===id)
+     ||(state.participants_visible||[]).find(item=>item.user_id===id)
+     ||(state.comments||[]).find(item=>item.user_id===id)
+     ||user;
    const box=sheet('إجراءات المستخدم');
-   note(box,(user.name||'مستخدم')+(message?' · '+(message.text||''):''));
+   const header=document.createElement('div');header.className='member-action-identity';
+   const ring=document.createElement('span');ring.className='comment-avatar-frame';
+   ring.dataset.frame=String(liveIdentity.selected_frame??0);
+   const placeholder=document.createElement('span');placeholder.className='comment-avatar';
+   placeholder.textContent=(liveIdentity.name||'').slice(0,1);ring.append(placeholder);
+   if(/^https:\/\//.test(liveIdentity.avatar_url||'')){
+    const img=document.createElement('img');img.src=liveIdentity.avatar_url;img.alt='';
+    img.onload=()=>{placeholder.hidden=true};img.onerror=()=>{img.remove();placeholder.hidden=false};
+    ring.append(img);
+   }
+   const info=document.createElement('div');info.className='member-action-details';
+   const name=document.createElement('strong');name.textContent=liveIdentity.name;info.append(name);
+   if(Number.isInteger(liveIdentity.level)&&liveIdentity.level>=1){
+    const badge=document.createElement('span');badge.className='member-level-badge';
+    badge.textContent='LV '+liveIdentity.level+(liveIdentity.vip_tier?' · VIP '+liveIdentity.vip_tier:'');
+    info.append(badge);
+   }
+   if(liveIdentity.identity_verified){
+    const verified=document.createElement('span');verified.className='member-verified';
+    verified.textContent='✓ حساب موثق';info.append(verified);
+   }
+   header.append(ring,info);box.append(header);
+   if(message?.text)note(box,message.text);
    if(id===config.userId){note(box,'هذه صفحتك الشخصية.');return}
    sectionHeading(box,'الخيارات الشخصية');
    if(config.gifts&&(state.speakers||[]).some(s=>s.user_id===id))button(box,'إرسال هدية لهذا المستخدم',()=>giftSheet(id));
@@ -197,8 +225,10 @@
    if(bubble){
      const id=Number(bubble.dataset.userId);
      if(Number.isInteger(id)&&id>0){
-       const message=(state.comments||[]).find(c=>Number(c.user_id)===id&&e.target.closest('.comment-bubble')===bubble);
-       e.preventDefault();e.stopPropagation();showUser({user_id:id,name:message?.name},message);
+       const commentId=Number(bubble.dataset.commentId);
+       const message=(state.comments||[]).find(c=>Number(c.id)===commentId);
+       e.preventDefault();e.stopPropagation();
+       showUser(message||{user_id:id},message);
      }
      return;
    }

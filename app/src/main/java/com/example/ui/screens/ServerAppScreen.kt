@@ -476,6 +476,32 @@ fun ServerAppScreen(baseUrl: String) {
         finally { loading = false }
     }
 
+    // Keep an already-open profile synchronized with server-side XP, frame,
+    // avatar and badges. Other viewers see changes without reopening the page.
+    // Do not poll on the edit form: its unsaved input values must remain intact.
+    LaunchedEffect(signedIn, foreground, screen, creator.optInt("id")) {
+        if (!signedIn || !foreground || screen !in listOf("حسابي","صفحة المذيعة")) return@LaunchedEffect
+        while (true) {
+            try {
+                if (screen=="حسابي") {
+                    val updated=api.request("/api/me")
+                    if (updated.toString()!=profile.toString()) profile=updated
+                } else {
+                    val userId=creator.optInt("id")
+                    if (userId>0) {
+                        val updated=api.request("/api/creators/$userId")
+                        if (updated.toString()!=creator.toString()) creator=updated
+                    }
+                }
+            } catch (e:CancellationException) { throw e }
+            catch (_:Exception) {
+                // Keep the last confirmed profile without showing form validation
+                // errors or an unrelated retry banner on the read-only page.
+            }
+            delay(3000)
+        }
+    }
+
     LaunchedEffect(signedIn, foreground, profile.optInt("id")) {
         if(!signedIn || !foreground)return@LaunchedEffect
         val inbox=MessageInbox(context,api.origin,profile.optInt("id"))
@@ -730,7 +756,8 @@ fun ServerAppScreen(baseUrl: String) {
         ) { padding ->
             Column(Modifier.fillMaxSize().padding(padding)) {
                 if (submitting) LuxuryLoadingStatus("جارٍ تنفيذ الطلب")
-                if (notice.isNotBlank() || contentError.isNotBlank()) Surface(color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), shape = RoundedCornerShape(18.dp)) {
+                if (screen !in listOf("حسابي","صفحة المذيعة") &&
+                    (notice.isNotBlank() || contentError.isNotBlank())) Surface(color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), shape = RoundedCornerShape(18.dp)) {
                     Row(Modifier.padding(14.dp),verticalAlignment=Alignment.CenterVertically) {
                         Text(notice.ifBlank { contentError }, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                         if (contentError.isNotBlank()) TextButton(onClick={revision++}, enabled=!loading) { Text("إعادة المحاولة") }
@@ -1518,8 +1545,28 @@ internal fun ProfileHero(
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Text(name, Modifier.weight(1f, fill = false), fontSize = 20.sp,
+                    Text(name, Modifier.weight(1f), fontSize = 20.sp,
                         fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (publicId != "—") Surface(
+                        onClick = {
+                            val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                                as android.content.ClipboardManager
+                            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Relaxia ID", publicId))
+                        },
+                        color = colors.surfaceContainerLow,
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Row(
+                            Modifier.padding(horizontal = 6.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text("ID: " + publicId, fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold, maxLines = 1)
+                            Icon(Icons.Rounded.ContentCopy, "نسخ رقم الحساب",
+                                Modifier.size(13.dp), tint = colors.primary)
+                        }
+                    }
                     val genderMark = when(person.optString("gender")) {
                         "male" -> "♂"; "female" -> "♀"; else -> ""
                     }
@@ -1527,33 +1574,12 @@ internal fun ProfileHero(
                 }
                 Row(verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    RelaxiaLevelBadge(person.optInt("level", 1))
+                    if (person.has("level") && !person.isNull("level"))
+                        RelaxiaLevelBadge(person.optInt("level"))
                     val vip = person.optInt("vip_tier")
                     if (vip > 0) Text("VIP " + vip,
                         color = colors.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
-            }
-        }
-        if (publicId != "—") Surface(
-            onClick = {
-                val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
-                    as android.content.ClipboardManager
-                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Relaxia ID", publicId))
-            },
-            modifier = Modifier.fillMaxWidth(),
-            color = colors.surfaceContainerLow,
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            Row(
-                Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(9.dp)
-            ) {
-                Icon(Icons.Rounded.Badge, null, Modifier.size(18.dp), tint = colors.primary)
-                Text("ID: " + publicId, Modifier.weight(1f),
-                    fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                Icon(Icons.Rounded.ContentCopy, "نسخ رقم الحساب",
-                    Modifier.size(18.dp), tint = colors.primary)
             }
         }
         if (person.optBoolean("identity_verified")) {
