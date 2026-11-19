@@ -283,7 +283,12 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    await page.evaluate(()=>{config.userId=1;qaRoom={...qaRoom,speakers:[{identity:'host-1',user_id:1,name:'مضيف تجريبي',owner:true,mode:'audio',avatar_url:''}]};drawState(qaRoom)});
    await page.locator('#bigGiftBtn').click();
    assert.equal(await page.locator('select[aria-label="مستلم الهدية"]').count(),0,'no redundant recipient dropdown in gift sheet');
-   assert.ok((await page.locator('.gift-target-summary').innerText()).includes('لنفسك'),'self gifting clearly blocked');
+   const qaSelfTarget=await page.locator('.gift-target-summary').evaluate(el=>({
+      innerText:el.innerText,text:el.textContent,hidden:el.hidden,
+      recipient:window.qaRoom?.speakers?.[0]?.user_id,currentUser:config.userId
+   }));
+   assert.ok(qaSelfTarget.text.includes('لنفسك'),
+      'self gifting clearly blocked: '+JSON.stringify(qaSelfTarget));
    assert.equal(await page.locator('.gift-card').first().isEnabled(),true,'gift catalog stays browseable');
    assert.equal(await page.locator('.gift-send').isDisabled(),true,'no charge without eligible target');
    await page.evaluate(()=>{qaRoom={...qaRoom,speakers:[...qaRoom.speakers,{identity:'guest-3',user_id:3,name:'ضيف معتمد',owner:false,mode:'audio',avatar_url:''}]};drawState(qaRoom)});
