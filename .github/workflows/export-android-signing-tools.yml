@@ -1,0 +1,38 @@
+name: Export Android SDK signing utilities (no private keys)
+on:
+  push:
+    branches: [ "feat/relaxia-home-live-syriatel-luxury-room-20261118" ]
+    paths: [ ".github/workflows/export-android-signing-tools.yml" ]
+  pull_request:
+    paths: [ ".github/workflows/export-android-signing-tools.yml" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export-tools:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Find Android SDK build tools (never include secrets)
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          build="$(find "$sdk/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          test -f "$build/lib/apksigner.jar"
+          test -x "$build/zipalign"
+          test -x "$build/aapt"
+          mkdir -p release-tools
+          cp "$build/lib/apksigner.jar" release-tools/apksigner.jar
+          cp "$build/zipalign" release-tools/zipalign
+          cp "$build/aapt" release-tools/aapt
+          chmod +x release-tools/{zipalign,aapt}
+          echo "These are unmodified Android SDK utilities. There are no signing keys or passwords in this artifact."
+          sha256sum release-tools/*
+      - name: Upload public SDK utilities
+        uses: actions/upload-artifact@v4
+        with:
+          name: Relaxia-Android-SDK-Signing-Utilities
+          path: release-tools/
+          retention-days: 1

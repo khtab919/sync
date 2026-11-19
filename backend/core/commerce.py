@@ -200,7 +200,11 @@ def payment_info(request):
     from .nowpayments import configured
     from .stripe_checkout import configured as stripe_configured
     settings = funding_settings()
-    return JsonResponse({'network':'BNB Smart Chain (BEP20)', 'currency':'USDT', 'address':ADDRESS, 'qr_url':request.build_absolute_uri('/api/payment-qr'), 'packages_cents':[100,300,1000,2500,5000,10000], 'packages':[{'coins':coins,'bonus_points':bonus_for(coins)} for coins in (100,300,1000,2500,5000,10000)], 'coin_rate':100, 'credit_rate':'100 coins = 1 USD internal balance', 'manual_review':True, 'nowpayments_enabled':configured(), 'stripe_enabled':stripe_configured(), 'shamcash_enabled':bool(settings.shamcash_enabled and settings.shamcash_account and settings.shamcash_rate>0), 'shamcash_account':settings.shamcash_account if settings.shamcash_enabled else '', 'shamcash_currency':settings.shamcash_currency, 'shamcash_instructions':settings.shamcash_instructions})
+    return JsonResponse({'network':'BNB Smart Chain (BEP20)', 'currency':'USDT', 'address':ADDRESS, 'qr_url':request.build_absolute_uri('/api/payment-qr'), 'packages_cents':[100,300,1000,2500,5000,10000], 'packages':[{'coins':coins,'bonus_points':bonus_for(coins)} for coins in (100,300,1000,2500,5000,10000)], 'coin_rate':100, 'credit_rate':'100 coins = 1 USD internal balance', 'manual_review':True, 'nowpayments_enabled':configured(), 'stripe_enabled':stripe_configured(), 'shamcash_enabled':bool(settings.shamcash_enabled and settings.shamcash_account and settings.shamcash_rate>0), 'shamcash_account':settings.shamcash_account if settings.shamcash_enabled else '', 'shamcash_currency':settings.shamcash_currency, 'shamcash_instructions':settings.shamcash_instructions,
+        'syriatel_cash_enabled':bool(settings.syriatel_cash_enabled and settings.syriatel_cash_syp_per_usd>0),
+        'syriatel_cash_number':settings.syriatel_cash_number,
+        'syriatel_cash_currency':'SYP',
+        'syriatel_cash_manual_review':True})
 
 
 def payment_qr(request):
@@ -217,6 +221,10 @@ def payment_qr(request):
         settings=funding_settings()
         if not settings.shamcash_enabled or not settings.shamcash_account:return HttpResponse(status=404)
         destination=settings.shamcash_account
+    elif request.GET.get('method')=='syriatelcash':
+        settings=funding_settings()
+        if not settings.syriatel_cash_enabled or settings.syriatel_cash_syp_per_usd<=0:return HttpResponse(status=404)
+        destination=settings.syriatel_cash_number
     output=io.BytesIO();qrcode.make(destination).save(output,format='PNG')
     return HttpResponse(output.getvalue(),content_type='image/png')
 
@@ -232,7 +240,7 @@ def quotes(request):
     cents=amount(request.payload,'amount_cents')
     if cents<100: raise ApiError('minimum_topup_one_usdt')
     method=request.payload.get('method','usdt')
-    if method not in ('usdt','shamcash','nowpayments','stripe'): raise ApiError('invalid_payment_method')
+    if method not in ('usdt','shamcash','nowpayments','stripe','syriatelcash'): raise ApiError('invalid_payment_method')
     with transaction.atomic():
         User.objects.select_for_update().get(pk=request.actor.pk)
         existing=TopUpQuote.objects.filter(user=request.actor,method=method,amount_cents=cents,expires_at__gt=timezone.now(),topup__isnull=True,gatewayinvoice__credited_at__isnull=True,stripecheckout__credited_at__isnull=True).exclude(gatewayinvoice__status__in=['failed','expired','refunded']).exclude(stripecheckout__status__in=['failed','expired','refunded','disputed']).first()
@@ -245,8 +253,18 @@ def quotes(request):
             from .stripe_checkout import configured as stripe_configured
             if not stripe_configured():raise ApiError('stripe_not_configured',409)
         if method=='shamcash' and not(settings.shamcash_enabled and settings.shamcash_account and settings.shamcash_rate>0): raise ApiError('shamcash_not_configured',409)
-        rate=settings.shamcash_rate if method=='shamcash' else Decimal(1)
-        row=TopUpQuote.objects.create(user=request.actor,method=method,amount_cents=cents,bonus_cents=bonus_for(cents),payment_amount=(Decimal(cents)*rate/100).quantize(Decimal('.01'),rounding=ROUND_HALF_UP),payment_currency=settings.shamcash_currency if method=='shamcash' else 'USD' if method in ('nowpayments','stripe') else 'USDT',destination=settings.shamcash_account if method=='shamcash' else 'NOWPayments hosted checkout' if method=='nowpayments' else 'Stripe hosted card checkout' if method=='stripe' else ADDRESS,expires_at=timezone.now()+timedelta(minutes=30))
+        if method=='syriatelcash' and not(settings.syriatel_cash_enabled and settings.syriatel_cash_syp_per_usd>0): raise ApiError('syriatelcash_not_configured',409)
+        rate=(settings.syriatel_cash_syp_per_usd if method=='syriatelcash' else settings.shamcash_rate if method=='shamcash' else Decimal(1))
+        destination=(settings.syriatel_cash_number if method=='syriatelcash' else
+                     settings.shamcash_account if method=='shamcash' else
+                     'NOWPayments hosted checkout' if method=='nowpayments' else
+                     'Stripe hosted card checkout' if method=='stripe' else ADDRESS)
+        row=TopUpQuote.objects.create(
+            user=request.actor,method=method,amount_cents=cents,
+            bonus_cents=bonus_for(cents),
+            payment_amount=(Decimal(cents)*rate/100).quantize(Decimal('.01'),rounding=ROUND_HALF_UP),
+            payment_currency=('SYP' if method=='syriatelcash' else settings.shamcash_currency if method=='shamcash' else 'USD' if method in ('nowpayments','stripe') else 'USDT'),
+            destination=destination,expires_at=timezone.now()+timedelta(minutes=30))
     return JsonResponse(quote_json(row,request),status=201)
 
 
@@ -269,6 +287,7 @@ def topups(request):
         if cents<100:raise ApiError('minimum_topup_one_usdt')
         method=quote.method if quote else 'usdt'
         if method in ('nowpayments','stripe'):raise ApiError('gateway_invoice_required',409)
+        if method=='syriatelcash' and quote is None:raise ApiError('payment_quote_required',409)
         reference=text(request.payload,'transaction_hash',4,100).strip()
         if method=='usdt':
             reference=reference.lower().removeprefix('0x')
@@ -276,7 +295,7 @@ def topups(request):
             reference='0x'+reference
         else:
             if not re.fullmatch('[A-Za-z0-9_-]{4,80}',reference):raise ApiError('invalid_transaction_reference')
-            reference='shamcash:'+reference
+            reference=('syriatelcash:' if method=='syriatelcash' else 'shamcash:')+reference
         previous=TopUp.objects.filter(transaction_hash=reference).first()
         if previous:
             if previous.user_id==request.actor.pk and previous.amount_cents==cents and str(previous.receipt_id)==request.payload.get('receipt_id'):return JsonResponse({'id':previous.pk,'status':previous.status})
@@ -298,18 +317,36 @@ def payment_settings(request):
         settings=funding_settings();settings=PaymentSettings.objects.select_for_update().get(pk=settings.pk)
         if request.method=='POST':
             p=request.payload
-            if type(p.get('enabled')) is not bool or p.get('currency') not in ('USD','SYP'):raise ApiError('invalid_payment_settings')
-            account=p.get('account','')
-            if not isinstance(account,str) or len(account)>160:raise ApiError('invalid_payment_settings')
-            account=account.strip()
-            try:rate=Decimal(str(p.get('rate','1')))
-            except InvalidOperation:raise ApiError('invalid_payment_settings')
-            if not rate.is_finite() or not 0<rate<=1000000 or (p['currency']=='USD' and rate!=1) or (p['enabled'] and not account):raise ApiError('invalid_payment_settings')
-            settings.shamcash_enabled=p['enabled'];settings.shamcash_account=account;settings.shamcash_currency=p['currency'];settings.shamcash_rate=rate;settings.shamcash_instructions=str(p.get('instructions',''))[:500];settings.save()
-            audit(request.actor,settings,'Sham Cash destination, currency and conversion settings updated')
+            if 'syriatel_cash' in p:
+                config=p['syriatel_cash']
+                if not isinstance(config,dict) or type(config.get('enabled')) is not bool:raise ApiError('invalid_payment_settings')
+                number=str(config.get('number','')).strip()
+                if not re.fullmatch(r'09[0-9]{8}',number):raise ApiError('invalid_payment_settings')
+                try:rate=Decimal(str(config.get('syp_per_usd','0')))
+                except InvalidOperation:raise ApiError('invalid_payment_settings')
+                if not rate.is_finite() or rate<0 or rate>100000000 or (config['enabled'] and rate<=0):raise ApiError('invalid_payment_settings')
+                settings.syriatel_cash_enabled=config['enabled']
+                settings.syriatel_cash_number=number
+                settings.syriatel_cash_syp_per_usd=rate
+                settings.syriatel_cash_instructions=str(config.get('instructions',''))[:500]
+                settings.save(update_fields=['syriatel_cash_enabled','syriatel_cash_number','syriatel_cash_syp_per_usd','syriatel_cash_instructions'])
+                audit(request.actor,settings,'Syriatel Cash manual settlement settings updated')
+            else:
+                if type(p.get('enabled')) is not bool or p.get('currency') not in ('USD','SYP'):raise ApiError('invalid_payment_settings')
+                account=p.get('account','')
+                if not isinstance(account,str) or len(account)>160:raise ApiError('invalid_payment_settings')
+                account=account.strip()
+                try:rate=Decimal(str(p.get('rate','1')))
+                except InvalidOperation:raise ApiError('invalid_payment_settings')
+                if not rate.is_finite() or not 0<rate<=1000000 or (p['currency']=='USD' and rate!=1) or (p['enabled'] and not account):raise ApiError('invalid_payment_settings')
+                settings.shamcash_enabled=p['enabled'];settings.shamcash_account=account;settings.shamcash_currency=p['currency'];settings.shamcash_rate=rate;settings.shamcash_instructions=str(p.get('instructions',''))[:500];settings.save()
+                audit(request.actor,settings,'Sham Cash destination, currency and conversion settings updated')
     from .nowpayments import configured
     from .stripe_checkout import configured as stripe_configured
-    return JsonResponse({'stripe_configured':stripe_configured(),'nowpayments_configured':configured(),'enabled':settings.shamcash_enabled,'account':settings.shamcash_account,'currency':settings.shamcash_currency,'rate':str(settings.shamcash_rate),'instructions':settings.shamcash_instructions})
+    return JsonResponse({'stripe_configured':stripe_configured(),'nowpayments_configured':configured(),'enabled':settings.shamcash_enabled,'account':settings.shamcash_account,'currency':settings.shamcash_currency,'rate':str(settings.shamcash_rate),'instructions':settings.shamcash_instructions,
+        'syriatel_cash':{'enabled':settings.syriatel_cash_enabled,'number':settings.syriatel_cash_number,
+        'syp_per_usd':str(settings.syriatel_cash_syp_per_usd),'currency':'SYP',
+        'instructions':settings.syriatel_cash_instructions}})
 
 
 @endpoint(['GET', 'POST'])

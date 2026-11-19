@@ -1,0 +1,90 @@
+name: Package Relaxia 11.7.10 voice and Syriatel server files
+
+on:
+  push:
+    branches:
+      - feat/relaxia-home-live-syriatel-luxury-room-20261118
+    paths:
+      - '.github/workflows/export-voice-syriatel.yml'
+      - 'backend/core/static/core/relaxia-voice-royal.css'
+      - 'backend/core/static/core/live-stage.js'
+      - 'backend/core/templates/core/live_room.html'
+      - 'backend/core/commerce.py'
+      - 'backend/core/models.py'
+      - 'backend/core/migrations/0041_syriatel_cash_settings.py'
+  pull_request:
+    paths:
+      - '.github/workflows/export-voice-syriatel.yml'
+      - 'backend/core/static/core/relaxia-voice-royal.css'
+      - 'backend/core/commerce.py'
+      - 'backend/core/models.py'
+      - 'backend/core/migrations/0041_syriatel_cash_settings.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate contents
+        run: |
+          set -euo pipefail
+          node --check backend/core/static/core/live-stage.js
+          node --check backend/core/static/core/gift-cinema.js
+          python3 -m py_compile backend/core/commerce.py backend/core/models.py backend/core/live.py backend/core/live_stage.py backend/core/migrations/0041_syriatel_cash_settings.py
+          grep -q '0997991404' backend/core/templates/core/live_room.html
+          grep -q 'syriatel_cash_enabled' backend/core/models.py
+          grep -q 'syriatelcash' backend/core/commerce.py
+          test -s backend/core/static/core/relaxia-voice-royal.css
+      - name: Bundle patch and deployment notes
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cat > INSTALL-RELAXIA-11.7.10-AR.txt <<'EOF'
+          حزمة تحديث الخادم لتطبيق Relaxia 11.7.10
+          ========================================
+          تشمل شاشة الصوت الزرقاء الفضية، هدايا 3D، سيريتيل كاش، تصحيح كتم الصوت.
+          ليست APK. تتطلب نسخة مشروع حديثة متوافقة، وليس نسخها على إصدار أقدم عشوائياً.
+          سيريتيل كاش 0997991404 متوقف تلقائياً حتى يحدد الأدمن سعر التحويل بالليرة السورية.
+          لا يتم اعتماد الإيصال ولا إضافة كوينز إلا بعد تحقق الإدارة من وصول الدفع فعلياً.
+
+          على بيئة اختبار:
+          1) احفظ قاعدة البيانات و backend/core وملفات .env الحالية.
+          2) تحقق أن المشروع يعمل من الفرع المتوافق مع التحديث وانه يحتوي migration 0040.
+          3) فك الحزمة في جذر نسخة المشروع وليس داخل backend.
+          4) cd backend
+          5) docker compose config --quiet
+          6) docker compose build api
+          7) طبق migrate --noinput عبر نفس قاعدة بيانات التطبيق، بعد النسخة الاحتياطية.
+          8) docker compose up -d --no-deps --force-recreate api live-api
+          9) docker compose exec -T api python manage.py collectstatic --noinput
+          10) تحقق من /health وملفات /static/core/relaxia-voice-royal.css?v=voice-30.
+          11) اختبر مع مستخدمين حقيقيين غرف الصوت والدفع اليدوي وتجربة الصرف.
+          لا تحذف المستخدمين أو قاعدة البيانات، ولا تستخدم docker compose down -v.
+          لا تضع بيانات الاعتماد أو مفاتيح التوقيع داخل حزمة السيرفر.
+          هذا مجرد تحديث تجريبي حتى اجتياز فحص CI والأجهزة والتحويل.
+          EOF
+          zip -9 -q dist/Relaxia-11.7.10-Voice-Syriatel-Server.zip \
+             INSTALL-RELAXIA-11.7.10-AR.txt \
+             backend/core/static/core/relaxia-voice-royal.css \
+             backend/core/static/core/live-stage.js \
+             backend/core/static/core/live-stage.css \
+             backend/core/static/core/live-media.js \
+             backend/core/static/core/gift-cinema.js \
+             backend/core/static/core/gift-cinema.css \
+             backend/core/static/core/gifts/catalog.json \
+             backend/core/templates/core/live_room.html \
+             backend/core/live.py \
+             backend/core/live_stage.py \
+             backend/core/commerce.py \
+             backend/core/models.py \
+             backend/core/migrations/0041_syriatel_cash_settings.py
+          unzip -t dist/Relaxia-11.7.10-Voice-Syriatel-Server.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Relaxia-11.7.10-Voice-Syriatel-Server
+          path: dist/Relaxia-11.7.10-Voice-Syriatel-Server.zip
+          retention-days: 30

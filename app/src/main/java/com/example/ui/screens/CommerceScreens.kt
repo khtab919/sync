@@ -78,6 +78,8 @@ internal fun commerceError(e: Exception): String = when(e.message) {
     "provider_check_pending" -> "التحقق من البوابة لم يكتمل بعد. حاول لاحقًا."
     "update_app_for_wheel_rules" -> "حدّث التطبيق لعرض قواعد العجلة الجديدة قبل الدفع."
     "shamcash_not_configured" -> "بيانات استلام شام كاش غير مفعلة بعد."
+    "syriatelcash_not_configured" -> "سيريتيل كاش لم يُفعّل بعد. يجب أن تضبط الإدارة سعر الصرف أولاً."
+    "payment_quote_required" -> "أنشئ فاتورة من التطبيق قبل إرسال إثبات تحويل سيريتيل كاش."
     "invalid_transaction_reference" -> "أدخل رقم إشعار الدفع الصحيح."
     "wheel_configuration_changed" -> "تغيّر سعر اللفة أو قواعدها. حدّث الصفحة قبل الدفع."
     "wheel_unavailable" -> "العجلة غير مفعّلة حاليًا."
@@ -86,7 +88,7 @@ internal fun commerceError(e: Exception): String = when(e.message) {
 
 @Composable
 internal fun CommerceScreen(api: LayaliApi, kind: String, back: () -> Unit) {
-    if(kind == "شحن الرصيد") { NativeUsdtTopupScreen(api, back); return }
+    if(kind == "شحن الرصيد") { RelaxiaTopupMethodsScreen(api, back); return }
     val isWheel = kind == "العجلة" || kind == "يا نصيب"
     val context = LocalContext.current
     val scope = rememberCoroutineScope()

@@ -120,6 +120,8 @@ fun ServerAppScreen(baseUrl: String) {
     var livePreview by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var livePreviewLoading by remember { mutableStateOf(false) }
     var livePreviewError by remember { mutableStateOf(false) }
+    // Room selected from the home feed, not a newly created broadcast.
+    var selectedHomeRoomId by remember { mutableStateOf("") }
     var creators by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var rows by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var selected by remember { mutableStateOf(JSONObject()) }
@@ -378,7 +380,7 @@ fun ServerAppScreen(baseUrl: String) {
             }catch(e:CancellationException){throw e}
             catch(_:Exception){livePreview=emptyList();livePreviewError=true}
             finally{livePreviewLoading=false}
-            delay(30000)
+            delay(10000)
         }
     }
     // Android back from a full-screen Reel must return home, never exit the app.
@@ -555,8 +557,8 @@ fun ServerAppScreen(baseUrl: String) {
         if(screen=="الحسابات المحظورة"){BlockedAccounts(api){back()};return@MyApplicationTheme}
         if(screen=="سجل العمليات"){FinancialHistory(api){back()};return@MyApplicationTheme}
         if(screen=="الحجوزات"){BookingHistory(api,explore={tab=2;back();revision++}){back();revision++};return@MyApplicationTheme}
-        if(screen=="البث المباشر"){LiveLobby(api,baseUrl,{showCreator(it)},{buyCredits()},initialFilter="audio",initialCreate=true){back();revision++};return@MyApplicationTheme}
-        if(screen=="الغرف الصوتية"){LiveLobby(api,baseUrl,{showCreator(it)},{buyCredits()},initialFilter="audio"){back();revision++};return@MyApplicationTheme}
+        if(screen=="البث المباشر"){LiveLobby(api,baseUrl,{showCreator(it)},{buyCredits()},initialFilter="all",initialRoomId=selectedHomeRoomId){selectedHomeRoomId="";back();revision++};return@MyApplicationTheme}
+        if(screen=="الغرف الصوتية"){LiveLobby(api,baseUrl,{showCreator(it)},{buyCredits()},initialFilter="audio",initialRoomId=selectedHomeRoomId){selectedHomeRoomId="";back();revision++};return@MyApplicationTheme}
         if(screen=="بدء غرفة صوتية"){LiveLobby(api,baseUrl,{showCreator(it)},{buyCredits()},initialFilter="audio",initialCreate=true){back();revision++};return@MyApplicationTheme}
         if(screen=="نشر صورة مدفوعة"){
             PaidPhotoPublishScreen(api){back();revision++}
@@ -753,12 +755,18 @@ fun ServerAppScreen(baseUrl: String) {
                             // Show only real live previews, loading or an actionable server error.
                             if (livePreview.isNotEmpty() || livePreviewLoading || livePreviewError) {
                                 item(key = "home_live_preview") {
-                                    RelaxiaLiveNow(
+                                    RelaxiaActiveHomeStreams(
                                         rooms = livePreview,
                                         loading = livePreviewLoading,
                                         unavailable = livePreviewError,
-                                        openAudio = { open("الغرف الصوتية") },
-                                        openVideo = { open("البث المباشر") }
+                                        onOpenRoom = { room ->
+                                            selectedHomeRoomId = room.optString("id")
+                                            open("البث المباشر")
+                                        },
+                                        onBrowse = {
+                                            selectedHomeRoomId = ""
+                                            open("البث المباشر")
+                                        }
                                     )
                                 }
                             }

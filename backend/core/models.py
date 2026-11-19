@@ -305,6 +305,12 @@ class PaymentSettings(models.Model):
     shamcash_currency = models.CharField(max_length=3, default='USD', choices=[('USD','USD'),('SYP','SYP')])
     shamcash_rate = models.DecimalField(max_digits=16, decimal_places=6, default=1)
     shamcash_instructions = models.CharField(max_length=500, blank=True)
+    # Independent manual settlement rail. No deposits auto-credit from a receipt.
+    syriatel_cash_enabled = models.BooleanField(default=False)
+    syriatel_cash_number = models.CharField(max_length=10, default='0997991404')
+    # SYP paid per one USD of internal credit; admin must configure before activation.
+    syriatel_cash_syp_per_usd = models.DecimalField(max_digits=16, decimal_places=4, default=0)
+    syriatel_cash_instructions = models.CharField(max_length=500, blank=True)
 
 class TopUpQuote(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

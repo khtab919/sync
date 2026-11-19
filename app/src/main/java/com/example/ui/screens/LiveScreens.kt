@@ -66,13 +66,25 @@ private fun liveError(e:Exception)=when(e.message){
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable internal fun LiveLobby(api:LayaliApi,baseUrl:String,openProfile:(Int)->Unit,buy:()->Unit,initialFilter:String="all",initialCreate:Boolean=false,back:()->Unit){
+@Composable internal fun LiveLobby(api:LayaliApi,baseUrl:String,openProfile:(Int)->Unit,buy:()->Unit,initialFilter:String="all",initialCreate:Boolean=false,initialRoomId:String="",back:()->Unit){
     val scope=rememberCoroutineScope();var rows by remember{mutableStateOf<List<JSONObject>>(emptyList())};var error by remember{mutableStateOf("")};var query by remember{mutableStateOf("")}
     var allowed by remember{mutableStateOf(false)};var available by remember{mutableStateOf(false)};var maximumLimit by remember{mutableIntStateOf(25)};var busy by remember{mutableStateOf(false)};var create by remember(initialCreate){mutableStateOf(initialCreate)}
     var title by remember{mutableStateOf("")};var privateLive by remember{mutableStateOf(false)};var inviteOnly by remember{mutableStateOf(false)};var invites by remember{mutableStateOf("")}
     var price by remember{mutableStateOf("100")};var limit by remember{mutableStateOf("25")};var minimum by remember{mutableStateOf("30")};var gifts by remember{mutableStateOf(true)}
     var roomFilter by remember(initialFilter){mutableStateOf(if(initialFilter in listOf("audio","video","free","paid"))initialFilter else "all")};var audioOnly by remember(initialFilter){mutableStateOf(initialFilter=="audio")};var speakers by remember(initialFilter){mutableStateOf(if(initialFilter=="audio")"8" else "1")};var giftGoal by remember{mutableStateOf("0")}
     var selected by remember{mutableStateOf<JSONObject?>(null)};var active by remember{mutableStateOf<JSONObject?>(null)};var activeId by remember{mutableStateOf("")}
+    // A home card deep-links into this actual broadcast, with the existing
+    // paid-room confirmation intact. Do not auto-charge or create a room.
+    var homeSelectionHandled by remember(initialRoomId){ mutableStateOf(false) }
+    LaunchedEffect(rows,initialRoomId){
+        if(initialRoomId.isNotBlank()&&!homeSelectionHandled){
+            val target=rows.firstOrNull{it.optString("id")==initialRoomId}
+            if(target!=null){
+                selected=target
+                homeSelectionHandled=true
+            }
+        }
+    }
     fun act(block:suspend()->Unit){if(busy)return;busy=true;error="";scope.launch{try{block()}catch(e:CancellationException){throw e}catch(e:Exception){error=liveError(e)}finally{busy=false}}}
     fun enter(row:JSONObject){act{active=api.request("/api/live/${row.getString("id")}/admission","POST",JSONObject().put("confirmed",true).put("price_cents",row.optLong("price_cents")));activeId=row.getString("id");selected=null}}
     LaunchedEffect(query){while(true){try{val result=api.request("/api/live?q="+URLEncoder.encode(query,"UTF-8"));if(result.optInt("stage_version")<3)throw IllegalStateException("live_update_required");val a=result.optJSONArray("items");rows=if(a==null)emptyList()else(0 until a.length()).map{a.getJSONObject(it)};allowed=result.optBoolean("can_broadcast");available=result.optBoolean("available");maximumLimit=result.optInt("max_viewers",25);error=""}catch(e:CancellationException){throw e}catch(e:Exception){allowed=false;available=false;rows=emptyList();error=liveError(e)};delay(5000)}}
@@ -101,7 +113,8 @@ private fun liveError(e:Exception)=when(e.message){
                     if(ending)scope.launch{
                         runCatching{api.request("/api/live/$broadcastId","POST",JSONObject().put("action","end"))}
                     }
-                }
+                },
+                onTopup=buy
             )
         }
         return
@@ -136,7 +149,7 @@ private fun liveError(e:Exception)=when(e.message){
     if(create){LiveHostSetupScreen(onClose={if(initialCreate)back() else create=false},audioOnly=audioOnly,onAudioOnlyChange={audioOnly=it;speakers=if(it)"8"else"1"},title=title,onTitleChange={title=it},privateLive=privateLive,onPrivateLiveChange={privateLive=it},price=price,onPriceChange={price=it},inviteOnly=inviteOnly,onInviteOnlyChange={inviteOnly=it},invites=invites,onInvitesChange={invites=it},speakers=speakers,onSpeakersChange={speakers=it},limit=limit,onLimitChange={limit=it},minimum=minimum,onMinimumChange={minimum=it},gifts=gifts,onGiftsChange={gifts=it},giftGoal=giftGoal,onGiftGoalChange={giftGoal=it},maximumLimit=maximumLimit,busy=busy||!allowed||!available,error=if(!allowed&&available&&error.isBlank())"هذا الحساب غير مخوّل لبدء بث حاليًا." else if(!available&&error.isBlank())"جارٍ التحقق من جاهزية البث…" else error,onStartStream={act{val p=price.toIntOrNull()?:0;val n=limit.toIntOrNull()?:0;val m=minimum.toIntOrNull()?:0;val t=title.trim().ifEmpty{"بث مباشر"};if(t.length<2||n !in 1..maximumLimit||m !in 30..3600||(privateLive&&p !in 1..1000000))throw IllegalArgumentException("invalid_input");val row=api.request("/api/live","POST",JSONObject().put("title",t).put("private",privateLive).put("invite_only",inviteOnly).put("price_cents",p).put("max_viewers",n).put("minimum_seconds",m).put("gifts_enabled",gifts).put("mode",if(audioOnly)"audio"else"video").put("max_speakers",if(audioOnly)8 else speakers.toInt()).put("gift_goal_cents",giftGoal.toIntOrNull()?:0).put("invite_names",JSONArray(invites.split(',', '،').map{it.trim().removePrefix("@")}.filter{it.isNotBlank()})));create=false;active=api.request("/api/live/${row.getString("id")}/admission","POST",JSONObject());activeId=row.getString("id")}})}
 }
 
-@Composable internal fun LiveRoomView(baseUrl:String,bootstrap:JSONObject,profile:((Int)->Unit)?=null,retry:()->Unit,finish:()->Unit){
+@Composable internal fun LiveRoomView(baseUrl:String,bootstrap:JSONObject,profile:((Int)->Unit)?=null,retry:()->Unit,finish:()->Unit,onTopup:()->Unit={}){
     val transportTheme=if(MaterialTheme.colorScheme.background.luminance()<.25f)"dark"else"light"
     val context=LocalContext.current;val lifecycle=LocalLifecycleOwner.current.lifecycle;val owner=bootstrap.optBoolean("owner");val audioOnly=bootstrap.optString("mode")=="audio"
     var granted by remember{mutableStateOf(!owner)};var error by remember{mutableStateOf("")};var view by remember{mutableStateOf<WebView?>(null)}
@@ -297,7 +310,8 @@ private fun liveError(e:Exception)=when(e.message){
                 }
             }}
             @JavascriptInterface fun shareLive(text:String){android.os.Handler(android.os.Looper.getMainLooper()).post{if(trustedCallOrigin(url.orEmpty(),baseUrl)&&Uri.parse(url).path==allowedPath&&text.length<=1000){(context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("دعوة Relaxia",text))}}}
-            @JavascriptInterface fun closeRoom(){android.os.Handler(android.os.Looper.getMainLooper()).post{if(trustedCallOrigin(url.orEmpty(),baseUrl)&&Uri.parse(url).path==allowedPath)finish()}}},"LayaliLive")
+            @JavascriptInterface fun closeRoom(){android.os.Handler(android.os.Looper.getMainLooper()).post{if(trustedCallOrigin(url.orEmpty(),baseUrl)&&Uri.parse(url).path==allowedPath)finish()}}
+            @JavascriptInterface fun openTopup(){android.os.Handler(android.os.Looper.getMainLooper()).post{if(trustedCallOrigin(url.orEmpty(),baseUrl)&&Uri.parse(url).path==allowedPath)onTopup()}}},"LayaliLive")
             webViewClient=object:WebViewClient(){
                 private fun missingCriticalMedia(r:WebResourceRequest?):Boolean{
                     val path=r?.url?.path ?: return false
