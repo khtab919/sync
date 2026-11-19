@@ -89,6 +89,7 @@
    note(box,(user.name||'مستخدم')+(message?' · '+(message.text||''):''));
    if(id===config.userId){note(box,'هذه صفحتك الشخصية.');return}
    sectionHeading(box,'الخيارات الشخصية');
+   if(config.gifts&&(state.speakers||[]).some(s=>s.user_id===id))button(box,'إرسال هدية لهذا المستخدم',()=>giftSheet(id));
    if(window.LayaliLive?.canOpenProfile?.()){
      button(box,'عرض الملف الشخصي',()=>{$('sheet').close();window.LayaliLive.openProfile(id)});
    }
