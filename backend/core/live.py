@@ -74,7 +74,7 @@ def authorized(row,user):
 
 def describe(row,user):
     admission=LiveAdmission.objects.select_related('operation').filter(broadcast=row,user=user).first()
-    return {'id':row.pk,'owner_id':row.owner_id,'owner_name':row.owner.profile.display_name or row.owner.username,'avatar_url':row.owner.profile.avatar_url,'title':row.title,'mode':row.mode,'max_speakers':(min(row.max_speakers,8) if row.mode=='audio' else row.max_speakers),'private':row.private,'invite_only':row.invite_only,'price_cents':row.price_cents,'max_viewers':row.max_viewers,'viewers':row.viewers,'minimum_seconds':row.minimum_seconds,'status':row.status,'gifts_enabled':row.gifts_enabled,'likes':LiveLike.objects.filter(broadcast=row).count(),'liked':LiveLike.objects.filter(broadcast=row,user=user).exists(),'following':__import__('core.models',fromlist=['Follow']).Follow.objects.filter(user=user,creator=row.owner).exists(),'owner':row.owner_id==user.pk,'admitted':bool(admission and not admission.banned),'payment_status':admission.operation.status if admission and admission.operation_id else 'free','refund_policy':f'يُحجز السعر عند التأكيد. تستحق الخدمة بعد {row.minimum_seconds} ثانية من إتاحة الوسائط أثناء اتصالك. يُعاد الحجز إذا انتهى البث قبل ذلك. لا يتكرر الدفع لإعادة الدخول في البث نفسه.'}
+    return {'id':row.pk,'owner_id':row.owner_id,'owner_name':row.owner.profile.display_name or row.owner.username,'avatar_url':row.owner.profile.avatar_url,'title':row.title,'mode':row.mode,'speaker_count':1+__import__('core.models',fromlist=['LiveSeat']).LiveSeat.objects.filter(admission__broadcast=row,status='approved',admission__banned=False).count(),'max_speakers':(min(row.max_speakers,8) if row.mode=='audio' else row.max_speakers),'private':row.private,'invite_only':row.invite_only,'price_cents':row.price_cents,'max_viewers':row.max_viewers,'viewers':row.viewers,'minimum_seconds':row.minimum_seconds,'status':row.status,'gifts_enabled':row.gifts_enabled,'likes':LiveLike.objects.filter(broadcast=row).count(),'liked':LiveLike.objects.filter(broadcast=row,user=user).exists(),'following':__import__('core.models',fromlist=['Follow']).Follow.objects.filter(user=user,creator=row.owner).exists(),'owner':row.owner_id==user.pk,'admitted':bool(admission and not admission.banned),'payment_status':admission.operation.status if admission and admission.operation_id else 'free','refund_policy':f'يُحجز السعر عند التأكيد. تستحق الخدمة بعد {row.minimum_seconds} ثانية من إتاحة الوسائط أثناء اتصالك. يُعاد الحجز إذا انتهى البث قبل ذلك. لا يتكرر الدفع لإعادة الدخول في البث نفسه.'}
 
 def financial_locks(row):
     ids=list(LiveAdmission.objects.filter(broadcast=row).values_list('user_id',flat=True))+[row.owner_id]
@@ -197,7 +197,7 @@ def broadcasts(request):
         except ApiError:
             row.status='failed';row.ended_at=timezone.now();row.save();raise
         return JsonResponse(describe(row,request.actor),status=201)
-    rows=LiveBroadcast.objects.filter(status__in=LIVE,owner__is_active=True).select_related('owner__profile').order_by('-created_at')[:50]
+    rows=LiveBroadcast.objects.filter(status__in=LIVE,owner__is_active=True).select_related('owner__profile').order_by('-viewers','-created_at')[:50]
     items=[];healthy=enabled()
     if healthy:
         try:provider('ListRooms',{})
