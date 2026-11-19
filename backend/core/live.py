@@ -284,7 +284,10 @@ def room(request,broadcast_id):
             a=ticket.admission;join=join_token(a,ticket.session);ticket.used_at=timezone.now();ticket.save(update_fields=['used_at'])
         nonce=secrets.token_urlsafe(24)
         control=signing.dumps({'session':ticket.session_id,'admission':a.pk},salt='live-control')
-        config={'id':str(broadcast_id),'token':join,'control':control,'url':os.environ.get('LIVEKIT_PUBLIC_URL',request.build_absolute_uri('/livekit').replace('https://','wss://')),'owner':a.user_id==a.broadcast.owner_id,'ownerId':a.broadcast.owner_id,'ownerPublicId':a.broadcast.owner.profile.public_id or '', 'ownerAvatar':a.broadcast.owner.profile.avatar_url,'ownerName':a.broadcast.owner.profile.display_name or a.broadcast.owner.username,'title':a.broadcast.title,'gifts':a.broadcast.gifts_enabled,'mode':a.broadcast.mode,'maxSpeakers':(min(a.broadcast.max_speakers,8) if a.broadcast.mode=='audio' else a.broadcast.max_speakers),'userId':a.user_id,'userName':a.user.profile.display_name or a.user.username,'userAvatar':a.user.profile.avatar_url,'private':a.broadcast.private,'inviteOnly':a.broadcast.invite_only}
+        from .public_presence import public_presence
+        owner_identity=public_presence(a.broadcast.owner)
+        config={'ownerFrame':owner_identity['selected_frame'],'ownerLevel':owner_identity['level'],
+                'ownerVip':owner_identity['vip_tier'],'id':str(broadcast_id),'token':join,'control':control,'url':os.environ.get('LIVEKIT_PUBLIC_URL',request.build_absolute_uri('/livekit').replace('https://','wss://')),'owner':a.user_id==a.broadcast.owner_id,'ownerId':a.broadcast.owner_id,'ownerPublicId':a.broadcast.owner.profile.public_id or '', 'ownerAvatar':a.broadcast.owner.profile.avatar_url,'ownerName':a.broadcast.owner.profile.display_name or a.broadcast.owner.username,'title':a.broadcast.title,'gifts':a.broadcast.gifts_enabled,'mode':a.broadcast.mode,'maxSpeakers':(min(a.broadcast.max_speakers,8) if a.broadcast.mode=='audio' else a.broadcast.max_speakers),'userId':a.user_id,'userName':a.user.profile.display_name or a.user.username,'userAvatar':a.user.profile.avatar_url,'private':a.broadcast.private,'inviteOnly':a.broadcast.invite_only}
         public=urlsplit(config['url'])
         if public.scheme not in ('wss','ws') or public.username or public.password or (public.scheme=='ws' and os.environ.get('LAYALI_TESTING')!='1'):raise ApiError('invalid_live_origin',503)
         ws_origin=public.scheme+'://'+public.netloc
@@ -383,17 +386,22 @@ def room_events(request,broadcast_id):
         else:raise ApiError('invalid_action')
     synchronize(row)
     row.refresh_from_db()
-    comments=LiveComment.objects.filter(broadcast=row).select_related('user__profile').order_by('-id')[:50]
-    result=describe(row,request.actor);result['comments']=[{'id':c.pk,'user_id':c.user_id,
-        'name':c.user.profile.display_name or c.user.username,'text':c.text} for c in reversed(comments)]
+    comments=list(LiveComment.objects.filter(broadcast=row).select_related('user__profile').order_by('-id')[:50])
+    connected=list(LiveAdmission.objects.filter(broadcast=row,connected=True).select_related('user__profile')[:100])
+    from .public_presence import public_presence_bulk
+    presence=public_presence_bulk(
+        [row.owner]+[comment.user for comment in comments]+[entry.user for entry in connected]
+    )
+    result=describe(row,request.actor)
+    result['comments']=[
+        dict(presence[c.user_id],id=c.pk,text=c.text)
+        for c in reversed(comments)
+    ]
     from .live_stage import snapshot,room_moderator
     result.update(snapshot(row,request.actor));result['server_time']=timezone.now()
-    if room_moderator(row,request.actor):result['participants']=[{'user_id':x.user_id,
-        'name':x.user.profile.display_name or x.user.username} for x in LiveAdmission.objects.filter(
-            broadcast=row,connected=True).exclude(user=row.owner).select_related('user__profile')]
-    result['participants_visible']=[{'user_id':x.user_id,
-        'name':x.user.profile.display_name or x.user.username,'avatar_url':x.user.profile.avatar_url}
-        for x in LiveAdmission.objects.filter(broadcast=row,connected=True).select_related('user__profile')[:100]]
+    if room_moderator(row,request.actor):
+        result['participants']=[presence[entry.user_id] for entry in connected if entry.user_id!=row.owner_id]
+    result['participants_visible']=[presence[entry.user_id] for entry in connected]
     return JsonResponse(result)
 
 @csrf_exempt
