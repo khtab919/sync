@@ -148,6 +148,8 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
                     syriatelRate=cash.optString("syp_per_usd","0")
                     syriatelInstructions=cash.optString("instructions")
                 }
+            } else if(section=="العقوبات") {
+                content=emptyList()
             } else if(section=="البث المباشر") {
                 val data=api.request("/api/admin/live");content=data.adminItems()
                 val reports=data.optJSONArray("pending_reports")
