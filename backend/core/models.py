@@ -445,6 +445,18 @@ class LiveChatRestriction(models.Model):
         constraints=[models.UniqueConstraint(fields=['broadcast','user'],name='unique_room_chat_mute')]
 
 
+class AccountModerationState(models.Model):
+    user=models.OneToOneField(settings.AUTH_USER_MODEL,on_delete=models.PROTECT,related_name='moderation_state')
+    status=models.CharField(max_length=24,default='active',choices=[
+        ('active','Active'),('suspended','Suspended'),('banned_permanent','Permanently banned')])
+    suspended_until=models.DateTimeField(null=True,blank=True)
+    reason=models.CharField(max_length=500,blank=True)
+    updated_by=models.ForeignKey(settings.AUTH_USER_MODEL,null=True,blank=True,
+        on_delete=models.PROTECT,related_name='moderation_state_updates')
+    version=models.PositiveBigIntegerField(default=0)
+    updated_at=models.DateTimeField(auto_now=True)
+
+
 class LiveHostBan(models.Model):
     host=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT,related_name='live_bans_issued')
     user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT,related_name='live_bans_received')
