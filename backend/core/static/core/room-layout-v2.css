@@ -183,7 +183,18 @@ body.audio-mode.ime-open #stage #messages {
  max-width:100%;overflow-wrap:anywhere;
 }
 #stage #sheet .member-action-identity .comment-avatar-frame{
- width:42px; height:42px; flex:0 0 42px;
+ position:relative;display:grid;place-items:center;
+ width:42px;height:42px;flex:0 0 42px;
+ border-radius:50%;overflow:visible;
+}
+#stage #sheet .member-action-identity .comment-avatar-frame img{
+ position:absolute;inset:0;
+ width:100%;height:100%;object-fit:cover;border-radius:50%;
+}
+#stage #sheet .member-action-identity .comment-avatar{
+ display:grid;place-items:center;
+ width:100%;height:100%;
+ border-radius:50%;background:#355E9B;color:#FFFFFF;
 }
 body.audio-mode #audioStage .member-avatar-frame {
   position:relative;
