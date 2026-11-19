@@ -259,7 +259,7 @@ def admission(request,broadcast_id):
         raw=secrets.token_urlsafe(48)
         LiveRoomTicket.objects.filter(expires_at__lt=timezone.now()).delete()
         LiveRoomTicket.objects.create(digest=hashlib.sha256(raw.encode()).hexdigest(),admission=a,session=request.api_token,expires_at=timezone.now()+timedelta(seconds=30))
-    return JsonResponse({'url':request.build_absolute_uri(f'/api/live/{row.pk}/room'),'ticket':raw,'owner':request.actor.pk==row.owner_id,'mode':row.mode})
+    return JsonResponse({'url':request.build_absolute_uri(f'/api/live/{row.pk}/room'),'ticket':raw,'owner':request.actor.pk==row.owner_id,'mode':row.mode,'user_id':request.actor.pk})
 
 def join_token(a,session):
     if a.session_id!=session.pk:raise ApiError('live_authorization_required',403)
@@ -304,6 +304,8 @@ def authorize(request):
         session=SessionToken.objects.select_related('user').get(pk=metadata['session'],expires_at__gt=timezone.now(),user__is_active=True)
         a=LiveAdmission.objects.select_related('broadcast__owner','user','operation').get(pk=metadata['admission'],user=session.user,session=session)
         authorized(a.broadcast,a.user)
+        from .live_moderation import check_room_password
+        check_room_password(a.broadcast,a.user,a)
         if data.get('video',{}).get('room')!=room_name(a.broadcast) or data['sub']!=('host-'+str(a.user_id) if a.user_id==a.broadcast.owner_id else str(a.pk)):raise ValueError()
         from .live_stage import publishing
         can_publish,sources=publishing(a)
