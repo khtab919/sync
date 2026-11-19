@@ -384,3 +384,11 @@ body.audio-mode #audioStage .audio-seat .member-seat-badge{
   height:min(17vw,60px) !important;
  }
 }
+
+/* Explicit viewer preferences always outrank the default fixed-size chat panel. */
+body.audio-mode.comments-hidden #stage #messages,
+html[data-theme=light] body.audio-mode.comments-hidden #stage #messages,
+body.audio-mode.relaxia-clean #stage #messages,
+body.audio-mode.clean-room #stage #messages {
+  display:none !important;
+}
