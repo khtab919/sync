@@ -1,0 +1,56 @@
+name: Verify Relaxia Voice Room Geometry in Chromium
+on:
+  push:
+    branches: [fix/relaxia-live-room-layout-discovery-20261120]
+    paths:
+      - '.github/workflows/verify-voice-room-layout.yml'
+      - 'backend/qa/audio_rooms_ui_test.cjs'
+      - 'backend/core/static/core/live-stage.js'
+      - 'backend/core/static/core/room-layout-v2.css'
+      - 'backend/core/templates/core/live_room.html'
+  pull_request:
+    paths:
+      - '.github/workflows/verify-voice-room-layout.yml'
+      - 'backend/qa/audio_rooms_ui_test.cjs'
+      - 'backend/core/static/core/live-stage.js'
+      - 'backend/core/static/core/room-layout-v2.css'
+      - 'backend/core/templates/core/live_room.html'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install isolated QA tools
+        run: |
+          python -m pip install -r backend/requirements.txt
+          npm install --no-save --no-package-lock playwright@1.56.0
+          npx playwright install --with-deps chromium
+      - name: Run geometry, gift, keyboard, frame and Arabic RTL tests
+        env:
+          TEST_PYTHON: python
+          DJANGO_SETTINGS_MODULE: config.settings
+          DJANGO_SECRET_KEY: qa-only-never-production
+          POSTGRES_PASSWORD: qa-only
+          LAYALI_TESTING: '1'
+          LIVE_PREVIEW_DIR: /tmp/relaxia-ui-captures
+        run: |
+          node --check backend/core/static/core/live-stage.js
+          node backend/qa/audio_rooms_ui_test.cjs
+      - name: Upload UI geometry snapshots on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Relaxia-Voice-Layout-QA-Diagnostics
+          path: /tmp/relaxia-ui-captures/
+          retention-days: 5
+          if-no-files-found: ignore
