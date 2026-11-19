@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="/static/core/gift-cinema.css?v=cinema-1">
 <link rel="stylesheet" href="/static/core/relaxia-voice-royal.css?v=voice-30">
 <link rel="stylesheet" href="/static/core/room-moderation-ui.css?v=room-admin-1">
+<link rel="stylesheet" href="/static/core/room-layout-v2.css?v=layout-32">
 <body{% if config.mode == "audio" %} class="audio-mode"{% endif %}>
 <main id="stage">
   <div id="video" aria-label="البث المباشر"{% if config.mode == "audio" %} hidden{% endif %}></div>
@@ -26,7 +27,7 @@
     <span id="viewers" class="pill" title="المشاهدون"><svg class="pill-eye" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span id="viewerCount">—</span></span>
     <span class="live-pill"><span class="pulse-dot"></span>{% if config.mode == "audio" %}غرفة صوتية{% else %}بث مباشر{% endif %}</span>
     <button id="profile" class="identity" aria-label="ملف صاحب البث">
-      <div class="identity-avatar-ring">
+      <div class="identity-avatar-ring" id="hostAvatarRing" data-frame="{{ config.ownerFrame|default:0 }}">
         <img id="ownerAvatar" hidden alt="">
         <div class="identity-fallback">{{ config.ownerName|first }}</div>
       </div>
@@ -79,13 +80,6 @@
         <button id="sendComment" type="submit" class="composer-send" aria-label="إرسال التعليق"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 14-8-4 16-4-7-6-1zM11 13l8-9"/></svg></button>
       </form>
     </div>
-    {% if config.mode == "audio" %}
-    <button id="syriatelCashLink" type="button" class="cash-payment-strip"
-        aria-label="فتح طريقة شحن سيريتيل كاش داخل التطبيق">
-      <span class="cash-wallet-icon" aria-hidden="true">▣</span>
-      <span>بوابة الدفع: سيريتيل كاش <b dir="ltr">0997991404</b></span>
-    </button>
-    {% endif %}
   </footer>
 
   <div id="ended" hidden>
@@ -130,7 +124,7 @@
 <script src="/static/core/livekit-client.umd.min.js"></script>
 <script src="/static/core/live-media.js?v=rooms-mic-29"></script>
 <script src="/static/core/gift-cinema.js?v=cinema-1"></script>
-<script src="/static/core/live-stage.js?v=cinema-mic-2"></script>
+<script src="/static/core/live-stage.js?v=appearance-layout-32"></script>
 <script src="/static/core/room-moderation-ui.js?v=room-admin-1"></script>
 </body>
 </html>
