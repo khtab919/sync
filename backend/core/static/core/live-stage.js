@@ -265,7 +265,7 @@ function giftSheet(preferredRecipientId=null){
  balance.textContent='رصيدك: '+Number(state.available_coins||0).toLocaleString('ar')+' كوين';box.append(balance);
  const target=document.createElement('div');
  target.className='gift-target-summary';target.setAttribute('role','status');
- target.setAttribute('aria-live','polite');box.append(target);
+ target.setAttribute('aria-live','polite');target.hidden=true;
  function recipientOf(snapshot){
   const speakers=snapshot.speakers||[];
   const host=speakers.find(s=>s.owner)||null;
@@ -277,6 +277,7 @@ function giftSheet(preferredRecipientId=null){
  function updateRecipients(snapshot){
   if(!target.isConnected)return;
   const receiver=recipientOf(snapshot);
+  target.hidden=false;
   if(receiver){
    const bySeat=selectedSeatId!=null&&receiver.user_id===selectedSeatId&&!receiver.owner;
    target.textContent='المستلم: '+receiver.name+(bySeat?' · المقعد المختار':' · المضيف');
@@ -301,9 +302,8 @@ function giftSheet(preferredRecipientId=null){
  let previewCleanup=null,lastPreview='';
  const tabs=document.createElement('div');tabs.className='gift-tabs';box.append(tabs);
  const grid=document.createElement('div');grid.className='gift-grid';box.append(grid);
- // Show purchasable choices before any optional cinema preview: the 3D preview
- // can be unavailable on some Android GPUs without making the shop look empty.
- grid.after(preview);
+ // The small selected-gift preview stays beside its sound button; the actual
+ // scrollable gift grid is immediately below the category filters.
  const catalog=(Array.isArray(state.gift_catalog)?state.gift_catalog:[])
   .filter(g=>/^gift_[a-z_]+$/.test(g.code))
   .sort((a,b)=>a.price_cents-b.price_cents);
@@ -312,7 +312,7 @@ function giftSheet(preferredRecipientId=null){
  const comboTitle=document.createElement('div');comboTitle.className='gift-combo-title';
  comboTitle.textContent='إرسال متتابع';picker.append(comboTitle);
  const counts=document.createElement('div');counts.className='gift-combo-counts';picker.append(counts);
- const checkout=document.createElement('div');checkout.className='gift-checkout';box.append(checkout);
+ const checkout=document.createElement('div');checkout.className='gift-checkout';box.append(target,checkout);
  const summary=document.createElement('div');summary.className='gift-checkout-summary';checkout.append(summary);
  const confirmation=document.createElement('p');confirmation.className='gift-confirm-hint';confirmation.textContent='لم تُخصم أي كوينز.';checkout.append(confirmation);
  const send=button(checkout,'',async()=>{
@@ -362,8 +362,23 @@ function giftSheet(preferredRecipientId=null){
    previewCleanup?.();previewCleanup=null;
    previewName.textContent=selected?.name||'اختر هدية';
    previewButton.disabled=!selected;
-   if(selected&&window.RelaxiaGiftCinema)previewCleanup=window.RelaxiaGiftCinema.preview(previewArt,selected);
-   activeGiftPreviewCleanup=previewCleanup;
+   previewArt.replaceChildren();
+   if(selected){
+    const icon=document.createElement('canvas');
+    icon.className='gift-choice-icon';
+    icon.setAttribute('aria-label','أيقونة '+selected.name);
+    previewArt.append(icon);
+    if(window.RelaxiaGiftCinema?.thumbnail){
+     requestAnimationFrame(()=>{if(icon.isConnected)window.RelaxiaGiftCinema.thumbnail(icon,selected.code)});
+    }else{
+     icon.remove();
+     const label=document.createElement('span');
+     label.className='gift-preview-fallback';
+     label.textContent=selected.name;
+     previewArt.append(label);
+    }
+   }
+   activeGiftPreviewCleanup=null;
    lastPreview=selected?.code||'';
   }
   for(const el of grid.children)el.setAttribute('aria-pressed',String(el.dataset.giftCode===selected?.code));
@@ -430,7 +445,10 @@ function drawAudioSeats(result){
   }
   if(slot>0&&slot<capacity)positions[slot]=guest;
  }
- const signature=JSON.stringify([capacity,positions.map(s=>s&&[s.identity,s.name,s.owner,s.avatar_url,s.seat_number]),result.room_settings?.locked_seat_numbers||[]]);
+ const signature=JSON.stringify([capacity,positions.map(s=>s&&[
+  s.identity,s.name,s.owner,s.avatar_url,s.seat_number,
+  s.selected_frame,s.level,s.vip_tier,s.identity_verified
+ ]),result.room_settings?.locked_seat_numbers||[]]);
  if(signature===audioSeatSignature&&box.querySelectorAll('.audio-seat').length===capacity){
   box.querySelectorAll('.audio-seat[data-identity]').forEach(item=>item.classList.toggle('speaking',activeSpeakerIds.has(item.dataset.identity)));
   return;
@@ -452,13 +470,28 @@ function drawAudioSeats(result){
    if(speaker.user_id!==config.userId)item.title='إرسال هدية إلى '+speaker.name;
    const waves=document.createElement('div');waves.className='audio-waves';waves.setAttribute('aria-hidden','true');
    for(let n=0;n<3;n++)waves.append(document.createElement('span'));item.append(waves);
-   const placeholder=document.createElement('div');placeholder.className='audio-placeholder';placeholder.textContent=(speaker.name||'م').slice(0,1);item.append(placeholder);
+   const avatarFrame=document.createElement('span');
+   avatarFrame.className='member-avatar-frame';
+   avatarFrame.dataset.frame=String(speaker.selected_frame??0);
+   const placeholder=document.createElement('div');placeholder.className='audio-placeholder';
+   placeholder.textContent=(speaker.name||'').slice(0,1);
+   avatarFrame.append(placeholder);
    if(/^https:\/\//.test(speaker.avatar_url)){
     const img=document.createElement('img');img.src=speaker.avatar_url;img.alt='';
-    img.onload=()=>placeholder.style.visibility='hidden';img.onerror=()=>img.remove();item.append(img)
+    img.onload=()=>{placeholder.hidden=true};
+    img.onerror=()=>{img.remove();placeholder.hidden=false};
+    avatarFrame.append(img);
    }
-   const label=document.createElement('span');label.className='audio-name';label.textContent=speaker.name;item.append(label);
-   const role=document.createElement('small');role.textContent=speaker.owner?'المضيف':'مقعد '+i;item.append(role);
+   item.append(avatarFrame);
+   const label=document.createElement('span');
+   label.className='audio-name';label.textContent=speaker.name;item.append(label);
+   const level=document.createElement('span');
+   level.className='member-seat-badge';
+   level.textContent='LV '+speaker.level+(speaker.vip_tier?' · VIP '+speaker.vip_tier:'');
+   item.append(level);
+   const role=document.createElement('small');
+   role.textContent=speaker.owner?'المضيف':'مقعد '+i;
+   item.append(role);
   }else{
    item.classList.add('empty-seat');item.dataset.seatNumber=String(i);
    item.setAttribute('aria-label','مقعد '+i+(item.classList.contains('seat-locked')?' مقفل':' · طلب الميكروفون'));
@@ -595,6 +628,22 @@ function playEffects(){
 function drawState(result){state=result;
  if($('sheet')?.open&&$('sheetTitle')?.textContent==='متجر الهدايا'&&activeGiftRecipientSync)activeGiftRecipientSync(result);
  const wallet=document.getElementById('giftBalance');if(wallet)wallet.textContent='رصيدك المتاح: '+Number(result.available_coins||0).toLocaleString('ar')+' كوين';updateQuickMic();document.querySelectorAll('.tile').forEach(t=>{const speaker=result.speakers?.find(s=>s.identity===t.dataset.identity);if(speaker)t.querySelector('small').textContent=speaker.name});serverOffset=Date.parse(result.server_time)-Date.now();const vCount=result.viewers||0;if($('viewerCount'))$('viewerCount').textContent=vCount>=1000?(vCount/1000).toFixed(1)+'K':vCount;else $('viewers').textContent=vCount+' مشاهد';$('viewers').title=vCount+' مشاهد';$('follow').textContent=result.following?'تتابعه':'متابعة';const host=result.speakers?.[0];$('badge').textContent=host&&Number(host.level)>0?('المستوى '+Math.floor(Number(host.level))+(host.vip?' · VIP':'')):(host?.vip?'VIP':'');
+ if(host){
+  const ring=$('hostAvatarRing');
+  if(ring)ring.dataset.frame=String(host.selected_frame??0);
+  $('name').textContent=host.name;
+  const avatar=$('ownerAvatar');
+  if(avatar){
+   if(/^https:\/\//.test(host.avatar_url||'')){
+    if(avatar.src!==host.avatar_url)avatar.src=host.avatar_url;
+    avatar.hidden=false;
+   }else{
+    avatar.hidden=true;
+    const fallback=$('profile')?.querySelector('.identity-fallback');
+    if(fallback)fallback.textContent=(host.name||'').slice(0,1);
+   }
+  }
+ }
  const headerLevel=$('hostLevel');
  if(headerLevel){
   const level=host&&Number(host.level)>=1?Math.floor(Number(host.level)):0;
@@ -606,7 +655,60 @@ function drawState(result){state=result;
   requestMic.hidden=!!speaking;
   requestMic.textContent=result.seat_status==='pending'?'طلب الانضمام قيد المراجعة':'طلب الانضمام';
  }
- const signature=JSON.stringify([!!result.manage_room,result.comments||[]]);if(lastComments!==signature){lastComments=signature;const box=$('messages');const nearBottom=box.scrollHeight-box.clientHeight-box.scrollTop<38,previousScroll=box.scrollTop;box.replaceChildren();for(const c of result.comments||[]){const p=document.createElement('div');p.className='comment-bubble';const av=document.createElement('div');av.className='comment-avatar';av.textContent=(c.name||'U').slice(0,1);const body=document.createElement('div');body.className='comment-body';const name=document.createElement('span');name.className='comment-author';name.textContent=c.name+': ';body.append(name,document.createTextNode(c.text));p.dataset.userId=String(c.user_id);p.append(av,body);if(result.manage_room){const manage=document.createElement('button');manage.type='button';manage.className='comment-actions';manage.textContent='⋯';manage.setAttribute('aria-label','إدارة تعليق '+(c.name||''));manage.onclick=()=>commentActionsSheet(c);p.append(manage)}box.append(p)}if(!(result.comments||[]).length){const blank=document.createElement('p');blank.className='comment-empty';blank.textContent='لا توجد تعليقات بعد · ابدأ الحوار';box.append(blank)}box.scrollTop=nearBottom?box.scrollHeight:Math.min(previousScroll,Math.max(0,box.scrollHeight-box.clientHeight))}
+ const signature=JSON.stringify([!!result.manage_room,result.comments||[]]);
+ if(lastComments!==signature){
+  lastComments=signature;
+  const box=$('messages'),nearBottom=box.scrollHeight-box.clientHeight-box.scrollTop<38;
+  const previousScroll=box.scrollTop;
+  box.replaceChildren();
+  for(const c of result.comments||[]){
+   const bubble=document.createElement('div');bubble.className='comment-bubble';
+   bubble.dataset.userId=String(c.user_id);
+   bubble.dataset.commentId=String(c.id);
+   bubble.tabIndex=0;
+   const frame=document.createElement('div');
+   frame.className='comment-avatar-frame';
+   frame.dataset.frame=String(c.selected_frame??0);
+   const fallback=document.createElement('span');fallback.className='comment-avatar';
+   fallback.textContent=(c.name||'').slice(0,1);
+   frame.append(fallback);
+   if(/^https:\/\//.test(c.avatar_url||'')){
+    const image=document.createElement('img');image.src=c.avatar_url;image.alt='';
+    image.onload=()=>{fallback.hidden=true};
+    image.onerror=()=>{image.remove();fallback.hidden=false};
+    frame.append(image);
+   }
+   const body=document.createElement('div');body.className='comment-body';
+   const name=document.createElement('span');name.className='comment-author';
+   name.textContent=c.name+': ';
+   body.append(name);
+   const badge=document.createElement('span');badge.className='comment-level-badge';
+   badge.textContent='LV '+c.level+(c.vip_tier?' · VIP '+c.vip_tier:'');
+   body.append(badge);
+   if(c.identity_verified){
+    const verified=document.createElement('span');
+    verified.className='comment-verified';verified.textContent=' ✓';
+    verified.title='حساب موثق';body.append(verified);
+   }
+   body.append(document.createTextNode(' '+c.text));
+   bubble.append(frame,body);
+   if(result.manage_room){
+    const manage=document.createElement('button');
+    manage.type='button';manage.className='comment-actions';
+    manage.textContent='⋯';
+    manage.setAttribute('aria-label','إدارة تعليق '+c.name);
+    manage.onclick=()=>commentActionsSheet(c);
+    bubble.append(manage);
+   }
+   box.append(bubble);
+  }
+  if(!(result.comments||[]).length){
+   const blank=document.createElement('p');blank.className='comment-empty';
+   blank.textContent='لا توجد تعليقات بعد · ابدأ الحوار';box.append(blank);
+  }
+  box.scrollTop=nearBottom?box.scrollHeight:Math.min(previousScroll,
+      Math.max(0,box.scrollHeight-box.clientHeight));
+ }
  $('pinned').hidden=!result.pinned_comment||!commentsVisible;if(result.pinned_comment)$('pinned').textContent='مثبّت · '+result.pinned_comment.name+': '+result.pinned_comment.text;
  $('goal').hidden=!result.gift_goal_cents;if(result.gift_goal_cents){if($('goalText'))$('goalText').textContent=(result.gift_total_cents||0)+' / '+result.gift_goal_cents;if($('goalProgress'))$('goalProgress').style.width=Math.min(100,Math.round(((result.gift_total_cents||0)/result.gift_goal_cents)*100))+'%';else $('goal').textContent='هدف الهدايا '+(result.gift_total_cents||0)+' / '+result.gift_goal_cents;}
  $('pk').hidden=!result.pk;document.body.classList.toggle('has-pk',!!result.pk);if(result.pk){const pk=result.pk;const teams=pk.teams.map(team=>team.map(id=>result.speakers?.find(s=>s.user_id===id)?.name||'مشارك').join(' + '));$('pkTeams').replaceChildren();for(let i=0;i<2;i++){const span=document.createElement('span');span.title=teams[i];span.textContent=(i===0?'الفريق الأول':'الفريق الثاني')+' · '+pk.scores[i];$('pkTeams').append(span)}const total=pk.scores[0]+pk.scores[1];$('pkProgress').value=total?pk.scores[0]/total*100:50;pkClock()}
@@ -737,15 +839,6 @@ $('follow').onclick=()=>api({action:'follow'}).then(refresh).catch(message);
 $('gift').onclick=giftSheet;$('guests').onclick=guestSheet;
 $('micQuick').onclick=()=>{if(speaking)$('mute').click();else guestSheet()};
 if($('requestMic'))$('requestMic').onclick=()=>guestSheet();
-if($('syriatelCashLink'))$('syriatelCashLink').onclick=()=>{
- if(window.LayaliLive?.openTopup){
-  window.LayaliLive.openTopup();
- }else{
-  const box=sheet('سيريتيل كاش');
-  note(box,'رقم الاستلام: 0997991404');
-  note(box,'لإرسال طلب شحن، افتح المحفظة داخل Relaxia وأنشئ فاتورة قبل التحويل. يعتمد الرصيد بعد تحقق الإدارة.');
- }
-};
 $('more').onclick=moreSheet;
 $('share').onclick=async()=>{const text='انضم إلى بث '+config.ownerName+' «'+config.title+'» على Relaxia. افتح قسم البث المباشر وابحث عن عنوان البث. الدخول الخاص يتطلب تصريحًا.';try{if(window.LayaliLive?.shareLive){window.LayaliLive.shareLive(text);$('status').textContent='نُسخت دعوة البث؛ يمكنك إرسالها إلى أصدقائك.';}else if(navigator.share)await navigator.share({title:'Relaxia · مباشر',text});else if(navigator.clipboard){await navigator.clipboard.writeText(text);$('status').textContent='نُسخت دعوة البث'}else prompt('انسخ دعوة البث',text)}catch(e){if(e.name!=='AbortError')message(e)}};
 $('reconnectAction').onclick=()=>{if(connecting||retrying)return;$('reconnectAction').hidden=true;reconnectSince=Date.now();reconnect()};
@@ -777,7 +870,10 @@ layout();updateQuickMic();window.relaxiaStageLoaded=true;
 // These seats use room metadata; they are placeholders, not fabricated online users.
 if(config.mode==='audio')drawAudioSeats({
  max_speakers:8,
- speakers:[{identity:'host-'+config.ownerId,name:config.ownerName,owner:true,avatar_url:config.ownerAvatar||''}]
+ speakers:[{identity:'host-'+config.ownerId,name:config.ownerName,owner:true,
+   user_id:config.ownerId,avatar_url:config.ownerAvatar||'',
+   selected_frame:config.ownerFrame,level:config.ownerLevel,
+   vip_tier:config.ownerVip}]
 });
 // Load seats, audience and chat before LiveKit connects, including recovery states.
 if(!polling){polling=true;poll()}
