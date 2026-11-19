@@ -44,6 +44,22 @@ class Migration(migrations.Migration):
             options={'constraints':[models.UniqueConstraint(fields=('broadcast','user'),name='unique_room_chat_mute')]}
         ),
         migrations.CreateModel(
+            name='AccountModerationState',
+            fields=[
+                ('id',models.BigAutoField(auto_created=True,primary_key=True,serialize=False,verbose_name='ID')),
+                ('status',models.CharField(max_length=24,default='active',
+                    choices=[('active','Active'),('suspended','Suspended'),('banned_permanent','Permanently banned')])),
+                ('suspended_until',models.DateTimeField(null=True,blank=True)),
+                ('reason',models.CharField(max_length=500,blank=True)),
+                ('version',models.PositiveBigIntegerField(default=0)),
+                ('updated_at',models.DateTimeField(auto_now=True)),
+                ('updated_by',models.ForeignKey(to=settings.AUTH_USER_MODEL,null=True,blank=True,
+                    on_delete=django.db.models.deletion.PROTECT,related_name='moderation_state_updates')),
+                ('user',models.OneToOneField(to=settings.AUTH_USER_MODEL,
+                    on_delete=django.db.models.deletion.PROTECT,related_name='moderation_state')),
+            ]
+        ),
+        migrations.CreateModel(
             name='LiveHostBan',
             fields=[
                 ('id',models.BigAutoField(auto_created=True,primary_key=True,serialize=False,verbose_name='ID')),
