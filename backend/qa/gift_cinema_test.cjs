@@ -129,13 +129,13 @@ test('live gift UI has inline two-step confirmation, no recipient fallback and m
  assert.doesNotMatch(stage,/selectedSeatId==null\?host:\(speakers.find/);
  assert.doesNotMatch(stage,/confirm\('تأكيد إرسال/);
  assert.match(stage,/RelaxiaGiftCinema\.play\(box,g\)/);
- assert.match(stage,/RelaxiaGiftCinema\.preview\(previewArt,selected\)/);
+ assert.match(stage,/RelaxiaGiftCinema\.thumbnail\(icon,selected\.code\)/);
  assert.match(stage,/RelaxiaGiftCinema\.thumbnail\(canvas,g.code\)/);
  assert.match(stage,/function syncRoomFooterMetrics/);
  assert.match(page,/gift-cinema\.js\?v=cinema-1/);
  assert.match(page,/gift-cinema\.css\?v=cinema-1/);
  assert.match(page,/relaxia-voice-royal\.css\?v=voice-30/);
- assert.match(page,/syriatelCashLink/);
- assert.match(page,/0997991404/);
- assert.ok(page.indexOf('gift-cinema.js?v=cinema-1')<page.indexOf('live-stage.js?v=cinema-mic-2'));
+ assert.doesNotMatch(page,/syriatelCashLink|0997991404/,'payment details are restricted to coin top-up');
+ assert.match(page,/room-layout-v2\.css\?v=layout-32/);
+ assert.ok(page.indexOf('gift-cinema.js?v=cinema-1')<page.indexOf('live-stage.js?v=appearance-layout-32'));
 });
