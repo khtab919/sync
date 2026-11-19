@@ -131,10 +131,13 @@ private fun liveError(e:Exception)=when(e.message){
     // the browsing lobby underneath it (no preliminary screen flash).
     if(!create){
     val filteredRooms=rows.filter{when(roomFilter){"audio","video"->it.optString("mode")==roomFilter;"free"->!it.optBoolean("private");"paid"->it.optBoolean("private");else->true}}
-    Scaffold(topBar={TopAppBar(title={Text("الغرف والبث")},navigationIcon={IconButton(back){Icon(Icons.Rounded.ArrowForward,"رجوع")}},actions={TextButton(buy){Text("الرصيد")};if(allowed)IconButton({create=true},enabled=available&&!busy){Icon(Icons.Rounded.Videocam,"بدء بث")}})}){padding->
+    Scaffold(topBar={TopAppBar(title={Text("الغرف والبث")},navigationIcon={IconButton(back){Icon(Icons.Rounded.ArrowForward,"رجوع")}},actions={TextButton(buy){Text("الرصيد")}})}){padding->
         LazyColumn(Modifier.fillMaxSize().padding(padding),contentPadding=PaddingValues(16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
             item{OutlinedTextField(query,{query=it.take(100)},label={Text("ابحث عن بث أو صاحب بث")},singleLine=true,modifier=Modifier.fillMaxWidth())}
-            item{Row(Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+            item{Row(Modifier.fillMaxWidth()
+                .horizontalScroll(androidx.compose.foundation.rememberScrollState())
+                .padding(horizontal=14.dp,vertical=3.dp),
+                horizontalArrangement=Arrangement.spacedBy(8.dp)){
                 listOf("all" to "الكل","audio" to "غرف صوتية","video" to "فيديو","free" to "مجانية","paid" to "مدفوعة").forEach{(key,label)->
                     FilterChip(roomFilter==key,{roomFilter=key},label={Text(label)})
                 }
