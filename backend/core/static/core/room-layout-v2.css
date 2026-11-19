@@ -1,0 +1,347 @@
+/* Relaxia voice room contract, loaded LAST.
+   Stable proportions apply to the WebView stage, not the Android status bar.
+   No chat panel is allowed to cover seats, even while the IME is visible. */
+body.audio-mode #stage {
+  height: var(--room-viewport-height,100dvh) !important;
+  min-height: 0 !important;
+  --voice-top:10%;
+  --voice-seats:32%;
+  --voice-dock:12%;
+}
+body.audio-mode #stage header,
+html[data-theme=light] body.audio-mode #stage header {
+  position:absolute !important;
+  top:4px !important;
+  left:8px !important;
+  right:8px !important;
+  height:calc(10% - 8px) !important;
+  min-height:0 !important;
+  max-height:none !important;
+  padding:3px 5px !important;
+  z-index:14 !important;
+  overflow:visible !important;
+}
+body.audio-mode #stage header #profile {
+  min-width:0 !important;
+  overflow:hidden !important;
+}
+body.audio-mode #audioStage.seat-grid,
+html[data-theme=light] body.audio-mode #audioStage.seat-grid {
+  position:absolute !important;
+  top:10% !important;
+  bottom:auto !important;
+  height:32% !important;
+  min-height:0 !important;
+  max-height:none !important;
+  left:6px !important;
+  right:6px !important;
+  display:grid !important;
+  grid-template-columns:repeat(4,minmax(0,1fr)) !important;
+  grid-template-rows:repeat(2,minmax(0,1fr)) !important;
+  gap:2px 4px !important;
+  overflow:visible !important;
+  z-index:3 !important;
+  padding:2px !important;
+}
+body.audio-mode #audioStage .audio-seat,
+html[data-theme=light] body.audio-mode #audioStage .audio-seat {
+  height:100% !important;
+  width:100% !important;
+  min-width:0 !important;
+  min-height:0 !important;
+  padding:2px 2px 3px !important;
+  gap:2px !important;
+  overflow:visible !important;
+  justify-content:center !important;
+}
+body.audio-mode #audioStage .audio-seat .audio-waves,
+body.audio-mode #audioStage .audio-seat .audio-placeholder,
+body.audio-mode #audioStage .audio-seat .seat-plus,
+body.audio-mode #audioStage .audio-seat img {
+  height:clamp(34px,12vw,60px) !important;
+  width:clamp(34px,12vw,60px) !important;
+  max-height:57% !important;
+  flex-shrink:1 !important;
+}
+body.audio-mode #audioStage .audio-seat::before {
+  width:clamp(42px,15vw,71px) !important;
+  height:clamp(42px,15vw,71px) !important;
+  max-height:67% !important;
+}
+body.audio-mode #audioStage .audio-seat .audio-name {
+  max-width:100% !important;
+  min-height:16px !important;
+  font-size:clamp(9px,2.5vw,11px) !important;
+  line-height:14px !important;
+  margin:0 !important;
+}
+body.audio-mode #audioStage .audio-seat small {
+  font-size:9px !important;
+  line-height:11px !important;
+  max-width:95% !important;
+  overflow:hidden !important;
+  text-overflow:ellipsis !important;
+  white-space:nowrap !important;
+}
+body.audio-mode #stage #messages,
+html[data-theme=light] body.audio-mode #stage #messages,
+body.audio-mode.chat-focused #stage #messages,
+html[data-theme=light] body.audio-mode.chat-focused #stage #messages {
+  position:absolute !important;
+  top:42% !important;
+  bottom:12% !important;
+  left:8px !important;
+  right:8px !important;
+  width:auto !important;
+  height:46% !important;
+  max-height:none !important;
+  min-height:0 !important;
+  padding:9px 10px !important;
+  overflow-y:auto !important;
+  overscroll-behavior:contain !important;
+  display:flex !important;
+  flex-direction:column !important;
+  justify-content:flex-start !important;
+  z-index:4 !important;
+  box-sizing:border-box !important;
+}
+body.audio-mode.chat-focused #audioStage.seat-grid,
+html[data-theme=light] body.audio-mode.chat-focused #audioStage.seat-grid {
+  display:grid !important;
+}
+body.audio-mode #stage footer,
+html[data-theme=light] body.audio-mode #stage footer {
+  position:absolute !important;
+  top:auto !important;
+  bottom:0 !important;
+  width:100% !important;
+  height:12% !important;
+  min-height:0 !important;
+  max-height:none !important;
+  padding:3px 7px max(4px,env(safe-area-inset-bottom,0px)) !important;
+  display:flex !important;
+  flex-direction:column !important;
+  justify-content:center !important;
+  z-index:11 !important;
+}
+body.audio-mode #stage footer .bottom {
+  flex:0 1 auto !important;
+  min-height:0 !important;
+  max-height:100% !important;
+  height:auto !important;
+  align-items:center !important;
+  gap:4px !important;
+  overflow:visible !important;
+}
+body.audio-mode #stage footer .bottom #composer {
+  flex:1 1 110px !important;
+  min-width:0 !important;
+  height:min(44px,90%) !important;
+  min-height:40px !important;
+}
+body.audio-mode #stage footer .bottom .quick-actions {
+  flex:0 0 auto !important;
+  gap:3px !important;
+}
+body.audio-mode #stage footer .cash-payment-strip {
+  display:none !important;
+}
+/* The IME never takes seats away; scroll focused input into visible area. */
+body.audio-mode.ime-open #audioStage.seat-grid { display:grid !important; }
+body.audio-mode.ime-open #stage #messages {
+  top:42% !important;
+  bottom:12% !important;
+  height:46% !important;
+}
+/* Real profile frames use the ID received from the backend, never viewer-side
+   defaults. The tier changes the border treatment, not the awarded frame. */
+.identity-avatar-ring[data-frame]:not([data-frame="0"]),
+.audio-seat .member-avatar-frame[data-frame]:not([data-frame="0"]),
+.comment-avatar-frame[data-frame]:not([data-frame="0"]) {
+  --frame-gold:#DDB66A;
+  border:3px solid var(--frame-gold) !important;
+  outline:1px solid #FFF7E0B8 !important;
+  box-shadow:0 0 0 2px #DBB56C75,0 0 15px #C894468A !important;
+  border-radius:50% !important;
+}
+[data-frame="110"],[data-frame="120"],[data-frame="130"]{--frame-gold:#54C7A5}
+[data-frame="140"],[data-frame="150"],[data-frame="160"]{--frame-gold:#71A8F5}
+[data-frame="170"],[data-frame="180"],[data-frame="190"],[data-frame="200"]{--frame-gold:#E5B84B}
+body.audio-mode #audioStage .member-avatar-frame {
+  position:relative;
+  display:grid;place-items:center;
+  width:clamp(34px,12vw,60px);
+  height:clamp(34px,12vw,60px);
+  max-height:60%;
+  flex-shrink:0;
+  border-radius:50%;
+  overflow:visible;
+}
+body.audio-mode #audioStage .member-avatar-frame .audio-placeholder,
+body.audio-mode #audioStage .member-avatar-frame img{
+  position:absolute;inset:0;
+  width:100% !important;
+  height:100% !important;
+  border-radius:50%;
+  object-fit:cover;
+}
+body.audio-mode #audioStage .audio-seat .member-seat-badge{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  white-space:nowrap;
+  font-weight:800;
+  font-size:9px;
+  line-height:12px;
+  padding:1px 5px;
+  color:#E9D4A0;
+  background:#1D4981;
+  border:1px solid #D5B676A0;
+  border-radius:12px;
+}
+#stage #messages .comment-avatar-frame {
+  position:relative;
+  display:grid;
+  place-items:center;
+  width:32px;
+  height:32px;
+  flex:0 0 32px;
+  border-radius:50%;
+  overflow:visible;
+}
+#stage #messages .comment-avatar-frame img {
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  border-radius:50%;
+}
+#stage #messages .comment-avatar-frame .comment-avatar{
+  width:100% !important;height:100% !important;
+  display:grid;place-items:center;
+  margin:0 !important;
+}
+#stage #messages .comment-level-badge,
+#stage #sheet .member-level-badge {
+  display:inline-flex;
+  align-items:center;
+  gap:3px;
+  padding:1px 6px;
+  border:1px solid #E5B84B99;
+  border-radius:999px;
+  background:#102E5C;
+  color:#FFE3A6;
+  font-size:10px;
+  font-weight:750;
+  white-space:nowrap;
+}
+#stage #messages .comment-verified,
+#stage #sheet .member-verified {
+  color:#91E4C3;
+  font-size:11px;
+  font-weight:900;
+}
+#stage #messages .comment-body {min-width:0 !important;overflow-wrap:anywhere;}
+#stage #messages .comment-bubble{max-width:96% !important;}
+#stage #sheet.gift-store-open {
+  display:flex !important;
+  flex-direction:column !important;
+  height:min(93dvh,860px) !important;
+  max-height:calc(100dvh - 12px) !important;
+  min-height:0 !important;
+  overflow:hidden !important;
+}
+#stage #sheet.gift-store-open:not([open]){display:none !important;}
+#stage #sheet.gift-store-open .sheet-head{
+  position:relative !important;
+  flex:0 0 auto !important;
+  margin:0 0 6px !important;
+  top:0 !important;
+}
+#stage #sheet.gift-store-open #sheetBody{
+  flex:1 1 auto !important;
+  min-height:0 !important;
+  height:auto !important;
+  overflow-y:auto !important;
+  overscroll-behavior:contain !important;
+  padding:2px 5px 12px !important;
+  gap:7px !important;
+}
+#stage #sheet.gift-store-open .gift-target-summary{
+  height:auto !important;
+  min-height:0 !important;
+  padding:6px 10px !important;
+  flex:0 0 auto !important;
+}
+#stage #sheet.gift-store-open .gift-target-summary[hidden]{display:none!important;}
+#stage #sheet.gift-store-open .gift-preview{
+  flex:0 0 auto !important;
+  display:grid !important;
+  grid-template-columns:68px minmax(0,1fr) !important;
+  align-items:center !important;
+  min-height:72px !important;
+  gap:10px !important;
+  padding:6px !important;
+}
+#stage #sheet.gift-store-open .gift-preview-art {
+  display:grid !important;
+  place-items:center !important;
+  width:64px !important;
+  height:64px !important;
+  border-radius:50% !important;
+  overflow:hidden !important;
+  border:1px solid #D3B476D6 !important;
+}
+#stage #sheet.gift-store-open .gift-preview-art .gift-3d-canvas.preview {
+  width:100% !important;
+  height:100% !important;
+  object-fit:contain !important;
+}
+#stage #sheet.gift-store-open .gift-tabs{
+  display:flex !important;
+  overflow-x:auto !important;
+  padding:4px 9px 8px !important;
+  scroll-padding-inline:9px !important;
+  gap:6px !important;
+  flex:0 0 auto !important;
+}
+#stage #sheet.gift-store-open .gift-grid{
+  display:grid !important;
+  flex:1 0 auto !important;
+  grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+  grid-auto-rows:minmax(126px,auto) !important;
+  align-content:start !important;
+  min-height:270px !important;
+  height:min(43dvh,348px) !important;
+  max-height:none !important;
+  overflow-y:auto !important;
+  overscroll-behavior:contain !important;
+  gap:8px !important;
+  padding:7px 7px 10px !important;
+  scroll-padding:8px;
+}
+#stage #sheet.gift-store-open .gift-grid .gift-card {
+  min-width:0 !important;
+  min-height:126px !important;
+  height:auto !important;
+  padding:5px 4px !important;
+}
+#stage #sheet.gift-store-open .gift-grid .gift-card .gift-medallion {
+  width:min(18vw,68px) !important;
+  height:min(18vw,68px) !important;
+}
+#stage #sheet.gift-store-open .gift-combo-picker,
+#stage #sheet.gift-store-open .gift-checkout { flex:0 0 auto !important; }
+@media(max-width:365px){
+ body.audio-mode #audioStage .audio-seat .audio-name {font-size:9px !important;}
+ body.audio-mode #stage footer .bottom .quick-actions .tool-circle{
+  width:31px !important;flex-basis:31px !important;
+ }
+ #stage #sheet.gift-store-open .gift-grid{
+  grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+  gap:5px !important;
+ }
+ #stage #sheet.gift-store-open .gift-grid .gift-card .gift-medallion{
+  width:min(17vw,60px) !important;
+  height:min(17vw,60px) !important;
+ }
+}
