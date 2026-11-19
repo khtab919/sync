@@ -92,7 +92,12 @@ class RoomModerationTests(TestCase):
         from . import live
         live.synchronize(row,True)
         self.assertEqual(self.join(row,self.viewer).status_code,200)
-        self.assertEqual(self.event(row,{'action':'room_settings','settings':{'lock_seat':{'number':1,'locked':True}}}).status_code,200)
+        # Audio rooms have 8 physical slots (host + seven guests), even when
+        # a fixture sets max_speakers=2. Lock all seven guest seats to exhaust
+        # room capacity, rather than assuming slot 2 does not exist.
+        for number in range(1,8):
+            self.assertEqual(self.event(row,{'action':'room_settings',
+                'settings':{'lock_seat':{'number':number,'locked':True}}}).status_code,200)
         self.assertEqual(self.event(row,{'action':'invite_to_seat','user_id':self.viewer.pk}).status_code,409)
         self.assertEqual(self.event(row,{'action':'room_settings','settings':{'lock_seat':{'number':1,'locked':False},
                    'seat_join_mode':'free'}}).status_code,200)
