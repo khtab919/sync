@@ -161,14 +161,17 @@ function positionRoomSheet(){
  if(height<160)return;
  const offsetTop=usableVisual?Math.max(0,visual.offsetTop||0):0;
  const inset=8;
- const sheetHeight=Math.max(180,Math.min(760,Math.floor(height*.78)));
+ const isGiftStore=modal.classList.contains('gift-store-open');
+ // The purchase grid needs two full rows; other sheets stay compact.
+ const sheetHeight=Math.max(180,Math.min(isGiftStore?900:760,
+    Math.floor(height*(isGiftStore?.94:.78))));
  const top=Math.max(inset,Math.floor(offsetTop+height-sheetHeight-inset));
  const bounds={
   position:'fixed',top:top+'px',bottom:'auto',
   left:'10px',right:'10px',margin:'0 auto',
   width:'calc(100% - 20px)',height:sheetHeight+'px',
   maxHeight:sheetHeight+'px',minHeight:'0px',
-  overflowY:'auto',overscrollBehavior:'contain'
+  overflowY:isGiftStore?'hidden':'auto',overscrollBehavior:'contain'
  };
  for(const [key,value] of Object.entries(bounds))modal.style.setProperty(key.replace(/[A-Z]/g,c=>'-'+c.toLowerCase()),value,'important');
  modal.scrollTop=Math.max(0,modal.scrollTop);
