@@ -99,6 +99,8 @@ def discipline(request):
                 target.is_active=False;target.save(update_fields=['is_active'])
             row.version+=1;row.updated_by=request.actor
             row.save()
+            from .firestore_realtime import on_commit_account
+            on_commit_account(row)
             if action!='restore':
                 # Revoke all access tokens immediately. Existing clients must log in again.
                 SessionToken.objects.filter(user=target).delete()
