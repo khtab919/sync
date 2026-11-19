@@ -59,9 +59,11 @@ def require_room_manager(request,row):
 
 
 def person(user):
-    total=FinancialOperation.objects.filter(creator=user,kind='live_gift',status='settled').aggregate(n=Sum('amount_cents'))['n'] or 0
-    return {'user_id':user.pk,'name':user.profile.display_name or user.username,'avatar_url':user.profile.avatar_url,
-            'level':total//1000,'vip':BenefitGrant.objects.filter(user=user,kind='vip',expires_at__gt=timezone.now()).exists()}
+    # Use the same authoritative profile resolver as /api/profile. Never
+    # infer a user's level from gift spending in the broadcast.
+    from .public_presence import public_presence
+    identity=public_presence(user)
+    return dict(identity,vip=identity['vip_tier']>0)
 
 
 def pk_json(row):
@@ -79,10 +81,16 @@ def snapshot(row,user):
     a=LiveAdmission.objects.select_related('broadcast','user').filter(broadcast=row,user=user).first()
     try:can_publish,sources=publishing(a) if a else (False,[])
     except ApiError:can_publish,sources=False,[]
-    speakers=[dict(person(row.owner),identity='host-'+str(row.owner_id),mode=row.mode,owner=True)]
-    for s in seats:
+    from .public_presence import public_presence_bulk
+    seen=list(seats)
+    people=public_presence_bulk([row.owner]+[s.admission.user for s in seen])
+    def presence(participant):
+        identity=people[participant.pk]
+        return dict(identity,vip=identity['vip_tier']>0)
+    speakers=[dict(presence(row.owner),identity='host-'+str(row.owner_id),mode=row.mode,owner=True)]
+    for s in seen:
         if s.status=='approved' and not s.admission.banned:
-            speakers.append(dict(person(s.admission.user),identity=str(s.admission_id),mode=s.mode,owner=False,
+            speakers.append(dict(presence(s.admission.user),identity=str(s.admission_id),mode=s.mode,owner=False,
                                  seat_number=s.seat_number,forced_mic_mute=s.admission.forced_mic_mute))
     events=LiveGiftEvent.objects.filter(broadcast=row).select_related('operation__buyer__profile','operation__creator__profile').order_by('-pk')[:20]
     top=LiveGiftEvent.objects.filter(broadcast=row,operation__status='settled').values('operation__buyer_id','operation__buyer__profile__display_name','operation__buyer__username').annotate(total=Sum('operation__amount_cents')).order_by('-total')[:5]
@@ -96,7 +104,7 @@ def snapshot(row,user):
                 'block_external_links':row.block_external_links,'seat_join_mode':row.seat_join_mode,
                 'locked_seat_numbers':row.locked_seat_numbers,'password_protected':bool(row.password_hash)},
             'seat_status':own.status if own else '', 'manage_room':manager,
-            'seat_requests':[dict(person(s.admission.user),mode=s.mode) for s in seats if s.status=='pending'] if manager else [],
+            'seat_requests':[dict(presence(s.admission.user),mode=s.mode) for s in seen if s.status=='pending'] if manager else [],
             'moderator_ids':list(LiveRoomModerator.objects.filter(broadcast=row).values_list('user_id',flat=True)) if row.owner_id==user.pk else [],
             'gift_catalog':public_gift_catalog(),
             'gift_events':[{'id':g.pk,'code':g.gift_code,'sender':g.operation.buyer.profile.display_name or g.operation.buyer.username,'recipient':g.operation.creator.profile.display_name or g.operation.creator.username,'name':g.gift_name,'symbol':g.symbol,'effect':g.effect,'combo_count':g.combo_count,'total_price_cents':g.operation.amount_cents} for g in reversed(events)],
