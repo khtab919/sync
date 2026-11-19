@@ -95,6 +95,7 @@ private fun liveError(e:Exception)=when(e.message){
             LiveRoomView(
                 baseUrl=baseUrl,
                 bootstrap=room,
+                api=api,
                 profile={id->active=null;openProfile(id)},
                 retry={
                     if(broadcastId.isNotBlank() && !busy){
@@ -149,9 +150,11 @@ private fun liveError(e:Exception)=when(e.message){
     if(create){LiveHostSetupScreen(onClose={if(initialCreate)back() else create=false},audioOnly=audioOnly,onAudioOnlyChange={audioOnly=it;speakers=if(it)"8"else"1"},title=title,onTitleChange={title=it},privateLive=privateLive,onPrivateLiveChange={privateLive=it},price=price,onPriceChange={price=it},inviteOnly=inviteOnly,onInviteOnlyChange={inviteOnly=it},invites=invites,onInvitesChange={invites=it},speakers=speakers,onSpeakersChange={speakers=it},limit=limit,onLimitChange={limit=it},minimum=minimum,onMinimumChange={minimum=it},gifts=gifts,onGiftsChange={gifts=it},giftGoal=giftGoal,onGiftGoalChange={giftGoal=it},maximumLimit=maximumLimit,busy=busy||!allowed||!available,error=if(!allowed&&available&&error.isBlank())"هذا الحساب غير مخوّل لبدء بث حاليًا." else if(!available&&error.isBlank())"جارٍ التحقق من جاهزية البث…" else error,onStartStream={act{val p=price.toIntOrNull()?:0;val n=limit.toIntOrNull()?:0;val m=minimum.toIntOrNull()?:0;val t=title.trim().ifEmpty{"بث مباشر"};if(t.length<2||n !in 1..maximumLimit||m !in 30..3600||(privateLive&&p !in 1..1000000))throw IllegalArgumentException("invalid_input");val row=api.request("/api/live","POST",JSONObject().put("title",t).put("private",privateLive).put("invite_only",inviteOnly).put("price_cents",p).put("max_viewers",n).put("minimum_seconds",m).put("gifts_enabled",gifts).put("mode",if(audioOnly)"audio"else"video").put("max_speakers",if(audioOnly)8 else speakers.toInt()).put("gift_goal_cents",giftGoal.toIntOrNull()?:0).put("invite_names",JSONArray(invites.split(',', '،').map{it.trim().removePrefix("@")}.filter{it.isNotBlank()})));create=false;active=api.request("/api/live/${row.getString("id")}/admission","POST",JSONObject());activeId=row.getString("id")}})}
 }
 
-@Composable internal fun LiveRoomView(baseUrl:String,bootstrap:JSONObject,profile:((Int)->Unit)?=null,retry:()->Unit,finish:()->Unit,onTopup:()->Unit={}){
+@Composable internal fun LiveRoomView(baseUrl:String,bootstrap:JSONObject,api:LayaliApi,profile:((Int)->Unit)?=null,retry:()->Unit,finish:()->Unit,onTopup:()->Unit={}){
     val transportTheme=if(MaterialTheme.colorScheme.background.luminance()<.25f)"dark"else"light"
     val context=LocalContext.current;val lifecycle=LocalLifecycleOwner.current.lifecycle;val owner=bootstrap.optBoolean("owner");val audioOnly=bootstrap.optString("mode")=="audio"
+    val roomId=android.net.Uri.parse(bootstrap.optString("url")).pathSegments.dropLast(1).lastOrNull().orEmpty()
+    RelaxiaRoomRealtimeGuard(api=api,roomId=roomId,userId=bootstrap.optInt("user_id"),onEvicted=finish)
     var granted by remember{mutableStateOf(!owner)};var error by remember{mutableStateOf("")};var view by remember{mutableStateOf<WebView?>(null)}
     var requestingGuest by remember{mutableStateOf(false)}
     var requestedMode by remember{mutableStateOf(if(audioOnly)"audio"else"video")}
