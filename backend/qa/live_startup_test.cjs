@@ -17,7 +17,7 @@ print(render_to_string('core/live_room.html',{'config':config,'nonce':'test-only
   const url=new URL(req.url,'http://localhost');
   if(url.pathname.startsWith('/static/core/')){
    const name=path.basename(url.pathname);
-   if(!['live-stage.js','live-media.js','live-stage.css','gift-cinema.js','gift-cinema.css','relaxia-voice-royal.css','livekit-client.umd.min.js'].includes(name)){res.writeHead(404).end();return}
+   if(!['live-stage.js','live-media.js','live-stage.css','gift-cinema.js','gift-cinema.css','relaxia-voice-royal.css','room-layout-v2.css','room-moderation-ui.js','room-moderation-ui.css','livekit-client.umd.min.js'].includes(name)){res.writeHead(404).end();return}
    res.setHeader('Content-Type',name.endsWith('.css')?'text/css':'application/javascript');
    res.end(fs.readFileSync(path.join(root,'core/static/core',name)));return;
   }
