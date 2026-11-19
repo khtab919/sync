@@ -210,5 +210,8 @@ def manager_action(request,row):
             # Releasing does not forcibly turn on the user's hardware mic.
         room.control_revision=F('control_revision')+1
         room.save(update_fields=['control_revision'])
+        if kind in ('kick_user','ban_from_host_rooms'):
+            from .firestore_realtime import on_commit_room_kick
+            on_commit_room_kick(room.pk,target.pk,kind)
         event(actor,kind,target.pk,reason,details={'broadcast':str(room.pk)})
         return {'ok':True,'action':kind,'user_id':target.pk}
