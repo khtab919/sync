@@ -1,0 +1,69 @@
+name: Export Relaxia Complete Voice and Profile Source
+on:
+  push:
+    branches: [fix/relaxia-live-room-layout-discovery-20261120]
+    paths: ['.github/workflows/export-relaxia-voice-profile-source.yml']
+  pull_request:
+    paths: ['.github/workflows/export-relaxia-voice-profile-source.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check all edited sources and package entire files
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import zipfile,hashlib
+          paths=[
+            'backend/core/public_presence.py',
+            'backend/core/views.py',
+            'backend/core/live_stage.py',
+            'backend/core/live.py',
+            'backend/core/templates/core/live_room.html',
+            'backend/core/static/core/live-stage.js',
+            'backend/core/static/core/room-moderation-ui.js',
+            'backend/core/static/core/room-layout-v2.css',
+            'app/src/main/java/com/example/ui/screens/ServerAppScreen.kt',
+            'app/src/main/java/com/example/ui/screens/LiveScreens.kt',
+            'backend/core/test_public_presence.py',
+            'backend/qa/audio_rooms_ui_test.cjs',
+            'backend/qa/gift_cinema_test.cjs',
+            'backend/qa/live_startup_test.cjs'
+          ]
+          output=Path('dist');output.mkdir(exist_ok=True)
+          file=output/'Relaxia-Voice-Profile-Complete-Changed-Source.zip'
+          for p in paths:
+              assert Path(p).is_file(),f'Missing complete source: {p}'
+              assert Path(p).stat().st_size>100
+              if p.endswith('.py'):compile(Path(p).read_text(),p,'exec')
+          with zipfile.ZipFile(file,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=9) as z:
+              for p in paths:z.write(p,p)
+              z.writestr('README-AR.txt',
+                'Relaxia: كامل الشيفرة للملفات التي جرى تعديلها، دون حذف أسطر.\n'
+                'يجب دمجها داخل المستودع الأصلي لا استخدامها وحدها كتطبيق مستقل.\n'
+                'مزامنة البيانات في الغرف تحدث عبر طلبات دورية كل 3 ثوان، ولا يوجد تفعيل إنتاجي لـ Firestore لحظي.\n'
+                'التركيب على الإنتاج يتطلب اختبارات Django وAndroid وتجربة بث بمستخدمين.\n')
+          with zipfile.ZipFile(file) as z:
+              assert z.testzip() is None
+              assert len(z.namelist())==len(paths)+1
+          digest=hashlib.sha256(file.read_bytes()).hexdigest()
+          (output/'SHA256SUMS.txt').write_text(digest+'  '+file.name+'\n')
+          print('Source files:',len(paths),'Compressed size:',file.stat().st_size,
+                'SHA256:',digest)
+          PY
+          node --check backend/core/static/core/live-stage.js
+          node --check backend/core/static/core/room-moderation-ui.js
+      - name: Attach complete source
+        uses: actions/upload-artifact@v4
+        with:
+          name: Relaxia-Voice-Profile-Complete-Changed-Source
+          path: |
+            dist/Relaxia-Voice-Profile-Complete-Changed-Source.zip
+            dist/SHA256SUMS.txt
+          retention-days: 30
