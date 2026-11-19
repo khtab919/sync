@@ -1,7 +1,7 @@
 """Cross-screen public appearance contract (database is sole authority)."""
 from datetime import timedelta
 from django.utils import timezone
-from django.test import override_settings
+from django.test import TestCase, override_settings
 from .models import Profile, BenefitGrant, ExperienceAward
 from .views import profile_json
 from .public_presence import public_presence, public_presence_bulk
@@ -9,7 +9,11 @@ from . import test_live as fixtures
 
 
 @override_settings(SECURE_SSL_REDIRECT=False)
-class PublicAppearanceTests(fixtures.LiveBroadcastTests):
+class PublicAppearanceTests(TestCase):
+    setUp=fixtures.LiveBroadcastTests.setUp
+    request=fixtures.LiveBroadcastTests.request
+    create=fixtures.LiveBroadcastTests.create
+    join=fixtures.LiveBroadcastTests.join
     def test_profile_and_room_host_use_same_xp_level_frame_and_badges(self):
         row=self.create()
         Profile.objects.filter(user=self.owner).update(
