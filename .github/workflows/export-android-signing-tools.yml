@@ -3,6 +3,8 @@ on:
   push:
     branches: [ "feat/relaxia-home-live-syriatel-luxury-room-20261118" ]
     paths: [ ".github/workflows/export-android-signing-tools.yml" ]
+  pull_request:
+    paths: [ ".github/workflows/export-android-signing-tools.yml" ]
   workflow_dispatch:
 
 permissions:
