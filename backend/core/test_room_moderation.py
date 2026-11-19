@@ -65,7 +65,13 @@ class RoomModerationTests(TestCase):
 
     def test_invite_mic_requires_local_consent_and_forced_mute_revokes_publish(self):
         row=self.create();row.max_speakers=2;row.mode='audio';row.save()
-        self.join(row,self.viewer)
+        # The fixture's original video host must publish an audio track before
+        # the server will accept a listener into this audio-mode test room.
+        self.parts=[{'identity':'host-'+str(self.owner.pk),
+                     'tracks':[{'type':'AUDIO','muted':False}]}]
+        from . import live
+        live.synchronize(row,True)
+        self.assertEqual(self.join(row,self.viewer).status_code,200)
         self.assertEqual(self.event(row,{'action':'invite_to_seat','user_id':self.viewer.pk}).status_code,200)
         seat=LiveSeat.objects.get(admission__broadcast=row,admission__user=self.viewer)
         self.assertEqual(seat.seat_number,1)
@@ -79,7 +85,13 @@ class RoomModerationTests(TestCase):
 
     def test_lock_seat_blocks_invitation_and_free_join_requires_space(self):
         row=self.create();row.max_speakers=2;row.mode='audio';row.save()
-        self.join(row,self.viewer)
+        # The fixture's original video host must publish an audio track before
+        # the server will accept a listener into this audio-mode test room.
+        self.parts=[{'identity':'host-'+str(self.owner.pk),
+                     'tracks':[{'type':'AUDIO','muted':False}]}]
+        from . import live
+        live.synchronize(row,True)
+        self.assertEqual(self.join(row,self.viewer).status_code,200)
         self.assertEqual(self.event(row,{'action':'room_settings','settings':{'lock_seat':{'number':1,'locked':True}}}).status_code,200)
         self.assertEqual(self.event(row,{'action':'invite_to_seat','user_id':self.viewer.pk}).status_code,409)
         self.assertEqual(self.event(row,{'action':'room_settings','settings':{'lock_seat':{'number':1,'locked':False},
