@@ -58,12 +58,6 @@ def require_room_manager(request,row):
         require_moderator(request)
 
 
-def person(user):
-    total=FinancialOperation.objects.filter(creator=user,kind='live_gift',status='settled').aggregate(n=Sum('amount_cents'))['n'] or 0
-    return {'user_id':user.pk,'name':user.profile.display_name or user.username,'avatar_url':user.profile.avatar_url,
-            'level':total//1000,'vip':BenefitGrant.objects.filter(user=user,kind='vip',expires_at__gt=timezone.now()).exists()}
-
-
 def pk_json(row):
     pk=LivePK.objects.filter(broadcast=row).order_by('-pk').first()
     if not pk:return None
@@ -79,10 +73,10 @@ def snapshot(row,user):
     a=LiveAdmission.objects.select_related('broadcast','user').filter(broadcast=row,user=user).first()
     try:can_publish,sources=publishing(a) if a else (False,[])
     except ApiError:can_publish,sources=False,[]
-    speakers=[dict(person(row.owner),identity='host-'+str(row.owner_id),mode=row.mode,owner=True)]
+    speakers=[dict(user_id=row.owner_id,name=row.owner.profile.display_name or row.owner.username,identity='host-'+str(row.owner_id),mode=row.mode,owner=True)]
     for s in seats:
         if s.status=='approved' and not s.admission.banned:
-            speakers.append(dict(person(s.admission.user),identity=str(s.admission_id),mode=s.mode,owner=False,
+            speakers.append(dict(user_id=s.admission.user_id,name=s.admission.user.profile.display_name or s.admission.user.username,identity=str(s.admission_id),mode=s.mode,owner=False,
                                  seat_number=s.seat_number,forced_mic_mute=s.admission.forced_mic_mute))
     events=LiveGiftEvent.objects.filter(broadcast=row).select_related('operation__buyer__profile','operation__creator__profile').order_by('-pk')[:20]
     top=LiveGiftEvent.objects.filter(broadcast=row,operation__status='settled').values('operation__buyer_id','operation__buyer__profile__display_name','operation__buyer__username').annotate(total=Sum('operation__amount_cents')).order_by('-total')[:5]
@@ -96,7 +90,7 @@ def snapshot(row,user):
                 'block_external_links':row.block_external_links,'seat_join_mode':row.seat_join_mode,
                 'locked_seat_numbers':row.locked_seat_numbers,'password_protected':bool(row.password_hash)},
             'seat_status':own.status if own else '', 'manage_room':manager,
-            'seat_requests':[dict(person(s.admission.user),mode=s.mode) for s in seats if s.status=='pending'] if manager else [],
+            'seat_requests':[dict(user_id=s.admission.user_id,name=s.admission.user.profile.display_name or s.admission.user.username,mode=s.mode) for s in seats if s.status=='pending'] if manager else [],
             'moderator_ids':list(LiveRoomModerator.objects.filter(broadcast=row).values_list('user_id',flat=True)) if row.owner_id==user.pk else [],
             'gift_catalog':public_gift_catalog(),
             'gift_events':[{'id':g.pk,'code':g.gift_code,'sender':g.operation.buyer.profile.display_name or g.operation.buyer.username,'recipient':g.operation.creator.profile.display_name or g.operation.creator.username,'name':g.gift_name,'symbol':g.symbol,'effect':g.effect,'combo_count':g.combo_count,'total_price_cents':g.operation.amount_cents} for g in reversed(events)],

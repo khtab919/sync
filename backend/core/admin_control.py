@@ -98,13 +98,9 @@ def preview(request,user_id):
     require(request,'users.preview');why=reason(request);u=User.objects.filter(pk=user_id).first()
     if not u:raise ApiError('account_unavailable',404)
     p=Profile.objects.get(user=u);event(request.actor,'account_preview',u.pk,why)
-    from .profile_levels import profile_progress
-    progress=profile_progress(u)
-    # Mirror the public profile serializer: retired frames never appear in previews.
-    active_frame=BenefitGrant.objects.filter(user=u,kind='frame',expires_at__gt=timezone.now(),
-        value__in=range(110,201,10)).order_by('-id').first()
-    shown_frame=active_frame.value if active_frame else (
-        p.selected_frame if p.selected_frame in progress['owned_frames'] else 0)
+    from .public_presence import public_presence
+    progress = public_presence(u)
+    shown_frame = progress['selected_frame']
     d={'read_only':True,'banner':'وضع معاينة إدارية','profile':{'public_id':p.public_id,'username':u.username,'display_name':p.display_name,'avatar_url':p.avatar_url,'bio':p.bio,'creator':p.creator,'gender':p.gender,'publishing_allowed':p.publishing_allowed,'identity_verified':p.identity_verified,'frame':shown_frame,'broadcast_allowed':p.broadcast_allowed,'created_at':u.date_joined,'level':progress['level'],'earned_level':progress['earned_level'],'level_color':progress['level_color'],'vip_tier':progress['vip_tier']},'services':rows(Service.objects.filter(owner=u),['id','title','active','approved','price_cents','duration_minutes']),'bookings':rows(Booking.objects.filter(Q(buyer=u)|Q(service__owner=u)).order_by('-created_at'),['id','status','price_cents','created_at']),'benefits':rows(BenefitGrant.objects.filter(user=u,expires_at__gt=timezone.now()),['kind','value','expires_at']),'communication':{'sent':Message.objects.filter(sender=u).count(),'received':Message.objects.filter(recipient=u).count(),'delivered':Message.objects.filter(sender=u,delivered_at__isnull=False).count(),'read':Message.objects.filter(sender=u,read_at__isnull=False).count(),'calls':rows(InternalCall.objects.filter(Q(caller=u)|Q(callee=u)).order_by('-created_at'),['id','mode','status','created_at'])}}
     # Read-only account view uses the same actual posted objects and frame
     # authority as the public profile; no impersonation or access to private DMs.

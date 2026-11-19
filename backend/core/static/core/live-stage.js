@@ -43,7 +43,6 @@ let preparedTracks=[],mediaFault=false,mediaReady=false;
 const path='/api/live/'+config.id+'/control';
 document.body.classList.toggle('audio-mode',config.mode==='audio');
 $('name').textContent=config.ownerName;$('title').textContent='ID: '+(config.ownerPublicId||'—');document.title='Relaxia · '+config.title;
-if(config.ownerAvatar&&/^https:\/\//.test(config.ownerAvatar)){$('ownerAvatar').onload=()=>$('ownerAvatar').hidden=false;$('ownerAvatar').src=config.ownerAvatar}
 $('profile').onclick=()=>{if(!config.owner&&window.LayaliLive?.canOpenProfile()){window.LayaliLive.openProfile(config.ownerId);return;}const box=sheet('ملف صاحب الغرفة');note(box,config.ownerName);note(box,'ID: '+(config.ownerPublicId||'—'));note(box,config.title)};
 async function api(action){const abort=new AbortController(),timer=setTimeout(()=>abort.abort(),8000);try{const r=await fetch(path,{method:action?'POST':'GET',headers:{'Content-Type':'application/json','X-Live-Control':config.control},body:action?JSON.stringify(action):undefined,signal:abort.signal,cache:'no-store'});const value=await r.json();if(!r.ok)throw Error(value.error||'network');return value}finally{clearTimeout(timer)}}
 function diagnostic(stage,outcome,reason=''){api({action:'media_diagnostic',stage,outcome,reason,build:'media-1'}).catch(()=>{})}
@@ -135,6 +134,12 @@ async function connect(token=config.token){
  if(config.owner||speaking){await prepareTracks();const fresh=await api({action:'token'});state.can_publish=fresh.can_publish;state.publish_sources=fresh.publish_sources;if(!fresh.can_publish){releasePrepared();throw Error('stage_unavailable')}token=fresh.token;}
  if(closed||leaving){releasePrepared();return}
  room=new Room({adaptiveStream:true,dynacast:true,audioCaptureDefaults:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},videoCaptureDefaults:{resolution:{width:1280,height:720,frameRate:30},facingMode:facing},publishDefaults:{simulcast:false,videoEncoding:{maxBitrate:1500000,maxFramerate:30}}});
+ let identityRefresh;
+ room.on(RoomEvent.DataReceived,(_bytes,participant,_kind,topic)=>{
+  if(topic!=='profile.changed'||participant||closed||leaving)return;
+  clearTimeout(identityRefresh);
+  identityRefresh=setTimeout(()=>refresh().catch(message),80);
+ });
  room.on(RoomEvent.TrackSubscribed,(track,pub,participant)=>renderTrack(track,participant));
  room.on(RoomEvent.TrackUnsubscribed,track=>{track.detach().forEach(el=>{const tile=el.closest('.tile');el.remove();tile?.remove()});layout()});
  room.on(RoomEvent.ConnectionStateChanged,s=>{if(mediaFault)return;$('connection').classList.remove('is-ready');$('status').textContent=s===ConnectionState.Connected?((config.owner||speaking)&&!mediaReady?'جارٍ نشر الصوت والصورة…':'متصل'):s===ConnectionState.Reconnecting?'إعادة الاتصال…':'جارٍ الاتصال…'});
@@ -161,7 +166,7 @@ function positionRoomSheet(){
  if(height<160)return;
  const offsetTop=usableVisual?Math.max(0,visual.offsetTop||0):0;
  const inset=8;
- const sheetHeight=Math.max(180,Math.min(760,Math.floor(height*.78)));
+ const sheetHeight=Math.max(180,Math.min(760,Math.floor(height*(modal.classList.contains('gift-store-open')?.96:.78))));
  const top=Math.max(inset,Math.floor(offsetTop+height-sheetHeight-inset));
  const bounds={
   position:'fixed',top:top+'px',bottom:'auto',
@@ -263,9 +268,9 @@ function giftSheet(preferredRecipientId=null){
  // Clicking a seat NEVER sends money until the user explicitly confirms.
  const balance=document.createElement('div');balance.id='giftBalance';balance.className='gift-balance';
  balance.textContent='رصيدك: '+Number(state.available_coins||0).toLocaleString('ar')+' كوين';box.append(balance);
- const target=document.createElement('div');
+ const target=document.createElement('small');
  target.className='gift-target-summary';target.setAttribute('role','status');
- target.setAttribute('aria-live','polite');box.append(target);
+ target.setAttribute('aria-live','polite');
  function recipientOf(snapshot){
   const speakers=snapshot.speakers||[];
   const host=speakers.find(s=>s.owner)||null;
@@ -313,7 +318,7 @@ function giftSheet(preferredRecipientId=null){
  comboTitle.textContent='إرسال متتابع';picker.append(comboTitle);
  const counts=document.createElement('div');counts.className='gift-combo-counts';picker.append(counts);
  const checkout=document.createElement('div');checkout.className='gift-checkout';box.append(checkout);
- const summary=document.createElement('div');summary.className='gift-checkout-summary';checkout.append(summary);
+ const summary=document.createElement('div');summary.className='gift-checkout-summary';checkout.append(summary,target);
  const confirmation=document.createElement('p');confirmation.className='gift-confirm-hint';confirmation.textContent='لم تُخصم أي كوينز.';checkout.append(confirmation);
  const send=button(checkout,'',async()=>{
   const recipient=recipientOf(state);
@@ -362,7 +367,15 @@ function giftSheet(preferredRecipientId=null){
    previewCleanup?.();previewCleanup=null;
    previewName.textContent=selected?.name||'اختر هدية';
    previewButton.disabled=!selected;
-   if(selected&&window.RelaxiaGiftCinema)previewCleanup=window.RelaxiaGiftCinema.preview(previewArt,selected);
+   preview.hidden=!selected;
+   previewArt.replaceChildren();
+   if(selected){
+    const icon=document.createElement('img');
+    icon.alt=selected.name;
+    icon.onerror=()=>previewArt.replaceChildren(document.createTextNode(selected.symbol));
+    icon.src=selected.icon_url;
+    previewArt.append(icon);
+   }
    activeGiftPreviewCleanup=previewCleanup;
    lastPreview=selected?.code||'';
   }
@@ -430,7 +443,7 @@ function drawAudioSeats(result){
   }
   if(slot>0&&slot<capacity)positions[slot]=guest;
  }
- const signature=JSON.stringify([capacity,positions.map(s=>s&&[s.identity,s.name,s.owner,s.avatar_url,s.seat_number]),result.room_settings?.locked_seat_numbers||[]]);
+ const signature=JSON.stringify([capacity,positions.map(s=>s&&[s.identity,s.name,s.owner,s.avatar_url,s.selected_frame,s.level,s.seat_number]),result.room_settings?.locked_seat_numbers||[]]);
  if(signature===audioSeatSignature&&box.querySelectorAll('.audio-seat').length===capacity){
   box.querySelectorAll('.audio-seat[data-identity]').forEach(item=>item.classList.toggle('speaking',activeSpeakerIds.has(item.dataset.identity)));
   return;
@@ -452,11 +465,10 @@ function drawAudioSeats(result){
    if(speaker.user_id!==config.userId)item.title='إرسال هدية إلى '+speaker.name;
    const waves=document.createElement('div');waves.className='audio-waves';waves.setAttribute('aria-hidden','true');
    for(let n=0;n<3;n++)waves.append(document.createElement('span'));item.append(waves);
-   const placeholder=document.createElement('div');placeholder.className='audio-placeholder';placeholder.textContent=(speaker.name||'م').slice(0,1);item.append(placeholder);
-   if(/^https:\/\//.test(speaker.avatar_url)){
-    const img=document.createElement('img');img.src=speaker.avatar_url;img.alt='';
-    img.onload=()=>placeholder.style.visibility='hidden';img.onerror=()=>img.remove();item.append(img)
-   }
+   const portrait=document.createElement('span');
+   portrait.className='room-portrait';
+   renderPortrait(portrait,speaker);
+   item.append(portrait);
    const label=document.createElement('span');label.className='audio-name';label.textContent=speaker.name;item.append(label);
    const role=document.createElement('small');role.textContent=speaker.owner?'المضيف':'مقعد '+i;item.append(role);
   }else{
@@ -592,9 +604,53 @@ function playEffects(){
   playEffects();
  },duration);
 }
+function identityLabel(user){
+ const parts=[user.name];
+ if(Number.isInteger(user.level)&&user.level>0)parts.push('Lv '+user.level);
+ if(user.vip_tier>0)parts.push('VIP '+user.vip_tier);
+ if(user.identity_verified)parts.push('✓');
+ return parts.join(' · ');
+}
+
+// Aperture centres and radii are measured in the Android frame atlas cells.
+const frameOpenings=[[.5488,.4829,.3149],[.5341,.4888,.3054],[.4996,.518,.2887],
+ [.4531,.496,.2789],[.4393,.5042,.292],[.5358,.4702,.276],[.5284,.4652,.269],
+ [.4773,.4833,.2772],[.4539,.4785,.258],[.4342,.4766,.2601]];
+function renderPortrait(node,user){
+ const key=JSON.stringify([user.name,user.avatar_url,user.selected_frame]);
+ if(node.dataset.portrait===key)return;
+ node.dataset.portrait=key;
+ node.classList.add('room-portrait');
+ const face=document.createElement('span');
+ face.className='portrait-face';
+ face.textContent=Array.from(user.name||'')[0]||'';
+ node.replaceChildren(face);
+ if(/^https:\/\//.test(user.avatar_url)){
+  const photo=document.createElement('img');
+  photo.alt='';
+  photo.onerror=()=>photo.remove();
+  photo.src=user.avatar_url;
+  face.append(photo);
+ }
+ const index=(user.selected_frame-110)/10;
+ const opening=frameOpenings[index];
+ if(!opening)return;
+ const [x,y,radius]=opening;
+ face.style.left=(x*100)+'%';
+ face.style.top=(y*100)+'%';
+ face.style.width=(radius*205)+'%';
+ const ornament=document.createElement('span');
+ ornament.className='portrait-frame';
+ ornament.style.backgroundPosition=(index%5*25)+'% '+(Math.floor(index/5)*100)+'%';
+ node.append(ornament);
+}
 function drawState(result){state=result;
  if($('sheet')?.open&&$('sheetTitle')?.textContent==='متجر الهدايا'&&activeGiftRecipientSync)activeGiftRecipientSync(result);
  const wallet=document.getElementById('giftBalance');if(wallet)wallet.textContent='رصيدك المتاح: '+Number(result.available_coins||0).toLocaleString('ar')+' كوين';updateQuickMic();document.querySelectorAll('.tile').forEach(t=>{const speaker=result.speakers?.find(s=>s.identity===t.dataset.identity);if(speaker)t.querySelector('small').textContent=speaker.name});serverOffset=Date.parse(result.server_time)-Date.now();const vCount=result.viewers||0;if($('viewerCount'))$('viewerCount').textContent=vCount>=1000?(vCount/1000).toFixed(1)+'K':vCount;else $('viewers').textContent=vCount+' مشاهد';$('viewers').title=vCount+' مشاهد';$('follow').textContent=result.following?'تتابعه':'متابعة';const host=result.speakers?.[0];$('badge').textContent=host&&Number(host.level)>0?('المستوى '+Math.floor(Number(host.level))+(host.vip?' · VIP':'')):(host?.vip?'VIP':'');
+ if(host){
+  $('name').textContent=host.name;
+  renderPortrait($('profile').querySelector('.identity-avatar-ring'),host);
+ }
  const headerLevel=$('hostLevel');
  if(headerLevel){
   const level=host&&Number(host.level)>=1?Math.floor(Number(host.level)):0;
@@ -606,7 +662,7 @@ function drawState(result){state=result;
   requestMic.hidden=!!speaking;
   requestMic.textContent=result.seat_status==='pending'?'طلب الانضمام قيد المراجعة':'طلب الانضمام';
  }
- const signature=JSON.stringify([!!result.manage_room,result.comments||[]]);if(lastComments!==signature){lastComments=signature;const box=$('messages');const nearBottom=box.scrollHeight-box.clientHeight-box.scrollTop<38,previousScroll=box.scrollTop;box.replaceChildren();for(const c of result.comments||[]){const p=document.createElement('div');p.className='comment-bubble';const av=document.createElement('div');av.className='comment-avatar';av.textContent=(c.name||'U').slice(0,1);const body=document.createElement('div');body.className='comment-body';const name=document.createElement('span');name.className='comment-author';name.textContent=c.name+': ';body.append(name,document.createTextNode(c.text));p.dataset.userId=String(c.user_id);p.append(av,body);if(result.manage_room){const manage=document.createElement('button');manage.type='button';manage.className='comment-actions';manage.textContent='⋯';manage.setAttribute('aria-label','إدارة تعليق '+(c.name||''));manage.onclick=()=>commentActionsSheet(c);p.append(manage)}box.append(p)}if(!(result.comments||[]).length){const blank=document.createElement('p');blank.className='comment-empty';blank.textContent='لا توجد تعليقات بعد · ابدأ الحوار';box.append(blank)}box.scrollTop=nearBottom?box.scrollHeight:Math.min(previousScroll,Math.max(0,box.scrollHeight-box.clientHeight))}
+ const signature=JSON.stringify([!!result.manage_room,result.comments||[]]);if(lastComments!==signature){lastComments=signature;const box=$('messages');const nearBottom=box.scrollHeight-box.clientHeight-box.scrollTop<38,previousScroll=box.scrollTop;box.replaceChildren();for(const c of result.comments||[]){const p=document.createElement('div');p.className='comment-bubble';const av=document.createElement('div');av.className='comment-avatar';renderPortrait(av,c);const body=document.createElement('div');body.className='comment-body';const name=document.createElement('span');name.className='comment-author';name.textContent=identityLabel(c)+' · ';body.append(name,document.createTextNode(c.text));p.dataset.userId=String(c.user_id);p.dataset.commentId=String(c.id);p.append(av,body);if(result.manage_room){const manage=document.createElement('button');manage.type='button';manage.className='comment-actions';manage.textContent='⋯';manage.setAttribute('aria-label','إدارة تعليق '+(c.name||''));manage.onclick=()=>commentActionsSheet(c);p.append(manage)}box.append(p)}if(!(result.comments||[]).length){const blank=document.createElement('p');blank.className='comment-empty';blank.textContent='لا توجد تعليقات بعد · ابدأ الحوار';box.append(blank)}box.scrollTop=nearBottom?box.scrollHeight:Math.min(previousScroll,Math.max(0,box.scrollHeight-box.clientHeight))}
  $('pinned').hidden=!result.pinned_comment||!commentsVisible;if(result.pinned_comment)$('pinned').textContent='مثبّت · '+result.pinned_comment.name+': '+result.pinned_comment.text;
  $('goal').hidden=!result.gift_goal_cents;if(result.gift_goal_cents){if($('goalText'))$('goalText').textContent=(result.gift_total_cents||0)+' / '+result.gift_goal_cents;if($('goalProgress'))$('goalProgress').style.width=Math.min(100,Math.round(((result.gift_total_cents||0)/result.gift_goal_cents)*100))+'%';else $('goal').textContent='هدف الهدايا '+(result.gift_total_cents||0)+' / '+result.gift_goal_cents;}
  $('pk').hidden=!result.pk;document.body.classList.toggle('has-pk',!!result.pk);if(result.pk){const pk=result.pk;const teams=pk.teams.map(team=>team.map(id=>result.speakers?.find(s=>s.user_id===id)?.name||'مشارك').join(' + '));$('pkTeams').replaceChildren();for(let i=0;i<2;i++){const span=document.createElement('span');span.title=teams[i];span.textContent=(i===0?'الفريق الأول':'الفريق الثاني')+' · '+pk.scores[i];$('pkTeams').append(span)}const total=pk.scores[0]+pk.scores[1];$('pkProgress').value=total?pk.scores[0]/total*100:50;pkClock()}
@@ -737,15 +793,6 @@ $('follow').onclick=()=>api({action:'follow'}).then(refresh).catch(message);
 $('gift').onclick=giftSheet;$('guests').onclick=guestSheet;
 $('micQuick').onclick=()=>{if(speaking)$('mute').click();else guestSheet()};
 if($('requestMic'))$('requestMic').onclick=()=>guestSheet();
-if($('syriatelCashLink'))$('syriatelCashLink').onclick=()=>{
- if(window.LayaliLive?.openTopup){
-  window.LayaliLive.openTopup();
- }else{
-  const box=sheet('سيريتيل كاش');
-  note(box,'رقم الاستلام: 0997991404');
-  note(box,'لإرسال طلب شحن، افتح المحفظة داخل Relaxia وأنشئ فاتورة قبل التحويل. يعتمد الرصيد بعد تحقق الإدارة.');
- }
-};
 $('more').onclick=moreSheet;
 $('share').onclick=async()=>{const text='انضم إلى بث '+config.ownerName+' «'+config.title+'» على Relaxia. افتح قسم البث المباشر وابحث عن عنوان البث. الدخول الخاص يتطلب تصريحًا.';try{if(window.LayaliLive?.shareLive){window.LayaliLive.shareLive(text);$('status').textContent='نُسخت دعوة البث؛ يمكنك إرسالها إلى أصدقائك.';}else if(navigator.share)await navigator.share({title:'Relaxia · مباشر',text});else if(navigator.clipboard){await navigator.clipboard.writeText(text);$('status').textContent='نُسخت دعوة البث'}else prompt('انسخ دعوة البث',text)}catch(e){if(e.name!=='AbortError')message(e)}};
 $('reconnectAction').onclick=()=>{if(connecting||retrying)return;$('reconnectAction').hidden=true;reconnectSince=Date.now();reconnect()};

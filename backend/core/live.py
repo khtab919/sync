@@ -394,6 +394,20 @@ def room_events(request,broadcast_id):
     result['participants_visible']=[{'user_id':x.user_id,
         'name':x.user.profile.display_name or x.user.username,'avatar_url':x.user.profile.avatar_url}
         for x in LiveAdmission.objects.filter(broadcast=row,connected=True).select_related('user__profile')[:100]]
+    from .public_presence import public_presence_bulk
+    groups = [result.get(key, []) for key in (
+        'speakers', 'comments', 'participants_visible', 'participants', 'seat_requests',
+    )]
+    user_ids = {item['user_id'] for group in groups for item in group}
+    identities = public_presence_bulk(User.objects.filter(pk__in=user_ids))
+    for group in groups:
+        for item in group:
+            identity = identities[item['user_id']]
+            item.update({key: identity[key] for key in (
+                'name', 'avatar_url', 'public_id', 'selected_frame', 'level',
+                'level_color', 'vip_tier', 'identity_verified',
+            )})
+            item['vip'] = bool(identity['vip_tier'])
     return JsonResponse(result)
 
 @csrf_exempt

@@ -24,14 +24,17 @@ internal fun RelaxiaRoomRealtimeGuard(
     roomId: String,
     userId: Int,
     onEvicted: () -> Unit,
-    onSuspended: () -> Unit = onEvicted
+    onSuspended: () -> Unit = onEvicted,
+    observedProfileId: Int = 0,
+    onProfileChanged: () -> Unit = {}
 ) {
-    if (userId <= 0 || roomId.isBlank()) return
+    if (userId <= 0 || (roomId.isBlank() && observedProfileId <= 0)) return
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val latestEvicted = rememberUpdatedState(onEvicted)
     val latestSuspended = rememberUpdatedState(onSuspended)
-    DisposableEffect(roomId,userId) {
+    val latestChange = rememberUpdatedState(onProfileChanged)
+    DisposableEffect(roomId,userId,observedProfileId) {
         val disposed = AtomicBoolean(false)
         val registrations = mutableListOf<ListenerRegistration>()
         val work = scope.launch {
@@ -54,6 +57,14 @@ internal fun RelaxiaRoomRealtimeGuard(
                     val db=FirebaseFirestore.getInstance(secondary)
                     synchronized(registrations) {
                         if(disposed.get())return@addOnCompleteListener
+                        if (observedProfileId > 0) {
+                            registrations.add(db.collection("profileChanges").document(observedProfileId.toString())
+                                .addSnapshotListener { snapshot, error ->
+                                    if (!disposed.get() && error == null && snapshot?.exists() == true)
+                                        latestChange.value()
+                                })
+                            return@synchronized
+                        }
                         registrations.add(db.collection("users").document(userId.toString())
                             .addSnapshotListener { snapshot, error->
                                 if(disposed.get() || error!=null || snapshot==null) return@addSnapshotListener

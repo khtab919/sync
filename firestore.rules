@@ -238,6 +238,11 @@ service cloud.firestore {
 
     // Server-owned LiveKit moderation mirrors. Firebase listeners read only
     // their owner's kick flag; clients can never spoof or erase a kick.
+    match /profileChanges/{userId} {
+      allow get: if request.auth != null;
+      allow list, write: if false;
+    }
+
     match /rooms/{roomId}/kickedUsers/{userId} {
       allow get: if isSignedIn() && isValidId(roomId) &&
                   isValidId(userId) && request.auth.uid == userId;

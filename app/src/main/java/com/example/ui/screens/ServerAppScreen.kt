@@ -441,7 +441,7 @@ fun ServerAppScreen(baseUrl: String) {
                         creatorContent=api.request("/api/creators/"+id+"/content").rows()
                     }
                     creators = api.request("/api/creators").rows()
-                    if (screen == "صفحة المذيعة") creator = (creators+accountMatches).firstOrNull { it.optInt("id") == creator.optInt("id") } ?: creator
+
                 }
                 "حسابي" -> {
                     profile = api.request("/api/me")
@@ -474,6 +474,29 @@ fun ServerAppScreen(baseUrl: String) {
             if (api.token == null) signedIn = false
         }
         finally { loading = false }
+    }
+
+    val viewedProfileId = if (screen == "حسابي") profile.optInt("id") else creator.optInt("id")
+    var profileRevision by remember(viewedProfileId) { mutableIntStateOf(0) }
+    if (signedIn && foreground && screen in setOf("حسابي", "صفحة المذيعة")) {
+        RelaxiaRoomRealtimeGuard(api, "", profile.optInt("id"), onEvicted = {},
+            observedProfileId = viewedProfileId, onProfileChanged = { profileRevision++ })
+    }
+    LaunchedEffect(signedIn, foreground, screen, viewedProfileId, profileRevision) {
+        if (!signedIn || !foreground || viewedProfileId <= 0 ||
+            screen !in setOf("حسابي", "صفحة المذيعة")) return@LaunchedEffect
+        val own = screen == "حسابي"
+        while (true) {
+            try {
+                val fresh = api.request(if (own) "/api/me" else "/api/creators/$viewedProfileId")
+                if (own) profile = fresh else creator = fresh
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Keep the last authoritative snapshot during a connection interruption.
+            }
+            delay(3000)
+        }
     }
 
     LaunchedEffect(signedIn, foreground, profile.optInt("id")) {
@@ -730,7 +753,7 @@ fun ServerAppScreen(baseUrl: String) {
         ) { padding ->
             Column(Modifier.fillMaxSize().padding(padding)) {
                 if (submitting) LuxuryLoadingStatus("جارٍ تنفيذ الطلب")
-                if (notice.isNotBlank() || contentError.isNotBlank()) Surface(color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), shape = RoundedCornerShape(18.dp)) {
+                if (screen !in setOf("حسابي", "صفحة المذيعة") && (notice.isNotBlank() || contentError.isNotBlank())) Surface(color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), shape = RoundedCornerShape(18.dp)) {
                     Row(Modifier.padding(14.dp),verticalAlignment=Alignment.CenterVertically) {
                         Text(notice.ifBlank { contentError }, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                         if (contentError.isNotBlank()) TextButton(onClick={revision++}, enabled=!loading) { Text("إعادة المحاولة") }
@@ -1146,7 +1169,7 @@ fun ServerAppScreen(baseUrl: String) {
                                 else (0 until frameArray.length()).map { frameArray.optInt(it) }.toSet()
                             RelaxiaFramePicker(profile.optInt("selected_frame"),
                                 profile.optString("display_name"), profile.optString("avatar_url"),
-                                profile.optInt("level", 1), owned) { frame -> perform {
+                                profile.optInt("level"), owned) { frame -> perform {
                                 profile = api.request("/api/me", "PATCH", JSONObject().put("selected_frame", frame))
                                 notice = "تم تجهيز الإطار."
                             } }
@@ -1520,6 +1543,26 @@ internal fun ProfileHero(
                     horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     Text(name, Modifier.weight(1f, fill = false), fontSize = 20.sp,
                         fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (publicId != "—") Surface(
+                        onClick = {
+                            val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                                as android.content.ClipboardManager
+                            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Relaxia ID", publicId))
+                        },
+                        color = colors.surfaceContainerLow,
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Row(
+                            Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            Text("ID: " + publicId,
+                                fontWeight = FontWeight.SemiBold, fontSize = 11.sp)
+                            Icon(Icons.Rounded.ContentCopy, "نسخ رقم الحساب",
+                                Modifier.size(14.dp), tint = colors.primary)
+                        }
+                    }
                     val genderMark = when(person.optString("gender")) {
                         "male" -> "♂"; "female" -> "♀"; else -> ""
                     }
@@ -1527,33 +1570,11 @@ internal fun ProfileHero(
                 }
                 Row(verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    RelaxiaLevelBadge(person.optInt("level", 1))
+                    person.optInt("level").takeIf { it > 0 }?.let { RelaxiaLevelBadge(it) }
                     val vip = person.optInt("vip_tier")
                     if (vip > 0) Text("VIP " + vip,
                         color = colors.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
-            }
-        }
-        if (publicId != "—") Surface(
-            onClick = {
-                val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
-                    as android.content.ClipboardManager
-                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Relaxia ID", publicId))
-            },
-            modifier = Modifier.fillMaxWidth(),
-            color = colors.surfaceContainerLow,
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            Row(
-                Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(9.dp)
-            ) {
-                Icon(Icons.Rounded.Badge, null, Modifier.size(18.dp), tint = colors.primary)
-                Text("ID: " + publicId, Modifier.weight(1f),
-                    fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                Icon(Icons.Rounded.ContentCopy, "نسخ رقم الحساب",
-                    Modifier.size(18.dp), tint = colors.primary)
             }
         }
         if (person.optBoolean("identity_verified")) {

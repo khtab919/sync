@@ -48,8 +48,7 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    assert.equal(await page.locator('#gift').isVisible(),false);
    assert.equal(await page.locator('#micQuick').isVisible(),false,'no duplicate quick microphone for audience');
    assert.equal(await page.locator('#bigGiftBtn').isVisible(),true);
-   assert.equal(await page.locator('#syriatelCashLink').isVisible(),true,'native Syriatel cash strip at bottom');
-   assert.match(await page.locator('#syriatelCashLink').innerText(),/0997991404/);
+   assert.equal(await page.locator('#syriatelCashLink').count(),0,'payment stays in the wallet');
    assert.equal(await page.locator('#requestMic').isVisible(),true,'request microphone appears for audience');
    const cssSeats=await page.locator('#audioStage').evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(' ').length);
    assert.equal(cssSeats,4,'eight seats arranged into four columns');
@@ -233,7 +232,7 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    const whaleCard=page.locator('.gift-card[data-gift-code="gift_blue_whale"]');
    assert.equal(await whaleCard.getAttribute('aria-label'),'الحوت الأزرق · 10000 كوين');
    assert.equal(await whaleCard.locator('canvas.gift-card-3d').count(),1,'all gifts use rendered 3D thumbnails');
-   assert.equal(await page.locator('.gift-preview canvas.gift-3d-canvas.preview').count(),1,'selected gift plays a 3D model preview');
+   assert.equal(await page.locator('.gift-preview-art').innerText(),'🦅','selected catalog symbol survives missing artwork');
    assert.equal(await page.locator('img.gift-webp').count(),0,'gift card no longer depends on an image file');
    await whaleCard.click();
    assert.equal(await whaleCard.getAttribute('aria-pressed'),'true','selected gift is highlighted');

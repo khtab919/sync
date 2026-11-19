@@ -21,14 +21,14 @@ def public_presence_bulk(users):
     levels=defaultdict(int)
     vip=defaultdict(int)
     owned_grant_frames=defaultdict(set)
-    newest_frame={}
+    newest_frame = {}
     for grant in grants:
         uid,kind,value=grant['user_id'],grant['kind'],grant['value']
         if kind=='level' and 1<=value<=100:levels[uid]=max(levels[uid],value)
         elif kind=='vip' and 1<=value<=5:vip[uid]=max(vip[uid],value)
         elif kind=='frame' and value in range(110,201,10):
             owned_grant_frames[uid].add(value)
-            newest_frame[uid]=value
+            newest_frame[uid] = value
     profiles=Profile.objects.filter(user_id__in=ids)
     profile_map={p.user_id:p for p in profiles}
     result={}
@@ -41,7 +41,9 @@ def public_presence_bulk(users):
             (81,'royal'),(61,'diamond'),(41,'gold'),(26,'purple'),(11,'blue'),(1,'green')
         ) if level>=minimum)
         owned_frames={0}|{100+n for n in range(10,101,10) if level>=n}|owned_grant_frames[uid]
-        selected=0 if not profile else newest_frame.get(uid,profile.selected_frame)
+        selected=0 if not profile else profile.selected_frame
+        if profile and not selected and not profile.frame_choice_explicit:
+            selected = newest_frame.get(uid, 0)
         if selected not in owned_frames:selected=0
         result[uid]={
             'user_id':uid,
@@ -49,6 +51,7 @@ def public_presence_bulk(users):
             'public_id':profile.public_id if profile else '',
             'avatar_url':profile.avatar_url if profile else '',
             'selected_frame':selected,
+            'owned_frames':sorted(owned_frames),
             'level':level,
             'earned_level':earned,
             'level_color':color,
@@ -61,3 +64,46 @@ def public_presence_bulk(users):
 
 def public_presence(user):
     return public_presence_bulk([user])[user.pk]
+
+def invalidate_public_presence(user_id):
+    """Wake connected clients. They re-read their authorized Django view."""
+    import base64
+    import logging
+    from django.db.models import Q
+    from . import live
+    from .firestore_realtime import write_document
+    from .models import LiveBroadcast
+
+    write_document('profileChanges/' + str(user_id), {'changedAt': timezone.now()})
+    if not live.enabled():
+        return
+    rooms = LiveBroadcast.objects.filter(status__in=live.LIVE).filter(
+        Q(owner_id=user_id) | Q(liveadmission__user_id=user_id)
+    ).values_list('pk', flat=True).distinct()
+    for room_id in rooms:
+        name = 'live-' + str(room_id)
+        try:
+            live.provider('SendData', {'room': name, 'topic': 'profile.changed',
+                'kind': 'RELIABLE', 'data': base64.b64encode(str(user_id).encode()).decode()}, name)
+        except live.ApiError:
+            logging.getLogger(__name__).warning('Room identity notification delayed for %s', room_id)
+
+
+def register_presence_signals():
+    from django.db import transaction
+    from django.db.models.signals import post_save, post_delete
+
+    def changed(sender, instance, raw=False, update_fields=None, **kwargs):
+        if raw:
+            return
+        if sender is Profile and update_fields and not set(update_fields).intersection(
+                {'display_name', 'selected_frame', 'avatar_url', 'identity_verified'}):
+            return
+        if sender is BenefitGrant and instance.kind not in ('frame', 'level', 'vip'):
+            return
+        uid = instance.user_id
+        transaction.on_commit(lambda: invalidate_public_presence(uid), robust=True)
+
+    for model in (Profile, BenefitGrant, ExperienceAward):
+        post_save.connect(changed, sender=model, weak=False, dispatch_uid='public-identity-save')
+        post_delete.connect(changed, sender=model, weak=False, dispatch_uid='public-identity-delete')

@@ -342,20 +342,6 @@ body.audio-mode #stage footer .bottom .quick-actions>.gift-fab{
  color:#37240B!important;
 }
 body.audio-mode #stage footer .bottom .quick-actions>.gift-fab svg{width:24px;height:24px;stroke:#6B460F}
-body.audio-mode #stage footer .cash-payment-strip{
- display:flex!important;align-items:center!important;justify-content:center!important;
- flex:0 0 29px!important;min-height:29px!important;
- width:100%!important;padding:3px 9px!important;
- margin-top:1px!important;border-radius:999px!important;
- background:linear-gradient(100deg,#2D4B76,#16365F)!important;
- border:1px solid #E5B84BAF!important;box-shadow:inset 0 1px 1px #FAE2B966!important;
- color:#FAF4E6!important;font-size:11px!important;
- font-weight:650!important;gap:9px!important;
-}
-body.audio-mode #stage footer .cash-payment-strip b{color:#F4C46D;font-weight:900;letter-spacing:.6px}
-body.audio-mode #stage footer .cash-wallet-icon{
- color:#FFDC8A;font-size:18px;line-height:1;
-}
 body.audio-mode #stage #sheet{z-index:30!important}
 @media(max-width:360px){
  body.audio-mode #stage header,
@@ -385,8 +371,63 @@ body.audio-mode #stage #sheet{z-index:30!important}
  body.audio-mode #audioStage .audio-seat .audio-name{font-size:9px!important;line-height:11px!important}
  body.audio-mode #audioStage .audio-seat small{font-size:8px!important}
 }
-body.audio-mode.chat-focused #audioStage.seat-grid{display:none!important}
-body.audio-mode.chat-focused #stage #messages{top:calc(env(safe-area-inset-top,0px) + var(--voice-top) + 10px)!important}
+
+
 @media(prefers-reduced-motion:reduce){
  body.audio-mode .floating-heart{animation:none!important;opacity:0}
 }
+
+body.audio-mode #stage {
+ --voice-top:10%;
+ --voice-seats:32%;
+ --voice-dock:12%;
+}
+html[data-theme] body.audio-mode #stage header {
+ top:0!important;
+ box-sizing:border-box;
+}
+html[data-theme] body.audio-mode #stage #audioStage.seat-grid {
+ top:var(--voice-top)!important;
+ display:grid!important;
+ box-sizing:border-box;
+ overflow-y:auto!important;
+ padding-inline:5px!important;
+}
+html[data-theme] body.audio-mode #stage #messages {
+ top:calc(var(--voice-top) + var(--voice-seats))!important;
+ bottom:var(--voice-dock)!important;
+ box-sizing:border-box;
+}
+html[data-theme] body.audio-mode #stage footer {box-sizing:border-box}
+#stage .room-portrait {
+ position:relative;display:inline-grid;place-items:center;aspect-ratio:1;
+ isolation:isolate;overflow:visible!important;
+}
+#stage .audio-seat .room-portrait {width:min(15vw,8dvh,64px);flex:none}
+#stage .room-portrait .portrait-face {
+ position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+ width:90%;aspect-ratio:1;display:grid;place-items:center;
+ border-radius:50%;overflow:hidden;background:#547aa6;color:white;
+}
+html[data-theme] #stage .room-portrait .portrait-face img {
+ position:absolute!important;inset:0!important;
+ width:100%!important;height:100%!important;
+ margin:0!important;padding:0!important;transform:none!important;
+ object-fit:cover!important;border:0!important;
+}
+.portrait-frame {position:absolute;inset:0;pointer-events:none;
+ background-image:url("relaxia-frame-atlas.png");background-size:500% 200%}
+#sheet.gift-store-open #sheetBody {overflow-y:auto;display:flex;height:auto}
+#sheet.gift-store-open #sheetBody > * {flex-shrink:0}
+#sheet.gift-store-open .gift-grid {
+ --card-height:9rem;
+ grid-auto-rows:var(--card-height);
+ max-height:calc(2 * var(--card-height) + 1rem);
+ padding:2px 5px;gap:6px;overflow-y:auto;box-sizing:border-box;
+}
+#sheet.gift-store-open .gift-grid .gift-card {min-height:0}
+#sheet.gift-store-open .gift-tabs {padding-inline:7px}
+#sheet.gift-store-open .gift-preview {grid-template-columns:52px 1fr;min-height:0}
+#sheet.gift-store-open .gift-preview[hidden] {display:none}
+#sheet.gift-store-open .gift-preview-art {width:50px;height:50px;border-radius:50%;display:grid;place-items:center;font-size:30px}
+.gift-preview-art img {width:100%;height:100%;object-fit:contain}

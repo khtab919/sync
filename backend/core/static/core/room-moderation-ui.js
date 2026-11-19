@@ -13,6 +13,12 @@
      const input=result&&Array.isArray(result.comments)?result.comments:[];
      const filtered={...result,comments:input.filter(c=>!ignored.has(Number(c.user_id)))};
      originalDraw(filtered);
+     const card=document.querySelector('#sheet[open] .member-identity');
+     if(card){
+       const person=[...filtered.speakers,...filtered.comments,...(filtered.participants_visible||[])]
+         .find(p=>String(p.user_id)===card.dataset.userId);
+       if(person)card.textContent=identityLabel(person);
+     }
      const allow=filtered.room_settings?.chat_enabled!==false||!!filtered.manage_room;
      if($('text')){$('text').disabled=!allow;$('text').placeholder=allow?'اكتب تعليقًا…':'الدردشة مغلقة بقرار المضيف'}
      if($('sendComment'))$('sendComment').disabled=!allow;
@@ -86,7 +92,12 @@
    const id=Number(user?.user_id);
    if(!Number.isInteger(id)||id<1)return;
    const box=sheet('إجراءات المستخدم');
-   note(box,(user.name||'مستخدم')+(message?' · '+(message.text||''):''));
+   const card=document.createElement('strong');
+   card.className='member-identity';
+   card.dataset.userId=String(id);
+   card.textContent=identityLabel(user);
+   box.append(card);
+   if(message)note(box,message.text);
    if(id===config.userId){note(box,'هذه صفحتك الشخصية.');return}
    sectionHeading(box,'الخيارات الشخصية');
    if(config.gifts&&(state.speakers||[]).some(s=>s.user_id===id))button(box,'إرسال هدية لهذا المستخدم',()=>giftSheet(id));
@@ -197,8 +208,8 @@
    if(bubble){
      const id=Number(bubble.dataset.userId);
      if(Number.isInteger(id)&&id>0){
-       const message=(state.comments||[]).find(c=>Number(c.user_id)===id&&e.target.closest('.comment-bubble')===bubble);
-       e.preventDefault();e.stopPropagation();showUser({user_id:id,name:message?.name},message);
+       const message=(state.comments||[]).find(c=>String(c.id)===bubble.dataset.commentId);
+       e.preventDefault();e.stopPropagation();showUser(message,message);
      }
      return;
    }

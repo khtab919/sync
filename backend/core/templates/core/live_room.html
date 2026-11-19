@@ -5,8 +5,8 @@
 <title>Relaxia · مباشر</title>
 <link rel="stylesheet" href="/static/core/live-stage.css?v=rooms-controls-28">
 <link rel="stylesheet" href="/static/core/gift-cinema.css?v=cinema-1">
-<link rel="stylesheet" href="/static/core/relaxia-voice-royal.css?v=voice-30">
-<link rel="stylesheet" href="/static/core/room-moderation-ui.css?v=room-admin-1">
+<link rel="stylesheet" href="/static/core/relaxia-voice-royal.css?v=presence-1">
+<link rel="stylesheet" href="/static/core/room-moderation-ui.css?v=presence-1">
 <body{% if config.mode == "audio" %} class="audio-mode"{% endif %}>
 <main id="stage">
   <div id="video" aria-label="البث المباشر"{% if config.mode == "audio" %} hidden{% endif %}></div>
@@ -79,13 +79,6 @@
         <button id="sendComment" type="submit" class="composer-send" aria-label="إرسال التعليق"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 14-8-4 16-4-7-6-1zM11 13l8-9"/></svg></button>
       </form>
     </div>
-    {% if config.mode == "audio" %}
-    <button id="syriatelCashLink" type="button" class="cash-payment-strip"
-        aria-label="فتح طريقة شحن سيريتيل كاش داخل التطبيق">
-      <span class="cash-wallet-icon" aria-hidden="true">▣</span>
-      <span>بوابة الدفع: سيريتيل كاش <b dir="ltr">0997991404</b></span>
-    </button>
-    {% endif %}
   </footer>
 
   <div id="ended" hidden>
@@ -130,7 +123,7 @@
 <script src="/static/core/livekit-client.umd.min.js"></script>
 <script src="/static/core/live-media.js?v=rooms-mic-29"></script>
 <script src="/static/core/gift-cinema.js?v=cinema-1"></script>
-<script src="/static/core/live-stage.js?v=cinema-mic-2"></script>
-<script src="/static/core/room-moderation-ui.js?v=room-admin-1"></script>
+<script src="/static/core/live-stage.js?v=presence-1"></script>
+<script src="/static/core/room-moderation-ui.js?v=presence-1"></script>
 </body>
 </html>

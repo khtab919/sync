@@ -204,9 +204,7 @@ def logout(request):
 
 def profile_json(user, viewer):
     profile = Profile.objects.get(user=user)
-    from .profile_levels import profile_progress
     from .public_presence import public_presence
-    progress = profile_progress(user)
     identity = public_presence(user)
     return {
         'account_restricted':__import__('core.admin_security',fromlist=['blocked']).blocked(user,'ban') if user==viewer else False,
@@ -219,7 +217,7 @@ def profile_json(user, viewer):
         'level_color': identity['level_color'], 'vip_tier': identity['vip_tier'],
         'xp_points': identity['xp_points'],
         'next_level_xp': identity['next_level_xp'],
-        'owned_frames': progress['owned_frames'] if user==viewer else [],
+        'owned_frames': identity['owned_frames'] if user==viewer else [],
         'avatar_url': profile.avatar_url, 'chat_price_cents': profile.chat_price_cents,
         'followers_count': Follow.objects.filter(creator=user, user__is_active=True).count(),
         'following_count': Follow.objects.filter(user=user, creator__is_active=True).count(),
@@ -284,7 +282,9 @@ def me(request):
         profile.gender = p.get("gender", profile.gender)
         profile.bio, profile.display_name = bio, name
         profile.avatar_url = avatar_url
-        profile.selected_frame = p.get('selected_frame', profile.selected_frame)
+        if 'selected_frame' in p:
+            profile.selected_frame = p['selected_frame']
+            profile.frame_choice_explicit = True
         profile.chat_price_cents = p.get('chat_price_cents', profile.chat_price_cents)
         with transaction.atomic():
             lock_registry()

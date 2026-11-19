@@ -16,6 +16,33 @@ class StageTests(TestCase):
     def event(self,row,p,user=None):return self.request(f'/api/live/{row.pk}/events',p,user)
     def stage(self,limit=2):
         row=self.create();row.max_speakers=limit;row.gifts_enabled=True;row.save();self.join(row,self.viewer);self.join(row,self.other);return row
+    def test_observer_sees_current_identity_on_existing_comments_and_seats(self):
+        row = self.stage()
+        subject = self.viewer
+        self.event(row, {'action': 'seat_request', 'mode': 'audio'}, subject)
+        self.event(row, {'action': 'seat_decision', 'user_id': subject.pk, 'approve': True})
+        self.event(row, {'action': 'comment', 'text': 'hello'}, subject)
+        BenefitGrant.objects.create(user=subject, actor=self.owner, kind='frame', value=110,
+                                   expires_at=timezone.now() + timedelta(days=1))
+        headers = {'HTTP_AUTHORIZATION': 'Bearer ' + self.tokens[subject.pk]}
+
+        def assert_visible(frame, level):
+            profile = self.request('/api/creators/' + str(subject.pk), user=self.other).json()
+            room = self.request(f'/api/live/{row.pk}/events', user=self.other).json()
+            self.assertEqual((profile['selected_frame'], profile['level']), (frame, level))
+            for group in ('speakers', 'comments'):
+                person = next(p for p in room[group] if p['user_id'] == subject.pk)
+                self.assertEqual((person['selected_frame'], person['level']), (frame, level))
+                self.assertEqual(person['name'], profile['display_name'])
+                self.assertEqual(person['avatar_url'], profile['avatar_url'])
+
+        assert_visible(110, 1)
+        response = self.client.patch('/api/me', {'display_name': 'Updated', 'selected_frame': 0},
+                                     content_type='application/json', **headers)
+        self.assertEqual(response.status_code, 200, response.content)
+        ExperienceAward.objects.create(user=subject, source='test:identity', points=400)
+        assert_visible(0, 3)
+
     def test_media_diagnostics_are_authorized_bounded_and_do_not_accept_raw_errors(self):
         row=self.stage()
         payload={'action':'media_diagnostic','stage':'camera_capture','outcome':'failed','reason':'NotAllowedError','build':'media-1'}

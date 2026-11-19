@@ -23,6 +23,7 @@ class Profile(models.Model):
     chat_price_cents = models.PositiveIntegerField(default=0)
     bio = models.CharField(max_length=300, blank=True)
     display_name = models.CharField(max_length=100, blank=True)
+    frame_choice_explicit = models.BooleanField(default=False)
     selected_frame = models.PositiveSmallIntegerField(default=0)
     avatar_url = models.URLField(max_length=500, blank=True)
     last_active_at = models.DateTimeField(null=True, blank=True)
