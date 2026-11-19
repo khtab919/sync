@@ -12,6 +12,8 @@ const cinemaCss=fs.readFileSync(path.join(root,'core/static/core/gift-cinema.css
 const royalCss=fs.readFileSync(path.join(root,'core/static/core/relaxia-voice-royal.css'),'utf8');
 const layoutCss=fs.readFileSync(path.join(root,'core/static/core/room-layout-v2.css'),'utf8');
 const cinemaJs=fs.readFileSync(path.join(root,'core/static/core/gift-cinema.js'),'utf8');
+const moderationJs=fs.readFileSync(path.join(root,'core/static/core/room-moderation-ui.js'),'utf8');
+const moderationCss=fs.readFileSync(path.join(root,'core/static/core/room-moderation-ui.css'),'utf8');
 const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8').replace('connect().catch(e=>{message(e);if(e.name!==\'MediaFailure\')reconnect()});','');
 (async()=>{
  const browser=await chromium.launch({headless:true,...(process.env.CAPTURE_CHROMIUM?{executablePath:process.env.CAPTURE_CHROMIUM}:{}),args:['--no-sandbox']});
@@ -22,9 +24,11 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    await page.route('https://room.test/',route=>route.fulfill({contentType:'text/html',body:html}));
    // The luxury pack may not yet be present on a new server: no broken icons.
    await page.route('**/static/core/gifts/icons/*.webp',route=>route.fulfill({status:404,body:''}));
-   await page.goto('https://room.test/');await page.addStyleTag({content:css});await page.addStyleTag({content:cinemaCss});await page.addStyleTag({content:royalCss});await page.addStyleTag({content:layoutCss});
+   await page.goto('https://room.test/');await page.addStyleTag({content:css});await page.addStyleTag({content:cinemaCss});await page.addStyleTag({content:royalCss});await page.addStyleTag({content:moderationCss});await page.addStyleTag({content:layoutCss});
    await page.evaluate(()=>{window.LivekitClient={Room:{},RoomEvent:{},Track:{},ConnectionState:{Connected:'connected'}};window.RelaxiaMedia={}});
-   await page.addScriptTag({content:cinemaJs});await page.addScriptTag({content:js});
+   await page.addScriptTag({content:cinemaJs});
+   await page.addScriptTag({content:js});
+   await page.addScriptTag({content:moderationJs});
    assert.equal(await page.locator('.audio-seat').count(),8,'placeholder seats render before network response');
    await page.evaluate(()=>{
     window.sent=[];room={state:'connected',localParticipant:{}};
