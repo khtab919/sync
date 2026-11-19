@@ -394,6 +394,10 @@ def room_events(request,broadcast_id):
     result['participants_visible']=[{'user_id':x.user_id,
         'name':x.user.profile.display_name or x.user.username,'avatar_url':x.user.profile.avatar_url}
         for x in LiveAdmission.objects.filter(broadcast=row,connected=True).select_related('user__profile')[:100]]
+    apply_room_identity(result)
+    return JsonResponse(result)
+
+def apply_room_identity(result):
     from .public_presence import public_presence_bulk
     groups = [result.get(key, []) for key in (
         'speakers', 'comments', 'participants_visible', 'participants', 'seat_requests',
@@ -408,7 +412,6 @@ def room_events(request,broadcast_id):
                 'level_color', 'vip_tier', 'identity_verified',
             )})
             item['vip'] = bool(identity['vip_tier'])
-    return JsonResponse(result)
 
 @csrf_exempt
 def control(request,broadcast_id):
@@ -459,6 +462,7 @@ def administration(request):
         except ApiError:pass
         from .live_stage import snapshot
         info=snapshot(row,request.actor)
+        apply_room_identity(info)
         item=describe(row,request.actor);item.update({k:info[k] for k in ('speakers','pk','gift_total_cents','gift_goal_cents')});item['reports']=[{'id':r.pk,'reason':r.reason} for r in LiveReport.objects.filter(broadcast=row,resolved=False)];items.append(item)
     pending=LiveReport.objects.filter(resolved=False).exclude(broadcast__status__in=LIVE).select_related('broadcast__owner__profile','user__profile').order_by('-id')[:100]
     reports=[{'id':r.pk,'broadcast_id':str(r.broadcast_id),'title':r.broadcast.title,'owner_name':r.broadcast.owner.profile.display_name or r.broadcast.owner.username,'reporter_name':r.user.profile.display_name or r.user.username,'reason':r.reason,'created_at':r.created_at.isoformat()} for r in pending]

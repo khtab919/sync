@@ -54,7 +54,7 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    assert.equal(await page.locator('.empty-seat .seat-plus svg').count(),7,'all empty seats use consistent microphone SVG icons');
    assert.ok(await page.locator('.host-seat').count()===1,'host uses distinct decorated seat');
    assert.ok(!(await page.locator('body').innerText()).includes('80٪'),'the live room never reveals payout percentages');
-   assert.equal(await page.locator('.empty-seat').first().getAttribute('aria-label'),'مقعد 2 · طلب الميكروفون');
+   assert.equal(await page.locator('.empty-seat').first().getAttribute('aria-label'),'مقعد 1 · طلب الميكروفون');
    assert.equal(await page.locator('#title').innerText(),'ID: 58321');
    assert.ok(!(await page.locator('#badge').innerText()).includes('undefined'),'level must not expose undefined placeholders');
    await page.evaluate(async()=>{qaRoom.status='starting';reconnectSince=Date.now()-13000;await refresh()});
@@ -160,8 +160,8 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    // Simulate Gboard reducing the viewport before the native keyboard test.
    await page.setViewportSize({width,height:440});
    await page.locator('#text').focus();
-   assert.equal(await page.locator('body').evaluate(el=>el.classList.contains('chat-focused')),true,'keyboard focus adjusts the room layout');
-   assert.equal(await page.locator('#audioStage').isVisible(),false,'keyboard prioritizes comments over seats on short screens');
+   assert.equal(await page.locator('body').evaluate(el=>el.classList.contains('chat-focused')),false,'typing keeps all four room zones visible');
+   assert.equal(await page.locator('#audioStage').isVisible(),true,'seat grid stays visible while typing');
    assert.equal(await page.locator('.quick-actions').isVisible(),true,'room action menus stay tappable while typing');
    await page.locator('#more').click();
    assert.equal(await page.locator('#sheet').evaluate(el=>el.open),true,'more menu opens with keyboard focused');
@@ -323,6 +323,20 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    assert.equal(await page.locator('#giftEffect .gift-cinema-combo').innerText(),'×10','combo visible');
    assert.equal(await page.locator('#giftEffect img').count(),0,'effect needs no static image asset');
    if(process.env.LIVE_PREVIEW_DIR)await page.screenshot({path:path.join(process.env.LIVE_PREVIEW_DIR,`whale-effect-${width}.png`)});
+   await page.addScriptTag({path:path.join(root,'core/static/core/room-moderation-ui.js')});
+   await page.evaluate(()=>{
+    qaRoom.comments=[{user_id:7,id:77,name:'عضو',level:23,selected_frame:120,text:'رسالة'}];
+    drawState(qaRoom);
+   });
+   await page.locator('.comment-author').click();
+   assert.match(await page.locator('.member-identity').innerText(),/Lv 23/);
+   assert.equal(await page.locator('.member-identity .portrait-frame').count(),1);
+   await page.evaluate(()=>{
+    Object.assign(qaRoom.comments[0],{level:24,selected_frame:0});
+    drawState(qaRoom);
+   });
+   assert.match(await page.locator('.member-identity').innerText(),/Lv 24/);
+   assert.equal(await page.locator('.member-identity .portrait-frame').count(),0);
    await page.close();
   }
   console.log('PASS: 8 seats at 320/360/430px, five-digit ID, speaker mute/unmute, emoji picker, comment and like, guest request, two-tap confirmation, procedural whale, safe seat selection. Synthetic UI only.');

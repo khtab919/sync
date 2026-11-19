@@ -40,7 +40,14 @@ class StageTests(TestCase):
         response = self.client.patch('/api/me', {'display_name': 'Updated', 'selected_frame': 0},
                                      content_type='application/json', **headers)
         self.assertEqual(response.status_code, 200, response.content)
-        ExperienceAward.objects.create(user=subject, source='test:identity', points=400)
+        self.mock.reset_mock()
+        with self.captureOnCommitCallbacks(execute=True):
+            ExperienceAward.objects.create(user=subject, source='test:identity', points=400)
+            self.assertFalse(any(call.args[0] == 'SendData' for call in self.mock.call_args_list))
+        notifications = [call for call in self.mock.call_args_list if call.args[0] == 'SendData']
+        self.assertEqual(len(notifications), 1)
+        self.assertEqual(notifications[0].args[1]['room'], live.room_name(row))
+        self.assertEqual(notifications[0].args[1]['topic'], 'profile.changed')
         assert_visible(0, 3)
 
     def test_media_diagnostics_are_authorized_bounded_and_do_not_accept_raw_errors(self):

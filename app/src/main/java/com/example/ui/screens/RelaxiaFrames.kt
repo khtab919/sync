@@ -20,7 +20,7 @@ internal fun RelaxiaAvatar(name: String, frame: Int, size: Int, imageUrl: String
 
 @Composable
 internal fun RelaxiaFramePicker(current: Int, name: String, imageUrl: String,
-    level: Int, ownedFrames: Set<Int>, onChoose: (Int) -> Unit) {
+    level: Int = 0, ownedFrames: Set<Int> = emptySet(), onChoose: (Int) -> Unit) {
     Column(Modifier.fillMaxWidth().padding(horizontal=16.dp), verticalArrangement=Arrangement.spacedBy(16.dp)) {
         Text("إطاراتي", style=MaterialTheme.typography.headlineMedium)
         RelaxiaLevelBadge(level)
