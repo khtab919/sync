@@ -114,6 +114,14 @@ fun ServerAppScreen(baseUrl: String) {
     var loading by remember { mutableStateOf(false) }
     var submitting by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf("") }
+    var accountDiscipline by remember { mutableStateOf<JSONObject?>(null) }
+    var restrictionClock by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(accountDiscipline) {
+        while(accountDiscipline!=null){
+            restrictionClock=System.currentTimeMillis()
+            delay(1000)
+        }
+    }
     var contentError by remember { mutableStateOf("") }
     var profile by remember { mutableStateOf(JSONObject()) }
     var services by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
@@ -186,7 +194,19 @@ fun ServerAppScreen(baseUrl: String) {
         scope.launch {
             try { action() }
             catch (e: CancellationException) { throw e }
-            catch (e: Exception) { notice = friendlyError(e.message) }
+            catch (e: Exception) {
+                if(e.message in listOf("account_suspended","account_banned_permanent","invalid_credentials")
+                   && email.isNotBlank() && password.isNotBlank() && !register){
+                    val status=runCatching {
+                        api.request("/api/account/status","POST",JSONObject()
+                            .put("email",email.trim()).put("password",password))
+                    }.getOrNull()
+                    if(status!=null&&status.optString("status") in listOf("suspended","banned_permanent")){
+                        accountDiscipline=status
+                        notice=""
+                    }else notice=friendlyError(e.message)
+                }else notice=friendlyError(e.message)
+            }
             finally { if (api.token == null) { signedIn = false; remembered = false } else if (!signedIn) remembered = true; submitting = false }
         }
     }
@@ -380,7 +400,7 @@ fun ServerAppScreen(baseUrl: String) {
             }catch(e:CancellationException){throw e}
             catch(_:Exception){livePreview=emptyList();livePreviewError=true}
             finally{livePreviewLoading=false}
-            delay(10000)
+            delay(5000)
         }
     }
     // Android back from a full-screen Reel must return home, never exit the app.
@@ -513,6 +533,41 @@ fun ServerAppScreen(baseUrl: String) {
             return@MyApplicationTheme
         }
         if (!signedIn) {
+            if(accountDiscipline?.optString("status") in listOf("suspended","banned_permanent")){
+                val s=accountDiscipline!!
+                val suspended=s.optString("status")=="suspended"
+                val until=runCatching{java.time.Instant.parse(s.optString("suspended_until")).toEpochMilli()}.getOrDefault(0L)
+                val left=((until-restrictionClock)/1000).coerceAtLeast(0)
+                Surface(Modifier.fillMaxSize().safeDrawingPadding(),color=MaterialTheme.colorScheme.background){
+                    Column(Modifier.fillMaxSize().padding(24.dp),
+                        horizontalAlignment=Alignment.CenterHorizontally,
+                        verticalArrangement=Arrangement.Center){
+                        Icon(Icons.Rounded.GppBad,contentDescription=null,
+                            modifier=Modifier.size(60.dp),tint=MaterialTheme.colorScheme.error)
+                        Spacer(Modifier.height(18.dp))
+                        Text(if(suspended)"حسابك معلّق مؤقتًا"else"تم حظر الحساب نهائيًا",
+                            style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.Bold)
+                        Spacer(Modifier.height(12.dp))
+                        Text("سبب القرار: "+s.optString("reason"),
+                            style=MaterialTheme.typography.bodyLarge)
+                        if(suspended){
+                            Spacer(Modifier.height(16.dp))
+                            Text("الوقت المتبقي: "+(left/86400)+" يوم · "+
+                                ((left%86400)/3600)+" ساعة · "+
+                                ((left%3600)/60)+" دقيقة · "+(left%60)+" ثانية",
+                                style=MaterialTheme.typography.titleMedium)
+                        }
+                        Spacer(Modifier.height(20.dp))
+                        OutlinedButton(onClick={accountDiscipline=null;notice="";password=""}){
+                            Text("عودة إلى تسجيل الدخول")
+                        }
+                        Text("يمكنك التواصل مع الدعم لطلب مراجعة القرار.",
+                            modifier=Modifier.padding(top=12.dp),
+                            style=MaterialTheme.typography.bodySmall)
+                    }
+                }
+                return@MyApplicationTheme
+            }
             ReferenceLogin(register, submitting, notice, username, password, email, adultConfirmed,
                 { username = it }, { password = it }, { email = it }, { adultConfirmed = it },
                 { register = !register; notice = "" }, { perform {
@@ -740,6 +795,21 @@ fun ServerAppScreen(baseUrl: String) {
                     if ((loading && rows.isEmpty() && screen in listOf("دردشة", "الحجوزات", "المحفوظات", "ريلز")) || (loading && services.isEmpty() && screen in listOf("تصفح", "العرض"))) item { LuxurySkeletonCards() }
                     when (screen) {
                         "تصفح" -> {
+                            if(livePreview.isNotEmpty()){
+                                item(key="home_live_hosts"){
+                                    RelaxiaLiveHostsBar(
+                                        rooms=livePreview,
+                                        onOpenRoom={room->
+                                            selectedHomeRoomId=room.optString("id")
+                                            open("البث المباشر")
+                                        },
+                                        onBrowse={
+                                            selectedHomeRoomId=""
+                                            open("البث المباشر")
+                                        }
+                                    )
+                                }
+                            }
                             item(key = "home_dashboard") {
                                 RelaxiaHomeDashboard(
                                     profile = profile,
@@ -785,11 +855,22 @@ fun ServerAppScreen(baseUrl: String) {
                             }
                             val visible = services
                             if (visible.isEmpty() && !loading && contentError.isBlank()) item { ReferenceEmpty(Icons.Rounded.Explore, "لا توجد عروض جديدة الآن", "يمكنك تصفح البثوث والغرف والريلز، أو العودة بعد نشر عروض جديدة.") }
-                            items(visible, key = { it.optInt("id") }) { service ->
-                                FeedCard(service, { showCreator(service.optInt("owner_id")) }, { showService(service) }, { kind -> perform {
-                                    val updated = api.request("/api/services/${service.optInt("id")}/reaction", "POST", JSONObject().put("kind", kind).put("enabled", !service.optBoolean(if (kind == "like") "liked" else "saved")))
-                                    services = services.map { if (it.optInt("id") == updated.optInt("id")) updated else it }
-                                } }, { startChat(service.optInt("owner_id"), service.optString("owner_name")) })
+                            visible.forEachIndexed { index, service ->
+                                item(key = "feed-service-${service.optInt("id")}") {
+                                    FeedCard(service, { showCreator(service.optInt("owner_id")) }, { showService(service) }, { kind -> perform {
+                                        val updated = api.request("/api/services/${service.optInt("id")}/reaction", "POST", JSONObject().put("kind", kind).put("enabled", !service.optBoolean(if (kind == "like") "liked" else "saved")))
+                                        services = services.map { if (it.optInt("id") == updated.optInt("id")) updated else it }
+                                    } }, { startChat(service.optInt("owner_id"), service.optString("owner_name")) })
+                                }
+                                if ((index+1)%5==0 && livePreview.isNotEmpty()) {
+                                    val liveRoom=livePreview[((index+1)/5-1)%livePreview.size]
+                                    item(key="interleaved-room-${index+1}-${liveRoom.optString("id")}") {
+                                        RelaxiaInFeedLiveCard(liveRoom){
+                                            selectedHomeRoomId=liveRoom.optString("id")
+                                            open("البث المباشر")
+                                        }
+                                    }
+                                }
                             }
                         }
                         "العرض", "المحفوظات" -> {

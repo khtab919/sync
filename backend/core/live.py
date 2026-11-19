@@ -64,13 +64,17 @@ def find(user,pk,owner=False):
 def authorized(row,user):
     eligible(user,host=user.pk==row.owner_id)
     if row.status not in LIVE or not row.owner.is_active:raise ApiError('broadcast_ended',409)
+    if user.pk!=row.owner_id and not user.is_superuser:
+        from .models import LiveHostBan
+        if LiveHostBan.objects.filter(host_id=row.owner_id,user=user).exists():
+            raise ApiError('host_permanent_ban',403)
     if user.pk!=row.owner_id and not moderator(user) and UserBlock.objects.filter(Q(user=row.owner,blocked=user)|Q(user=user,blocked=row.owner)).exists():raise ApiError('broadcast_forbidden',403)
     if row.invite_only and not moderator(user) and user.pk!=row.owner_id and not row.invited.filter(pk=user.pk).exists():raise ApiError('invitation_required',403)
     if LiveAdmission.objects.filter(broadcast=row,user=user,banned=True).exists():raise ApiError('broadcast_forbidden',403)
 
 def describe(row,user):
     admission=LiveAdmission.objects.select_related('operation').filter(broadcast=row,user=user).first()
-    return {'id':row.pk,'owner_id':row.owner_id,'owner_name':row.owner.profile.display_name or row.owner.username,'avatar_url':row.owner.profile.avatar_url,'title':row.title,'mode':row.mode,'max_speakers':(min(row.max_speakers,8) if row.mode=='audio' else row.max_speakers),'private':row.private,'invite_only':row.invite_only,'price_cents':row.price_cents,'max_viewers':row.max_viewers,'viewers':row.viewers,'minimum_seconds':row.minimum_seconds,'status':row.status,'gifts_enabled':row.gifts_enabled,'likes':LiveLike.objects.filter(broadcast=row).count(),'liked':LiveLike.objects.filter(broadcast=row,user=user).exists(),'following':__import__('core.models',fromlist=['Follow']).Follow.objects.filter(user=user,creator=row.owner).exists(),'owner':row.owner_id==user.pk,'admitted':bool(admission and not admission.banned),'payment_status':admission.operation.status if admission and admission.operation_id else 'free','refund_policy':f'يُحجز السعر عند التأكيد. تستحق الخدمة بعد {row.minimum_seconds} ثانية من إتاحة الوسائط أثناء اتصالك. يُعاد الحجز إذا انتهى البث قبل ذلك. لا يتكرر الدفع لإعادة الدخول في البث نفسه.'}
+    return {'id':row.pk,'owner_id':row.owner_id,'owner_name':row.owner.profile.display_name or row.owner.username,'avatar_url':row.owner.profile.avatar_url,'title':row.title,'mode':row.mode,'speaker_count':1+__import__('core.models',fromlist=['LiveSeat']).LiveSeat.objects.filter(admission__broadcast=row,status='approved',admission__banned=False).count(),'max_speakers':(min(row.max_speakers,8) if row.mode=='audio' else row.max_speakers),'private':row.private,'password_protected':bool(row.password_hash),'invite_only':row.invite_only,'price_cents':row.price_cents,'max_viewers':row.max_viewers,'viewers':row.viewers,'minimum_seconds':row.minimum_seconds,'status':row.status,'gifts_enabled':row.gifts_enabled,'likes':LiveLike.objects.filter(broadcast=row).count(),'liked':LiveLike.objects.filter(broadcast=row,user=user).exists(),'following':__import__('core.models',fromlist=['Follow']).Follow.objects.filter(user=user,creator=row.owner).exists(),'owner':row.owner_id==user.pk,'admitted':bool(admission and not admission.banned),'payment_status':admission.operation.status if admission and admission.operation_id else 'free','refund_policy':f'يُحجز السعر عند التأكيد. تستحق الخدمة بعد {row.minimum_seconds} ثانية من إتاحة الوسائط أثناء اتصالك. يُعاد الحجز إذا انتهى البث قبل ذلك. لا يتكرر الدفع لإعادة الدخول في البث نفسه.'}
 
 def financial_locks(row):
     ids=list(LiveAdmission.objects.filter(broadcast=row).values_list('user_id',flat=True))+[row.owner_id]
@@ -146,7 +150,8 @@ def synchronize(row,force=False):
             media_peer=next((p for p in participants if str(p.get('identity'))==str(a.pk)),{})
             if present and not seat and media_peer.get('tracks'):
                 invalid.append(str(a.pk));present=False
-            if present and (a.banned or not a.user.is_active or not a.session_id or not SessionToken.objects.filter(pk=a.session_id,expires_at__gt=now).exists() or (not moderator(a.user) and UserBlock.objects.filter(Q(user=locked.owner,blocked=a.user)|Q(user=a.user,blocked=locked.owner)).exists())):invalid.append(str(a.pk));present=False
+            from .models import LiveHostBan
+            if present and (a.banned or LiveHostBan.objects.filter(host=locked.owner,user=a.user).exists() or not a.user.is_active or not a.session_id or not SessionToken.objects.filter(pk=a.session_id,expires_at__gt=now).exists() or (not moderator(a.user) and UserBlock.objects.filter(Q(user=locked.owner,blocked=a.user)|Q(user=a.user,blocked=locked.owner)).exists())):invalid.append(str(a.pk));present=False
             if present:viewers+=1
             if present and a.connected and transmitting and previous and previously_active:
                 a.watched_seconds+=min(10,max(0,int((now-previous).total_seconds())))
@@ -192,7 +197,7 @@ def broadcasts(request):
         except ApiError:
             row.status='failed';row.ended_at=timezone.now();row.save();raise
         return JsonResponse(describe(row,request.actor),status=201)
-    rows=LiveBroadcast.objects.filter(status__in=LIVE,owner__is_active=True).select_related('owner__profile').order_by('-created_at')[:50]
+    rows=LiveBroadcast.objects.filter(status__in=LIVE,owner__is_active=True).select_related('owner__profile').order_by('-viewers','-created_at')[:50]
     items=[];healthy=enabled()
     if healthy:
         try:provider('ListRooms',{})
@@ -236,11 +241,17 @@ def admission(request,broadcast_id):
         row=LiveBroadcast.objects.select_for_update().get(pk=row.pk)
         authorized(row,request.actor)
         a=LiveAdmission.objects.select_for_update().filter(broadcast=row,user=request.actor).first()
+        from .live_moderation import check_room_password,is_global
+        check_room_password(row,request.actor,a,request.payload.get('password'))
         if a and a.operation_id and a.operation.status=='refunded':raise ApiError('admission_refunded',409)
         if request.actor.pk!=row.owner_id and not moderator(request.actor) and not(a and a.connected):
             reserved=LiveAdmission.objects.filter(broadcast=row,user__is_active=True,banned=False).exclude(user_id__in=[row.owner_id,request.actor.pk]).filter(Q(connected=True)|Q(token_until__gt=timezone.now())).count()
             if reserved>=row.max_viewers:raise ApiError('live_capacity',409)
         if a is None:a=LiveAdmission.objects.create(broadcast=row,user=request.actor)
+        if row.password_hash and request.actor.pk!=row.owner_id and not is_global(request.actor):
+            if not a.password_verified_at:
+                a.password_verified_at=timezone.now()
+                a.save(update_fields=['password_verified_at'])
         if row.private and request.actor.pk!=row.owner_id and not moderator(request.actor) and a.operation_id is None:
             if request.payload.get('confirmed') is not True or type(request.payload.get('price_cents')) is not int or request.payload['price_cents']!=row.price_cents:raise ApiError('price_confirmation_required',409)
             a.operation=finance.hold(request.actor,row.owner,'live_entry',uuid.UUID(str(row.pk)),str(row.pk),row.price_cents);a.save(update_fields=['operation'])
@@ -248,11 +259,13 @@ def admission(request,broadcast_id):
         raw=secrets.token_urlsafe(48)
         LiveRoomTicket.objects.filter(expires_at__lt=timezone.now()).delete()
         LiveRoomTicket.objects.create(digest=hashlib.sha256(raw.encode()).hexdigest(),admission=a,session=request.api_token,expires_at=timezone.now()+timedelta(seconds=30))
-    return JsonResponse({'url':request.build_absolute_uri(f'/api/live/{row.pk}/room'),'ticket':raw,'owner':request.actor.pk==row.owner_id,'mode':row.mode})
+    return JsonResponse({'url':request.build_absolute_uri(f'/api/live/{row.pk}/room'),'ticket':raw,'owner':request.actor.pk==row.owner_id,'mode':row.mode,'user_id':request.actor.pk})
 
 def join_token(a,session):
     if a.session_id!=session.pk:raise ApiError('live_authorization_required',403)
     row=a.broadcast;authorized(row,a.user)
+    from .live_moderation import check_room_password
+    check_room_password(row,a.user,a)
     if a.operation_id and a.operation.status=='refunded':raise ApiError('admission_refunded',403)
     owner=a.user_id==row.owner_id
     if row.private and not owner and not moderator(a.user) and not a.operation_id:raise ApiError('payment_required',403)
@@ -291,6 +304,8 @@ def authorize(request):
         session=SessionToken.objects.select_related('user').get(pk=metadata['session'],expires_at__gt=timezone.now(),user__is_active=True)
         a=LiveAdmission.objects.select_related('broadcast__owner','user','operation').get(pk=metadata['admission'],user=session.user,session=session)
         authorized(a.broadcast,a.user)
+        from .live_moderation import check_room_password
+        check_room_password(a.broadcast,a.user,a)
         if data.get('video',{}).get('room')!=room_name(a.broadcast) or data['sub']!=('host-'+str(a.user_id) if a.user_id==a.broadcast.owner_id else str(a.pk)):raise ValueError()
         from .live_stage import publishing
         can_publish,sources=publishing(a)
@@ -308,6 +323,8 @@ def events(request,broadcast_id):
 def room_events(request,broadcast_id):
     row=find(request.actor,broadcast_id);authorized(row,request.actor)
     a=LiveAdmission.objects.filter(broadcast=row,user=request.actor,banned=False).first()
+    from .live_moderation import check_room_password,ensure_chat_allowed
+    check_room_password(row,request.actor,a)
     if not a or (row.private and request.actor.pk!=row.owner_id and not moderator(request.actor) and not a.operation_id):raise ApiError('admission_required',403)
     if request.method=='POST':
         action=request.payload.get('action')
@@ -324,34 +341,59 @@ def room_events(request,broadcast_id):
             logging.getLogger('relaxia.live.media').warning('client_media room=%s user=%s stage=%s outcome=%s reason=%s build=media-1',row.pk,request.actor.pk,stage,outcome,reason)
             return JsonResponse({'accepted':True})
         elif action=='comment':
+            body=text(request.payload,'text',1,300)
+            ensure_chat_allowed(row,request.actor,body)
+            last=LiveComment.objects.filter(broadcast=row,user=request.actor).order_by('-created_at').first()
+            if last and (timezone.now()-last.created_at).total_seconds()<row.chat_slow_seconds and request.actor.pk!=row.owner_id:
+                raise ApiError('room_slow_mode',429)
             if LiveComment.objects.filter(user=request.actor,created_at__gt=timezone.now()-timedelta(seconds=10)).count()>=5:raise ApiError('slow_down',429)
-            LiveComment.objects.create(broadcast=row,user=request.actor,text=text(request.payload,'text',1,300))
+            LiveComment.objects.create(broadcast=row,user=request.actor,text=body)
         elif action=='like':LiveLike.objects.get_or_create(broadcast=row,user=request.actor)
         elif action=='follow':
             from .models import Follow
             if request.actor.pk==row.owner_id:raise ApiError('invalid_action')
             Follow.objects.get_or_create(user=request.actor,creator=row.owner)
-        elif action=='report':LiveReport.objects.create(broadcast=row,user=request.actor,reason=text(request.payload,'reason',3,500))
+        elif action in ('report','report_user'):
+            target=None
+            if action=='report_user':
+                user_id=request.payload.get('user_id')
+                if type(user_id) is not int or user_id==request.actor.pk:raise ApiError('invalid_user_id')
+                target=User.objects.filter(pk=user_id).first()
+                if not target or not LiveAdmission.objects.filter(broadcast=row,user=target).exists():raise ApiError('participant_unavailable',404)
+            LiveReport.objects.create(broadcast=row,user=request.actor,target_user=target,
+                                     reason=text(request.payload,'reason',3,500))
         elif action in ('gift','seat_request','seat_decision','seat_leave','pin_comment','delete_comment','set_moderator','pk_start','pk_cancel'):
             from .live_stage import action as stage_action
             stage_action(request,row,a)
+        elif action in ('kick_user','mute_chat','unmute_chat','force_mute_mic','release_mic_mute',
+                      'invite_to_seat','remove_from_seat','set_room_moderator','ban_from_host_rooms',
+                      'remove_host_ban','room_settings'):
+            from .live_moderation import manager_action
+            manager_action(request,row)
         elif action=='ban':
             from .live_stage import require_room_manager
             require_room_manager(request,row)
             user_id=amount(request.payload,'user_id')
             target=LiveAdmission.objects.filter(broadcast=row,user_id=user_id).exclude(user=row.owner).first()
             if not target:raise ApiError('participant_unavailable',404)
-            if moderator(target.user):raise ApiError('protected_account',403)
+            from .live_moderation import check_target
+            check_target(row,request.actor,target.user)
             target.banned=True;target.connected=False;target.token_until=None;target.save(update_fields=['banned','connected','token_until'])
             provider('RemoveParticipant',{'room':room_name(row),'identity':str(target.pk)},room_name(row));audit(request.actor,row,f'Banned live participant {user_id}')
         else:raise ApiError('invalid_action')
     synchronize(row)
     row.refresh_from_db()
     comments=LiveComment.objects.filter(broadcast=row).select_related('user__profile').order_by('-id')[:50]
-    result=describe(row,request.actor);result['comments']=[{'id':c.pk,'user_id':c.user_id,'name':c.user.profile.display_name or c.user.username,'text':c.text} for c in reversed(comments)]
+    result=describe(row,request.actor);result['comments']=[{'id':c.pk,'user_id':c.user_id,
+        'name':c.user.profile.display_name or c.user.username,'text':c.text} for c in reversed(comments)]
     from .live_stage import snapshot,room_moderator
     result.update(snapshot(row,request.actor));result['server_time']=timezone.now()
-    if room_moderator(row,request.actor):result['participants']=[{'user_id':x.user_id,'name':x.user.profile.display_name or x.user.username} for x in LiveAdmission.objects.filter(broadcast=row,connected=True).exclude(user=row.owner).select_related('user__profile')]
+    if room_moderator(row,request.actor):result['participants']=[{'user_id':x.user_id,
+        'name':x.user.profile.display_name or x.user.username} for x in LiveAdmission.objects.filter(
+            broadcast=row,connected=True).exclude(user=row.owner).select_related('user__profile')]
+    result['participants_visible']=[{'user_id':x.user_id,
+        'name':x.user.profile.display_name or x.user.username,'avatar_url':x.user.profile.avatar_url}
+        for x in LiveAdmission.objects.filter(broadcast=row,connected=True).select_related('user__profile')[:100]]
     return JsonResponse(result)
 
 @csrf_exempt

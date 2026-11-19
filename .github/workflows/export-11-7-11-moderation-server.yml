@@ -1,0 +1,136 @@
+name: Export Relaxia 11.7.11 Moderation Server Bundle
+
+on:
+  push:
+    branches: [feat/relaxia-roles-moderation-live-feed-20261119]
+    paths:
+      - '.github/workflows/export-11-7-11-moderation-server.yml'
+      - 'backend/deploy_relaxia_11_7_11.sh'
+      - 'backend/core/**'
+      - 'backend/config/**'
+      - 'backend/requirements.txt'
+      - 'backend/Dockerfile'
+  pull_request:
+    paths:
+      - '.github/workflows/export-11-7-11-moderation-server.yml'
+      - 'backend/deploy_relaxia_11_7_11.sh'
+      - 'backend/core/**'
+      - 'backend/config/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate source without secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m compileall -q backend/core backend/config
+          bash -n backend/deploy_relaxia_11_7_11.sh
+          node --check backend/core/static/core/live-stage.js
+          node --check backend/core/static/core/live-media.js
+          node --check backend/core/static/core/room-moderation-ui.js
+          node --check backend/core/static/core/gift-cinema.js
+      - name: Create server source bundle and secure installer
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp backend/deploy_relaxia_11_7_11.sh dist/deploy-relaxia-11.7.11.sh
+          chmod 700 dist/deploy-relaxia-11.7.11.sh
+          cp firestore.rules dist/firestore-moderation-reference.rules
+          cat > dist/DEPLOY-README-AR.txt <<'DOC'
+          Relaxia 11.7.11 — تحديث الخادم ونظام الإشراف
+          ===========================================
+          جميع ملفات هذا ZIP مأخوذة من فرع تطوير Relaxia في مستودع khtab919/sync
+          بتاريخ 19 نوفمبر 2026، وليس من صورة أو نسخة تجريبية أخرى.
+          الحزمة تحتوي backend/core, backend/config, Django migrations, Django
+          template/static, requirements, manage.py وDockerfile.
+          لا توجد مفاتيح توقيع APK أو بيانات اعتماد حسابات أو .env داخل الحزمة.
+
+          يجب أن يكون مشروعك الأصلي موجوداً في /opt/layali وملف compose في
+          /opt/layali/backend/compose.yaml مع .env موجود مسبقاً.
+          يتم الحفاظ على قاعدة PostgreSQL وملفات المستخدمين وملف Docker Compose
+          وملف .env، ويُنشئ المثبّت نسخاً احتياطية قبل أي تعديل.
+
+          ارفع الملفين معاً إلى /opt:
+          - Relaxia-11.7.11-Server-Moderation.zip
+          - deploy-relaxia-11.7.11.sh
+
+          افحص أولاً (دون أي تغييرات):
+            sudo bash /opt/deploy-relaxia-11.7.11.sh --check /opt/Relaxia-11.7.11-Server-Moderation.zip
+
+          شغّل بعد نجاح الاختبار على بيئة تجريبية:
+            sudo bash /opt/deploy-relaxia-11.7.11.sh --apply /opt/Relaxia-11.7.11-Server-Moderation.zip
+
+          لا تنفّذ docker compose down -v أبداً.
+          نسخة المصدر والقاعدة والوسائط تُحفظ في /opt/layali-backups.
+          قد يؤدي إعادة إنشاء خدمات api وlive-api إلى انقطاع جلسات البث الجارية
+          لفترة وجيزة؛ يفضل وقت صيانة أو التحقق على خادم تجريبي.
+
+          تحذير مهم: تكامل Firebase اختياري ومغلق افتراضياً؛ لا تضف مفاتيح
+          خدمة Firebase إلى التطبيق أو الحزمة. لا تُنشر قواعد Firestore الجديدة
+          آلياً بهذا المثبّت ويجب مراجعتها ونشرها بشكل منفصل.
+          نتائج اختبارات Django وLiveKit/TURN كانت ناجحة في تشغيل سابق، لكن
+          اختبار واجهة المتصفح كشف أيقونة صغيرة جداً وتم إصلاح مقاسها في الشيفرة.
+          قبل النشر على الإنتاج ينبغي اختبار دخول 12 مشاهداً فعلياً وتأكيد
+          نجاح أحدث اختبارات الواجهة على شاشة Android صغيرة.
+          DOC
+          python3 - <<'PY'
+          import subprocess,zipfile,pathlib,hashlib
+          root=pathlib.Path('.')
+          dest=pathlib.Path('dist/Relaxia-11.7.11-Server-Moderation.zip')
+          all_paths=subprocess.check_output(['git','ls-files','-z','--','backend/core','backend/config',
+                            'backend/requirements.txt','backend/manage.py','backend/Dockerfile',
+                            'backend/fetch_live_sdk.py']).split(b'\0')
+          files=[]
+          for raw in all_paths:
+              if not raw:continue
+              path=pathlib.Path(raw.decode('utf-8'))
+              if path.is_symlink() or not path.is_file():continue
+              if path.name in ('.env','google-services.json') or path.suffix in ('.pem','.key','.jks','.p12','.keystore','.sqlite3'):raise ValueError(f'Secret in package: {path}')
+              if '__pycache__' in path.parts:continue
+              files.append(path)
+          with zipfile.ZipFile(dest,'w',zipfile.ZIP_DEFLATED,compresslevel=9) as z:
+              for path in files:z.write(path,path.as_posix())
+              z.write('dist/DEPLOY-README-AR.txt','DEPLOY-README-AR.txt')
+          with zipfile.ZipFile(dest) as z:
+              assert z.testzip() is None
+              names=set(z.namelist())
+              assert len(names)>=100,f'Incomplete server bundle: {len(names)}'
+              needed={'backend/core/models.py','backend/core/live.py','backend/core/live_stage.py',
+                 'backend/core/admin_discipline.py','backend/core/live_moderation.py',
+                 'backend/core/firestore_realtime.py','backend/core/static/core/room-moderation-ui.js',
+                 'backend/core/static/core/room-moderation-ui.css',
+                 'backend/core/migrations/0042_live_moderation_controls.py',
+                 'backend/core/migrations/0041_syriatel_cash_settings.py',
+                 'backend/core/migrations/0040_usdt_withdrawals_and_notices.py',
+                 'backend/config/urls.py','backend/config/settings.py','backend/requirements.txt',
+                 'backend/manage.py','backend/Dockerfile','DEPLOY-README-AR.txt'}
+              assert needed<=names, f'Missing: {sorted(needed-names)}'
+              print('Verified package files:',len(names),'Size:',dest.stat().st_size)
+          for path in ['dist/Relaxia-11.7.11-Server-Moderation.zip',
+                       'dist/deploy-relaxia-11.7.11.sh',
+                       'dist/firestore-moderation-reference.rules']:
+              data=pathlib.Path(path).read_bytes()
+              print(hashlib.sha256(data).hexdigest(),' ',path)
+          PY
+          cd dist
+          sha256sum Relaxia-11.7.11-Server-Moderation.zip \
+             deploy-relaxia-11.7.11.sh firestore-moderation-reference.rules > SHA256SUMS.txt
+      - name: Upload server package (never secrets)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Relaxia-11.7.11-Moderation-Server-Install-Kit
+          path: |
+            dist/Relaxia-11.7.11-Server-Moderation.zip
+            dist/deploy-relaxia-11.7.11.sh
+            dist/DEPLOY-README-AR.txt
+            dist/firestore-moderation-reference.rules
+            dist/SHA256SUMS.txt
+          retention-days: 30

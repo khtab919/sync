@@ -405,6 +405,13 @@ class LiveBroadcast(models.Model):
     max_speakers=models.PositiveSmallIntegerField(default=1)
     gift_goal_cents=models.PositiveIntegerField(default=0)
     pinned_comment=models.ForeignKey("LiveComment",on_delete=models.SET_NULL,null=True,blank=True,related_name="pinned_in")
+    chat_enabled=models.BooleanField(default=True)
+    chat_slow_seconds=models.PositiveSmallIntegerField(default=0)
+    block_external_links=models.BooleanField(default=True)
+    seat_join_mode=models.CharField(max_length=10,default='request',choices=[('request','طلب'),('free','مفتوح')])
+    locked_seat_numbers=models.JSONField(default=list)
+    password_hash=models.CharField(max_length=150,blank=True)
+    control_revision=models.PositiveIntegerField(default=0)
 
 class LiveAdmission(models.Model):
     session=models.ForeignKey(SessionToken,on_delete=models.SET_NULL,null=True,blank=True)
@@ -416,6 +423,8 @@ class LiveAdmission(models.Model):
     token_until=models.DateTimeField(null=True,blank=True)
     last_seen_at=models.DateTimeField(null=True,blank=True)
     banned=models.BooleanField(default=False)
+    forced_mic_mute=models.BooleanField(default=False)
+    password_verified_at=models.DateTimeField(null=True,blank=True)
     created_at=models.DateTimeField(auto_now_add=True)
     class Meta:
         constraints=[models.UniqueConstraint(fields=['broadcast','user'],name='unique_live_admission')]
@@ -425,6 +434,37 @@ class LiveComment(models.Model):
     user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.CASCADE)
     text=models.CharField(max_length=300)
     created_at=models.DateTimeField(auto_now_add=True)
+
+class LiveChatRestriction(models.Model):
+    broadcast=models.ForeignKey(LiveBroadcast,on_delete=models.CASCADE)
+    user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT)
+    muted_until=models.DateTimeField(null=True,blank=True)
+    entire_stream=models.BooleanField(default=False)
+    reason=models.CharField(max_length=300,blank=True)
+    class Meta:
+        constraints=[models.UniqueConstraint(fields=['broadcast','user'],name='unique_room_chat_mute')]
+
+
+class AccountModerationState(models.Model):
+    user=models.OneToOneField(settings.AUTH_USER_MODEL,on_delete=models.PROTECT,related_name='moderation_state')
+    status=models.CharField(max_length=24,default='active',choices=[
+        ('active','Active'),('suspended','Suspended'),('banned_permanent','Permanently banned')])
+    suspended_until=models.DateTimeField(null=True,blank=True)
+    reason=models.CharField(max_length=500,blank=True)
+    updated_by=models.ForeignKey(settings.AUTH_USER_MODEL,null=True,blank=True,
+        on_delete=models.PROTECT,related_name='moderation_state_updates')
+    version=models.PositiveBigIntegerField(default=0)
+    updated_at=models.DateTimeField(auto_now=True)
+
+
+class LiveHostBan(models.Model):
+    host=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT,related_name='live_bans_issued')
+    user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT,related_name='live_bans_received')
+    reason=models.CharField(max_length=300,blank=True)
+    created_at=models.DateTimeField(auto_now_add=True)
+    class Meta:
+        constraints=[models.UniqueConstraint(fields=['host','user'],name='unique_host_lifetime_ban')]
+
 
 class LiveLike(models.Model):
     broadcast=models.ForeignKey(LiveBroadcast,on_delete=models.CASCADE)
@@ -436,6 +476,7 @@ class LiveReport(models.Model):
     broadcast=models.ForeignKey(LiveBroadcast,on_delete=models.PROTECT)
     user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT)
     reason=models.CharField(max_length=500)
+    target_user=models.ForeignKey(settings.AUTH_USER_MODEL,null=True,blank=True,on_delete=models.PROTECT,related_name='live_reports_received')
     resolved=models.BooleanField(default=False)
     created_at=models.DateTimeField(auto_now_add=True)
 
@@ -540,6 +581,7 @@ class PromotionalGrant(models.Model):
 
 class LiveSeat(models.Model):
     admission=models.OneToOneField(LiveAdmission,on_delete=models.CASCADE)
+    seat_number=models.PositiveSmallIntegerField(null=True,blank=True)
     mode=models.CharField(max_length=5,choices=[('audio','صوت'),('video','فيديو')])
     status=models.CharField(max_length=10,default='pending')
     updated_at=models.DateTimeField(auto_now=True)

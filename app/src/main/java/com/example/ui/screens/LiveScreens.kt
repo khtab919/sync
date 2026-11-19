@@ -73,6 +73,7 @@ private fun liveError(e:Exception)=when(e.message){
     var price by remember{mutableStateOf("100")};var limit by remember{mutableStateOf("25")};var minimum by remember{mutableStateOf("30")};var gifts by remember{mutableStateOf(true)}
     var roomFilter by remember(initialFilter){mutableStateOf(if(initialFilter in listOf("audio","video","free","paid"))initialFilter else "all")};var audioOnly by remember(initialFilter){mutableStateOf(initialFilter=="audio")};var speakers by remember(initialFilter){mutableStateOf(if(initialFilter=="audio")"8" else "1")};var giftGoal by remember{mutableStateOf("0")}
     var selected by remember{mutableStateOf<JSONObject?>(null)};var active by remember{mutableStateOf<JSONObject?>(null)};var activeId by remember{mutableStateOf("")}
+    var roomPassword by remember{mutableStateOf("")}
     // A home card deep-links into this actual broadcast, with the existing
     // paid-room confirmation intact. Do not auto-charge or create a room.
     var homeSelectionHandled by remember(initialRoomId){ mutableStateOf(false) }
@@ -86,7 +87,13 @@ private fun liveError(e:Exception)=when(e.message){
         }
     }
     fun act(block:suspend()->Unit){if(busy)return;busy=true;error="";scope.launch{try{block()}catch(e:CancellationException){throw e}catch(e:Exception){error=liveError(e)}finally{busy=false}}}
-    fun enter(row:JSONObject){act{active=api.request("/api/live/${row.getString("id")}/admission","POST",JSONObject().put("confirmed",true).put("price_cents",row.optLong("price_cents")));activeId=row.getString("id");selected=null}}
+    fun enter(row:JSONObject){act{
+        val payload=JSONObject().put("confirmed",true).put("price_cents",row.optLong("price_cents"))
+        if(row.optBoolean("password_protected"))payload.put("password",roomPassword)
+        active=api.request("/api/live/${row.getString("id")}/admission","POST",payload)
+        roomPassword=""
+        activeId=row.getString("id");selected=null
+    }}
     LaunchedEffect(query){while(true){try{val result=api.request("/api/live?q="+URLEncoder.encode(query,"UTF-8"));if(result.optInt("stage_version")<3)throw IllegalStateException("live_update_required");val a=result.optJSONArray("items");rows=if(a==null)emptyList()else(0 until a.length()).map{a.getJSONObject(it)};allowed=result.optBoolean("can_broadcast");available=result.optBoolean("available");maximumLimit=result.optInt("max_viewers",25);error=""}catch(e:CancellationException){throw e}catch(e:Exception){allowed=false;available=false;rows=emptyList();error=liveError(e)};delay(5000)}}
     active?.let{room->
         val broadcastId=activeId
@@ -95,6 +102,7 @@ private fun liveError(e:Exception)=when(e.message){
             LiveRoomView(
                 baseUrl=baseUrl,
                 bootstrap=room,
+                api=api,
                 profile={id->active=null;openProfile(id)},
                 retry={
                     if(broadcastId.isNotBlank() && !busy){
@@ -144,14 +152,51 @@ private fun liveError(e:Exception)=when(e.message){
             item{Text("لا يُسجَّل البث ولا تتوفر إعادة مشاهدة داخل المنصة. لا يمكن ضمان منع التسجيل بأدوات خارجية.",style=MaterialTheme.typography.bodySmall)}
         }
     }
-    selected?.let{row->AlertDialog(onDismissRequest={selected=null},title={Text(row.optString("title"))},text={Column(verticalArrangement=Arrangement.spacedBy(10.dp)){Text(row.optString("owner_name"));Text(if(row.optBoolean("private"))"سعر الدخول: ${row.optLong("price_cents")} من الرصيد"else if(row.optBoolean("invite_only"))"بث بالدعوة · مجاني"else"بث عام مجاني");Text(row.optString("refund_policy"),style=MaterialTheme.typography.bodySmall);TextButton({selected=null;openProfile(row.optInt("owner_id"))}){Text("عرض الملف الشخصي")}}},confirmButton={TextButton({enter(row)},enabled=!busy){Text(if(row.optBoolean("private"))"تأكيد الدخول وحجز المبلغ"else if(row.optString("mode")=="audio")"دخول الغرفة"else"مشاهدة")}},dismissButton={TextButton({selected=null}){Text("إلغاء")}})}
+    selected?.let{row->
+        AlertDialog(
+            onDismissRequest={selected=null;roomPassword=""},
+            title={Text(row.optString("title"))},
+            text={
+                Column(verticalArrangement=Arrangement.spacedBy(10.dp)){
+                    Text(row.optString("owner_name"))
+                    Text(
+                        if(row.optBoolean("private"))"سعر الدخول: ${row.optLong("price_cents")} من الرصيد"
+                        else if(row.optBoolean("invite_only"))"بث بالدعوة · مجاني"
+                        else "بث عام مجاني"
+                    )
+                    if(row.optBoolean("password_protected")){
+                        OutlinedTextField(
+                            value=roomPassword,
+                            onValueChange={roomPassword=it.take(40)},
+                            label={Text("كلمة مرور الغرفة")},
+                            visualTransformation=androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                            singleLine=true,modifier=Modifier.fillMaxWidth()
+                        )
+                    }
+                    Text(row.optString("refund_policy"),style=MaterialTheme.typography.bodySmall)
+                    TextButton({selected=null;roomPassword="";openProfile(row.optInt("owner_id"))}){Text("عرض الملف الشخصي")}
+                }
+            },
+            confirmButton={
+                TextButton({enter(row)},enabled=!busy && (
+                    !row.optBoolean("password_protected") || roomPassword.length>=4
+                )){
+                    Text(if(row.optBoolean("private"))"تأكيد الدخول وحجز المبلغ"
+                        else if(row.optString("mode")=="audio")"دخول الغرفة"else"مشاهدة")
+                }
+            },
+            dismissButton={TextButton({selected=null;roomPassword=""}){Text("إلغاء")}}
+        )
+    }
     }
     if(create){LiveHostSetupScreen(onClose={if(initialCreate)back() else create=false},audioOnly=audioOnly,onAudioOnlyChange={audioOnly=it;speakers=if(it)"8"else"1"},title=title,onTitleChange={title=it},privateLive=privateLive,onPrivateLiveChange={privateLive=it},price=price,onPriceChange={price=it},inviteOnly=inviteOnly,onInviteOnlyChange={inviteOnly=it},invites=invites,onInvitesChange={invites=it},speakers=speakers,onSpeakersChange={speakers=it},limit=limit,onLimitChange={limit=it},minimum=minimum,onMinimumChange={minimum=it},gifts=gifts,onGiftsChange={gifts=it},giftGoal=giftGoal,onGiftGoalChange={giftGoal=it},maximumLimit=maximumLimit,busy=busy||!allowed||!available,error=if(!allowed&&available&&error.isBlank())"هذا الحساب غير مخوّل لبدء بث حاليًا." else if(!available&&error.isBlank())"جارٍ التحقق من جاهزية البث…" else error,onStartStream={act{val p=price.toIntOrNull()?:0;val n=limit.toIntOrNull()?:0;val m=minimum.toIntOrNull()?:0;val t=title.trim().ifEmpty{"بث مباشر"};if(t.length<2||n !in 1..maximumLimit||m !in 30..3600||(privateLive&&p !in 1..1000000))throw IllegalArgumentException("invalid_input");val row=api.request("/api/live","POST",JSONObject().put("title",t).put("private",privateLive).put("invite_only",inviteOnly).put("price_cents",p).put("max_viewers",n).put("minimum_seconds",m).put("gifts_enabled",gifts).put("mode",if(audioOnly)"audio"else"video").put("max_speakers",if(audioOnly)8 else speakers.toInt()).put("gift_goal_cents",giftGoal.toIntOrNull()?:0).put("invite_names",JSONArray(invites.split(',', '،').map{it.trim().removePrefix("@")}.filter{it.isNotBlank()})));create=false;active=api.request("/api/live/${row.getString("id")}/admission","POST",JSONObject());activeId=row.getString("id")}})}
 }
 
-@Composable internal fun LiveRoomView(baseUrl:String,bootstrap:JSONObject,profile:((Int)->Unit)?=null,retry:()->Unit,finish:()->Unit,onTopup:()->Unit={}){
+@Composable internal fun LiveRoomView(baseUrl:String,bootstrap:JSONObject,api:LayaliApi,profile:((Int)->Unit)?=null,retry:()->Unit,finish:()->Unit,onTopup:()->Unit={}){
     val transportTheme=if(MaterialTheme.colorScheme.background.luminance()<.25f)"dark"else"light"
     val context=LocalContext.current;val lifecycle=LocalLifecycleOwner.current.lifecycle;val owner=bootstrap.optBoolean("owner");val audioOnly=bootstrap.optString("mode")=="audio"
+    val roomId=android.net.Uri.parse(bootstrap.optString("url")).pathSegments.dropLast(1).lastOrNull().orEmpty()
+    RelaxiaRoomRealtimeGuard(api=api,roomId=roomId,userId=bootstrap.optInt("user_id"),onEvicted=finish)
     var granted by remember{mutableStateOf(!owner)};var error by remember{mutableStateOf("")};var view by remember{mutableStateOf<WebView?>(null)}
     var requestingGuest by remember{mutableStateOf(false)}
     var requestedMode by remember{mutableStateOf(if(audioOnly)"audio"else"video")}

@@ -172,3 +172,137 @@ internal fun RelaxiaActiveHomeStreams(
         }
     }
 }
+
+/** Compact active host rail. All entries are returned by /api/live; no fake online users. */
+@Composable
+internal fun RelaxiaLiveHostsBar(
+    rooms:List<JSONObject>,onOpenRoom:(JSONObject)->Unit,onBrowse:()->Unit
+){
+    if(rooms.isEmpty())return
+    Column(Modifier.fillMaxWidth().padding(top=8.dp,bottom=4.dp),
+        verticalArrangement=Arrangement.spacedBy(7.dp)){
+        Row(Modifier.fillMaxWidth().padding(horizontal=14.dp),
+            verticalAlignment=Alignment.CenterVertically){
+            Text("المباشر الآن",Modifier.weight(1f),fontWeight=FontWeight.Bold,
+                style=MaterialTheme.typography.titleMedium,color=Color(0xFF1E3A8A))
+            TextButton(onClick=onBrowse){Text("عرض الكل")}
+        }
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+            .padding(horizontal=14.dp),horizontalArrangement=Arrangement.spacedBy(12.dp)){
+            rooms.take(15).forEach{room->
+                val user=room.optString("owner_name")
+                Column(Modifier.width(72.dp).clickable{onOpenRoom(room)},
+                    horizontalAlignment=Alignment.CenterHorizontally,
+                    verticalArrangement=Arrangement.spacedBy(5.dp)){
+                    Box(Modifier.size(64.dp),contentAlignment=Alignment.Center){
+                        Surface(Modifier.size(64.dp),shape=CircleShape,
+                            color=Color(0xFF38BDF8)){
+                            Box(Modifier.padding(3.dp).background(Color(0xFF1E3A8A),CircleShape)
+                                .padding(3.dp),contentAlignment=Alignment.Center){
+                                val avatar=room.optString("avatar_url")
+                                if(avatar.startsWith("https://"))
+                                    AsyncImage(model=avatar,contentDescription="مباشر $user",
+                                        modifier=Modifier.fillMaxSize().clip(CircleShape))
+                                else Icon(Icons.Rounded.Person,null,tint=Color.White)
+                            }
+                        }
+                        Surface(Modifier.align(Alignment.BottomCenter).offset(y=4.dp),
+                            color=Color(0xFFC72B55),shape=RoundedCornerShape(7.dp)){
+                            Text("LIVE",Modifier.padding(horizontal=6.dp,vertical=2.dp),
+                                fontSize=9.sp,color=Color.White,fontWeight=FontWeight.Bold)
+                        }
+                    }
+                    Text(user,maxLines=1,overflow=TextOverflow.Ellipsis,
+                        fontSize=11.sp,color=MaterialTheme.colorScheme.onSurface)
+                }
+            }
+        }
+    }
+}
+
+/** A real in-feed stream card after every fifth regular post.
+ * Audio visualization uses actual approved-seat count from the backend.
+ * For video, there is no publicly authorized inline SFU preview endpoint yet:
+ * show the host art, not a fabricated or unconsented remote camera stream.
+ */
+@Composable
+internal fun RelaxiaInFeedLiveCard(room:JSONObject,onOpenRoom:()->Unit){
+    val audio=room.optString("mode")=="audio"
+    val owner=room.optString("owner_name").ifBlank{"مضيف"}
+    val occupants=room.optInt("speaker_count",1).coerceAtLeast(1)
+    ElevatedCard(onClick=onOpenRoom,
+        modifier=Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=5.dp),
+        shape=RoundedCornerShape(16.dp),
+        elevation=CardDefaults.elevatedCardElevation(defaultElevation=5.dp)){
+        Column(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(
+            Color(0xFF1D4E91),Color(0xFF10274C)))).padding(14.dp),
+            verticalArrangement=Arrangement.spacedBy(12.dp)){
+            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
+                Surface(color=Color(0xFFD93658),shape=RoundedCornerShape(8.dp)){
+                    Text("● LIVE",Modifier.padding(horizontal=9.dp,vertical=4.dp),
+                        color=Color.White,fontSize=11.sp,fontWeight=FontWeight.Bold)
+                }
+                Spacer(Modifier.width(9.dp))
+                Icon(Icons.Rounded.Visibility,null,Modifier.size(15.dp),tint=Color(0xFFD5EAFD))
+                Text(" ${room.optInt("viewers",0)}",color=Color.White,fontSize=12.sp)
+                Spacer(Modifier.weight(1f))
+                Text(if(audio)"غرفة صوتية"else"بث فيديو مباشر",color=Color(0xFFDAEAFD),
+                    style=MaterialTheme.typography.labelMedium)
+            }
+            Box(Modifier.fillMaxWidth().height(100.dp),contentAlignment=Alignment.Center){
+                if(audio){
+                    Row(horizontalArrangement=Arrangement.spacedBy(7.dp),
+                        verticalAlignment=Alignment.CenterVertically){
+                        repeat(8){i->
+                            Box(Modifier.size(if(i<occupants)27.dp else 22.dp)
+                                .background(if(i<occupants)Color(0xFF38BDF8)
+                                    else Color(0xFF5478A3),CircleShape),
+                                contentAlignment=Alignment.Center){
+                                Icon(Icons.Rounded.HeadsetMic,null,Modifier.size(13.dp),
+                                    tint=Color.White)
+                            }
+                        }
+                    }
+                    Text("${occupants.coerceAtMost(8)} / 8 مقاعد مشغولة",
+                        Modifier.align(Alignment.BottomCenter),
+                        color=Color(0xFFDBE8F7),fontSize=11.sp)
+                }else{
+                    val avatar=room.optString("avatar_url")
+                    Row(verticalAlignment=Alignment.CenterVertically,
+                        horizontalArrangement=Arrangement.spacedBy(15.dp)){
+                        if(avatar.startsWith("https://")){
+                            AsyncImage(model=avatar,contentDescription=null,
+                                modifier=Modifier.size(72.dp).clip(CircleShape))
+                        }else Icon(Icons.Rounded.LiveTv,null,Modifier.size(58.dp),
+                            tint=Color(0xFF38BDF8))
+                        Column{
+                            Text("بث مباشر",color=Color.White,
+                                style=MaterialTheme.typography.titleLarge)
+                            Text("اضغط للمشاهدة بالصوت والصورة",color=Color(0xFFD0E2FA),
+                                fontSize=12.sp)
+                        }
+                    }
+                }
+            }
+            HorizontalDivider(color=Color.White.copy(alpha=.24f))
+            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,
+                horizontalArrangement=Arrangement.spacedBy(10.dp)){
+                val image=room.optString("avatar_url")
+                if(image.startsWith("https://"))
+                    AsyncImage(model=image,contentDescription=null,
+                        modifier=Modifier.size(38.dp).clip(CircleShape))
+                else Icon(Icons.Rounded.Person,null,Modifier.size(38.dp),
+                    tint=Color(0xFFD4EAFD))
+                Column(Modifier.weight(1f)){
+                    Text(owner,color=Color.White,fontWeight=FontWeight.Bold,fontSize=13.sp)
+                    Text(room.optString("title"),color=Color(0xFFE0EDFA),
+                        fontSize=12.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
+                }
+                Surface(color=Color(0xFF38BDF8),shape=RoundedCornerShape(50)){
+                    Text("انضم للبث",Modifier.padding(horizontal=13.dp,vertical=10.dp),
+                        color=Color(0xFF0F2544),fontSize=12.sp,fontWeight=FontWeight.Bold)
+                }
+            }
+        }
+    }
+}

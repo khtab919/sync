@@ -36,6 +36,10 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
     val scope = rememberCoroutineScope()
     val uriHandler = LocalUriHandler.current
     var section by remember { mutableStateOf(allowed?.firstOrNull()?:if(liveOnly)"البث المباشر"else"الحسابات") }
+    var canSuperDiscipline by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        canSuperDiscipline=runCatching{api.request("/api/admin/control/discipline");true}.getOrDefault(false)
+    }
     var query by remember { mutableStateOf("") }
     var offset by remember { mutableIntStateOf(0) }
     var total by remember { mutableIntStateOf(0) }
@@ -144,6 +148,8 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
                     syriatelRate=cash.optString("syp_per_usd","0")
                     syriatelInstructions=cash.optString("instructions")
                 }
+            } else if(section=="العقوبات") {
+                content=emptyList()
             } else if(section=="البث المباشر") {
                 val data=api.request("/api/admin/live");content=data.adminItems()
                 val reports=data.optJSONArray("pending_reports")
@@ -176,6 +182,7 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
             LiveRoomView(
                 baseUrl=api.origin,
                 bootstrap=room,
+                api=api,
                 retry={
                     val parts=android.net.Uri.parse(room.optString("url")).pathSegments
                     val id=parts.getOrNull(parts.size-2)
@@ -238,7 +245,8 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
                 if(exit!=null)TextButton(onClick=exit){Text("العودة لمركز الإدارة")}
                 TextButton(onClick = logout, enabled = !busy) { Text("تسجيل الخروج") }
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    (allowed?:if(liveOnly)listOf("البث المباشر")else listOf("الحسابات", "البث المباشر", "الحجوزات", "السحب", "المحتوى", "الطلبات", "العجلة", "الدفع")).forEach { name ->
+                    ((allowed?:if(liveOnly)listOf("البث المباشر")else listOf("الحسابات", "البث المباشر", "الحجوزات", "السحب", "المحتوى", "الطلبات", "العجلة", "الدفع"))+
+                        (if(canSuperDiscipline)listOf("العقوبات") else emptyList())).distinct().forEach { name ->
                         FilterChip(selected = section == name, onClick = { selected = null; section = name; offset = 0 }, label = { Text(name) }, enabled = !busy)
                     }
                 }
@@ -247,6 +255,9 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
                 if (success.isNotBlank()) Text(success, color = MaterialTheme.colorScheme.primary)
                 if (loading || busy) LuxuryLoadingStatus("جارٍ التحميل")
                 TextButton(onClick = { revision++ }, enabled = !busy && !loading) { Text("تحديث") }
+            }
+            if(section=="العقوبات"&&canSuperDiscipline) {
+                item(key="super_admin_discipline"){RelaxiaSuperAdminDiscipline(api)}
             }
             if(section=="البث المباشر") {
                 if(content.isEmpty())item{Text("لا توجد بثوث جارية.")}

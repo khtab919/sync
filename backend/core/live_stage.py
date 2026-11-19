@@ -42,11 +42,14 @@ def publishing(admission):
     if not owner and not seat:return False,[]
     eligible(admission.user,True)
     mode=admission.broadcast.mode if owner else seat.mode
+    if admission.forced_mic_mute:
+        return (True,['camera']) if mode=='video' else (False,[])
     return True,['microphone']+(['camera'] if mode=='video' else [])
 
 
 def room_moderator(row,user):
-    return row.owner_id==user.pk or LiveRoomModerator.objects.filter(broadcast=row,user=user).exists()
+    from .live_moderation import is_manager
+    return is_manager(row,user)
 
 
 def require_room_manager(request,row):
@@ -70,7 +73,7 @@ def pk_json(row):
 
 
 def snapshot(row,user):
-    seats=LiveSeat.objects.filter(admission__broadcast=row).select_related('admission__user__profile').order_by('pk')
+    seats=LiveSeat.objects.filter(admission__broadcast=row).select_related('admission__user__profile').order_by('seat_number','pk')
     own=next((s for s in seats if s.admission.user_id==user.pk),None)
     manager=room_moderator(row,user)
     a=LiveAdmission.objects.select_related('broadcast','user').filter(broadcast=row,user=user).first()
@@ -79,13 +82,19 @@ def snapshot(row,user):
     speakers=[dict(person(row.owner),identity='host-'+str(row.owner_id),mode=row.mode,owner=True)]
     for s in seats:
         if s.status=='approved' and not s.admission.banned:
-            speakers.append(dict(person(s.admission.user),identity=str(s.admission_id),mode=s.mode,owner=False))
+            speakers.append(dict(person(s.admission.user),identity=str(s.admission_id),mode=s.mode,owner=False,
+                                 seat_number=s.seat_number,forced_mic_mute=s.admission.forced_mic_mute))
     events=LiveGiftEvent.objects.filter(broadcast=row).select_related('operation__buyer__profile','operation__creator__profile').order_by('-pk')[:20]
     top=LiveGiftEvent.objects.filter(broadcast=row,operation__status='settled').values('operation__buyer_id','operation__buyer__profile__display_name','operation__buyer__username').annotate(total=Sum('operation__amount_cents')).order_by('-total')[:5]
     received=LiveGiftEvent.objects.filter(broadcast=row,operation__status='settled').aggregate(total=Sum('operation__amount_cents'),earnings=Sum('operation__creator_cents'))
     wallet=Wallet.objects.filter(user=user).values('balance_cents','reserved_cents').first()
     available_coins=max(0,wallet['balance_cents']-wallet['reserved_cents']) if wallet else 0
+    from .live_moderation import role
     return {'mode':row.mode,'max_speakers':(max(8,len(speakers)) if row.mode=='audio' else row.max_speakers),'speakers':speakers,'can_publish':can_publish,'publish_sources':sources,
+            'current_role':role(row,user),'control_revision':row.control_revision,
+            'room_settings':{'chat_enabled':row.chat_enabled,'chat_slow_seconds':row.chat_slow_seconds,
+                'block_external_links':row.block_external_links,'seat_join_mode':row.seat_join_mode,
+                'locked_seat_numbers':row.locked_seat_numbers,'password_protected':bool(row.password_hash)},
             'seat_status':own.status if own else '', 'manage_room':manager,
             'seat_requests':[dict(person(s.admission.user),mode=s.mode) for s in seats if s.status=='pending'] if manager else [],
             'moderator_ids':list(LiveRoomModerator.objects.filter(broadcast=row).values_list('user_id',flat=True)) if row.owner_id==user.pk else [],
@@ -147,13 +156,19 @@ def action(request,row,a):
             seat,_=LiveSeat.objects.get_or_create(admission=a,defaults={'mode':mode})
             if seat.status=='approved':return
             if timezone.now()-seat.updated_at<timedelta(seconds=15) and seat.status=='rejected':raise ApiError('slow_down',429)
-            seat.mode=mode;seat.status='pending';seat.save();return
+            from .live_moderation import free_seat
+            number=free_seat(current)
+            if number is None:raise ApiError('stage_full',409)
+            seat.mode=mode
+            seat.status='approved' if current.seat_join_mode=='free' else 'pending'
+            seat.seat_number=number if seat.status=='approved' else None
+            seat.save();return
         if kind=='seat_leave':
             seat=LiveSeat.objects.filter(admission=a).first()
             if seat:
                 # Remove tracks before revoking DB permission. On provider failure the DB stays unchanged.
                 provider('RemoveParticipant',{'room':room_name(row),'identity':str(a.pk)},room_name(row))
-                seat.status='left';seat.save()
+                seat.status='left';seat.seat_number=None;seat.save()
             return
         require_room_manager(request,current)
         if kind=='seat_decision':
@@ -163,9 +178,12 @@ def action(request,row,a):
                 eligible(seat.admission.user,True)
                 if seat.admission.banned:raise ApiError('broadcast_forbidden',403)
                 if seat.status!='approved' and LiveSeat.objects.filter(admission__broadcast=row,status='approved').count()>=(min(current.max_speakers,8) if current.mode=='audio' else current.max_speakers)-1:raise ApiError('stage_full',409)
-                seat.status='approved'
+                from .live_moderation import free_seat
+                number=seat.seat_number if seat.status=='approved' else free_seat(current)
+                if number is None or number in (current.locked_seat_numbers or []):raise ApiError('stage_full',409)
+                seat.seat_number=number;seat.status='approved'
             else:
-                provider('RemoveParticipant',{'room':room_name(row),'identity':str(seat.admission_id)},room_name(row));seat.status='rejected'
+                provider('RemoveParticipant',{'room':room_name(row),'identity':str(seat.admission_id)},room_name(row));seat.status='rejected';seat.seat_number=None
             seat.save();audit(request.actor,row,f'Stage permission {seat.admission.user_id}: {seat.status}');return
         if kind in ('pin_comment','delete_comment'):
             comment=LiveComment.objects.filter(broadcast=row,pk=p.get('comment_id')).first()
@@ -174,8 +192,10 @@ def action(request,row,a):
             return
         if kind=='set_moderator':
             if request.actor.pk!=row.owner_id:raise ApiError('owner_required',403)
-            target=LiveAdmission.objects.filter(broadcast=row,user_id=p.get('user_id'),banned=False).exclude(user=row.owner).first()
+            target=LiveAdmission.objects.select_related('user').filter(broadcast=row,user_id=p.get('user_id'),banned=False).exclude(user=row.owner).first()
             if not target:raise ApiError('participant_unavailable',404)
+            from .live_moderation import check_target
+            check_target(row,request.actor,target.user)
             if p.get('enabled') is True:LiveRoomModerator.objects.get_or_create(broadcast=row,user=target.user)
             else:LiveRoomModerator.objects.filter(broadcast=row,user=target.user).delete()
             audit(request.actor,row,f'Room moderator changed {target.user_id}');return

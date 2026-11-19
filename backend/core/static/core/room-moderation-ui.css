@@ -1,0 +1,92 @@
+/* Material 3–informed RTL moderation surface for Android System WebView.
+   Uses the room's existing accessible <dialog> bottom sheet. */
+#stage #sheet{
+ color:#F3F7FF!important;
+ background:linear-gradient(165deg,#183D72,#0D2548)!important;
+ border:1px solid #80AEDE8C!important;
+ border-radius:28px 28px 24px 24px!important;
+ box-shadow:0 22px 65px #020D27A6, inset 0 1px 0 #FFFFFF33!important;
+ padding:14px!important;
+ backdrop-filter:blur(22px);
+}
+#stage #sheet::backdrop{background:#03112896;backdrop-filter:blur(3px);}
+#sheet .sheet-head{
+ display:flex;align-items:center;justify-content:space-between;
+ position:sticky;top:-14px;z-index:15;
+ padding:6px 4px 13px;margin-bottom:10px;
+ background:#173D72!important;
+ border-bottom:1px solid #B0CBEB44;border-radius:18px 18px 0 0;
+}
+#sheet .sheet-head h2{
+ color:#F8FAFF;font-size:18px;font-weight:760;
+ line-height:1.4;
+}
+#sheet #sheetBody>.room-user-entry,
+#sheet #sheetBody>.participant-action{
+ min-height:50px!important;display:block;width:100%;
+ margin:3px 0;border:1px solid #AED2F144!important;
+ color:#F5F9FF!important;
+ background:linear-gradient(130deg,#224F8D,#153764)!important;
+ border-radius:17px!important;text-align:right!important;
+ padding:10px 13px!important;font-size:14px;
+}
+#sheet #sheetBody>button:not(.gift-card):not(.gift-send),
+#sheet #sheetBody>.room-user-entry {
+ min-height:46px;
+ white-space:normal;overflow-wrap:anywhere;
+}
+#sheet #sheetBody>.room-duration-select,
+#sheet #sheetBody>.room-moderation-select,
+#sheet #sheetBody>select{
+ display:block;width:100%;min-height:48px;
+ padding:11px 14px;border-radius:14px;
+ border:1px solid #A9C7EC8C;
+ color:#FFFFFF;background:#214D84;
+ font-family:inherit;font-size:14px;
+ margin:10px 0;
+}
+#sheet #sheetBody select option{background:#16385F;color:#FFFFFF}
+#sheet #sheetBody>.room-setting-heading{
+ margin:16px 0 7px;font-size:12px;line-height:1.35;
+ font-weight:800;letter-spacing:.2px;color:#F2D398;
+}
+#sheet #sheetBody>textarea,
+#sheet #sheetBody>input[type=password]{
+ width:100%;box-sizing:border-box;
+ min-height:46px;padding:11px 14px;
+ font:inherit;line-height:1.5;color:#FFFFFF;
+ background:#0F2F5E;border:1px solid #B7D3E58F;
+ border-radius:15px;outline-offset:2px;
+}
+#sheet #sheetBody>textarea{min-height:96px;resize:vertical}
+#sheet #sheetBody>textarea::placeholder,
+#sheet #sheetBody>input::placeholder{color:#C9D9ED}
+#stage #messages .comment-bubble[data-user-id]{
+ cursor:pointer;min-height:36px;outline-offset:2px;
+}
+#stage #messages .comment-bubble[data-user-id]:focus-visible,
+#stage #audioStage .audio-seat[data-user-id]:focus-visible{
+ outline:3px solid #E5B84B;outline-offset:2px;
+}
+#stage #audioStage .audio-seat.seat-locked::before{
+ border-color:#CC8D89!important;
+ background:#B5B7CA83!important;
+}
+#stage #audioStage .audio-seat.seat-locked{
+ filter:saturate(.55);
+}
+body.relaxia-clean #stage #messages,
+body.relaxia-clean #stage #pinned,
+body.relaxia-clean #stage #giftEffect,
+body.relaxia-clean #stage #floatingHearts,
+body.relaxia-clean #stage #goal{
+ display:none!important;
+}
+body.relaxia-clean #stage #video{
+ inset:calc(env(safe-area-inset-top,0px) + 70px) 5px calc(var(--room-footer-height) + 8px)!important;
+}
+#stage #messages .comment-bubble{touch-action:manipulation;}
+@media(max-width:350px){
+ #stage #sheet{padding:10px!important}
+ #sheet .sheet-head h2{font-size:16px}
+}

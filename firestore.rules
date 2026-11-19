@@ -42,7 +42,8 @@ service cloud.firestore {
                'xpPoints', 'nextLevelXp', 'walletBalanceUsd',
                'chatPriceUsd', 'isPaidChatEnabled',
                'passwordSaltHex', 'passwordHashHex',
-               'createdAt', 'updatedAt'
+               'createdAt', 'updatedAt',
+               'accountStatus','isBanned','suspendedUntil','reason','version'
              ]) &&
              data.keys().hasOnly([
                'userId', 'username', 'displayName', 'email', 'bio',
@@ -50,7 +51,8 @@ service cloud.firestore {
                'xpPoints', 'nextLevelXp', 'walletBalanceUsd',
                'chatPriceUsd', 'isPaidChatEnabled',
                'passwordSaltHex', 'passwordHashHex',
-               'createdAt', 'updatedAt'
+               'createdAt', 'updatedAt',
+               'accountStatus','isBanned','suspendedUntil','reason','version'
              ]) &&
              data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
              data.userId == request.auth.uid &&
@@ -206,7 +208,10 @@ service cloud.firestore {
       allow create: if isSignedIn() &&
                        isValidId(userId) &&
                        request.auth.uid == userId &&
-                       isValidUserAccount(incoming());
+                       isValidUserAccount(incoming()) &&
+                       !incoming().keys().hasAny([
+                         'accountStatus','isBanned','suspendedUntil','reason','version'
+                       ]);
 
       allow update: if isSignedIn() &&
                        isValidId(userId) &&
@@ -223,10 +228,20 @@ service cloud.firestore {
                          'passwordSaltHex', 'passwordHashHex', 'updatedAt'
                        ]);
 
+      // A sanctioned account cannot destroy its own server-owned moderation mirror.
       allow delete: if isSignedIn() &&
                        isValidId(userId) &&
                        request.auth.uid == userId &&
-                       existing().userId == request.auth.uid;
+                       existing().userId == request.auth.uid &&
+                       !existing().keys().hasAny(['accountStatus','isBanned','version']);
+    }
+
+    // Server-owned LiveKit moderation mirrors. Firebase listeners read only
+    // their owner's kick flag; clients can never spoof or erase a kick.
+    match /rooms/{roomId}/kickedUsers/{userId} {
+      allow get: if isSignedIn() && isValidId(roomId) &&
+                  isValidId(userId) && request.auth.uid == userId;
+      allow list, create, update, delete: if false;
     }
 
     // Collection: User Bookings
