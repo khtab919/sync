@@ -56,7 +56,7 @@
        $('sheet').close();
      });
      button(body,'قائمة المشاركين وإجراءات المستخدمين',()=>window.peopleSheet());
-     if(['host','super_admin','app_moderator'].includes(state.current_role)){
+     if(['host','super_admin'].includes(state.current_role)){
        button(body,'إعدادات المضيف والمقاعد والدردشة',roomSettings,'primary');
      }
    };
@@ -128,7 +128,7 @@
    button(box,'طرد من هذا البث',()=>confirmed('طرد المستخدم',
      'سيُفصل المستخدم من الغرفة فورًا، ولن يستطيع العودة إلى الجلسة الحالية.',
      ()=>api({action:'kick_user',user_id:id,reason:'مخالفة قواعد البث'})),'danger');
-   if(['host','super_admin','app_moderator'].includes(state.current_role)){
+   if(['host','super_admin'].includes(state.current_role)){
      const mod=(state.moderator_ids||[]).includes(id);
      button(box,mod?'إزالة صفة المشرف':'تعيين مشرف غرفة',async()=>{
        await api({action:'set_room_moderator',user_id:id,enabled:!mod});$('sheet').close();await refresh()
@@ -147,7 +147,7 @@
    }
  }
  function roomSettings(){
-   if(!['host','super_admin','app_moderator'].includes(state.current_role))return;
+   if(!['host','super_admin'].includes(state.current_role))return;
    const options=state.room_settings||{},box=sheet('إعدادات الغرفة');
    note(box,'كل إعداد يُحفظ على الخادم ويُفرض على الجميع.');
    for(const [key,label] of [['chat_enabled','إتاحة الدردشة'],['block_external_links','منع الروابط']]){
