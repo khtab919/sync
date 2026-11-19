@@ -17,7 +17,7 @@
      if(card){
        const person=[...(filtered.speakers||[]),...filtered.comments,...(filtered.participants_visible||[])]
          .find(p=>String(p.user_id)===card.dataset.userId);
-       if(person)card.textContent=identityLabel(person);
+       if(person)updateMember(card,person);
      }
      const allow=filtered.room_settings?.chat_enabled!==false||!!filtered.manage_room;
      if($('text')){$('text').disabled=!allow;$('text').placeholder=allow?'اكتب تعليقًا…':'الدردشة مغلقة بقرار المضيف'}
@@ -88,6 +88,10 @@
    try{localStorage.setItem(ignoredKey,JSON.stringify([...ignored]))}catch(_){}
    lastComments='';window.drawState(state);$('sheet').close();
  }
+ function updateMember(card,user){
+   renderPortrait(card.firstElementChild,user);
+   card.lastElementChild.textContent=identityLabel(user);
+ }
  function showUser(user,message=null){
    const id=Number(user?.user_id);
    if(!Number.isInteger(id)||id<1)return;
@@ -95,7 +99,8 @@
    const card=document.createElement('strong');
    card.className='member-identity';
    card.dataset.userId=String(id);
-   card.textContent=identityLabel(user);
+   card.append(document.createElement('span'),document.createElement('span'));
+   updateMember(card,user);
    box.append(card);
    if(message)note(box,message.text);
    if(id===config.userId){note(box,'هذه صفحتك الشخصية.');return}

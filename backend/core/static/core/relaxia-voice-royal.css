@@ -434,3 +434,6 @@ html[data-theme] #stage .room-portrait .portrait-face img {
 
 .public-level {display:inline-block;padding:1px 5px;margin-inline-start:4px;
  border-radius:8px;background:#294d83;color:white;font-size:.85em}
+#sheet .member-identity {display:flex;align-items:center;gap:8px}
+#sheet .member-identity .room-portrait {width:48px;flex:none}
+body.audio-mode #stage header .room-portrait.identity-avatar-ring {border:0;box-shadow:none}

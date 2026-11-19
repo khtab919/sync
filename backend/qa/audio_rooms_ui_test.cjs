@@ -31,6 +31,24 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
     window.qaRoom=result;api=async action=>{if(action)window.sent.push(action);return {...window.qaRoom,seat_status:action?.action==='seat_request'?'pending':''}};drawState(result);
    });
    assert.equal(await page.locator('.audio-seat').count(),8);
+   await page.evaluate(()=>{
+    const catalog=qaRoom.gift_catalog;
+    const extra=['gift_rose','gift_teddy','gift_coffee','gift_cake'].map((code,index)=>({
+     ...catalog[0],code,price_cents:100+index
+    }));
+    qaRoom.gift_catalog=[...catalog,...extra];
+    giftSheet();
+    qaRoom.gift_catalog=catalog;
+   });
+   const gridLayout=await page.locator('.gift-grid').evaluate(grid=>{
+    const cards=Array.from(grid.children).map(el=>el.getBoundingClientRect());
+    const bounds=grid.getBoundingClientRect();
+    return {top:bounds.top,bottom:bounds.bottom,first:cards[0].top,second:cards[5].bottom,
+            screen:innerHeight,scroll:grid.scrollHeight-grid.clientHeight};
+   });
+   assert.ok(gridLayout.first>=gridLayout.top-1 && gridLayout.second<=gridLayout.bottom+1 &&
+             gridLayout.second<=gridLayout.screen && gridLayout.scroll>0,'two complete gift rows and reachable overflow');
+   await page.locator('#closeSheet').click();
    assert.equal(await page.locator('.empty-seat').count(),7);
    assert.equal(await page.locator('.empty-seat small').count(),0,'empty places have accessible numbers, not visually crowded labels');
    assert.equal(await page.locator('.empty-seat .seat-plus svg').count(),7,'all empty seats use consistent microphone SVG icons');
@@ -50,6 +68,25 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    assert.equal(await page.locator('#bigGiftBtn').isVisible(),true);
    assert.equal(await page.locator('#syriatelCashLink').count(),0,'payment stays in the wallet');
    assert.equal(await page.locator('#requestMic').isVisible(),true,'request microphone appears for audience');
+   await page.evaluate(()=>{
+    const source=qaRoom.speakers[0];
+    window.originalHost={...source};
+    Object.assign(source,{level:17,selected_frame:110,vip_tier:2});
+    qaRoom.comments=[{...source,id:42,text:'same comment'}];
+    drawState(qaRoom);
+   });
+   assert.equal(await page.locator('.host-seat .portrait-frame').count(),1);
+   assert.equal(await page.locator('#profile .portrait-frame').count(),1);
+   assert.equal(await page.locator('.comment-avatar .portrait-frame').count(),1);
+   assert.equal(await page.locator('.comment-author .public-level').innerText(),'Lv 17');
+   await page.evaluate(()=>{
+    Object.assign(qaRoom.speakers[0],{level:18,selected_frame:0});
+    Object.assign(qaRoom.comments[0],{level:18,selected_frame:0});
+    drawState(qaRoom);
+   });
+   assert.equal(await page.locator('.portrait-frame').count(),0);
+   assert.equal(await page.locator('.comment-author .public-level').innerText(),'Lv 18');
+   await page.evaluate(()=>{qaRoom.speakers=[originalHost];qaRoom.comments=[];drawState(qaRoom)});
    const cssSeats=await page.locator('#audioStage').evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(' ').length);
    assert.equal(cssSeats,4,'eight seats arranged into four columns');
    const chatStyle=await page.locator('#messages').evaluate(el=>getComputedStyle(el).overflowY);
@@ -186,6 +223,12 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    const comments=await page.locator('#messages').boundingBox();
    assert.ok(seats.y+seats.height<=comments.y+2,'seats must not cover comments');
    assert.ok(comments.y+comments.height<=footer.y+2,'comments must not hide under controls');
+   const stageBounds=await page.locator('#stage').boundingBox();
+   const header=await page.locator('header').boundingBox();
+   for(const [bounds,portion] of [[header,.10],[seats,.32],[comments,.46],[footer,.12]]){
+    assert.ok(Math.abs(bounds.height-stageBounds.height*portion)<=2,
+      'expected room height fraction '+portion+' at '+width+'px, got '+bounds.height);
+   }
    const layout=await page.evaluate(()=>({
     overflowX:document.documentElement.scrollWidth-innerWidth,
     overflowY:document.getElementById('stage').scrollHeight-document.getElementById('stage').clientHeight,
@@ -232,7 +275,7 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    const whaleCard=page.locator('.gift-card[data-gift-code="gift_blue_whale"]');
    assert.equal(await whaleCard.getAttribute('aria-label'),'الحوت الأزرق · 10000 كوين');
    assert.equal(await whaleCard.locator('canvas.gift-card-3d').count(),1,'all gifts use rendered 3D thumbnails');
-   assert.equal(await page.locator('.gift-preview-art').innerText(),'🦅','selected catalog symbol survives missing artwork');
+   await page.waitForFunction(()=>document.querySelector('.gift-preview-art')?.textContent==='🦅');
    assert.equal(await page.locator('img.gift-webp').count(),0,'gift card no longer depends on an image file');
    await whaleCard.click();
    assert.equal(await whaleCard.getAttribute('aria-pressed'),'true','selected gift is highlighted');

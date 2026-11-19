@@ -38,7 +38,7 @@ window.addEventListener('resize',syncRoomFooterMetrics,{passive:true});
 requestAnimationFrame(syncRoomFooterMetrics);
 let state={},speaking=false,activating=false,latestGift=0,haveGiftBaseline=false,giftQueue=[],effectBusy=false,giftKey=null,giftPending=null,quality=720,serverOffset=0;
 // Keep the current gift recipient list in sync with server-approved speakers.
-let activeGiftRecipientSync=null,activeGiftPreviewCleanup=null;
+let activeGiftRecipientSync=null;
 let preparedTracks=[],mediaFault=false,mediaReady=false;
 const path='/api/live/'+config.id+'/control';
 document.body.classList.toggle('audio-mode',config.mode==='audio');
@@ -184,7 +184,6 @@ window.visualViewport?.addEventListener('scroll',positionRoomSheet,{passive:true
 function sheet(title){
  if(title!=='متجر الهدايا'){
   activeGiftRecipientSync=null;
-  activeGiftPreviewCleanup?.();activeGiftPreviewCleanup=null;
  }
  // Dismiss the IME before opening every room menu, not just gifts.
  if(document.activeElement?.id==='text')document.activeElement.blur();
@@ -239,7 +238,6 @@ function commentActionsSheet(comment){
 $('closeSheet').onclick=()=>$('sheet').close();
 $('sheet').addEventListener('close',()=>{
  activeGiftRecipientSync=null;
- activeGiftPreviewCleanup?.();activeGiftPreviewCleanup=null;
 });$('sheet').addEventListener('click',e=>{if(e.target===$('sheet'))$('sheet').close()});
 async function consent(mode){
  if(!window.LayaliLive?.requestPublishPermissions)return true;

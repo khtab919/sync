@@ -115,7 +115,8 @@ internal fun MilestoneAvatar(name: String, frame: Int, size: Int, imageUrl: Stri
 
 @Composable
 internal fun RelaxiaLevelBadge(level: Int) {
-    val tierColor = when(level.coerceIn(1,100)) {
+    if (level !in 1..100) return
+    val tierColor = when(level) {
         in 1..10 -> Color(0xFF30A66B)
         in 11..25 -> Color(0xFF3187DA)
         in 26..40 -> Color(0xFF9666D9)
@@ -134,7 +135,7 @@ internal fun RelaxiaLevelBadge(level: Int) {
             verticalAlignment=Alignment.CenterVertically
         ) {
             Box(Modifier.size(8.dp).background(tierColor,CircleShape))
-            Text("LV ${level.coerceIn(1,100)}",color=tierColor,
+            Text("LV $level",color=tierColor,
                 style=MaterialTheme.typography.labelLarge,fontWeight=FontWeight.Bold)
         }
     }
