@@ -56,7 +56,11 @@ def route_scope(request):
     if path.endswith('/requests') and request.payload.get('kind')=='seller':return 'users.edit' if write else 'users.view'
     return 'finance.approve' if write else 'finance.view'
 
-def blocked(user,kind):return AccountSanction.objects.filter(user=user,kind__in=['ban',kind],revoked_at__isnull=True).filter(Q(expires_at__isnull=True)|Q(expires_at__gt=timezone.now())).exists()
+def blocked(user,kind):
+    if not user.is_superuser and kind in ('ban','live','messages','calls','store','withdrawals'):
+        from .admin_discipline import active_status
+        if active_status(user):return True
+    return AccountSanction.objects.filter(user=user,kind__in=['ban',kind],revoked_at__isnull=True).filter(Q(expires_at__isnull=True)|Q(expires_at__gt=timezone.now())).exists()
 
 def check_operation(request):
     from .views import ApiError
