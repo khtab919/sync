@@ -41,6 +41,8 @@ def endpoint(methods, authenticated=True):
                         raise ApiError('invalid_session', 401)
                     request.actor = token.user
                     request.api_token = token
+                    from .admin_discipline import enforce
+                    enforce(request.actor)
                 if not authenticated and request.method == 'POST':
                     limited = False
                     ip = request.headers.get('X-Real-IP', request.META.get('REMOTE_ADDR', 'unknown'))
@@ -181,6 +183,8 @@ def login(request):
     user=authenticate(username=matches[0].username,password=password)
     if user is None:
         raise ApiError('invalid_credentials', 401)
+    from .admin_discipline import enforce
+    enforce(user)
     if user.is_staff and user.is_superuser:
         with transaction.atomic():
             lock_registry()
