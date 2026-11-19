@@ -4,13 +4,19 @@ const config=JSON.parse(document.getElementById('config').textContent),$=id=>doc
 const {Room,RoomEvent,Track,ConnectionState}=LivekitClient;
 let room,closed=false,muted=false,speakerMuted=false,cameraOff=false,facing='user',commentsVisible=true,lastComments='',leaving=false,retrying=false,polling=false;
 let activeSpeakerIds=new Set(),audioSeatSignature='',reconnectSince=0,controlFailures=0,connecting=false;
+let stableViewportHeight=Math.max(window.innerHeight||0,document.documentElement.clientHeight||0);
 function updateRoomViewport(){
- // Account for a virtual keyboard which can shrink the visual viewport
- // independently of the layout viewport on Android WebView.
+ // Android IME and browser chrome both resize visualViewport. Keyboard focus
+ // alone is NOT proof that the keyboard is showing: do not obscure seats.
  const visual=window.visualViewport;
  const layoutHeight=document.documentElement.clientHeight||window.innerHeight;
  const visible=visual?Math.min(layoutHeight,visual.height):layoutHeight;
  const height=Math.max(1,Math.round(visible));
+ const focus=document.activeElement?.id==='text';
+ if(!focus)stableViewportHeight=Math.max(stableViewportHeight,height);
+ const keyboardVisible=focus&&(stableViewportHeight-height>=145);
+ document.body.classList.toggle('ime-open',keyboardVisible);
+ document.body.classList.remove('chat-focused');
  document.documentElement.style.setProperty('--room-viewport-height',height+'px');
 }
 updateRoomViewport();
@@ -178,6 +184,7 @@ function sheet(title){
  // Dismiss the IME before opening every room menu, not just gifts.
  if(document.activeElement?.id==='text')document.activeElement.blur();
  const modal=$('sheet');
+ modal.classList.toggle('gift-store-open',title==='متجر الهدايا');
  $('sheetTitle').textContent=title;
  $('sheetBody').replaceChildren();
  if(!modal.open)modal.showModal();
@@ -294,6 +301,9 @@ function giftSheet(preferredRecipientId=null){
  let previewCleanup=null,lastPreview='';
  const tabs=document.createElement('div');tabs.className='gift-tabs';box.append(tabs);
  const grid=document.createElement('div');grid.className='gift-grid';box.append(grid);
+ // Show purchasable choices before any optional cinema preview: the 3D preview
+ // can be unavailable on some Android GPUs without making the shop look empty.
+ grid.after(preview);
  const catalog=(Array.isArray(state.gift_catalog)?state.gift_catalog:[])
   .filter(g=>/^gift_[a-z_]+$/.test(g.code))
   .sort((a,b)=>a.price_cents-b.price_cents);
@@ -404,12 +414,23 @@ function giftSheet(preferredRecipientId=null){
  render('all');
  activeGiftRecipientSync=updateRecipients;
  updateRecipients(state);
- sectionHeading(box,'أكبر الداعمين');
- for(const supporter of state.top_supporters||[])note(box,supporter.name+' · '+supporter.total+' كوين');
+ // Supporter rankings belong in the room's information menu, not the checkout.
+ // Keeping the gift store focused prevents accidental scrolling past pricing.
 }
 function drawAudioSeats(result){
- const box=$('audioStage'),speakers=result.speakers||[],capacity=Math.max(8,speakers.length);
- const signature=JSON.stringify([capacity,speakers.map(s=>[s.identity,s.name,s.owner,s.avatar_url])]);
+ const box=$('audioStage'),speakers=result.speakers||[],capacity=8;
+ // The host is fixed in the first RTL slot. Approved guest seats must retain
+ // their assigned number even when another speaker leaves or a slot is locked.
+ const positions=Array(capacity).fill(null);
+ positions[0]=speakers.find(s=>s.owner)||null;
+ for(const guest of speakers.filter(s=>!s.owner)){
+  let slot=Number(guest.seat_number);
+  if(!Number.isInteger(slot)||slot<1||slot>=capacity||positions[slot]){
+   slot=positions.findIndex((value,i)=>i>0&&!value);
+  }
+  if(slot>0&&slot<capacity)positions[slot]=guest;
+ }
+ const signature=JSON.stringify([capacity,positions.map(s=>s&&[s.identity,s.name,s.owner,s.avatar_url,s.seat_number]),result.room_settings?.locked_seat_numbers||[]]);
  if(signature===audioSeatSignature&&box.querySelectorAll('.audio-seat').length===capacity){
   box.querySelectorAll('.audio-seat[data-identity]').forEach(item=>item.classList.toggle('speaking',activeSpeakerIds.has(item.dataset.identity)));
   return;
@@ -418,7 +439,9 @@ function drawAudioSeats(result){
  box.classList.add('seat-grid');box.classList.toggle('solo-room',capacity===1);
  const nodes=document.createDocumentFragment();
  for(let i=0;i<capacity;i++){
-  const speaker=speakers[i],item=document.createElement('button');item.type='button';item.className='audio-person audio-seat';
+  const speaker=positions[i],item=document.createElement('button');item.type='button';item.className='audio-person audio-seat';
+  item.dataset.seatNumber=String(i);
+  item.classList.toggle('seat-locked',(result.room_settings?.locked_seat_numbers||[]).includes(i));
   // Occupied seat = choose gift recipient and open store; empty seat = request mic.
   item.onclick=speaker&&speaker.user_id!==config.userId
    ?()=>giftSheet(speaker.user_id)
@@ -435,9 +458,10 @@ function drawAudioSeats(result){
     img.onload=()=>placeholder.style.visibility='hidden';img.onerror=()=>img.remove();item.append(img)
    }
    const label=document.createElement('span');label.className='audio-name';label.textContent=speaker.name;item.append(label);
-   const role=document.createElement('small');role.textContent=speaker.owner?'المضيف':String(i+1);item.append(role);
+   const role=document.createElement('small');role.textContent=speaker.owner?'المضيف':'مقعد '+i;item.append(role);
   }else{
-   item.classList.add('empty-seat');item.dataset.seatNumber=String(i);item.setAttribute('aria-label','مقعد '+(i+1)+' · طلب الميكروفون');
+   item.classList.add('empty-seat');item.dataset.seatNumber=String(i);
+   item.setAttribute('aria-label','مقعد '+i+(item.classList.contains('seat-locked')?' مقفل':' · طلب الميكروفون'));
    const circle=document.createElement('span');circle.className='seat-plus';circle.setAttribute('aria-hidden','true');circle.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 10v2a7 7 0 0 0 11.3 5.5M12 19v2M8.5 21h7M19 11v6M16 14h6"/></svg>';
    // Empty seats show one clear action; the seat number remains in aria-label.
    item.append(circle);
@@ -667,11 +691,10 @@ $('text').addEventListener('keydown',event=>{
 });
 $('text').addEventListener('input',()=>commentNotice(''));
 $('text').addEventListener('focus',()=>{
- document.body.classList.add('chat-focused');
  requestAnimationFrame(()=>{updateRoomViewport();syncRoomFooterMetrics()});
 });
 $('text').addEventListener('blur',()=>{
- document.body.classList.remove('chat-focused');
+ document.body.classList.remove('ime-open','chat-focused');
  requestAnimationFrame(()=>{updateRoomViewport();syncRoomFooterMetrics()});
 });
 // Keep microphone and camera independent, including during rapid taps.
