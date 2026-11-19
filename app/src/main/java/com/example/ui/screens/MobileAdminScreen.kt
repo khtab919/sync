@@ -182,6 +182,7 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
             LiveRoomView(
                 baseUrl=api.origin,
                 bootstrap=room,
+                api=api,
                 retry={
                     val parts=android.net.Uri.parse(room.optString("url")).pathSegments
                     val id=parts.getOrNull(parts.size-2)
