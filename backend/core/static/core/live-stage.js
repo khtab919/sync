@@ -487,8 +487,10 @@ function drawAudioSeats(result){
    label.className='audio-name';label.textContent=speaker.name;item.append(label);
    const level=document.createElement('span');
    level.className='member-seat-badge';
-   level.textContent='LV '+speaker.level+(speaker.vip_tier?' · VIP '+speaker.vip_tier:'');
-   item.append(level);
+   if(Number.isInteger(speaker.level)&&speaker.level>=1){
+    level.textContent='LV '+speaker.level+(speaker.vip_tier?' · VIP '+speaker.vip_tier:'');
+    item.append(level);
+   }
    const role=document.createElement('small');
    role.textContent=speaker.owner?'المضيف':'مقعد '+i;
    item.append(role);
@@ -683,8 +685,10 @@ function drawState(result){state=result;
    name.textContent=c.name+': ';
    body.append(name);
    const badge=document.createElement('span');badge.className='comment-level-badge';
-   badge.textContent='LV '+c.level+(c.vip_tier?' · VIP '+c.vip_tier:'');
-   body.append(badge);
+   if(Number.isInteger(c.level)&&c.level>=1){
+    badge.textContent='LV '+c.level+(c.vip_tier?' · VIP '+c.vip_tier:'');
+    body.append(badge);
+   }
    if(c.identity_verified){
     const verified=document.createElement('span');
     verified.className='comment-verified';verified.textContent=' ✓';
