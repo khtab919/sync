@@ -278,7 +278,9 @@ function giftSheet(preferredRecipientId=null){
   return chosen&&chosen.user_id!==config.userId?chosen:null;
  }
  function updateRecipients(snapshot){
-  if(!target.isConnected)return;
+  // Always compute the status even while the modal is being inserted:
+  // Android WebView may not mark a newly created bottom sheet as connected
+  // during the same rendering tick.
   const receiver=recipientOf(snapshot);
   target.hidden=false;
   if(receiver){
@@ -316,6 +318,7 @@ function giftSheet(preferredRecipientId=null){
  comboTitle.textContent='إرسال متتابع';picker.append(comboTitle);
  const counts=document.createElement('div');counts.className='gift-combo-counts';picker.append(counts);
  const checkout=document.createElement('div');checkout.className='gift-checkout';box.append(target,checkout);
+ updateRecipients(state);
  const summary=document.createElement('div');summary.className='gift-checkout-summary';checkout.append(summary);
  const confirmation=document.createElement('p');confirmation.className='gift-confirm-hint';confirmation.textContent='لم تُخصم أي كوينز.';checkout.append(confirmation);
  const send=button(checkout,'',async()=>{
