@@ -476,6 +476,32 @@ fun ServerAppScreen(baseUrl: String) {
         finally { loading = false }
     }
 
+    // Keep an already-open profile synchronized with server-side XP, frame,
+    // avatar and badges. Other viewers see changes without reopening the page.
+    // Do not poll on the edit form: its unsaved input values must remain intact.
+    LaunchedEffect(signedIn, foreground, screen, creator.optInt("id")) {
+        if (!signedIn || !foreground || screen !in listOf("حسابي","صفحة المذيعة")) return@LaunchedEffect
+        while (true) {
+            try {
+                if (screen=="حسابي") {
+                    val updated=api.request("/api/me")
+                    if (updated.toString()!=profile.toString()) profile=updated
+                } else {
+                    val userId=creator.optInt("id")
+                    if (userId>0) {
+                        val updated=api.request("/api/creators/$userId")
+                        if (updated.toString()!=creator.toString()) creator=updated
+                    }
+                }
+            } catch (e:CancellationException) { throw e }
+            catch (_:Exception) {
+                // Keep the last confirmed profile without showing form validation
+                // errors or an unrelated retry banner on the read-only page.
+            }
+            delay(3000)
+        }
+    }
+
     LaunchedEffect(signedIn, foreground, profile.optInt("id")) {
         if(!signedIn || !foreground)return@LaunchedEffect
         val inbox=MessageInbox(context,api.origin,profile.optInt("id"))
