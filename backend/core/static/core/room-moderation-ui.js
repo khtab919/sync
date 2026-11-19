@@ -15,7 +15,7 @@
      originalDraw(filtered);
      const card=document.querySelector('#sheet[open] .member-identity');
      if(card){
-       const person=[...filtered.speakers,...filtered.comments,...(filtered.participants_visible||[])]
+       const person=[...(filtered.speakers||[]),...filtered.comments,...(filtered.participants_visible||[])]
          .find(p=>String(p.user_id)===card.dataset.userId);
        if(person)card.textContent=identityLabel(person);
      }
@@ -204,6 +204,7 @@
  }
  // Delegate at capture phase: one hook for dynamically re-rendered avatars/comments.
  function openActionFromEvent(e){
+   if(e.target.closest?.('.comment-actions'))return;
    const bubble=e.target.closest?.('#messages .comment-bubble');
    if(bubble){
      const id=Number(bubble.dataset.userId);

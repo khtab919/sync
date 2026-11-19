@@ -303,7 +303,7 @@ function giftSheet(preferredRecipientId=null){
    window.RelaxiaGiftCinema.previewSound(selected.code);
   }
  },'gift-preview-sound');
- let previewCleanup=null,lastPreview='';
+ let lastPreview;
  const tabs=document.createElement('div');tabs.className='gift-tabs';box.append(tabs);
  const grid=document.createElement('div');grid.className='gift-grid';box.append(grid);
  // Show purchasable choices before any optional cinema preview: the 3D preview
@@ -364,7 +364,6 @@ function giftSheet(preferredRecipientId=null){
    ?'تأكيد: '+selected.name+' إلى '+recipient.name+' بمبلغ '+cost.toLocaleString('ar')+' كوين.'
    :'راجع المستلم والسعر. لا يُخصم الرصيد إلا بعد الضغط على «إرسال الآن».';
   if(selected?.code!==lastPreview){
-   previewCleanup?.();previewCleanup=null;
    previewName.textContent=selected?.name||'اختر هدية';
    previewButton.disabled=!selected;
    preview.hidden=!selected;
@@ -376,7 +375,6 @@ function giftSheet(preferredRecipientId=null){
     icon.src=selected.icon_url;
     previewArt.append(icon);
    }
-   activeGiftPreviewCleanup=previewCleanup;
    lastPreview=selected?.code||'';
   }
   for(const el of grid.children)el.setAttribute('aria-pressed',String(el.dataset.giftCode===selected?.code));
@@ -662,7 +660,14 @@ function drawState(result){state=result;
   requestMic.hidden=!!speaking;
   requestMic.textContent=result.seat_status==='pending'?'طلب الانضمام قيد المراجعة':'طلب الانضمام';
  }
- const signature=JSON.stringify([!!result.manage_room,result.comments||[]]);if(lastComments!==signature){lastComments=signature;const box=$('messages');const nearBottom=box.scrollHeight-box.clientHeight-box.scrollTop<38,previousScroll=box.scrollTop;box.replaceChildren();for(const c of result.comments||[]){const p=document.createElement('div');p.className='comment-bubble';const av=document.createElement('div');av.className='comment-avatar';renderPortrait(av,c);const body=document.createElement('div');body.className='comment-body';const name=document.createElement('span');name.className='comment-author';name.textContent=identityLabel(c)+' · ';body.append(name,document.createTextNode(c.text));p.dataset.userId=String(c.user_id);p.dataset.commentId=String(c.id);p.append(av,body);if(result.manage_room){const manage=document.createElement('button');manage.type='button';manage.className='comment-actions';manage.textContent='⋯';manage.setAttribute('aria-label','إدارة تعليق '+(c.name||''));manage.onclick=()=>commentActionsSheet(c);p.append(manage)}box.append(p)}if(!(result.comments||[]).length){const blank=document.createElement('p');blank.className='comment-empty';blank.textContent='لا توجد تعليقات بعد · ابدأ الحوار';box.append(blank)}box.scrollTop=nearBottom?box.scrollHeight:Math.min(previousScroll,Math.max(0,box.scrollHeight-box.clientHeight))}
+ const signature=JSON.stringify([!!result.manage_room,result.comments||[]]);if(lastComments!==signature){lastComments=signature;const box=$('messages');const nearBottom=box.scrollHeight-box.clientHeight-box.scrollTop<38,previousScroll=box.scrollTop;box.replaceChildren();for(const c of result.comments||[]){const p=document.createElement('div');p.className='comment-bubble';const av=document.createElement('div');av.className='comment-avatar';renderPortrait(av,c);const body=document.createElement('div');body.className='comment-body';const name=document.createElement('span');name.className='comment-author';name.textContent=c.name;
+ if(Number.isInteger(c.level)&&c.level>0){
+  const badge=document.createElement('small');badge.className='public-level';
+  badge.textContent='Lv '+c.level;name.append(badge);
+ }
+ if(c.vip_tier>0)name.append(' VIP '+c.vip_tier);
+ if(c.identity_verified)name.append(' ✓');
+ name.append(' · ');body.append(name,document.createTextNode(c.text));p.dataset.userId=String(c.user_id);p.dataset.commentId=String(c.id);p.append(av,body);if(result.manage_room){const manage=document.createElement('button');manage.type='button';manage.className='comment-actions';manage.textContent='⋯';manage.setAttribute('aria-label','إدارة تعليق '+(c.name||''));manage.onclick=()=>commentActionsSheet(c);p.append(manage)}box.append(p)}if(!(result.comments||[]).length){const blank=document.createElement('p');blank.className='comment-empty';blank.textContent='لا توجد تعليقات بعد · ابدأ الحوار';box.append(blank)}box.scrollTop=nearBottom?box.scrollHeight:Math.min(previousScroll,Math.max(0,box.scrollHeight-box.clientHeight))}
  $('pinned').hidden=!result.pinned_comment||!commentsVisible;if(result.pinned_comment)$('pinned').textContent='مثبّت · '+result.pinned_comment.name+': '+result.pinned_comment.text;
  $('goal').hidden=!result.gift_goal_cents;if(result.gift_goal_cents){if($('goalText'))$('goalText').textContent=(result.gift_total_cents||0)+' / '+result.gift_goal_cents;if($('goalProgress'))$('goalProgress').style.width=Math.min(100,Math.round(((result.gift_total_cents||0)/result.gift_goal_cents)*100))+'%';else $('goal').textContent='هدف الهدايا '+(result.gift_total_cents||0)+' / '+result.gift_goal_cents;}
  $('pk').hidden=!result.pk;document.body.classList.toggle('has-pk',!!result.pk);if(result.pk){const pk=result.pk;const teams=pk.teams.map(team=>team.map(id=>result.speakers?.find(s=>s.user_id===id)?.name||'مشارك').join(' + '));$('pkTeams').replaceChildren();for(let i=0;i<2;i++){const span=document.createElement('span');span.title=teams[i];span.textContent=(i===0?'الفريق الأول':'الفريق الثاني')+' · '+pk.scores[i];$('pkTeams').append(span)}const total=pk.scores[0]+pk.scores[1];$('pkProgress').value=total?pk.scores[0]/total*100:50;pkClock()}
