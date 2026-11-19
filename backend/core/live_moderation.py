@@ -92,7 +92,7 @@ def manager_action(request,row):
     if not is_manager(row,actor):raise ApiError('room_manager_required',403)
     # Settings and permanent host-wide bans belong to host or Super Admin.
     host_only={'room_settings','ban_from_host_rooms','remove_host_ban','set_room_moderator'}
-    if kind in host_only and actor.pk!=row.owner_id and not is_global(actor):
+    if kind in host_only and actor.pk!=row.owner_id and not actor.is_superuser:
         raise ApiError('host_required',403)
 
     with transaction.atomic():
