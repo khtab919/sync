@@ -380,7 +380,7 @@ fun ServerAppScreen(baseUrl: String) {
             }catch(e:CancellationException){throw e}
             catch(_:Exception){livePreview=emptyList();livePreviewError=true}
             finally{livePreviewLoading=false}
-            delay(10000)
+            delay(5000)
         }
     }
     // Android back from a full-screen Reel must return home, never exit the app.
@@ -740,6 +740,21 @@ fun ServerAppScreen(baseUrl: String) {
                     if ((loading && rows.isEmpty() && screen in listOf("دردشة", "الحجوزات", "المحفوظات", "ريلز")) || (loading && services.isEmpty() && screen in listOf("تصفح", "العرض"))) item { LuxurySkeletonCards() }
                     when (screen) {
                         "تصفح" -> {
+                            if(livePreview.isNotEmpty()){
+                                item(key="home_live_hosts"){
+                                    RelaxiaLiveHostsBar(
+                                        rooms=livePreview,
+                                        onOpenRoom={room->
+                                            selectedHomeRoomId=room.optString("id")
+                                            open("البث المباشر")
+                                        },
+                                        onBrowse={
+                                            selectedHomeRoomId=""
+                                            open("البث المباشر")
+                                        }
+                                    )
+                                }
+                            }
                             item(key = "home_dashboard") {
                                 RelaxiaHomeDashboard(
                                     profile = profile,
@@ -785,11 +800,22 @@ fun ServerAppScreen(baseUrl: String) {
                             }
                             val visible = services
                             if (visible.isEmpty() && !loading && contentError.isBlank()) item { ReferenceEmpty(Icons.Rounded.Explore, "لا توجد عروض جديدة الآن", "يمكنك تصفح البثوث والغرف والريلز، أو العودة بعد نشر عروض جديدة.") }
-                            items(visible, key = { it.optInt("id") }) { service ->
-                                FeedCard(service, { showCreator(service.optInt("owner_id")) }, { showService(service) }, { kind -> perform {
-                                    val updated = api.request("/api/services/${service.optInt("id")}/reaction", "POST", JSONObject().put("kind", kind).put("enabled", !service.optBoolean(if (kind == "like") "liked" else "saved")))
-                                    services = services.map { if (it.optInt("id") == updated.optInt("id")) updated else it }
-                                } }, { startChat(service.optInt("owner_id"), service.optString("owner_name")) })
+                            visible.forEachIndexed { index, service ->
+                                item(key = "feed-service-${service.optInt("id")}") {
+                                    FeedCard(service, { showCreator(service.optInt("owner_id")) }, { showService(service) }, { kind -> perform {
+                                        val updated = api.request("/api/services/${service.optInt("id")}/reaction", "POST", JSONObject().put("kind", kind).put("enabled", !service.optBoolean(if (kind == "like") "liked" else "saved")))
+                                        services = services.map { if (it.optInt("id") == updated.optInt("id")) updated else it }
+                                    } }, { startChat(service.optInt("owner_id"), service.optString("owner_name")) })
+                                }
+                                if ((index+1)%5==0 && livePreview.isNotEmpty()) {
+                                    val liveRoom=livePreview[((index+1)/5-1)%livePreview.size]
+                                    item(key="interleaved-room-${index+1}-${liveRoom.optString("id")}") {
+                                        RelaxiaInFeedLiveCard(liveRoom){
+                                            selectedHomeRoomId=liveRoom.optString("id")
+                                            open("البث المباشر")
+                                        }
+                                    }
+                                }
                             }
                         }
                         "العرض", "المحفوظات" -> {
