@@ -154,7 +154,7 @@ internal fun NativeUsdtTopupScreen(api: LayaliApi, initialQuote:String="", initi
                     StepHeader("1", "أرسل بالضبط", onHelp = { showHelp = true })
                     TopupPanel {
                         Row(
-                            Modifier.fillMaxWidth().padding(18.dp),
+                            Modifier.fillMaxWidth().padding(9.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Button(onClick = { copy(payAmount, "USDT amount") },
@@ -165,7 +165,7 @@ internal fun NativeUsdtTopupScreen(api: LayaliApi, initialQuote:String="", initi
                             }
                             Spacer(Modifier.weight(1f))
                             Column(horizontalAlignment = Alignment.End) {
-                                Text(payAmount, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+                                Text(payAmount, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                                 Text("USDT", color = SoftText)
                             }
                         }
@@ -180,7 +180,7 @@ internal fun NativeUsdtTopupScreen(api: LayaliApi, initialQuote:String="", initi
                     }
                     TopupPanel {
                         Column(
-                            Modifier.fillMaxWidth().padding(18.dp),
+                            Modifier.fillMaxWidth().padding(9.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
@@ -189,7 +189,7 @@ internal fun NativeUsdtTopupScreen(api: LayaliApi, initialQuote:String="", initi
                             if (qr != null) {
                                 Surface(onClick = { showQr = true }, color = Color.White, shape = RoundedCornerShape(4.dp)) {
                                     Image(qr.asImageBitmap(), "تكبير رمز QR لعنوان الدفع",
-                                        Modifier.size(230.dp))
+                                        Modifier.size(115.dp))
                                 }
                             } else Text("تعذّر إنشاء رمز QR. انسخ العنوان بالأسفل.")
                             HorizontalDivider(color = PanelBorder)
@@ -277,7 +277,7 @@ internal fun NativeUsdtTopupScreen(api: LayaliApi, initialQuote:String="", initi
                     }
                     TopupPanel {
                         Row(
-                            Modifier.fillMaxWidth().padding(18.dp),
+                            Modifier.fillMaxWidth().padding(9.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(Icons.Rounded.Toll, null, tint = Color(0xFFF0B95C),
@@ -294,7 +294,7 @@ internal fun NativeUsdtTopupScreen(api: LayaliApi, initialQuote:String="", initi
                     LockedPaymentRow("طريقة الدفع", "USDT · شبكة Tron (TRC20)",
                         Icons.Rounded.Lock)
                     TopupPanel {
-                        Row(Modifier.fillMaxWidth().padding(18.dp),
+                        Row(Modifier.fillMaxWidth().padding(9.dp),
                             verticalAlignment = Alignment.CenterVertically) {
                             Surface(color = Color(0xFF106345),
                                 shape = RoundedCornerShape(9.dp)) {
@@ -413,11 +413,11 @@ private fun StepHeader(number: String, title: String, onHelp: (() -> Unit)? = nu
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         if (onHelp != null) TextButton(onClick = onHelp) { Text("كيف يعمل هذا؟") }
         Spacer(Modifier.weight(1f))
-        Text(title, fontSize = 23.sp, fontWeight = FontWeight.Bold)
+        Text(title, fontSize = 17.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.width(12.dp))
         Surface(color = ActionBlue, contentColor = Color.White, shape = RoundedCornerShape(40.dp)) {
             Text(number, Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                fontWeight = FontWeight.Bold, fontSize = 23.sp)
+                fontWeight = FontWeight.Bold, fontSize = 17.sp)
         }
     }
 }

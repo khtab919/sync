@@ -102,7 +102,7 @@ internal fun CoinPackage(coins:Int,bonus:Int,dollars:String,selected:Boolean,bad
             if(selected)Color(0xFFF59E0B) else Color(0xFF465876))
     ){
         Column(
-            modifier=Modifier.fillMaxWidth().heightIn(min=164.dp)
+            modifier=Modifier.fillMaxWidth().heightIn(min=110.dp)
                 .padding(horizontal=4.dp,vertical=8.dp),
             horizontalAlignment=Alignment.CenterHorizontally,
             verticalArrangement=Arrangement.spacedBy(4.dp)
@@ -264,7 +264,7 @@ internal fun CoinShopScreen(api:LayaliApi, fixedMethod:String,back:()->Unit) {
             if(packages.isEmpty()&&!busy)Text("لا تتوفر باقات شحن حاليًا. أعد تحديث المتجر لاحقًا.",color=Color(0xFFB2C3DB))
             val maxBonus=packages.maxOfOrNull{it.bonusPoints}?:0
             BoxWithConstraints(Modifier.fillMaxWidth()){
-                val columns=if(maxWidth>=280.dp)3 else 2
+                val columns=if(maxWidth>=480.dp)3 else 2
                 Column(verticalArrangement=Arrangement.spacedBy(9.dp)){
                     packages.chunked(columns).forEach{line->
                         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(9.dp)){
@@ -283,7 +283,7 @@ internal fun CoinShopScreen(api:LayaliApi, fixedMethod:String,back:()->Unit) {
                     }
                 }
             }
-            Text("اختر إحدى الباقات ثم اضغط اشحن الآن لعرض وسائل الدفع والسعر النهائي.",style=MaterialTheme.typography.bodySmall,color=Color(0xFFA5B9D8))
+            Text("اختر الباقة ثم اضغط «مراجعة المبلغ».",style=MaterialTheme.typography.bodySmall,color=Color(0xFFA5B9D8))
         }else if(!showOrders && quote!=null){
             Text("${quote.optInt("amount_cents")} كوين" + if(quote.optInt("bonus_cents")>0) " · +${quote.optInt("bonus_cents")} نقطة ترويجية" else "",fontSize=20.sp,fontWeight=FontWeight.Bold)
             Text(
@@ -336,7 +336,7 @@ internal fun CoinShopScreen(api:LayaliApi, fixedMethod:String,back:()->Unit) {
                 }
             } else {
             Text(if(rail=="usdt")"USDT على BEP20 فقط"else if(rail=="syriatelcash")"استلام عبر سيريتيل كاش"else"استلام عبر شام كاش",fontWeight=FontWeight.Bold)
-            Surface(color=androidx.compose.ui.graphics.Color.White,shape=RoundedCornerShape(24.dp)) { ReferenceImage(quote.optString("qr_url"),Modifier.fillMaxWidth().height(256.dp).padding(16.dp),contentScale=androidx.compose.ui.layout.ContentScale.Fit) }
+            Surface(color=androidx.compose.ui.graphics.Color.White,shape=RoundedCornerShape(24.dp)) { ReferenceImage(quote.optString("qr_url"),Modifier.fillMaxWidth().height(128.dp).padding(16.dp),contentScale=androidx.compose.ui.layout.ContentScale.Fit) }
             Text(quote.optString("destination"),style=MaterialTheme.typography.bodyMedium.copy(textDirection=androidx.compose.ui.text.style.TextDirection.Ltr))
             OutlinedButton(onClick={(context.getSystemService(Context.CLIPBOARD_SERVICE)as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Relaxia payment",quote.optString("destination")));note="تم نسخ بيانات الاستلام."}){Text("نسخ بيانات الاستلام")}
             if(rail=="shamcash"&&info.optString("shamcash_instructions").isNotBlank())Text(info.optString("shamcash_instructions"))

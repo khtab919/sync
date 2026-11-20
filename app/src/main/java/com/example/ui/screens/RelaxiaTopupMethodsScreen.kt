@@ -20,8 +20,11 @@ import androidx.compose.material.icons.rounded.ReceiptLong
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.Density
+import androidx.compose.material.icons.rounded.CreditCard
+import androidx.compose.material.icons.rounded.Smartphone
+import androidx.compose.material.icons.rounded.ChevronLeft
+import androidx.activity.compose.BackHandler
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.horizontalScroll
@@ -42,17 +45,6 @@ private val CashGold = Color(0xFFE5B84B)
 
 @Composable
 internal fun RelaxiaTopupMethodsScreen(api:LayaliApi,back:()->Unit){
-    val device = LocalDensity.current
-    val checkoutDensity = remember(device.density, device.fontScale) {
-        Density(device.density * 0.5f, device.fontScale)
-    }
-    CompositionLocalProvider(LocalDensity provides checkoutDensity) {
-        CheckoutTheme(api, back)
-    }
-}
-
-@Composable
-private fun CheckoutTheme(api: LayaliApi, back: () -> Unit) {
     MaterialTheme(
         colorScheme = darkColorScheme(
             primary = Color(0xFFACCEFF),
@@ -90,13 +82,16 @@ private fun PaymentMethodsContent(api: LayaliApi, back: () -> Unit) {
         catch(_:Exception){loadError=true}
         finally{loading=false}
     }
+    BackHandler(selected != "choose") { selected = "choose" }
     when(selected){
         "stripe", "shamcash", "nowpayments", "syriatelcash" -> CoinShopScreen(api, selected){selected="choose"}
         else -> Surface(Modifier.fillMaxSize(),color=CashNavy,contentColor=Color.White){
             Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(18.dp),
-                verticalArrangement=Arrangement.spacedBy(18.dp)){
-                TextButton(onClick=back){ Icon(Icons.Rounded.ArrowForward,null); Text("رجوع") }
-                Text("شحن الكوينز",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold)
+                verticalArrangement=Arrangement.spacedBy(12.dp)){
+                Row(verticalAlignment=Alignment.CenterVertically) {
+                    IconButton(onClick=back){Icon(Icons.Rounded.ArrowForward,"رجوع")}
+                    Text("شحن الكوينز",fontSize=22.sp,fontWeight=FontWeight.Bold)
+                }
                 Text("اختر طريقة الدفع داخل Relaxia",color=Color(0xFFC4D6EE))
                 if(loading) CircularProgressIndicator()
                 else if(loadError) TextButton(onClick={retry++}){Text("تعذّر تحميل طرق الشحن · إعادة المحاولة")}
@@ -108,7 +103,7 @@ private fun PaymentMethodsContent(api: LayaliApi, back: () -> Unit) {
                 ).forEach { (code,title,detail) ->
                     val flag = if(code=="syriatelcash") "syriatel_cash_enabled" else code+"_enabled"
                     val available = info.optBoolean(flag)
-                    CashMethodCard(title, if(available) detail else "غير متاحة حاليًا", available) { selected=code }
+                    CashMethodCard(code,title, if(available) detail else if(code=="stripe") info.optString("stripe_status_label","الدفع بالبطاقات غير متاح حاليًا") else "غير متاحة حاليًا", available) { selected=code }
                 }
                 Text("لا تُضاف الكوينز بعد إرسال إيصال فقط. يجب تأكيد وصول الدفعة الفعلية.",
                     color=Color(0xFFBFD0EA),style=MaterialTheme.typography.bodySmall)
@@ -118,19 +113,36 @@ private fun PaymentMethodsContent(api: LayaliApi, back: () -> Unit) {
 }
 
 @Composable
-private fun CashMethodCard(title:String,detail:String,enabled:Boolean,onClick:()->Unit){
-    Card(onClick=onClick,enabled=enabled,modifier=Modifier.fillMaxWidth().heightIn(min=76.dp),
-        shape=RoundedCornerShape(25.dp),
-        colors=CardDefaults.cardColors(containerColor=CashRoyal)){
-        Row(Modifier.fillMaxWidth().padding(18.dp),verticalAlignment=Alignment.CenterVertically,
+private fun CashMethodCard(code:String,title:String,detail:String,enabled:Boolean,onClick:()->Unit){
+    val accent = when(code){
+        "stripe" -> Color(0xFFC6B8FF)
+        "shamcash" -> Color(0xFF8ADFD7)
+        "nowpayments" -> Color(0xFF8CE0AD)
+        else -> Color(0xFFFFB0AD)
+    }
+    Card(onClick=onClick,enabled=enabled,modifier=Modifier.fillMaxWidth(),
+        border=androidx.compose.foundation.BorderStroke(1.dp,accent.copy(alpha=.32f)),
+        colors=CardDefaults.cardColors(containerColor=Color(0xFF162A48),disabledContainerColor=Color(0xFF202A3A)),
+        shape=RoundedCornerShape(18.dp)){
+        Row(Modifier.padding(horizontal=14.dp,vertical=12.dp),verticalAlignment=Alignment.CenterVertically,
             horizontalArrangement=Arrangement.spacedBy(12.dp)){
-            Icon(Icons.Rounded.AccountBalanceWallet,null,tint=CashGold,modifier=Modifier.size(32.dp))
-            Column(Modifier.weight(1f)){
-                Text(title,color=Color.White,fontWeight=FontWeight.Bold,
-                    style=MaterialTheme.typography.titleMedium)
-                Text(detail,color=Color(0xFFE1EAF6),style=MaterialTheme.typography.bodySmall)
+            Surface(shape=RoundedCornerShape(13.dp),color=accent.copy(alpha=.13f)){
+                Box(Modifier.size(42.dp),contentAlignment=Alignment.Center){
+                    when(code){
+                        "nowpayments" -> Text("₮",color=accent,fontSize=24.sp,fontWeight=FontWeight.Bold)
+                        else -> Icon(when(code){
+                            "stripe" -> Icons.Rounded.CreditCard
+                            "shamcash" -> Icons.Rounded.AccountBalanceWallet
+                            else -> Icons.Rounded.Smartphone
+                        },null,tint=accent)
+                    }
+                }
             }
-            if(enabled) Icon(Icons.Rounded.ArrowForward,null,tint=CashGold)
+            Column(Modifier.weight(1f)){
+                Text(title,color=Color.White,fontSize=16.sp,fontWeight=FontWeight.Bold)
+                Text(detail,color=Color(0xFFC4D5E9),fontSize=13.sp,lineHeight=19.sp)
+            }
+            if(enabled) Icon(Icons.Rounded.ChevronLeft,null,tint=accent)
         }
     }
 }
