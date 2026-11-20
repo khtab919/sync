@@ -218,7 +218,8 @@ class NativeAdminSecurityTests(TestCase):
         self.verify(self.owner)
         p={'user_id':self.user.pk,'kind':'frame','value':110,'days':1,'reason':'Temporary frame benefit'}
         self.assertEqual(self.call('/api/admin/control/benefits',p).status_code,200)
-        self.assertEqual(self.call('/api/me',user=self.user).json()['selected_frame'],110)
+        self.assertIn(110,self.call('/api/me',user=self.user).json()['owned_frames'])
+        self.assertEqual(self.call('/api/me',user=self.user).json()['selected_frame'],0)
         BenefitGrant.objects.update(expires_at=timezone.now()-timedelta(seconds=1))
         self.assertEqual(self.call('/api/me',user=self.user).json()['selected_frame'],0)
     def test_milestone_reward_catalog_blocks_old_frames(self):

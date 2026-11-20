@@ -184,7 +184,7 @@ class ApiTests(TestCase):
             expires_at=timezone.now() + timedelta(days=1))
         response = self.client.get('/api/conversations', **headers)
         self.assertEqual(response.status_code, 200, response.content)
-        self.assertEqual(response.json()['items'][0]['selected_frame'], 30)
+        self.assertEqual(response.json()['items'][0]['selected_frame'], 0)
 
     def test_reel_likes_are_real_idempotent_and_protected(self):
         from .models import Reel, ReelLike

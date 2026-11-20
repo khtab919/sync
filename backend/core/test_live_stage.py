@@ -36,6 +36,8 @@ class StageTests(TestCase):
                 self.assertEqual(person['name'], profile['display_name'])
                 self.assertEqual(person['avatar_url'], profile['avatar_url'])
 
+        assert_visible(0, 1)
+        self.client.patch('/api/me', {'selected_frame':110}, content_type='application/json', **headers)
         assert_visible(110, 1)
         response = self.client.patch('/api/me', {'display_name': 'Updated', 'selected_frame': 0},
                                      content_type='application/json', **headers)

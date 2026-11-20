@@ -394,18 +394,10 @@ function giftSheet(preferredRecipientId=null){
    b.dataset.giftCode=g.code;
    b.setAttribute('aria-label',g.name+' · '+g.price_cents+' كوين');
    const medallion=document.createElement('span');medallion.className='gift-medallion';
-   const canvas=document.createElement('canvas');
-   canvas.className='gift-card-3d';
-   canvas.setAttribute('aria-hidden','true');
-   medallion.append(canvas);
-   if(window.RelaxiaGiftCinema?.thumbnail){
-    requestAnimationFrame(()=>window.RelaxiaGiftCinema.thumbnail(canvas,g.code));
-   }else{
-    const fallback=document.createElement('span');
-    fallback.className='gift-art-fallback';
-    fallback.textContent=(g.name||'هدية').trim().slice(0,2);
-    medallion.append(fallback);
-   }
+   const icon=document.createElement('img');
+   icon.className='gift-webp';icon.alt='';icon.loading='lazy';icon.decoding='async';
+   icon.onerror=()=>medallion.replaceChildren(document.createTextNode(g.symbol||g.name));
+   icon.src=g.icon_url;medallion.append(icon);
    b.classList.add('gift-'+String(g.code).replace(/[^a-z0-9_-]/g,''));
    const name=document.createElement('strong');name.textContent=g.name;
    const price=document.createElement('small');price.className='gift-price';price.textContent=g.price_cents.toLocaleString('ar')+' كوين';
@@ -466,8 +458,9 @@ function drawAudioSeats(result){
    renderPortrait(portrait,speaker);
    item.append(portrait);
    const label=document.createElement('span');label.className='audio-name';label.textContent=speaker.name;item.append(label);
-   const role=document.createElement('small');role.textContent=speaker.owner?'المضيف':'مقعد '+i;item.append(role);
+   const role=document.createElement('small');role.textContent=(speaker.owner?'المضيف':'مقعد '+i)+(config.gifts&&speaker.user_id!==config.userId?' · إهداء':'');item.append(role);
   }else{
+   item.disabled=item.classList.contains('seat-locked');
    item.classList.add('empty-seat');item.dataset.seatNumber=String(i);
    item.setAttribute('aria-label','مقعد '+i+(item.classList.contains('seat-locked')?' مقفل':' · طلب الميكروفون'));
    const circle=document.createElement('span');circle.className='seat-plus';circle.setAttribute('aria-hidden','true');circle.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 10v2a7 7 0 0 0 11.3 5.5M12 19v2M8.5 21h7M19 11v6M16 14h6"/></svg>';

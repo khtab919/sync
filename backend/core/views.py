@@ -215,7 +215,7 @@ def profile_json(user, viewer):
         'selected_frame': identity['selected_frame'],
         'level': identity['level'], 'earned_level': identity['earned_level'],
         'level_color': identity['level_color'], 'vip_tier': identity['vip_tier'],
-        'xp_points': identity['xp_points'],
+        'xp_points': identity['xp_points'], 'level_start_xp': identity['level_start_xp'],
         'next_level_xp': identity['next_level_xp'],
         'owned_frames': identity['owned_frames'] if user==viewer else [],
         'avatar_url': profile.avatar_url, 'chat_price_cents': profile.chat_price_cents,
@@ -229,6 +229,20 @@ def profile_json(user, viewer):
         'admin_permissions':__import__('core.admin_security',fromlist=['scopes']).scopes(user) if user==viewer else [],
         'admin_scope':('full' if user.is_superuser else 'live') if user==viewer and user.is_staff else '',
     }
+
+@endpoint(['GET'])
+def public_identities(request):
+    from .public_presence import public_presence_bulk
+    raw = request.GET.get('ids', '').split(',')
+    if not 1 <= len(raw) <= 100 or any(not value.isascii() or not value.isdigit()
+                                       or len(value) > 10 for value in raw):
+        raise ApiError('invalid_input')
+    users = User.objects.filter(pk__in={int(value) for value in raw}, is_active=True,
+                                profile__isnull=False).exclude(pk__in=visible_owners(request.actor))
+    fields = ('user_id', 'name', 'avatar_url', 'selected_frame', 'level', 'vip_tier', 'identity_verified')
+    identities = public_presence_bulk(users)
+    return JsonResponse({'items': [{key: row[key] for key in fields} for row in identities.values()]})
+
 
 @endpoint(['GET', 'PATCH'])
 def me(request):
@@ -298,11 +312,13 @@ def me(request):
                 request.actor.save(update_fields=['email'])
     return JsonResponse(profile_json(request.actor, request.actor))
 
-def service_json(service, viewer):
-    owner = Profile.objects.get(user=service.owner)
+def service_json(service, viewer, identity=None):
+    from .public_presence import public_presence
+    if identity is None:
+        identity = public_presence(service.owner)
     return {'duration_minutes':service.duration_minutes,'terms':service.terms,'id': service.pk, 'owner_id': service.owner_id,
-            'owner_name': owner.display_name or service.owner.username,
-            'owner_frame': owner.selected_frame, 'owner_avatar_url': owner.avatar_url, 'title': service.title,
+            'owner_name': identity['name'], 'level':identity['level'], 'vip_tier':identity['vip_tier'], 'identity_verified':identity['identity_verified'],
+            'owner_frame': identity['selected_frame'], 'owner_avatar_url': identity['avatar_url'], 'title': service.title,
             'description': service.description, 'price_cents': service.price_cents,
             'image_url': service.image_url, 'category': service.category,
             'liked': ServiceReaction.objects.filter(service=service, user=viewer, kind='like').exists(),
@@ -329,7 +345,9 @@ def services(request):
         followed = Follow.objects.filter(user=request.actor).values_list('creator_id', flat=True)
         ordered = rank_feed(rows, likes=likes, bookings=completed,
                             following=followed, viewer_id=request.actor.pk)
-        return JsonResponse({'items': [service_json(row, request.actor) for row in ordered], 'next_cursor':next_cursor})
+        from .public_presence import public_presence_bulk
+        identities = public_presence_bulk(row.owner for row in ordered)
+        return JsonResponse({'items': [service_json(row, request.actor, identities[row.owner_id]) for row in ordered], 'next_cursor':next_cursor})
     if not Profile.objects.filter(user=request.actor, publishing_allowed=True).exists():
         raise ApiError('creator_account_required', 403)
     p = request.payload
@@ -431,13 +449,13 @@ def conversations(request):
     peers=list(peers[:101]); more=len(peers)>100; peers=peers[:100]
     messages={m.pk:m for m in Message.objects.filter(pk__in=[u.last_id for u in peers]).select_related('attachment','call')}
     unread=dict(Message.objects.filter(recipient=request.actor,read_at__isnull=True,deleted_at__isnull=True,sender_id__in=[u.pk for u in peers]).values('sender_id').annotate(n=Count('id')).values_list('sender_id','n'))
-    grants={}
-    for grant in BenefitGrant.objects.filter(user_id__in=[u.pk for u in peers],kind='frame',expires_at__gt=timezone.now()).order_by('id'):grants[grant.user_id]=grant.value
+    from .public_presence import public_presence_bulk
+    identities = public_presence_bulk(peers)
     result=[]
     for peer in peers:
         m=messages[peer.last_id]; profile=peer.profile
         preview='حُذفت هذه الرسالة' if m.deleted_at else ('مكالمة' if m.call_id else ('رسالة صوتية' if m.attachment_id and m.attachment.mime.startswith('audio') else 'مرفق' if m.attachment_id else m.body))
-        result.append({'id':peer.pk,'public_id':profile.public_id,'username':peer.username,'display_name':profile.display_name or peer.username,'selected_frame':grants.get(peer.pk,profile.selected_frame),'avatar_url':profile.avatar_url,'last_message':preview,'unread_count':unread.get(peer.pk,0),'is_mine':m.sender_id==request.actor.pk,'delivered_at':m.delivered_at.isoformat() if m.delivered_at else None,'read_at':m.read_at.isoformat() if m.read_at else None,'created_at':m.created_at})
+        result.append({'id':peer.pk,'public_id':profile.public_id,'username':peer.username,'display_name':profile.display_name or peer.username,'level':identities[peer.pk]['level'],'vip_tier':identities[peer.pk]['vip_tier'],'selected_frame':identities[peer.pk]['selected_frame'],'avatar_url':profile.avatar_url,'last_message':preview,'unread_count':unread.get(peer.pk,0),'is_mine':m.sender_id==request.actor.pk,'delivered_at':m.delivered_at.isoformat() if m.delivered_at else None,'read_at':m.read_at.isoformat() if m.read_at else None,'created_at':m.created_at})
     return JsonResponse({'items':result,'next_cursor':str(peers[-1].last_id) if more else None})
 
 @endpoint(['GET', 'POST'])
@@ -596,18 +614,20 @@ def reels(request):
                       viewer_id=request.actor.pk)[:100]
     # Real reactions only, with no fabricated views, comments, or metrics.
     items = []
+    from .public_presence import public_presence_bulk
+    identities = public_presence_bulk(reel.owner for reel in reels)
     for reel in reels:
-        owner_profile = reel.owner.profile
+        identity = identities[reel.owner_id]
         items.append({
             'saved':reel.pk in saved_ids, 'share_url':request.build_absolute_uri('/s/reel/'+str(reel.pk)), 'caption':reel.caption, 'id': reel.pk, 'owner_id': reel.owner_id,
             **__import__('core.paid_content',fromlist=['reel_json']).reel_json(reel,request),
-            'owner_name': owner_profile.display_name or reel.owner.username,
+            'owner_name': identity['name'],
             'owner_username': reel.owner.username,
-            'owner_public_id': owner_profile.public_id,
-            'identity_verified': owner_profile.identity_verified,
+            'owner_public_id': identity['public_id'],
+            'identity_verified': identity['identity_verified'],
             'following': reel.owner_id in following_ids,
-            'avatar_url': owner_profile.avatar_url,
-            'selected_frame': owner_profile.selected_frame,
+            'avatar_url': identity['avatar_url'],
+            'selected_frame': identity['selected_frame'], 'level':identity['level'], 'vip_tier':identity['vip_tier'],
             'created_at': reel.created_at.isoformat(),
             'liked': reel.pk in liked_ids,
             'like_count': likes.get(reel.pk, 0)

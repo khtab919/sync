@@ -74,7 +74,7 @@ import java.math.BigDecimal
 import java.util.UUID
 
 private val destinations = listOf("تصفح", "ريلز", "العرض", "دردشة", "حسابي")
-private val destinationLabels = listOf("الرئيسية", "الريلز", "المتجر", "الرسائل", "حسابي")
+private val destinationLabels = listOf("الرئيسية", "الريلز", "السوق", "الرسائل", "حسابي")
 private val destinationIcons = listOf(Icons.Rounded.Home, Icons.Rounded.SmartDisplay, Icons.Rounded.Storefront, Icons.Rounded.ChatBubbleOutline, Icons.Rounded.PersonOutline)
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
@@ -139,7 +139,7 @@ fun ServerAppScreen(baseUrl: String) {
     var showReportConfirmation by remember { mutableStateOf(false) }
     var accountReportReason by remember { mutableStateOf("") }
     val chatState = rememberSaveableStateHolder()
-    var purchaseReturn by rememberSaveable { mutableStateOf("") }
+    var routeHistory by rememberSaveable { mutableStateOf(arrayListOf<String>()) }
     var walletAccountId by remember { mutableIntStateOf(0) }
     var walletLoading by remember { mutableStateOf(false) }
     var walletError by remember { mutableStateOf("") }
@@ -184,9 +184,11 @@ fun ServerAppScreen(baseUrl: String) {
     var reportId by rememberSaveable { mutableStateOf("") }
     var reason by rememberSaveable { mutableStateOf("") }
 
-    fun open(route: String) { page = route; notice = ""; contentError = ""; query = ""; searchCategory = "الكل" }
-    fun buyCredits() { purchaseReturn = page; open("شحن الرصيد") }
-    fun back() { if (page == "شحن الرصيد" && purchaseReturn.isNotBlank()) { page = purchaseReturn; purchaseReturn = "" } else { page = "" }; query = ""; notice = "" }
+    fun open(route: String) {
+        if(route!=page) routeHistory = if(page.isBlank()) arrayListOf("") else ArrayList(routeHistory + page)
+        page = route; notice = ""; contentError = ""; query = ""; searchCategory = "الكل" }
+    fun buyCredits() { open("شحن الرصيد") }
+    fun back() { page = routeHistory.lastOrNull().orEmpty(); routeHistory = ArrayList(routeHistory.dropLast(1)); query = ""; notice = "" }
     fun perform(action: suspend () -> Unit) {
         if (submitting) return
         submitting = true
@@ -386,21 +388,22 @@ fun ServerAppScreen(baseUrl: String) {
     }
     LaunchedEffect(signedIn,screen,foreground,revision){
         if(!signedIn || screen!="تصفح" || !foreground)return@LaunchedEffect
+        var retryDelay=5000L
         while(true){
             livePreviewLoading=true
             try{
                 val response=api.request("/api/live")
                 if(response.optInt("stage_version")<3 || !response.optBoolean("available")){
-                    livePreview=emptyList()
                     livePreviewError=true
                 }else{
                     livePreview=response.rows().take(30)
                     livePreviewError=false
                 }
             }catch(e:CancellationException){throw e}
-            catch(_:Exception){livePreview=emptyList();livePreviewError=true}
+            catch(_:Exception){livePreviewError=true}
             finally{livePreviewLoading=false}
-            delay(5000)
+            delay(retryDelay)
+            retryDelay=if(livePreviewError)(retryDelay*2).coerceAtMost(30000L) else 5000L
         }
     }
     // Android back from a full-screen Reel must return home, never exit the app.
@@ -474,6 +477,48 @@ fun ServerAppScreen(baseUrl: String) {
             if (api.token == null) signedIn = false
         }
         finally { loading = false }
+    }
+
+    val identityItems = when(screen) {
+        "تصفح", "العرض" -> services
+        "ريلز", "دردشة" -> rows
+        else -> emptyList()
+    }
+    val peerList = screen == "دردشة"
+    val identityIds = identityItems.map { it.optInt(if(peerList) "id" else "owner_id") }
+        .filter { it > 0 }.toSet()
+    var identityRevision by remember { mutableIntStateOf(0) }
+    if (signedIn && foreground && identityIds.isNotEmpty()) {
+        RelaxiaRoomRealtimeGuard(api, "", profile.optInt("id"), onEvicted = {},
+            observedIds = identityIds, onProfileChanged = { identityRevision++ })
+    }
+    LaunchedEffect(screen, foreground, signedIn, identityIds, identityRevision) {
+        if(!signedIn || !foreground || identityIds.isEmpty()) return@LaunchedEffect
+        delay(120)
+        while(true) {
+            try {
+                val people = identityIds.chunked(100).flatMap { ids ->
+                    api.request("/api/public-identities?ids="+ids.joinToString(",")).rows()
+                }.associateBy { it.optInt("user_id") }
+                val offers = screen == "تصفح" || screen == "العرض"
+                val current = if(offers) services else rows
+                val updated = current.map { item ->
+                    val person = people[item.optInt(if(peerList) "id" else "owner_id")]
+                    if(person == null) item else {
+                        val fields = mapOf(
+                            (if(peerList) "display_name" else "owner_name") to "name",
+                            (if(offers) "owner_frame" else "selected_frame") to "selected_frame",
+                            (if(offers) "owner_avatar_url" else "avatar_url") to "avatar_url",
+                            "level" to "level", "vip_tier" to "vip_tier", "identity_verified" to "identity_verified"
+                        )
+                        if(fields.all { (key,source) -> item.opt(key)==person.opt(source) }) item
+                        else JSONObject(item.toString()).apply { fields.forEach { (key,source) -> put(key,person.get(source)) } }
+                    }
+                }
+                if(offers) services=updated else rows=updated
+            } catch(e:CancellationException){ throw e } catch(_:Exception){ /* Retry after reconnect. */ }
+            delay(10000)
+        }
     }
 
     val viewedProfileId = if (screen == "حسابي") profile.optInt("id") else creator.optInt("id")
@@ -628,7 +673,7 @@ fun ServerAppScreen(baseUrl: String) {
             return@MyApplicationTheme
         }
         if (screen in listOf("شحن الرصيد", "تفعيل البائع", "يا نصيب", "العجلة")) {
-            CommerceScreen(api, screen) { page = purchaseReturn; purchaseReturn = ""; notice = ""; revision++ }
+            CommerceScreen(api, screen) { back(); revision++ }
             return@MyApplicationTheme
         }
         if(screen=="التنبيهات"){AccountNotices(api){back()};return@MyApplicationTheme}
@@ -667,7 +712,7 @@ fun ServerAppScreen(baseUrl: String) {
                 if (screen != "حسابي" && screen != "صفحة المذيعة" && (screen != "ريلز" || rows.isEmpty())) TopAppBar(
                     title = {
                         if (screen == "تصفح") Text("Relaxia", fontSize = 23.sp, fontWeight = FontWeight.Bold)
-                        else Text(if (screen == "محادثة") peerName.ifBlank { "محادثة" } else screen, fontWeight = FontWeight.SemiBold)
+                        else Text(if (screen == "محادثة") peerName.ifBlank { "محادثة" } else if(screen=="العرض") "السوق" else screen, fontWeight = FontWeight.SemiBold)
                     },
                     navigationIcon = { if (page.isNotBlank()) IconButton(onClick = { back() }) { Icon(Icons.Rounded.ArrowForward, "رجوع") } },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
@@ -687,7 +732,6 @@ fun ServerAppScreen(baseUrl: String) {
                     when (screen) {
                             "تصفح" -> HomeToolbarActions({showCreationSheet=true},{buyCredits()},{open("المحفوظات")},{revision++},{open("الدعم وخدمة العملاء")})
                             "العرض" -> {
-                                IconButton(onClick = { open("إضافة عرض") }) { Icon(Icons.Rounded.AddCircleOutline, "إضافة عرض") }
                                 IconButton(onClick = { open("الحجوزات") }) { Icon(Icons.Rounded.ShoppingBag, "حجوزاتي") }
                             }
                             "دردشة" -> IconButton(onClick = { open("محادثة جديدة") }) { Icon(Icons.Rounded.EditNote, "محادثة جديدة") }
@@ -1640,9 +1684,10 @@ internal fun ProfileHero(
                     color = colors.primary, fontSize = 12.sp)
             }
             val nextLevelXp = person.optLong("next_level_xp")
-            if (nextLevelXp > 0) {
+            val startXp = person.optLong("level_start_xp", -1)
+            if (startXp >= 0 && nextLevelXp > startXp) {
                 LinearProgressIndicator(
-                    progress = { (person.optLong("xp_points").toFloat() / nextLevelXp.toFloat()).coerceIn(0f, 1f) },
+                    progress = { ((person.optLong("xp_points") - startXp).toFloat() / (nextLevelXp - startXp).toFloat()).coerceIn(0f, 1f) },
                     modifier = Modifier.fillMaxWidth().height(5.dp)
                 )
             }

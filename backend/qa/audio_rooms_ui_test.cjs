@@ -274,9 +274,9 @@ const js=fs.readFileSync(path.join(root,'core/static/core/live-stage.js'),'utf8'
    assert.equal(await page.locator('.gift-medallion').count(),2,'real gifts use dimensional artwork');
    const whaleCard=page.locator('.gift-card[data-gift-code="gift_blue_whale"]');
    assert.equal(await whaleCard.getAttribute('aria-label'),'الحوت الأزرق · 10000 كوين');
-   assert.equal(await whaleCard.locator('canvas.gift-card-3d').count(),1,'all gifts use rendered 3D thumbnails');
+   assert.equal(await whaleCard.locator('canvas').count(),0,'catalog cards avoid animated canvases');
    await page.waitForFunction(()=>document.querySelector('.gift-preview-art')?.textContent==='🦅');
-   assert.equal(await page.locator('img.gift-webp').count(),0,'gift card no longer depends on an image file');
+   await page.waitForFunction(()=>document.querySelector('[data-gift-code=gift_blue_whale] .gift-medallion')?.textContent==='🐋');
    await whaleCard.click();
    assert.equal(await whaleCard.getAttribute('aria-pressed'),'true','selected gift is highlighted');
    await page.getByRole('button',{name:'×10',exact:true}).click();

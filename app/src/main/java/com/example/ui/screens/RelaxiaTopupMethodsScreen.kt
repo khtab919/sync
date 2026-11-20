@@ -41,22 +41,42 @@ private val CashGold = Color(0xFFE5B84B)
 @Composable
 internal fun RelaxiaTopupMethodsScreen(api:LayaliApi,back:()->Unit){
     var selected by rememberSaveable { mutableStateOf("choose") }
+    var cashAvailable by remember { mutableStateOf(false) }
+    var cryptoAvailable by remember { mutableStateOf(false) }
+    var loadError by remember { mutableStateOf(false) }
+    var loading by remember { mutableStateOf(true) }
+    var retry by remember { mutableIntStateOf(0) }
+    LaunchedEffect(selected,retry){
+        if(selected!="choose")return@LaunchedEffect
+        loading=true
+        try {
+            val info=api.request("/api/payment-info")
+            cashAvailable=info.optBoolean("syriatel_cash_enabled")
+            cryptoAvailable=info.optBoolean("nowpayments_enabled")
+            loadError=false
+        } catch(e:CancellationException){throw e}
+        catch(_:Exception){loadError=true}
+        finally{loading=false}
+    }
     when(selected){
         "trc20" -> NativeUsdtTopupScreen(api){selected="choose"}
         "syriatel" -> SyriatelCashTopupScreen(api){selected="choose"}
         else -> Surface(Modifier.fillMaxSize(),color=CashNavy,contentColor=Color.White){
-            Column(Modifier.fillMaxSize().safeDrawingPadding().padding(18.dp),
+            Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(18.dp),
                 verticalArrangement=Arrangement.spacedBy(18.dp)){
                 TextButton(onClick=back){ Icon(Icons.Rounded.ArrowForward,null); Text("رجوع") }
                 Text("شحن الكوينز",style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold)
                 Text("اختر طريقة الدفع داخل Relaxia",color=Color(0xFFC4D6EE))
-                CashMethodCard(
+                if(loading) CircularProgressIndicator()
+                else if(loadError) TextButton(onClick={retry++}){Text("تعذّر تحميل طرق الشحن · إعادة المحاولة")}
+                else if(!cashAvailable&&!cryptoAvailable) Text("لا توجد وسيلة شحن مفعّلة حالياً.")
+                if(!loading&&!loadError&&cryptoAvailable) CashMethodCard(
                     title="USDT · TRC20",
                     detail="شبكة Tron فقط · التحقق من بوابة الدفع",
                     onClick={selected="trc20"})
-                CashMethodCard(
+                if(!loading&&!loadError&&cashAvailable) CashMethodCard(
                     title="سيريتيل كاش",
-                    detail="0997991404 · دفع يدوي بالليرة السورية ومراجعة الإدارة",
+                    detail="دفع يدوي بالليرة السورية ومراجعة الإدارة",
                     onClick={selected="syriatel"})
                 Text("لا تُضاف الكوينز بعد إرسال إيصال فقط. يجب تأكيد وصول الدفعة الفعلية.",
                     color=Color(0xFFBFD0EA),style=MaterialTheme.typography.bodySmall)
@@ -88,7 +108,7 @@ private fun SyriatelCashTopupScreen(api:LayaliApi,back:()->Unit){
     val context=LocalContext.current
     val scope=rememberCoroutineScope()
     var enabled by remember { mutableStateOf(false) }
-    var phone by remember { mutableStateOf("0997991404") }
+    var phone by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var note by remember { mutableStateOf("") }
     var usd by rememberSaveable { mutableIntStateOf(10) }
@@ -120,8 +140,8 @@ private fun SyriatelCashTopupScreen(api:LayaliApi,back:()->Unit){
     LaunchedEffect(Unit){
         try{
             val info=api.request("/api/payment-info")
-            enabled=info.optBoolean("syriatel_cash_enabled")
-            phone=info.optString("syriatel_cash_number","0997991404")
+            enabled=info.optBoolean("syriatel_cash_enabled") && info.optString("syriatel_cash_number").matches(Regex("09[0-9]{8}"))
+            phone=info.optString("syriatel_cash_number","")
         }catch(e:CancellationException){throw e}
         catch(_:Exception){note="تعذر التحقق من إعدادات سيريتيل كاش. حاول مجددًا."}
     }
@@ -142,6 +162,7 @@ private fun SyriatelCashTopupScreen(api:LayaliApi,back:()->Unit){
             Surface(color=CashRoyal,shape=RoundedCornerShape(23.dp)){
                 Column(Modifier.fillMaxWidth().padding(17.dp),
                     verticalArrangement=Arrangement.spacedBy(9.dp)){
+                    if(enabled && phone.isNotBlank()) {
                     Text("رقم الاستلام",color=Color(0xFFDCEAF8))
                     Row(verticalAlignment=Alignment.CenterVertically){
                         Text(phone,modifier=Modifier.weight(1f),color=CashGold,
@@ -151,6 +172,7 @@ private fun SyriatelCashTopupScreen(api:LayaliApi,back:()->Unit){
                                 .setPrimaryClip(ClipData.newPlainText("سيريتيل كاش",phone))
                             note="تم نسخ الرقم"
                         }){Icon(Icons.Rounded.ContentCopy,"نسخ رقم سيريتيل كاش",tint=Color.White)}
+                    }
                     }
                     Text(if(enabled)"جاهز لإنشاء فاتورة تحويل"
                          else "هذه الوسيلة تنتظر تفعيل المسؤول وتحديد سعر الصرف؛ لا تحول الآن.",

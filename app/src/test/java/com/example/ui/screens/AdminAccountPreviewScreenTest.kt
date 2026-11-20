@@ -32,7 +32,7 @@ class AdminAccountPreviewScreenTest {
                 AdminAccountPreviewScreen(snapshot) { calls.incrementAndGet() }
             }
         }
-        compose.onNodeWithText("Relaxia").assertIsDisplayed()
+        compose.onNodeWithText("معاينة للقراءة فقط").assertIsDisplayed()
         compose.onNodeWithText("مستخدم تجريبي").assertIsDisplayed()
         compose.onNodeWithText("العودة للإدارة").assertIsDisplayed()
         compose.onNodeWithText("الريلز").performClick()

@@ -131,7 +131,7 @@ test('live gift UI has inline two-step confirmation, no recipient fallback and m
  assert.match(stage,/RelaxiaGiftCinema\.play\(box,g\)/);
  assert.match(stage,/icon\.src=selected\.icon_url/);
  assert.match(stage,/document\.createTextNode\(selected\.symbol\)/);
- assert.match(stage,/RelaxiaGiftCinema\.thumbnail\(canvas,g.code\)/);
+ assert.match(stage,/icon\.src=g\.icon_url/);
  assert.match(stage,/function syncRoomFooterMetrics/);
  assert.match(page,/gift-cinema\.js\?v=cinema-1/);
  assert.match(page,/gift-cinema\.css\?v=cinema-1/);

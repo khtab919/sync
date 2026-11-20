@@ -77,7 +77,7 @@ internal fun AdminAccountPreviewScreen(snapshot: JSONObject, onBack: () -> Unit)
                     }
                     Spacer(Modifier.weight(1f))
                     Text(
-                        "Relaxia", fontSize = 27.sp, fontWeight = FontWeight.ExtraBold,
+                        "معاينة للقراءة فقط", fontSize = 19.sp, fontWeight = FontWeight.ExtraBold,
                         color = MaterialTheme.colorScheme.onBackground
                     )
                 }

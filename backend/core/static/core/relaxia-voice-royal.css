@@ -437,3 +437,9 @@ html[data-theme] #stage .room-portrait .portrait-face img {
 #sheet .member-identity {display:flex;align-items:center;gap:8px}
 #sheet .member-identity .room-portrait {width:48px;flex:none}
 body.audio-mode #stage header .room-portrait.identity-avatar-ring {border:0;box-shadow:none}
+
+/* Compact landscape and resized keyboard windows keep controls at their usable size. */
+@media (max-height: 390px) {
+ body.audio-mode #stage {--voice-top:44px;--voice-dock:48px;--voice-seats:38%}
+ html[data-theme] body.audio-mode #stage #audioStage.seat-grid {overflow-y:auto!important;grid-template-rows:repeat(2,minmax(62px,1fr))!important}
+}

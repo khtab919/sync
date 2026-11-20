@@ -21,14 +21,12 @@ def public_presence_bulk(users):
     levels=defaultdict(int)
     vip=defaultdict(int)
     owned_grant_frames=defaultdict(set)
-    newest_frame = {}
     for grant in grants:
         uid,kind,value=grant['user_id'],grant['kind'],grant['value']
         if kind=='level' and 1<=value<=100:levels[uid]=max(levels[uid],value)
         elif kind=='vip' and 1<=value<=5:vip[uid]=max(vip[uid],value)
         elif kind=='frame' and value in range(110,201,10):
             owned_grant_frames[uid].add(value)
-            newest_frame[uid] = value
     profiles=Profile.objects.filter(user_id__in=ids)
     profile_map={p.user_id:p for p in profiles}
     result={}
@@ -42,8 +40,6 @@ def public_presence_bulk(users):
         ) if level>=minimum)
         owned_frames={0}|{100+n for n in range(10,101,10) if level>=n}|owned_grant_frames[uid]
         selected=0 if not profile else profile.selected_frame
-        if profile and not selected and not profile.frame_choice_explicit:
-            selected = newest_frame.get(uid, 0)
         if selected not in owned_frames:selected=0
         result[uid]={
             'user_id':uid,
@@ -58,6 +54,7 @@ def public_presence_bulk(users):
             'vip_tier':vip[uid],
             'identity_verified':bool(profile and profile.identity_verified),
             'xp_points':xp,
+            'level_start_xp':(earned-1)*200,
             'next_level_xp':None if earned==100 else earned*200,
         }
     return result

@@ -28,7 +28,7 @@ class SyriatelCashTests(TestCase):
 
     def test_disabled_until_admin_enables_rate_and_validates_number(self):
         info = self.request('/api/payment-info').json()
-        self.assertEqual(info['syriatel_cash_number'], '0997991404')
+        self.assertEqual(info['syriatel_cash_number'], '')
         self.assertFalse(info['syriatel_cash_enabled'])
         disabled = self.request('/api/topup-quotes', {'method':'syriatelcash','amount_cents':1000})
         self.assertEqual(disabled.status_code, 409, disabled.content)

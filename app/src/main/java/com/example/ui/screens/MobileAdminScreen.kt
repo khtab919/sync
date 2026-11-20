@@ -65,7 +65,7 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
     var paymentInstructions by remember { mutableStateOf("") }
     var paymentEnabled by remember { mutableStateOf(false) }
     var syriatelEnabled by remember { mutableStateOf(false) }
-    var syriatelNumber by remember { mutableStateOf("0997991404") }
+    var syriatelNumber by remember { mutableStateOf("") }
     var syriatelRate by remember { mutableStateOf("0") }
     var syriatelInstructions by remember { mutableStateOf("") }
     var wheelStep by remember { mutableStateOf("") }
@@ -144,7 +144,7 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
                 gatewayConfigured=data.optBoolean("nowpayments_configured");paymentAccount=data.optString("account");paymentCurrency=data.optString("currency","USD");paymentRate=data.optString("rate","1");paymentInstructions=data.optString("instructions");paymentEnabled=data.optBoolean("enabled")
                 data.optJSONObject("syriatel_cash")?.let { cash ->
                     syriatelEnabled=cash.optBoolean("enabled")
-                    syriatelNumber=cash.optString("number","0997991404")
+                    syriatelNumber=cash.optString("number","")
                     syriatelRate=cash.optString("syp_per_usd","0")
                     syriatelInstructions=cash.optString("instructions")
                 }

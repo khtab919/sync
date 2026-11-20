@@ -163,7 +163,10 @@ internal fun RelaxiaActiveHomeStreams(
                     }
                 }
             }
-        } else if (loading) {
+        }
+        if (unavailable && rooms.isNotEmpty()) {
+            Text("تعذّر التحديث · تعرض القائمة آخر بثوث متاحة",style=MaterialTheme.typography.bodySmall)
+        } else if (loading && rooms.isEmpty()) {
             LinearProgressIndicator(Modifier.fillMaxWidth(), color = LiveRoyal)
         } else if (unavailable) {
             Text("تعذّر تحديث قائمة البثوث الآن. اضغط عرض الكل للمحاولة.",

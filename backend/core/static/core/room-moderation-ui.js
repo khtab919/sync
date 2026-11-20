@@ -220,7 +220,7 @@
      return;
    }
    const seat=e.target.closest?.('#audioStage .audio-seat[data-user-id]');
-   if(seat){
+   if(seat && (e.target.closest('.audio-name') || !config.gifts)){
      const id=Number(seat.dataset.userId);
      if(id>0&&id!==config.userId){
        const speaker=(state.speakers||[]).find(s=>Number(s.user_id)===id);

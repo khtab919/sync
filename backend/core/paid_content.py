@@ -184,6 +184,8 @@ def creator_content(request,creator_id):
     entries=[]
     for p in photos:entries.append({'kind':'photo',**post_json(p,request)})
     for r in reels:entries.append({'kind':'reel',**reel_json(r,request),'created_at':r.created_at.isoformat()})
-    for s in offers:entries.append({'kind':'service',**service_json(s,request),'created_at':s.created_at.isoformat()})
+    from .public_presence import public_presence
+    identity = public_presence(owner)
+    for s in offers:entries.append({'kind':'service',**service_json(s,request.actor,identity),'created_at':s.created_at.isoformat()})
     entries.sort(key=lambda x:x['created_at'],reverse=True)
     return JsonResponse({'items':entries[:150]})

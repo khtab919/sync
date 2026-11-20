@@ -94,16 +94,28 @@ private fun liveError(e:Exception)=when(e.message){
         roomPassword=""
         activeId=row.getString("id");selected=null
     }}
-    LaunchedEffect(query){while(true){try{val result=api.request("/api/live?q="+URLEncoder.encode(query,"UTF-8"));if(result.optInt("stage_version")<3)throw IllegalStateException("live_update_required");val a=result.optJSONArray("items");rows=if(a==null)emptyList()else(0 until a.length()).map{a.getJSONObject(it)};allowed=result.optBoolean("can_broadcast");available=result.optBoolean("available");maximumLimit=result.optInt("max_viewers",25);error=""}catch(e:CancellationException){throw e}catch(e:Exception){allowed=false;available=false;rows=emptyList();error=liveError(e)};delay(5000)}}
+    LaunchedEffect(query){rows=emptyList();var retryDelay=5000L;while(true){try{val result=api.request("/api/live?q="+URLEncoder.encode(query,"UTF-8"));if(result.optInt("stage_version")<3)throw IllegalStateException("live_update_required");val a=result.optJSONArray("items");rows=if(a==null)emptyList()else(0 until a.length()).map{a.getJSONObject(it)};allowed=result.optBoolean("can_broadcast");available=result.optBoolean("available");maximumLimit=result.optInt("max_viewers",25);error=""}catch(e:CancellationException){throw e}catch(e:Exception){allowed=false;available=false;error=liveError(e)};delay(retryDelay);retryDelay=if(error.isBlank())5000L else (retryDelay*2).coerceAtMost(30000L)}}
     active?.let{room->
         val broadcastId=activeId
+        var memberId by remember(broadcastId){mutableIntStateOf(0)}
+        var member by remember(memberId){mutableStateOf<JSONObject?>(null)}
+        var memberError by remember(memberId){mutableStateOf("")}
+        LaunchedEffect(memberId){
+            if(memberId<=0)return@LaunchedEffect
+            while(true){
+                try { member=api.request("/api/creators/$memberId");memberError="" }
+                catch(e:CancellationException){throw e}
+                catch(e:Exception){memberError=liveError(e)}
+                delay(3000)
+            }
+        }
         // A WebView failure must not silently end an owner's live room or charge a paid guest again.
         key(room.optString("ticket")){
             LiveRoomView(
                 baseUrl=baseUrl,
                 bootstrap=room,
                 api=api,
-                profile={id->active=null;openProfile(id)},
+                profile={id->memberId=id},
                 retry={
                     if(broadcastId.isNotBlank() && !busy){
                         // Unmount the existing WebView before opening a new one so its
@@ -125,6 +137,23 @@ private fun liveError(e:Exception)=when(e.message){
                 onTopup=buy
             )
         }
+        if(memberId>0) AlertDialog(
+            onDismissRequest={memberId=0}, title={Text("الملف الشخصي")},
+            text={
+                val person=member
+                if(person!=null) Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)){
+                    val name=person.optString("display_name")
+                    ReferenceAvatar(name,person.optInt("selected_frame"),72,person.optString("avatar_url"))
+                    Text(name,style=MaterialTheme.typography.titleMedium)
+                    Text("ID: "+person.optString("public_id"))
+                    RelaxiaLevelBadge(person.optInt("level"))
+                    if(person.optInt("vip_tier")>0) Text("VIP "+person.optInt("vip_tier"))
+                    if(person.optBoolean("identity_verified")) Text("حساب موثّق")
+                    if(person.optString("bio").isNotBlank()) Text(person.optString("bio"))
+                } else if(memberError.isNotBlank()) Text(memberError) else CircularProgressIndicator()
+            },
+            confirmButton={TextButton(onClick={memberId=0}){Text("العودة للغرفة")}}
+        )
         return
     }
     // Host routes render the actual pre-live setup immediately, without mounting
