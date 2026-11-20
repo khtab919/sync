@@ -76,8 +76,7 @@ private fun CheckoutTheme(api: LayaliApi, back: () -> Unit) {
 @Composable
 private fun PaymentMethodsContent(api: LayaliApi, back: () -> Unit) {
     var selected by rememberSaveable { mutableStateOf("choose") }
-    var cashAvailable by remember { mutableStateOf(false) }
-    var cryptoAvailable by remember { mutableStateOf(false) }
+    var info by remember { mutableStateOf(JSONObject()) }
     var loadError by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
     var retry by remember { mutableIntStateOf(0) }
@@ -85,17 +84,14 @@ private fun PaymentMethodsContent(api: LayaliApi, back: () -> Unit) {
         if(selected!="choose")return@LaunchedEffect
         loading=true
         try {
-            val info=api.request("/api/payment-info")
-            cashAvailable=info.optBoolean("syriatel_cash_enabled")
-            cryptoAvailable=info.optBoolean("nowpayments_enabled")
+            info=api.request("/api/payment-info")
             loadError=false
         } catch(e:CancellationException){throw e}
         catch(_:Exception){loadError=true}
         finally{loading=false}
     }
     when(selected){
-        "trc20" -> NativeUsdtTopupScreen(api){selected="choose"}
-        "syriatel" -> SyriatelCashTopupScreen(api){selected="choose"}
+        "stripe", "shamcash", "nowpayments", "syriatelcash" -> CoinShopScreen(api, selected){selected="choose"}
         else -> Surface(Modifier.fillMaxSize(),color=CashNavy,contentColor=Color.White){
             Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(18.dp),
                 verticalArrangement=Arrangement.spacedBy(18.dp)){
@@ -104,15 +100,16 @@ private fun PaymentMethodsContent(api: LayaliApi, back: () -> Unit) {
                 Text("اختر طريقة الدفع داخل Relaxia",color=Color(0xFFC4D6EE))
                 if(loading) CircularProgressIndicator()
                 else if(loadError) TextButton(onClick={retry++}){Text("تعذّر تحميل طرق الشحن · إعادة المحاولة")}
-                else if(!cashAvailable&&!cryptoAvailable) Text("لا توجد وسيلة شحن مفعّلة حالياً.")
-                if(!loading&&!loadError&&cryptoAvailable) CashMethodCard(
-                    title="USDT · TRC20",
-                    detail="شبكة Tron فقط · التحقق من بوابة الدفع",
-                    onClick={selected="trc20"})
-                if(!loading&&!loadError&&cashAvailable) CashMethodCard(
-                    title="سيريتيل كاش",
-                    detail="تحويل بالليرة السورية الجديدة",
-                    onClick={selected="syriatel"})
+                else listOf(
+                    Triple("stripe","البطاقات البنكية والدفع العالمي","شبكات البطاقات والمحافظ المتاحة عند الدفع"),
+                    Triple("shamcash","شام كاش","تحويل محلي عبر المحفظة"),
+                    Triple("nowpayments","العملات الرقمية","USDT · شبكة Tron (TRC20)"),
+                    Triple("syriatelcash","سيريتيل كاش","تحويل بالليرة السورية الجديدة")
+                ).forEach { (code,title,detail) ->
+                    val flag = if(code=="syriatelcash") "syriatel_cash_enabled" else code+"_enabled"
+                    val available = info.optBoolean(flag)
+                    CashMethodCard(title, if(available) detail else "غير متاحة حاليًا", available) { selected=code }
+                }
                 Text("لا تُضاف الكوينز بعد إرسال إيصال فقط. يجب تأكيد وصول الدفعة الفعلية.",
                     color=Color(0xFFBFD0EA),style=MaterialTheme.typography.bodySmall)
             }
@@ -121,8 +118,8 @@ private fun PaymentMethodsContent(api: LayaliApi, back: () -> Unit) {
 }
 
 @Composable
-private fun CashMethodCard(title:String,detail:String,onClick:()->Unit){
-    Card(onClick=onClick,modifier=Modifier.fillMaxWidth().heightIn(min=104.dp),
+private fun CashMethodCard(title:String,detail:String,enabled:Boolean,onClick:()->Unit){
+    Card(onClick=onClick,enabled=enabled,modifier=Modifier.fillMaxWidth().heightIn(min=76.dp),
         shape=RoundedCornerShape(25.dp),
         colors=CardDefaults.cardColors(containerColor=CashRoyal)){
         Row(Modifier.fillMaxWidth().padding(18.dp),verticalAlignment=Alignment.CenterVertically,
@@ -133,7 +130,7 @@ private fun CashMethodCard(title:String,detail:String,onClick:()->Unit){
                     style=MaterialTheme.typography.titleMedium)
                 Text(detail,color=Color(0xFFE1EAF6),style=MaterialTheme.typography.bodySmall)
             }
-            Icon(Icons.Rounded.ArrowForward,null,tint=CashGold)
+            if(enabled) Icon(Icons.Rounded.ArrowForward,null,tint=CashGold)
         }
     }
 }
@@ -220,7 +217,7 @@ private fun SyriatelCashTopupScreen(api:LayaliApi,back:()->Unit){
                 listOf(5,10,25,50).forEach{value->
                     FilterChip(selected=usd==value,onClick={
                         if(usd!=value){usd=value;quoteText="";receiptId="";reference=""}
-                    },label={Text("$value")},modifier=Modifier.widthIn(min=104.dp))
+                    },label={Text("$value")},modifier=Modifier.widthIn(min=76.dp))
                 }
             }
             Button(onClick={action{

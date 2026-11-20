@@ -46,13 +46,13 @@ private val ActionBlue = Color(0xFF1864D9)
 private val SoftText = Color(0xFFB1C2DF)
 
 @Composable
-internal fun NativeUsdtTopupScreen(api: LayaliApi, back: () -> Unit) {
+internal fun NativeUsdtTopupScreen(api: LayaliApi, initialQuote:String="", initialPayment:String="", back: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var usdAmount by rememberSaveable { mutableIntStateOf(10) }
-    var quoteText by rememberSaveable { mutableStateOf("") }
-    var paymentText by rememberSaveable { mutableStateOf("") }
-    var paymentVisible by rememberSaveable { mutableStateOf(false) }
+    var quoteText by rememberSaveable { mutableStateOf(initialQuote) }
+    var paymentText by rememberSaveable { mutableStateOf(initialPayment) }
+    var paymentVisible by rememberSaveable { mutableStateOf(initialPayment.isNotBlank()) }
     var completed by rememberSaveable { mutableStateOf(false) }
     var showOrders by remember { mutableStateOf(false) }
     var showQr by remember { mutableStateOf(false) }
@@ -129,7 +129,7 @@ internal fun NativeUsdtTopupScreen(api: LayaliApi, back: () -> Unit) {
             delay(12000)
         }
     }
-    BackHandler(paymentVisible) { paymentVisible = false }
+    BackHandler(paymentVisible) { if(initialPayment.isNotBlank()) back() else paymentVisible = false }
 
     Surface(Modifier.fillMaxSize(), color = NightBlue, contentColor = Color.White) {
         Column(Modifier.fillMaxSize().safeDrawingPadding()) {
@@ -138,7 +138,7 @@ internal fun NativeUsdtTopupScreen(api: LayaliApi, back: () -> Unit) {
                     Modifier.fillMaxWidth().padding(horizontal = 9.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = { paymentVisible = false }) {
+                    IconButton(onClick = { if(initialPayment.isNotBlank()) back() else paymentVisible = false }) {
                         Icon(Icons.Rounded.ArrowForward, "رجوع")
                     }
                     Spacer(Modifier.weight(1f))
@@ -243,7 +243,7 @@ internal fun NativeUsdtTopupScreen(api: LayaliApi, back: () -> Unit) {
                         Spacer(Modifier.width(6.dp))
                         Text("دفع آمن • اتصال مشفر", color = SoftText)
                     }
-                    if (completed) Button(onClick = { paymentVisible = false },
+                    if (completed) Button(onClick = { if(initialPayment.isNotBlank()) back() else paymentVisible = false },
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(containerColor = ActionBlue, contentColor = Color.White)) {
                         Text("العودة إلى رصيدي")

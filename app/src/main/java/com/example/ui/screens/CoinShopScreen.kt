@@ -45,7 +45,7 @@ private data class StorePaymentMethod(val code:String,val name:String,val descri
 private fun storeMethods(info:JSONObject):List<StorePaymentMethod> = listOf(
     StorePaymentMethod("stripe","فيزا / ماستركارد","بوابة الدفع العالمية · بطاقات بنكية","💳",info.optBoolean("stripe_enabled")),
     StorePaymentMethod("nowpayments","بوابة الدفع الرقمية","NOWPayments · مدفوعات إلكترونية","✦",info.optBoolean("nowpayments_enabled")),
-    StorePaymentMethod("usdt","USDT · BEP20","تحويل USDT على شبكة BNB Smart Chain","₮",info.optString("address").isNotBlank()),
+    StorePaymentMethod("syriatelcash","سيريتيل كاش","الليرة السورية الجديدة","",info.optBoolean("syriatel_cash_enabled")),
     StorePaymentMethod("shamcash","شام كاش","تحويل محلي مع إثبات الدفع","◈",info.optBoolean("shamcash_enabled"))
 )
 
@@ -132,9 +132,10 @@ internal fun CoinPackage(coins:Int,bonus:Int,dollars:String,selected:Boolean,bad
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
+internal fun CoinShopScreen(api:LayaliApi, fixedMethod:String,back:()->Unit) {
     val context=LocalContext.current
     val scope=rememberCoroutineScope()
+    var directPayment by rememberSaveable { mutableStateOf("") }
     var invoiceUrl by rememberSaveable{mutableStateOf("")}
     var checkoutUrl by rememberSaveable{mutableStateOf("")}
     var checkoutProvider by rememberSaveable{mutableStateOf("")}
@@ -142,7 +143,7 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
     var balance by remember{mutableStateOf<Long?>(null)}
     var rows by remember{mutableStateOf<List<JSONObject>>(emptyList())}
     var selected by rememberSaveable{mutableIntStateOf(1000)}
-    var method by rememberSaveable{mutableStateOf("stripe")}
+    var method by rememberSaveable{mutableStateOf(fixedMethod)}
     var showPaymentSheet by rememberSaveable{mutableStateOf(false)}
     var quoteText by rememberSaveable{mutableStateOf("")}
     var submittedId by rememberSaveable { mutableStateOf("") }
@@ -157,7 +158,7 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
     var note by remember{mutableStateOf("")}
     val quote=remember(quoteText){if(quoteText.isBlank())null else runCatching{JSONObject(quoteText)}.getOrNull()}
     val packages=remember(info){storePackages(info)}
-    val methods=remember(info){storeMethods(info)}
+    val methods=remember(info){storeMethods(info).filter { it.code == fixedMethod }}
     var quoteSeconds by remember{mutableLongStateOf(0L)}
     LaunchedEffect(quoteText){
         val quotation=quote ?: return@LaunchedEffect
@@ -172,7 +173,7 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
     suspend fun reload(){
         val updated=api.request("/api/payment-info")
         info=updated
-        val available=storeMethods(updated).filter{it.enabled}
+        val available=storeMethods(updated).filter{it.enabled && it.code==fixedMethod}
         if(available.none{it.code==method})method=available.firstOrNull()?.code.orEmpty()
         balance=api.request("/api/wallet").optLong("available_cents")
         val a=api.request("/api/topups").optJSONArray("items")
@@ -184,6 +185,10 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
     LaunchedEffect(quoteText, submittedId, showOrders) { scrollState.scrollTo(0) }
 
     val showSelection=!showOrders && quote==null && submittedId.isBlank()
+    if (directPayment.isNotBlank()) {
+        NativeUsdtTopupScreen(api, quoteText, directPayment) { directPayment="";quoteText="";perform{reload()} }
+        return
+    }
     if(checkoutUrl.isNotBlank()){
         PaymentCheckoutScreen(url=checkoutUrl,provider=checkoutProvider,
             onClose={checkoutUrl=""},
@@ -288,11 +293,17 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
             )
             Text("المطلوب: ${quote.optString("payment_amount")} ${quote.optString("payment_currency")}",style=MaterialTheme.typography.titleLarge)
             val rail=quote.optString("method")
-            if(rail=="nowpayments"||rail=="stripe") {
+            if (rail=="nowpayments") {
+                Button(onClick={perform {
+                    val result=api.request("/api/nowpayments/direct","POST",JSONObject().put("quote_id",quote.getString("id")))
+                    require(result.optString("pay_currency")=="usdttrc20" && result.optString("pay_address").matches(Regex("T[1-9A-HJ-NP-Za-km-z]{33}")) && result.optString("pay_amount").toBigDecimal().signum()>0)
+                    directPayment=result.toString()
+                }},enabled=!busy && quoteSeconds>0){Text("عرض فاتورة USDT على Tron")}
+            } else if(rail=="stripe") {
                 val viaStripe=rail=="stripe"
-                Text(if(viaStripe)"الدفع بالفيزا أو ماستركارد"else"دفع آمن عبر NOWPayments",style=MaterialTheme.typography.titleLarge)
+                Text(if(viaStripe)"البطاقات البنكية والدفع العالمي"else"دفع آمن عبر NOWPayments",style=MaterialTheme.typography.titleLarge)
                 Text(
-                    if(viaStripe)"تُفتح صفحة الدفع الرسمية داخل Relaxia. يتم اعتماد الشحن فقط بعد إشعار الدفع الموقّع."
+                    if(viaStripe)"تظهر وسائل الدفع المدعومة في صفحة الدفع الرسمية. يتم اعتماد الشحن فقط بعد إشعار الدفع الموقّع."
                     else "تختار العملة داخل صفحة الدفع الرسمية. لا تُضاف الكوينز قبل تحقق الخادم من العملية.",
                     style=MaterialTheme.typography.bodySmall
                 )
@@ -306,7 +317,9 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
                     require(parsed.scheme=="https"&&trusted&&parsed.userInfo==null)
                     invoiceUrl=link
                     checkoutProvider=rail
-                    checkoutUrl=link
+                    val intent=android.content.Intent(android.content.Intent.ACTION_VIEW,parsed)
+                    intent.putExtras(android.os.Bundle().apply { putBinder("android.support.customtabs.extra.SESSION",null) })
+                    context.startActivity(intent)
                 }},enabled=!busy,modifier=Modifier.fillMaxWidth().height(52.dp)){
                     Text(if(invoiceUrl.isBlank())"فتح بوابة الدفع"else"فتح صفحة الدفع مجددًا")
                 }
@@ -322,7 +335,7 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
                     Text("التحقق من الدفع وتحديث الرصيد")
                 }
             } else {
-            Text(if(rail=="usdt")"USDT على BEP20 فقط"else"استلام عبر شام كاش",fontWeight=FontWeight.Bold)
+            Text(if(rail=="usdt")"USDT على BEP20 فقط"else if(rail=="syriatelcash")"استلام عبر سيريتيل كاش"else"استلام عبر شام كاش",fontWeight=FontWeight.Bold)
             Surface(color=androidx.compose.ui.graphics.Color.White,shape=RoundedCornerShape(24.dp)) { ReferenceImage(quote.optString("qr_url"),Modifier.fillMaxWidth().height(256.dp).padding(16.dp),contentScale=androidx.compose.ui.layout.ContentScale.Fit) }
             Text(quote.optString("destination"),style=MaterialTheme.typography.bodyMedium.copy(textDirection=androidx.compose.ui.text.style.TextDirection.Ltr))
             OutlinedButton(onClick={(context.getSystemService(Context.CLIPBOARD_SERVICE)as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Relaxia payment",quote.optString("destination")));note="تم نسخ بيانات الاستلام."}){Text("نسخ بيانات الاستلام")}
@@ -363,7 +376,7 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
                         Box(Modifier.fillMaxSize().background(
                             Brush.horizontalGradient(listOf(Color(0xFF1E40AF),Color(0xFFF0BC71)))),
                             contentAlignment=Alignment.Center){
-                            Text("اشحن الآن",color=Color.White,fontWeight=FontWeight.ExtraBold,fontSize=17.sp)
+                            Text("مراجعة المبلغ",color=Color.White,fontWeight=FontWeight.ExtraBold,fontSize=17.sp)
                         }
                     }
                     Text("100 كوين = 1 USD كقيمة أساسية داخل التطبيق. يظهر المبلغ النهائي قبل الدفع. النقاط الترويجية منفصلة وغير قابلة للسحب.",
@@ -379,7 +392,7 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
                 Modifier.fillMaxWidth().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal=22.dp).padding(bottom=20.dp),
                 verticalArrangement=Arrangement.spacedBy(13.dp)
             ){
-                Text("اختر طريقة الدفع",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.Bold)
+                Text("مراجعة طلب الشحن",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.Bold)
                 val chosen=packages.firstOrNull{it.coins==selected}
                 Surface(color=MaterialTheme.colorScheme.primaryContainer,shape=RoundedCornerShape(16.dp)){
                     Column(Modifier.fillMaxWidth().padding(16.dp),verticalArrangement=Arrangement.spacedBy(5.dp)){
@@ -388,37 +401,8 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
                         if((chosen?.bonusPoints?:0)>0)Text("+${chosen?.bonusPoints} نقطة ترويجية إضافية",color=MaterialTheme.colorScheme.primary)
                     }
                 }
-                methods.forEach{option->
-                    Surface(
-                        onClick={method=option.code},enabled=option.enabled,
-                        color=if(method==option.code&&option.enabled)MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
-                        border=BorderStroke(1.dp,if(method==option.code&&option.enabled)MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
-                        shape=RoundedCornerShape(18.dp)
-                    ){
-                        Row(Modifier.fillMaxWidth().padding(12.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)){
-                            Text(option.symbol,fontSize=23.sp,color=MaterialTheme.colorScheme.primary)
-                            Column(Modifier.weight(1f)){
-                                Text(option.name,fontWeight=FontWeight.SemiBold)
-                                Text(if(option.enabled)option.description else "غير مفعّل حاليًا",fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            if(option.code=="stripe"){
-                                Row(horizontalArrangement=Arrangement.spacedBy(4.dp),
-                                    verticalAlignment=Alignment.CenterVertically){
-                                    Surface(shape=RoundedCornerShape(6.dp),color=Color.White){
-                                        Text("VISA",color=Color(0xFF163F85),fontSize=11.sp,
-                                            fontWeight=FontWeight.ExtraBold,
-                                            modifier=Modifier.padding(horizontal=5.dp,vertical=3.dp))
-                                    }
-                                    Surface(shape=RoundedCornerShape(6.dp),color=Color.White){
-                                        Text("●●",color=Color(0xFFF18632),fontSize=14.sp,
-                                            modifier=Modifier.padding(horizontal=5.dp,vertical=2.dp))
-                                    }
-                                }
-                            }
-                            RadioButton(selected=method==option.code&&option.enabled,onClick=null,enabled=option.enabled)
-                        }
-                    }
-                }
+                Text(methods.firstOrNull()?.name.orEmpty(),fontWeight=FontWeight.Bold)
+                Text("رسوم مزوّد الدفع أو التحويل تُراجع قبل التحويل لدى المزوّد.")
                 Text("لن يتم الخصم عند اختيار الوسيلة. سيعرض الخادم المبلغ النهائي وبيانات التحويل قبل الدفع.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                 if(methods.none{it.enabled})Text("لا توجد وسيلة دفع مفعّلة حاليًا. يرجى التواصل مع الدعم.",color=MaterialTheme.colorScheme.error,style=MaterialTheme.typography.bodySmall)
                 if(note.isNotBlank())Text(note,color=MaterialTheme.colorScheme.error,style=MaterialTheme.typography.bodySmall)
