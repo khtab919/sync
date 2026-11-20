@@ -21,10 +21,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -36,17 +34,28 @@ import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.math.BigDecimal
 
-private val CashNavy = Color(0xFF0F2544)
+private val CashNavy = Color(0xFF0B1528)
 private val CashRoyal = Color(0xFF1A4789)
 private val CashGold = Color(0xFFE5B84B)
 
 @Composable
 internal fun RelaxiaTopupMethodsScreen(api:LayaliApi,back:()->Unit){
-    val device = LocalDensity.current
-    val checkoutDensity = remember(device.density, device.fontScale) {
-        Density(device.density * 0.5f, device.fontScale)
-    }
-    CompositionLocalProvider(LocalDensity provides checkoutDensity) {
+    MaterialTheme(
+        colorScheme = darkColorScheme(
+            primary = Color(0xFFACCEFF),
+            onPrimary = Color(0xFF082449),
+            secondaryContainer = Color(0xFF264F82),
+            onSecondaryContainer = Color.White,
+            surface = Color(0xFF13223D),
+            onSurface = Color.White,
+            onSurfaceVariant = Color(0xFFCCD9EC),
+            outline = Color(0xFF8DA4C2),
+            background = Color(0xFF0B1528),
+            onBackground = Color.White
+        ),
+        typography = MaterialTheme.typography,
+        shapes = MaterialTheme.shapes
+    ) {
         PaymentMethodsContent(api, back)
     }
 }
@@ -75,10 +84,10 @@ private fun PaymentMethodsContent(api: LayaliApi, back: () -> Unit) {
         "trc20" -> NativeUsdtTopupScreen(api){selected="choose"}
         "syriatel" -> SyriatelCashTopupScreen(api){selected="choose"}
         else -> Surface(Modifier.fillMaxSize(),color=CashNavy,contentColor=Color.White){
-            Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(18.dp),
-                verticalArrangement=Arrangement.spacedBy(18.dp)){
+            Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(9.dp),
+                verticalArrangement=Arrangement.spacedBy(9.dp)){
                 TextButton(onClick=back){ Icon(Icons.Rounded.ArrowForward,null); Text("رجوع") }
-                Text("شحن الكوينز",style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold)
+                Text("شحن الكوينز",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold)
                 Text("اختر طريقة الدفع داخل Relaxia",color=Color(0xFFC4D6EE))
                 if(loading) CircularProgressIndicator()
                 else if(loadError) TextButton(onClick={retry++}){Text("تعذّر تحميل طرق الشحن · إعادة المحاولة")}
@@ -89,7 +98,7 @@ private fun PaymentMethodsContent(api: LayaliApi, back: () -> Unit) {
                     onClick={selected="trc20"})
                 if(!loading&&!loadError&&cashAvailable) CashMethodCard(
                     title="سيريتيل كاش",
-                    detail="دفع يدوي بالليرة السورية ومراجعة الإدارة",
+                    detail="تحويل بالليرة السورية الجديدة",
                     onClick={selected="syriatel"})
                 Text("لا تُضاف الكوينز بعد إرسال إيصال فقط. يجب تأكيد وصول الدفعة الفعلية.",
                     color=Color(0xFFBFD0EA),style=MaterialTheme.typography.bodySmall)
@@ -100,10 +109,10 @@ private fun PaymentMethodsContent(api: LayaliApi, back: () -> Unit) {
 
 @Composable
 private fun CashMethodCard(title:String,detail:String,onClick:()->Unit){
-    Card(onClick=onClick,modifier=Modifier.fillMaxWidth().heightIn(min=104.dp),
+    Card(onClick=onClick,modifier=Modifier.fillMaxWidth().heightIn(min=52.dp),
         shape=RoundedCornerShape(25.dp),
         colors=CardDefaults.cardColors(containerColor=CashRoyal)){
-        Row(Modifier.fillMaxWidth().padding(18.dp),verticalAlignment=Alignment.CenterVertically,
+        Row(Modifier.fillMaxWidth().padding(9.dp),verticalAlignment=Alignment.CenterVertically,
             horizontalArrangement=Arrangement.spacedBy(12.dp)){
             Icon(Icons.Rounded.AccountBalanceWallet,null,tint=CashGold,modifier=Modifier.size(32.dp))
             Column(Modifier.weight(1f)){
@@ -161,19 +170,19 @@ private fun SyriatelCashTopupScreen(api:LayaliApi,back:()->Unit){
 
     Surface(Modifier.fillMaxSize(),color=CashNavy,contentColor=Color.White){
         Column(Modifier.fillMaxSize().safeDrawingPadding()
-            .verticalScroll(rememberScrollState()).padding(18.dp),
-            verticalArrangement=Arrangement.spacedBy(15.dp)){
+            .verticalScroll(rememberScrollState()).padding(9.dp),
+            verticalArrangement=Arrangement.spacedBy(9.dp)){
             Row(verticalAlignment=Alignment.CenterVertically){
                 TextButton(back){Icon(Icons.Rounded.ArrowForward,null);Text("طرق الدفع")}
                 Spacer(Modifier.weight(1f))
                 Icon(Icons.Rounded.Payments,null,tint=CashGold)
             }
-            Text("سيريتيل كاش",style=MaterialTheme.typography.headlineMedium,
+            Text("سيريتيل كاش",style=MaterialTheme.typography.titleLarge,
                 fontWeight=FontWeight.ExtraBold,color=CashGold)
-            Text("شحن يدوي آمن · الدفع بالليرة السورية (SYP)",
+            Text("الدفع بالليرة السورية الجديدة",
                 color=Color(0xFFE0ECFA))
             Surface(color=CashRoyal,shape=RoundedCornerShape(23.dp)){
-                Column(Modifier.fillMaxWidth().padding(17.dp),
+                Column(Modifier.fillMaxWidth().padding(9.dp),
                     verticalArrangement=Arrangement.spacedBy(9.dp)){
                     if(enabled && phone.isNotBlank()) {
                     Text("رقم الاستلام",color=Color(0xFFDCEAF8))
@@ -194,11 +203,11 @@ private fun SyriatelCashTopupScreen(api:LayaliApi,back:()->Unit){
                 }
             }
             Text("اختر قيمة الرصيد بالدولار الداخلي",fontWeight=FontWeight.SemiBold)
-            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(7.dp)){
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal=4.dp),horizontalArrangement=Arrangement.spacedBy(7.dp)){
                 listOf(5,10,25,50).forEach{value->
                     FilterChip(selected=usd==value,onClick={
                         if(usd!=value){usd=value;quoteText="";receiptId="";reference=""}
-                    },label={Text("$value")},modifier=Modifier.weight(1f))
+                    },label={Text("$value")},modifier=Modifier.widthIn(min=52.dp))
                 }
             }
             Button(onClick={action{
@@ -209,17 +218,17 @@ private fun SyriatelCashTopupScreen(api:LayaliApi,back:()->Unit){
                 quoteText=result.toString()
                 receiptId="";reference=""
                 note="راجع المبلغ بالليرة السورية ثم حوّله إلى رقم الاستلام."
-            }},enabled=enabled&&!busy,modifier=Modifier.fillMaxWidth().height(51.dp),
-                colors=ButtonDefaults.buttonColors(containerColor=CashRoyal)){
+            }},enabled=enabled&&!busy,modifier=Modifier.fillMaxWidth().heightIn(min=48.dp),
+                colors=ButtonDefaults.buttonColors(containerColor=CashRoyal,contentColor=Color.White)){
                 Text(if(busy)"جارٍ إنشاء الطلب"else"إنشاء فاتورة $usd دولار رصيد")
             }
             if(quote!=null&&current){
                 Surface(color=Color(0xFF193E73),shape=RoundedCornerShape(21.dp)){
-                    Column(Modifier.fillMaxWidth().padding(17.dp),
+                    Column(Modifier.fillMaxWidth().padding(9.dp),
                         verticalArrangement=Arrangement.spacedBy(10.dp)){
                         Text("تفاصيل الدفع المطلوبة",color=CashGold,
                             style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold)
-                        Text("المبلغ: ${quote.optString("payment_amount")} ليرة سورية",
+                        Text("المبلغ: ${quote.optString("payment_amount")} ليرة سورية جديدة",
                             style=MaterialTheme.typography.titleLarge)
                         Text("المستلم: ${quote.optString("destination")}")
                         Text("صلاحية السعر حتى: ${quote.optString("expires_at")}",
@@ -247,7 +256,7 @@ private fun SyriatelCashTopupScreen(api:LayaliApi,back:()->Unit){
                     note="تم إرسال الطلب #${result.optString("id")}. ينتظر فحص وصول الدفع واعتماد الإدارة."
                 }},enabled=!busy&&receiptId.isNotBlank()&&
                     Regex("^[A-Za-z0-9_-]{4,80}$").matches(reference),
-                    modifier=Modifier.fillMaxWidth().height(52.dp),
+                    modifier=Modifier.fillMaxWidth().heightIn(min=48.dp),
                     colors=ButtonDefaults.buttonColors(containerColor=CashGold,
                         contentColor=CashNavy)){
                     Icon(Icons.Rounded.CheckCircle,null)
