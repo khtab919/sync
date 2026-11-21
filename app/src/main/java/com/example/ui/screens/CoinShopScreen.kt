@@ -132,7 +132,7 @@ internal fun CoinPackage(coins:Int,bonus:Int,dollars:String,selected:Boolean,bad
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
+internal fun CoinShopScreen(api:LayaliApi,back:()->Unit,preferredMethod:String?=null) {
     val context=LocalContext.current
     val scope=rememberCoroutineScope()
     var invoiceUrl by rememberSaveable{mutableStateOf("")}
@@ -142,7 +142,7 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
     var balance by remember{mutableStateOf<Long?>(null)}
     var rows by remember{mutableStateOf<List<JSONObject>>(emptyList())}
     var selected by rememberSaveable{mutableIntStateOf(1000)}
-    var method by rememberSaveable{mutableStateOf("stripe")}
+    var method by rememberSaveable{mutableStateOf(preferredMethod ?: "stripe")}
     var showPaymentSheet by rememberSaveable{mutableStateOf(false)}
     var quoteText by rememberSaveable{mutableStateOf("")}
     var submittedId by rememberSaveable { mutableStateOf("") }
@@ -157,7 +157,9 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
     var note by remember{mutableStateOf("")}
     val quote=remember(quoteText){if(quoteText.isBlank())null else runCatching{JSONObject(quoteText)}.getOrNull()}
     val packages=remember(info){storePackages(info)}
-    val methods=remember(info){storeMethods(info)}
+    val methods=remember(info,preferredMethod){
+        storeMethods(info).filter { preferredMethod==null || it.code==preferredMethod }
+    }
     var quoteSeconds by remember{mutableLongStateOf(0L)}
     LaunchedEffect(quoteText){
         val quotation=quote ?: return@LaunchedEffect
@@ -172,7 +174,7 @@ internal fun CoinShopScreen(api:LayaliApi,back:()->Unit) {
     suspend fun reload(){
         val updated=api.request("/api/payment-info")
         info=updated
-        val available=storeMethods(updated).filter{it.enabled}
+        val available=storeMethods(updated).filter{it.enabled && (preferredMethod==null || it.code==preferredMethod)}
         if(available.none{it.code==method})method=available.firstOrNull()?.code.orEmpty()
         balance=api.request("/api/wallet").optLong("available_cents")
         val a=api.request("/api/topups").optJSONArray("items")

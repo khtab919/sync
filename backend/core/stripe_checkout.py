@@ -51,7 +51,7 @@ def _stripe_api_create(quote, request):
     origin = request.build_absolute_uri('/').rstrip('/')
     fields = {
         'mode': 'payment',
-        'payment_method_types[0]': 'card',
+        # Let Stripe display eligible cards and wallets dynamically.
         'client_reference_id': str(quote.pk),
         'metadata[quote_id]': str(quote.pk),
         'metadata[user_id]': str(quote.user_id),

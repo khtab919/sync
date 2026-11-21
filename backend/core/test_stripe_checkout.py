@@ -1,9 +1,12 @@
 """Stripe-only regression checks. No network, secrets or actual charges."""
 import hashlib
+import io
 import hmac
 import json
 import time
 from datetime import date
+from types import SimpleNamespace
+from urllib.parse import parse_qs
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -77,6 +80,20 @@ class StripeCheckoutTests(TestCase):
         self.assertEqual(result.status_code, 201, result.content)
         self.assertEqual(result.json()['checkout_url'], session['url'])
         return quote, session
+
+    def test_checkout_uses_dynamic_payment_methods(self):
+        from .stripe_checkout import _stripe_api_create
+        quote_data = self.quote()
+        quote = TopUpQuote.objects.get(pk=quote_data['id'])
+        request = SimpleNamespace(
+            build_absolute_uri=lambda path: 'https://relaxia.example' + path
+        )
+        with patch('core.stripe_checkout.urlopen', return_value=io.BytesIO(b'{}')) as send:
+            _stripe_api_create(quote, request)
+        body = parse_qs(send.call_args.args[0].data.decode('utf-8'))
+        self.assertFalse(any(k.startswith('payment_method_types') for k in body))
+        self.assertEqual(body['mode'], ['payment'])
+        self.assertEqual(body['line_items[0][price_data][currency]'], ['usd'])
 
     def test_requires_keys_and_explicit_enablement(self):
         with patch.dict('os.environ', {'STRIPE_ENABLED': '0'}):

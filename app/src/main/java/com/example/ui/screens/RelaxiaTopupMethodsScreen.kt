@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -41,6 +42,8 @@ private val CashGold = Color(0xFFE5B84B)
 @Composable
 internal fun RelaxiaTopupMethodsScreen(api:LayaliApi,back:()->Unit){
     var selected by rememberSaveable { mutableStateOf("choose") }
+    var stripeAvailable by remember { mutableStateOf(false) }
+    var shamcashAvailable by remember { mutableStateOf(false) }
     var cashAvailable by remember { mutableStateOf(false) }
     var cryptoAvailable by remember { mutableStateOf(false) }
     var loadError by remember { mutableStateOf(false) }
@@ -51,6 +54,8 @@ internal fun RelaxiaTopupMethodsScreen(api:LayaliApi,back:()->Unit){
         loading=true
         try {
             val info=api.request("/api/payment-info")
+            stripeAvailable=info.optBoolean("stripe_enabled")
+            shamcashAvailable=info.optBoolean("shamcash_enabled")
             cashAvailable=info.optBoolean("syriatel_cash_enabled")
             cryptoAvailable=info.optBoolean("nowpayments_enabled")
             loadError=false
@@ -59,6 +64,8 @@ internal fun RelaxiaTopupMethodsScreen(api:LayaliApi,back:()->Unit){
         finally{loading=false}
     }
     when(selected){
+        "stripe" -> CoinShopScreen(api,back={selected="choose"},preferredMethod="stripe")
+        "shamcash" -> CoinShopScreen(api,back={selected="choose"},preferredMethod="shamcash")
         "trc20" -> NativeUsdtTopupScreen(api){selected="choose"}
         "syriatel" -> SyriatelCashTopupScreen(api){selected="choose"}
         else -> Surface(Modifier.fillMaxSize(),color=CashNavy,contentColor=Color.White){
@@ -69,15 +76,38 @@ internal fun RelaxiaTopupMethodsScreen(api:LayaliApi,back:()->Unit){
                 Text("اختر طريقة الدفع داخل Relaxia",color=Color(0xFFC4D6EE))
                 if(loading) CircularProgressIndicator()
                 else if(loadError) TextButton(onClick={retry++}){Text("تعذّر تحميل طرق الشحن · إعادة المحاولة")}
-                else if(!cashAvailable&&!cryptoAvailable) Text("لا توجد وسيلة شحن مفعّلة حالياً.")
-                if(!loading&&!loadError&&cryptoAvailable) CashMethodCard(
-                    title="USDT · TRC20",
-                    detail="شبكة Tron فقط · التحقق من بوابة الدفع",
-                    onClick={selected="trc20"})
-                if(!loading&&!loadError&&cashAvailable) CashMethodCard(
-                    title="سيريتيل كاش",
-                    detail="دفع يدوي بالليرة السورية ومراجعة الإدارة",
-                    onClick={selected="syriatel"})
+                else {
+                    CashMethodCard(
+                        title="البطاقات البنكية والدفع العالمي",
+                        detail="Visa · Mastercard · American Express · محافظ مؤهلة",
+                        enabled=stripeAvailable,
+                        icon=Icons.Rounded.Payments,
+                        onClick={selected="stripe"}
+                    )
+                    CashMethodCard(
+                        title="شام كاش",
+                        detail="دفع محلي · التحقق من الإيصال",
+                        enabled=shamcashAvailable,
+                        icon=Icons.Rounded.AccountBalanceWallet,
+                        onClick={selected="shamcash"}
+                    )
+                    CashMethodCard(
+                        title="العملات الرقمية",
+                        detail="USDT · شبكة Tron (TRC20)",
+                        enabled=cryptoAvailable,
+                        icon=Icons.Rounded.ReceiptLong,
+                        onClick={selected="trc20"}
+                    )
+                    CashMethodCard(
+                        title="سيريتل كاش",
+                        detail="دفع بالليرة السورية · مراجعة الإدارة",
+                        enabled=cashAvailable,
+                        icon=Icons.Rounded.AccountBalanceWallet,
+                        onClick={selected="syriatel"}
+                    )
+                    if(!stripeAvailable&&!shamcashAvailable&&!cryptoAvailable&&!cashAvailable)
+                        Text("لا توجد وسيلة شحن مفعّلة حاليًا.",color=Color(0xFFFFDEAB))
+                }
                 Text("لا تُضاف الكوينز بعد إرسال إيصال فقط. يجب تأكيد وصول الدفعة الفعلية.",
                     color=Color(0xFFBFD0EA),style=MaterialTheme.typography.bodySmall)
             }
@@ -86,19 +116,37 @@ internal fun RelaxiaTopupMethodsScreen(api:LayaliApi,back:()->Unit){
 }
 
 @Composable
-private fun CashMethodCard(title:String,detail:String,onClick:()->Unit){
-    Card(onClick=onClick,modifier=Modifier.fillMaxWidth().heightIn(min=104.dp),
-        shape=RoundedCornerShape(25.dp),
-        colors=CardDefaults.cardColors(containerColor=CashRoyal)){
-        Row(Modifier.fillMaxWidth().padding(18.dp),verticalAlignment=Alignment.CenterVertically,
-            horizontalArrangement=Arrangement.spacedBy(12.dp)){
-            Icon(Icons.Rounded.AccountBalanceWallet,null,tint=CashGold,modifier=Modifier.size(32.dp))
-            Column(Modifier.weight(1f)){
+private fun CashMethodCard(
+    title:String,
+    detail:String,
+    enabled:Boolean,
+    icon:ImageVector,
+    onClick:()->Unit
+){
+    Card(
+        onClick=onClick,
+        enabled=enabled,
+        modifier=Modifier.fillMaxWidth().heightIn(min=86.dp),
+        shape=RoundedCornerShape(24.dp),
+        colors=CardDefaults.cardColors(
+            containerColor=CashRoyal,
+            disabledContainerColor=Color(0xFF303B52)
+        )
+    ){
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal=17.dp,vertical=15.dp),
+            verticalAlignment=Alignment.CenterVertically,
+            horizontalArrangement=Arrangement.spacedBy(12.dp)
+        ){
+            Icon(icon,null,tint=if(enabled)CashGold else Color(0xFF9AA9BC),
+                modifier=Modifier.size(29.dp))
+            Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(3.dp)){
                 Text(title,color=Color.White,fontWeight=FontWeight.Bold,
                     style=MaterialTheme.typography.titleMedium)
-                Text(detail,color=Color(0xFFE1EAF6),style=MaterialTheme.typography.bodySmall)
+                Text(if(enabled)detail else "غير متاحة حاليًا · بانتظار التفعيل",
+                    color=Color(0xFFD7E3F3),style=MaterialTheme.typography.bodySmall)
             }
-            Icon(Icons.Rounded.ArrowForward,null,tint=CashGold)
+            if(enabled)Icon(Icons.Rounded.ArrowForward,null,tint=CashGold)
         }
     }
 }
