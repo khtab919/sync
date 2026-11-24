@@ -37,7 +37,7 @@ internal fun JSONObject.rows(): List<JSONObject> {
     val rows = optJSONArray("items") ?: return emptyList()
     return (0 until rows.length()).map { rows.getJSONObject(it) }
 }
-internal fun usd(cents: Long): String = String.format(Locale.US, "$%.2f", cents / 100.0)
+internal fun usd(cents: Long): String = "${cents} كوين"
 
 @Composable
 internal fun ReferenceCard(modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
