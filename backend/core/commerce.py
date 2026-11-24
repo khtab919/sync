@@ -201,8 +201,8 @@ def payment_info(request):
     from .stripe_checkout import configured as stripe_configured
     settings = funding_settings()
     return JsonResponse({'network':'BNB Smart Chain (BEP20)', 'currency':'USDT', 'address':ADDRESS, 'qr_url':request.build_absolute_uri('/api/payment-qr'), 'packages_cents':[100,300,1000,2500,5000,10000], 'packages':[{'coins':coins,'bonus_points':bonus_for(coins)} for coins in (100,300,1000,2500,5000,10000)], 'coin_rate':100, 'credit_rate':'100 coins = 1 USD internal balance', 'manual_review':True, 'nowpayments_enabled':configured(), 'stripe_enabled':stripe_configured(), 'shamcash_enabled':bool(settings.shamcash_enabled and settings.shamcash_account and settings.shamcash_rate>0), 'shamcash_account':settings.shamcash_account if settings.shamcash_enabled else '', 'shamcash_currency':settings.shamcash_currency, 'shamcash_instructions':settings.shamcash_instructions,
-        'syriatel_cash_enabled':bool(settings.syriatel_cash_enabled and settings.syriatel_cash_syp_per_usd>0),
-        'syriatel_cash_number':settings.syriatel_cash_number if settings.syriatel_cash_enabled and settings.syriatel_cash_syp_per_usd>0 else '',
+        'syriatel_cash_enabled':bool(settings.syriatel_cash_enabled and settings.syriatel_cash_number.strip() and settings.syriatel_cash_syp_per_usd>0),
+        'syriatel_cash_number':settings.syriatel_cash_number if settings.syriatel_cash_enabled and settings.syriatel_cash_number.strip() and settings.syriatel_cash_syp_per_usd>0 else '',
         'syriatel_cash_currency':'SYP',
         'syriatel_cash_manual_review':True})
 
@@ -253,7 +253,7 @@ def quotes(request):
             from .stripe_checkout import configured as stripe_configured
             if not stripe_configured():raise ApiError('stripe_not_configured',409)
         if method=='shamcash' and not(settings.shamcash_enabled and settings.shamcash_account and settings.shamcash_rate>0): raise ApiError('shamcash_not_configured',409)
-        if method=='syriatelcash' and not(settings.syriatel_cash_enabled and settings.syriatel_cash_syp_per_usd>0): raise ApiError('syriatelcash_not_configured',409)
+        if method=='syriatelcash' and not(settings.syriatel_cash_enabled and settings.syriatel_cash_number.strip() and settings.syriatel_cash_syp_per_usd>0): raise ApiError('syriatelcash_not_configured',409)
         rate=(settings.syriatel_cash_syp_per_usd if method=='syriatelcash' else settings.shamcash_rate if method=='shamcash' else Decimal(1))
         destination=(settings.syriatel_cash_number if method=='syriatelcash' else
                      settings.shamcash_account if method=='shamcash' else

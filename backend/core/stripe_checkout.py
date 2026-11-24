@@ -37,13 +37,13 @@ def configured():
     secret = os.environ.get('STRIPE_WEBHOOK_SECRET', '').strip()
     return (
         os.environ.get('STRIPE_ENABLED') == '1'
-        and key.startswith(('sk_test_', 'sk_live_')) and len(key) > 12
+        and key.startswith(('sk_test_', 'sk_live_', 'rk_test_', 'rk_live_')) and len(key) > 12
         and secret.startswith('whsec_') and len(secret) > 12
     )
 
 
 def _live_mode():
-    return os.environ.get('STRIPE_SECRET_KEY', '').strip().startswith('sk_live_')
+    return os.environ.get('STRIPE_SECRET_KEY', '').strip().startswith(('sk_live_', 'rk_live_'))
 
 
 def _stripe_api_create(quote, request):
