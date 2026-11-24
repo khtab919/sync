@@ -39,12 +39,12 @@
  const originalPeople=window.peopleSheet;
  if(typeof originalPeople==='function'){
    window.peopleSheet=function(){
+     // Use the same searchable, identity-aware audience panel as the header.
+     if(window.RelaxiaAudience?.open){window.RelaxiaAudience.open();return}
      const box=sheet('المشاهدون والمشاركون');
-     for(const p of state.participants_visible||[]){
-       if(Number(p.user_id)!==config.userId)
-         button(box,p.name||'مستخدم',()=>showUser(p), 'room-user-entry');
-     }
-     if(!(state.participants_visible||[]).length)note(box,'لا يوجد مشاركون متصلون حاليًا.');
+     const people=state.participants_visible||[];
+     for(const p of people)button(box,p.name||'مستخدم',()=>showUser(p),'room-user-entry');
+     if(!people.length)note(box,'لا يوجد مشاركون متصلون حاليًا.');
    };
  }
  const originalMore=window.moreSheet;
@@ -252,5 +252,5 @@
    });
    track.observe(audio,{childList:true,subtree:true});
  }
- window.RelaxiaRoomModeration={showUser,roomSettings,reportUser};
+ window.RelaxiaRoomModeration={showUser,roomSettings,reportUser,getState:()=>state,openSheet:sheet,renderPortrait};
 })();
