@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Storefront
 import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.SmartDisplay
 import androidx.compose.material.icons.rounded.CheckCircle
@@ -206,25 +207,33 @@ private val PublishHint = Color(0xFF61718B)
  * submitted as a reel (or vice versa).
  */
 @Composable
-internal fun SellerPublishScreen(api: LayaliApi, initialReel: Boolean = false, back: () -> Unit) {
+internal fun SellerPublishScreen(api: LayaliApi, initialReel: Boolean = false, accountId:Int, onPhoto:()->Unit, onHome:()->Unit, onView:(Boolean,JSONObject)->Unit, back: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var title by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-    var caption by remember { mutableStateOf("") }
-    var reelPaid by remember { mutableStateOf(false) }
-    var reelPrice by remember { mutableStateOf("") }
-    var duration by remember { mutableStateOf("30") }
-    var terms by remember { mutableStateOf("") }
-    var price by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf("خدمة") }
-    var offerMedia by remember { mutableStateOf(JSONObject()) }
-    var reelMedia by remember { mutableStateOf(JSONObject()) }
+    val drafts=remember(accountId){context.getSharedPreferences("publish_draft_"+accountId,Context.MODE_PRIVATE)}
+    var publishedJson by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
+    var previewVideo by remember { mutableStateOf(false) }
+    var videoSource by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(drafts.getString("videoSource","").orEmpty()) }
+    var title by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(drafts.getString("title","").orEmpty()) }
+    var description by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(drafts.getString("description","").orEmpty()) }
+    var caption by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(drafts.getString("caption","").orEmpty()) }
+    var reelPaid by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(drafts.getBoolean("reelPaid",false)) }
+    var reelPrice by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(drafts.getString("reelPrice","").orEmpty()) }
+    var duration by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(drafts.getString("duration","30").orEmpty()) }
+    var terms by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(drafts.getString("terms","").orEmpty()) }
+    var price by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(drafts.getString("price","").orEmpty()) }
+    var category by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(drafts.getString("category","خدمة").orEmpty()) }
+    var offerJson by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(drafts.getString("offerJson","{}").orEmpty()) }
+    val offerMedia = remember(offerJson) { JSONObject(offerJson) }
+    var offerUri by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(drafts.getString("offerUri","").orEmpty()) }
+    var reelJson by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(drafts.getString("reelJson","{}").orEmpty()) }
+    val reelMedia = remember(reelJson) { JSONObject(reelJson) }
+    var reelUri by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(drafts.getString("reelUri","").orEmpty()) }
     var reel by remember(initialReel) { mutableStateOf(initialReel) }
     var busy by remember { mutableStateOf(false) }
     var uploadProgress by remember { mutableFloatStateOf(-1f) }
-    var note by remember { mutableStateOf("") }
-    var noteIsError by remember { mutableStateOf(false) }
+    var note by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
+    var noteIsError by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
 
     fun perform(block: suspend () -> Unit) {
         if (busy) return
@@ -238,18 +247,48 @@ internal fun SellerPublishScreen(api: LayaliApi, initialReel: Boolean = false, b
             finally { uploadProgress = -1f; busy = false }
         }
     }
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if(uri != null) {
-            val chosenReel = reel
-            perform {
-                val uploaded = api.upload(context, uri, if(chosenReel) "reel" else "offer") {
-                    uploadProgress = it
-                }
-                if(chosenReel) reelMedia = uploaded else offerMedia = uploaded
-                note = if(chosenReel) "تم رفع الفيديو. يمكنك كتابة الوصف ثم النشر." else "تم رفع الصورة بنجاح."
-            }
+    fun uploadDraft(uri: android.net.Uri, chosenReel: Boolean) {
+        perform {
+            uploadProgress = 0f
+            val uploaded = api.upload(context, uri, if(chosenReel) "reel" else "offer") { uploadProgress = it }
+            require(uploaded.optString("id").isNotBlank())
+            if(chosenReel) { reelJson = uploaded.toString(); reelUri = "" }
+            else { offerJson = uploaded.toString(); offerUri = "" }
+            note = if(chosenReel) "تم رفع الفيديو. راجع الوصف ثم انشر." else "تم رفع الصورة."
         }
     }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if(uri != null) {
+            runCatching { context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            if(reel) { videoSource=uri.toString(); reelUri = uri.toString(); reelJson = "{}" }
+            else { offerUri = uri.toString(); offerJson = "{}" }
+            uploadDraft(uri, reel)
+        }
+    }
+    LaunchedEffect(title,description,caption,reelPaid,reelPrice,duration,terms,price,category,offerJson,reelJson,reelUri,offerUri,videoSource){
+        drafts.edit().putString("title",title).putString("description",description).putString("caption",caption).putString("reelPrice",reelPrice).putString("duration",duration).putString("terms",terms).putString("price",price).putString("category",category).putString("offerJson",offerJson).putString("reelJson",reelJson).putString("reelUri",reelUri).putString("offerUri",offerUri).putString("videoSource",videoSource).putBoolean("reelPaid",reelPaid).apply()
+    }
+    if(previewVideo && videoSource.isNotBlank()){
+        AlertDialog(onDismissRequest={previewVideo=false}, title={Text("معاينة الريلز")},text={
+            androidx.compose.ui.viewinterop.AndroidView(factory={ctx->android.widget.VideoView(ctx).apply{
+                val controls=android.widget.MediaController(ctx);controls.setAnchorView(this);setMediaController(controls)
+                setVideoURI(android.net.Uri.parse(videoSource));setOnPreparedListener{start()}
+            }},modifier=Modifier.fillMaxWidth().height(260.dp))
+        },confirmButton={TextButton({previewVideo=false}){Text("إغلاق")}})
+    }
+    if(publishedJson.isNotEmpty()){
+        Column(Modifier.fillMaxSize().safeDrawingPadding().padding(24.dp),verticalArrangement=Arrangement.Center,horizontalAlignment=Alignment.CenterHorizontally){
+            Icon(Icons.Rounded.CheckCircle,null,Modifier.size(64.dp),tint=PublishNavy)
+            Text("تم النشر بنجاح!",style=MaterialTheme.typography.headlineMedium)
+            Text("أصبح محتواك متاحًا للمشاهدة.")
+            Spacer(Modifier.height(16.dp))
+            Button({onView(reel,JSONObject(publishedJson))},modifier=Modifier.fillMaxWidth()){Text("مشاهدة المنشور")}
+            OutlinedButton(onHome,modifier=Modifier.fillMaxWidth()){Text("العودة إلى الرئيسية")}
+            TextButton({publishedJson="";note=""}){Text("إنشاء منشور آخر")}
+        }
+        return
+    }
+    val pendingUri = if(reel) reelUri else offerUri
     val selectedMedia = if(reel) reelMedia else offerMedia
     val validMoney = runCatching {
         (price.trim().toIntOrNull() ?: 0) > 0
@@ -268,7 +307,7 @@ internal fun SellerPublishScreen(api: LayaliApi, initialReel: Boolean = false, b
             ) {
                 Box(Modifier.fillMaxWidth().height(62.dp), contentAlignment = Alignment.Center) {
                     Text(
-                        if(reel) "مساحة النشر" else "إضافة عرض جديد",
+                        "إنشاء محتوى",
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -291,6 +330,7 @@ internal fun SellerPublishScreen(api: LayaliApi, initialReel: Boolean = false, b
                     PublishSegment("ريلز", reel, !busy, Modifier.weight(1f)) {
                         reel = true; note = ""
                     }
+                    PublishSegment("صورة", false, !busy, Modifier.weight(1f), onPhoto)
                 }
 
                 Column(
@@ -320,8 +360,15 @@ internal fun SellerPublishScreen(api: LayaliApi, initialReel: Boolean = false, b
                         )
                         PublishMediaDropzone(
                             selected = reelMedia.has("id"), isReel = true, enabled = !busy,
-                            modifier = Modifier.fillMaxWidth().height(250.dp)
-                        ) { picker.launch("video/mp4") }
+                            modifier = Modifier.fillMaxWidth().height(112.dp)
+                        ) { picker.launch(arrayOf("video/mp4")) }
+                        if(videoSource.isNotBlank()){
+                            Row {
+                                TextButton({previewVideo=true},enabled=!busy){Text("معاينة الفيديو")}
+                                TextButton({videoSource="";reelJson="{}";reelUri="";note=""},enabled=!busy){Text("إزالة الفيديو")}
+                            }
+                        }
+                        Text("${caption.length} / 500",style=MaterialTheme.typography.labelSmall)
                         PublishInput(
                             value = caption, onChange = { caption = it.take(500) },
                             label = "عنوان أو وصف الريلز",
@@ -385,16 +432,18 @@ internal fun SellerPublishScreen(api: LayaliApi, initialReel: Boolean = false, b
                         )
                         PublishMediaDropzone(
                             selected = offerMedia.has("id"), isReel = false, enabled = !busy,
-                            modifier = Modifier.fillMaxWidth().height(155.dp)
-                        ) { picker.launch("image/*") }
+                            modifier = Modifier.fillMaxWidth().height(112.dp)
+                        ) { picker.launch(arrayOf("image/*")) }
                         if(offerMedia.has("id")) {
                             val imageUrl = offerMedia.optString("url")
                             if(imageUrl.isNotBlank())
                                 ReferenceImage(imageUrl, Modifier.fillMaxWidth().height(150.dp))
                         }
                     }
+                    if(pendingUri.isNotBlank() && !busy) {
+                        OutlinedButton({ uploadDraft(android.net.Uri.parse(pendingUri),reel) }) { Text("إعادة رفع الملف المختار") }
+                    }
                     Spacer(Modifier.height(6.dp))
-                }
 
                 Column(
                     Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 10.dp),
@@ -402,6 +451,7 @@ internal fun SellerPublishScreen(api: LayaliApi, initialReel: Boolean = false, b
                 ) {
                     if(busy) {
                         if(uploadProgress >= 0f) {
+                            Text("رفع الملف · ${(uploadProgress*100).toInt()}٪")
                             LinearProgressIndicator(
                                 progress = { uploadProgress.coerceIn(0f, 1f) },
                                 modifier = Modifier.fillMaxWidth()
@@ -431,12 +481,13 @@ internal fun SellerPublishScreen(api: LayaliApi, initialReel: Boolean = false, b
                                     )
                                 }
                                 if(response.optString("status") == "published") {
-                                    if(reel) { reelMedia = JSONObject(); caption = "";reelPaid=false;reelPrice="" }
+                                    publishedJson=response.toString()
+                                    if(reel) { videoSource="";reelJson = "{}"; caption = "";reelPaid=false;reelPrice="" }
                                     else {
-                                        offerMedia = JSONObject(); title = ""; description = ""
+                                        offerJson = "{}"; title = ""; description = ""
                                         price = ""; duration = "30"; terms = ""
                                     }
-                                    note = "تم نشر المحتوى بنجاح."
+                                    note = ""
                                 } else {
                                     noteIsError = true
                                     note = "تم إرسال الطلب، لكن النشر لم يتأكد بعد. تحقق من تحديث الخادم."
@@ -452,10 +503,11 @@ internal fun SellerPublishScreen(api: LayaliApi, initialReel: Boolean = false, b
                         shape = RoundedCornerShape(17.dp)
                     ) {
                         Text(
-                            if(busy) "جارٍ النشر…" else "نشر الآن",
+                            if(uploadProgress>=0f) "جارٍ رفع الملف…" else if(busy) "جارٍ النشر…" else if(noteIsError && publishEnabled) "إعادة محاولة النشر" else "نشر الآن",
                             fontWeight = FontWeight.Bold, fontSize = 16.sp
                         )
                     }
+                }
                 }
             }
         }
@@ -476,10 +528,12 @@ private fun PublishSegment(
         border = androidx.compose.foundation.BorderStroke(
             1.dp, if(selected) PublishSelected else PublishLine
         ),
-        color = if(selected) PublishSelected else Color.Transparent,
-        contentColor = PublishNavy
+        color = if(selected) Color(0xFF214D9A) else MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = if(selected) Color.White else MaterialTheme.colorScheme.onSurface
     ) {
-        Box(Modifier.fillMaxSize().padding(horizontal = 5.dp), contentAlignment = Alignment.Center) {
+        Row(Modifier.fillMaxSize(), verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.Center) {
+            Icon(if(title=="ريلز") Icons.Rounded.SmartDisplay else if(title=="صورة") Icons.Rounded.PhotoCamera else Icons.Rounded.Storefront,null,Modifier.size(16.dp))
+            Spacer(Modifier.width(3.dp))
             Text(
                 title, fontWeight = if(selected) FontWeight.Bold else FontWeight.Medium,
                 fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,

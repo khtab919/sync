@@ -173,6 +173,7 @@ dependencies {
 }
 
 tasks.withType<Test> {
+  systemProperty("robolectric.dependency.repo.url", "https://repo.maven.apache.org/maven2")
   failFast = true
   timeout.set(Duration.ofMinutes(2))
   testLogging {

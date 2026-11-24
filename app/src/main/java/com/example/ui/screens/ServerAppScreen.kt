@@ -678,10 +678,10 @@ fun ServerAppScreen(baseUrl: String) {
                 ){heldRoom="";selectedHomeRoomId="";back();revision++}
             }
             if (!mini) return@MyApplicationTheme
-            androidx.compose.ui.window.Popup(alignment=Alignment.TopStart) {
+            if(screen !in listOf("نشر ريلز","إضافة عرض","نشر صورة مدفوعة")) androidx.compose.ui.window.Popup(alignment=Alignment.TopStart) {
                 Surface(onClick={open(heldRoom)},modifier=Modifier.statusBarsPadding().padding(start=8.dp,top=4.dp),
                     shape=RoundedCornerShape(20.dp),color=MaterialTheme.colorScheme.primaryContainer,shadowElevation=5.dp) {
-                    Text("↩  "+miniTitle.take(24)+" · "+miniMic,Modifier.padding(horizontal=12.dp,vertical=9.dp),
+                    Text("↩  "+miniTitle.take(12)+" · "+miniMic,Modifier.padding(horizontal=12.dp,vertical=9.dp),
                         style=MaterialTheme.typography.labelMedium,maxLines=1)
                 }
             }
@@ -713,7 +713,12 @@ fun ServerAppScreen(baseUrl: String) {
             return@MyApplicationTheme
         }
         if (screen == "إضافة عرض" || screen == "نشر ريلز") {
-            SellerPublishScreen(api, initialReel = screen == "نشر ريلز") { back(); revision++ }
+            SellerPublishScreen(api, initialReel = screen == "نشر ريلز", accountId=profile.optInt("id"),
+                onPhoto={open("نشر صورة مدفوعة")},onHome={page="";tab=0;revision++},
+                onView={isReel,result->
+                    if(isReel){directReel=result.getInt("id").toString();page="";tab=1;revision++}
+                    else {val item=result.optJSONObject("item");if(item!=null)showService(item) else {page="";tab=2;revision++}}
+                }) { back(); revision++ }
             return@MyApplicationTheme
         }
         if (screen == "محادثة" && peerId.toIntOrNull() != null) {
@@ -2218,6 +2223,8 @@ private fun friendlyError(code: String?): String = when (code) {
     "verified_creator_required", "creator_account_required" -> "صلاحية النشر موقوفة لهذا الحساب. تواصل مع الدعم."
     "identity_verification_required" -> "خادم التطبيق ما زال بالنسخة القديمة. حدّثه لتفعيل عرض الريلز للجميع."
     "paid_chat_requires_verified_payment" -> "المحادثة مدفوعة. الدفع غير مفعّل بعد، ولم تُرسل الرسالة."
+    "insufficient_withdrawable_earnings" -> "المبلغ يتجاوز أرباح الدعم والحجوزات المتاحة للسحب."
+    "bank_exchange_rate_unavailable" -> "تعذّر جلب سعر الليرة التركية. أعد المحاولة بعد قليل."
     "insufficient_funds" -> "رصيدك المتاح لا يكفي لطلب السحب."
     "too_many_attempts" -> "محاولات كثيرة. حاول بعد 15 دقيقة."
     "username_unavailable" -> "اسم المستخدم مستخدم بالفعل أو محجوز. اختر اسمًا آخر."
