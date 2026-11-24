@@ -14,6 +14,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ArrowForward
+import androidx.compose.material.icons.rounded.CreditCard
+import androidx.compose.material.icons.rounded.AccountBalanceWallet
+import androidx.compose.material.icons.rounded.Payments
+import androidx.compose.material.icons.rounded.Smartphone
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material.icons.rounded.Toll
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -40,13 +47,13 @@ import java.math.BigDecimal
 import java.time.Instant
 
 private data class StorePackage(val coins:Int,val bonusPoints:Int){ val id:String get()="pack_$coins" }
-private data class StorePaymentMethod(val code:String,val name:String,val description:String,val symbol:String,val enabled:Boolean)
+private data class StorePaymentMethod(val code:String,val name:String,val description:String,val icon:ImageVector,val enabled:Boolean)
 
 private fun storeMethods(info:JSONObject):List<StorePaymentMethod> = listOf(
-    StorePaymentMethod("stripe","فيزا / ماستركارد","بوابة الدفع العالمية · بطاقات بنكية","💳",info.optBoolean("stripe_enabled")),
-    StorePaymentMethod("nowpayments","العملات الرقمية","فاتورة دفع إلكترونية","✦",info.optBoolean("nowpayments_enabled")),
-    StorePaymentMethod("syriatelcash","سيريتيل كاش","الليرة السورية الجديدة","",info.optBoolean("syriatel_cash_enabled")),
-    StorePaymentMethod("shamcash","شام كاش","تحويل محلي مع إثبات الدفع","◈",info.optBoolean("shamcash_enabled"))
+    StorePaymentMethod("stripe","فيزا / ماستركارد","بوابة الدفع العالمية · بطاقات بنكية",Icons.Rounded.CreditCard,info.optBoolean("stripe_enabled")),
+    StorePaymentMethod("nowpayments","العملات الرقمية","فاتورة دفع إلكترونية",Icons.Rounded.Payments,info.optBoolean("nowpayments_enabled")),
+    StorePaymentMethod("syriatelcash","سيريتيل كاش","الليرة السورية الجديدة",Icons.Rounded.Smartphone,info.optBoolean("syriatel_cash_enabled")),
+    StorePaymentMethod("shamcash","شام كاش","تحويل محلي مع إثبات الدفع",Icons.Rounded.AccountBalanceWallet,info.optBoolean("shamcash_enabled"))
 )
 
 private fun storePackages(info:JSONObject):List<StorePackage>{
@@ -212,20 +219,16 @@ internal fun CoinShopScreen(api:LayaliApi, back:()->Unit) {
         return
     }
     Surface(Modifier.fillMaxSize(),color=MaterialTheme.colorScheme.background,contentColor=MaterialTheme.colorScheme.onSurface){
-        Box(Modifier.fillMaxSize()
-            
-            .safeDrawingPadding()){
+        Box(Modifier.fillMaxSize().safeDrawingPadding()){
             Column(Modifier.fillMaxSize().imePadding().verticalScroll(scrollState)
                 .padding(horizontal=18.dp)
                 .padding(top=12.dp,bottom=28.dp),
                 verticalArrangement=Arrangement.spacedBy(14.dp)){
-        Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
-            TextButton(onClick=back,enabled=!busy){Text("رجوع")}
-            Spacer(Modifier.weight(1f))
-            Text("Relaxia",fontWeight=FontWeight.SemiBold,color=MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+            IconButton(onClick=back,enabled=!busy) { Icon(Icons.Rounded.ArrowForward,"رجوع") }
+            Text(if (quote==null) "متجر الكوينز" else "إتمام الشحن", style=MaterialTheme.typography.titleLarge, fontWeight=FontWeight.Bold)
         }
-        Text(if(quote==null)"اختر باقة الشحن"else"إتمام الشحن",style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.ExtraBold,color=MaterialTheme.colorScheme.onSurface)
-        Surface(shape=RoundedCornerShape(50.dp),shadowElevation=2.dp,color=MaterialTheme.colorScheme.surface,border=BorderStroke(1.dp,MaterialTheme.colorScheme.outlineVariant)){
+        Surface(shape=RoundedCornerShape(24.dp),shadowElevation=2.dp,color=MaterialTheme.colorScheme.surface,border=BorderStroke(1.dp,MaterialTheme.colorScheme.outlineVariant)){
             Row(Modifier.fillMaxWidth().padding(horizontal=16.dp,vertical=10.dp),verticalAlignment=Alignment.CenterVertically){
                 Icon(androidx.compose.material.icons.Icons.Rounded.Toll, null, Modifier.size(23.dp), tint=MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.width(10.dp))
@@ -355,9 +358,14 @@ internal fun CoinShopScreen(api:LayaliApi, back:()->Unit) {
                             if (option.code in setOf("stripe", "nowpayments")) openCheckout(selectedQuote)
                         }
                     }, enabled = !busy, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
-                        Column(Modifier.padding(16.dp)) {
-                            Text(option.name, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                            Text(option.description, style = MaterialTheme.typography.bodySmall)
+                        Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement=Arrangement.spacedBy(14.dp), verticalAlignment=Alignment.CenterVertically) {
+                            Surface(shape=RoundedCornerShape(14.dp),color=MaterialTheme.colorScheme.primaryContainer) {
+                                Icon(option.icon,null,Modifier.padding(10.dp).size(24.dp),tint=MaterialTheme.colorScheme.onPrimaryContainer)
+                            }
+                            Column(Modifier.weight(1f)) {
+                                Text(option.name, fontWeight=FontWeight.Bold)
+                                Text(option.description,style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                         }
                     }
                 }
