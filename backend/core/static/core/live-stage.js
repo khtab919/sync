@@ -408,14 +408,14 @@ function giftSheet(preferredRecipientId=null){
  for(const supporter of state.top_supporters||[])note(box,supporter.name+' · '+supporter.total+' كوين');
 }
 function drawAudioSeats(result){
- const box=$('audioStage'),speakers=result.speakers||[],capacity=Math.max(8,speakers.length);
+ const box=$('audioStage'),speakers=result.speakers||[],capacity=Math.max(9,speakers.length);
  const signature=JSON.stringify([capacity,speakers.map(s=>[s.identity,s.name,s.owner,s.avatar_url])]);
  if(signature===audioSeatSignature&&box.querySelectorAll('.audio-seat').length===capacity){
   box.querySelectorAll('.audio-seat[data-identity]').forEach(item=>item.classList.toggle('speaking',activeSpeakerIds.has(item.dataset.identity)));
   return;
  }
  audioSeatSignature=signature;
- box.classList.add('seat-grid');box.classList.toggle('solo-room',capacity===1);
+ box.classList.add('seat-grid');box.classList.toggle('solo-room',capacity===1);box.style.setProperty('--seat-rows',String(Math.ceil((capacity-1)/4)+1));
  const nodes=document.createDocumentFragment();
  for(let i=0;i<capacity;i++){
   const speaker=speakers[i],item=document.createElement('button');item.type='button';item.className='audio-person audio-seat';
@@ -432,10 +432,10 @@ function drawAudioSeats(result){
    const placeholder=document.createElement('div');placeholder.className='audio-placeholder';placeholder.textContent=(speaker.name||'م').slice(0,1);item.append(placeholder);
    if(/^https:\/\//.test(speaker.avatar_url)){
     const img=document.createElement('img');img.src=speaker.avatar_url;img.alt='';
-    img.onload=()=>placeholder.style.visibility='hidden';img.onerror=()=>img.remove();item.append(img)
+    img.onload=()=>placeholder.hidden=true;img.onerror=()=>img.remove();item.append(img)
    }
    const label=document.createElement('span');label.className='audio-name';label.textContent=speaker.name;item.append(label);
-   const role=document.createElement('small');role.textContent=speaker.owner?'المضيف':String(i+1);item.append(role);
+   const role=document.createElement('small');role.textContent=speaker.owner?'المضيف':String(speaker.seat_number ?? i+1);item.append(role);
   }else{
    item.classList.add('empty-seat');item.dataset.seatNumber=String(i);item.setAttribute('aria-label','مقعد '+(i+1)+' · طلب الميكروفون');
    const circle=document.createElement('span');circle.className='seat-plus';circle.setAttribute('aria-hidden','true');circle.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 10v2a7 7 0 0 0 11.3 5.5M12 19v2M8.5 21h7M19 11v6M16 14h6"/></svg>';
