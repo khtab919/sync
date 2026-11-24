@@ -46,15 +46,16 @@ private val ActionBlue = Color(0xFF1864D9)
 private val SoftText = Color(0xFFB1C2DF)
 
 @Composable
-internal fun NativeUsdtTopupScreen(api: LayaliApi, back: () -> Unit) {
+internal fun NativeUsdtTopupScreen(api: LayaliApi, initialQuote:String="", initialPayment:String="", back: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var usdAmount by rememberSaveable { mutableIntStateOf(10) }
-    var quoteText by rememberSaveable { mutableStateOf("") }
-    var paymentText by rememberSaveable { mutableStateOf("") }
-    var paymentVisible by rememberSaveable { mutableStateOf(false) }
+    var quoteText by rememberSaveable { mutableStateOf(initialQuote) }
+    var paymentText by rememberSaveable { mutableStateOf(initialPayment) }
+    var paymentVisible by rememberSaveable { mutableStateOf(initialPayment.isNotBlank()) }
     var completed by rememberSaveable { mutableStateOf(false) }
     var showOrders by remember { mutableStateOf(false) }
+    var showQr by remember { mutableStateOf(false) }
     var showHelp by remember { mutableStateOf(false) }
     var orders by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var balance by remember { mutableLongStateOf(0L) }
@@ -128,16 +129,16 @@ internal fun NativeUsdtTopupScreen(api: LayaliApi, back: () -> Unit) {
             delay(12000)
         }
     }
-    BackHandler(paymentVisible) { paymentVisible = false }
+    BackHandler(paymentVisible) { if(initialPayment.isNotBlank()) back() else paymentVisible = false }
 
     Surface(Modifier.fillMaxSize(), color = NightBlue, contentColor = Color.White) {
         Column(Modifier.fillMaxSize().safeDrawingPadding()) {
             if (paymentVisible) {
                 Row(
-                    Modifier.fillMaxWidth().padding(14.dp),
+                    Modifier.fillMaxWidth().padding(horizontal = 9.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = { paymentVisible = false }) {
+                    IconButton(onClick = { if(initialPayment.isNotBlank()) back() else paymentVisible = false }) {
                         Icon(Icons.Rounded.ArrowForward, "رجوع")
                     }
                     Spacer(Modifier.weight(1f))
@@ -147,24 +148,24 @@ internal fun NativeUsdtTopupScreen(api: LayaliApi, back: () -> Unit) {
                 }
                 Column(
                     Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-                        .padding(horizontal = 18.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(15.dp)
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     StepHeader("1", "أرسل بالضبط", onHelp = { showHelp = true })
                     TopupPanel {
                         Row(
-                            Modifier.fillMaxWidth().padding(18.dp),
+                            Modifier.fillMaxWidth().padding(9.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Button(onClick = { copy(payAmount, "USDT amount") },
-                                colors = ButtonDefaults.buttonColors(containerColor = ActionBlue)) {
+                                colors = ButtonDefaults.buttonColors(containerColor = ActionBlue, contentColor = Color.White)) {
                                 Icon(Icons.Rounded.ContentCopy, null)
                                 Spacer(Modifier.width(7.dp))
                                 Text("نسخ")
                             }
                             Spacer(Modifier.weight(1f))
                             Column(horizontalAlignment = Alignment.End) {
-                                Text(payAmount, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+                                Text(payAmount, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                                 Text("USDT", color = SoftText)
                             }
                         }
@@ -179,23 +180,23 @@ internal fun NativeUsdtTopupScreen(api: LayaliApi, back: () -> Unit) {
                     }
                     TopupPanel {
                         Column(
-                            Modifier.fillMaxWidth().padding(18.dp),
+                            Modifier.fillMaxWidth().padding(9.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(14.dp)
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Text("كود QR للعنوان", color = SoftText)
                             val qr = remember(payAddress) { makeQr(payAddress) }
                             if (qr != null) {
-                                Surface(color = Color.White, shape = RoundedCornerShape(16.dp)) {
-                                    Image(qr.asImageBitmap(), "رمز QR لعنوان الدفع",
-                                        Modifier.size(230.dp).padding(10.dp))
+                                Surface(onClick = { showQr = true }, color = Color.White, shape = RoundedCornerShape(4.dp)) {
+                                    Image(qr.asImageBitmap(), "تكبير رمز QR لعنوان الدفع",
+                                        Modifier.size(115.dp))
                                 }
                             } else Text("تعذّر إنشاء رمز QR. انسخ العنوان بالأسفل.")
                             HorizontalDivider(color = PanelBorder)
                             Row(
                                 Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(9.dp)
+                                horizontalArrangement = Arrangement.spacedBy(18.dp)
                             ) {
                                 OutlinedButton(
                                     onClick = { copy(payAddress, "USDT TRC20 address") },
@@ -242,27 +243,27 @@ internal fun NativeUsdtTopupScreen(api: LayaliApi, back: () -> Unit) {
                         Spacer(Modifier.width(6.dp))
                         Text("دفع آمن • اتصال مشفر", color = SoftText)
                     }
-                    if (completed) Button(onClick = { paymentVisible = false },
+                    if (completed) Button(onClick = { if(initialPayment.isNotBlank()) back() else paymentVisible = false },
                         modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = ActionBlue)) {
+                        colors = ButtonDefaults.buttonColors(containerColor = ActionBlue, contentColor = Color.White)) {
                         Text("العودة إلى رصيدي")
                     }
                 }
             } else {
                 Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 5.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = back) { Icon(Icons.Rounded.Close, "إغلاق") }
                     Text("شحن الكوينز", Modifier.weight(1f),
-                        textAlign = TextAlign.Center, fontSize = 24.sp,
+                        textAlign = TextAlign.Center, fontSize = 20.sp,
                         fontWeight = FontWeight.ExtraBold)
                     IconButton(onClick = back) { Icon(Icons.Rounded.ArrowForward, "رجوع") }
                 }
                 Column(
                     Modifier.fillMaxSize().verticalScroll(rememberScrollState())
                         .padding(horizontal = 18.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     TextButton(onClick = { runAction {
                         val data = api.request("/api/topups").optJSONArray("items")
@@ -276,7 +277,7 @@ internal fun NativeUsdtTopupScreen(api: LayaliApi, back: () -> Unit) {
                     }
                     TopupPanel {
                         Row(
-                            Modifier.fillMaxWidth().padding(18.dp),
+                            Modifier.fillMaxWidth().padding(9.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(Icons.Rounded.Toll, null, tint = Color(0xFFF0B95C),
@@ -285,19 +286,17 @@ internal fun NativeUsdtTopupScreen(api: LayaliApi, back: () -> Unit) {
                             Column(Modifier.weight(1f),
                                 horizontalAlignment = Alignment.End) {
                                 Text("رصيدك الحالي", color = SoftText)
-                                Text(balance.toString() + " كوين", fontSize = 24.sp,
+                                Text(balance.toString() + " كوين", fontSize = 20.sp,
                                     fontWeight = FontWeight.Bold)
                             }
                         }
                     }
-                    LockedPaymentRow("طريقة الدفع", "عملات رقمية (NOWPayments)",
-                        Icons.Rounded.AccountBalanceWallet)
-                    LockedPaymentRow("العملة المعتمدة", "USDT (TRC20) فقط",
+                    LockedPaymentRow("طريقة الدفع", "USDT · شبكة Tron (TRC20)",
                         Icons.Rounded.Lock)
                     TopupPanel {
-                        Row(Modifier.fillMaxWidth().padding(16.dp),
+                        Row(Modifier.fillMaxWidth().padding(9.dp),
                             verticalAlignment = Alignment.CenterVertically) {
-                            Surface(color = Color(0xFF169C69),
+                            Surface(color = Color(0xFF106345),
                                 shape = RoundedCornerShape(9.dp)) {
                                 Text("= " + (usdAmount * 100) + " كوين",
                                     Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
@@ -307,17 +306,17 @@ internal fun NativeUsdtTopupScreen(api: LayaliApi, back: () -> Unit) {
                             Column(horizontalAlignment = Alignment.End) {
                                 Text("المبلغ", color = SoftText)
                                 Text("$" + String.format(Locale.US, "%.2f", usdAmount.toDouble()),
-                                    fontSize = 25.sp, fontWeight = FontWeight.Bold)
+                                    fontSize = 21.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
-                    Row(Modifier.fillMaxWidth(),horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf(5, 10, 25, 50).forEach { option ->
                             FilterChip(
                                 selected = option == usdAmount,
                                 onClick = { usdAmount = option },
                                 label = { Text("$" + option) },
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.widthIn(min = 52.dp)
                             )
                         }
                     }
@@ -345,8 +344,8 @@ internal fun NativeUsdtTopupScreen(api: LayaliApi, back: () -> Unit) {
                             paymentVisible = true
                         }
                     }, enabled = !busy && !completed,
-                        modifier = Modifier.fillMaxWidth().height(54.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = ActionBlue),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = ActionBlue, contentColor = Color.White),
                         shape = RoundedCornerShape(16.dp)) {
                         Text(if (busy) "جارٍ إنشاء فاتورة USDT…" else
                             "متابعة الدفع — " + String.format(Locale.US, "%.2f USD", usdAmount.toDouble()),
@@ -369,6 +368,18 @@ internal fun NativeUsdtTopupScreen(api: LayaliApi, back: () -> Unit) {
         }
     }
 
+    if (showQr && paymentVisible) AlertDialog(
+        onDismissRequest = { showQr = false },
+        title = { Text("عنوان محفظة Tron") },
+        text = {
+            remember(payAddress) { makeQr(payAddress) }?.let { bitmap ->
+                Image(bitmap.asImageBitmap(), "رمز عنوان الفاتورة",
+                    Modifier.fillMaxWidth().aspectRatio(1f))
+            }
+        },
+        confirmButton = { TextButton(onClick = { showQr = false }) { Text("إغلاق") } }
+    )
+
     if (showHelp) AlertDialog(
         onDismissRequest = { showHelp = false },
         title = { Text("طريقة الدفع") },
@@ -382,7 +393,7 @@ internal fun NativeUsdtTopupScreen(api: LayaliApi, back: () -> Unit) {
             title = { Text("طلباتي") },
             text = {
                 Column(Modifier.heightIn(max = 370.dp).verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (orders.isEmpty()) Text("لا توجد طلبات محفوظة")
                     orders.forEach {
                         Text(it.optLong("amount_cents").toString() + " كوين · " +
@@ -402,11 +413,11 @@ private fun StepHeader(number: String, title: String, onHelp: (() -> Unit)? = nu
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         if (onHelp != null) TextButton(onClick = onHelp) { Text("كيف يعمل هذا؟") }
         Spacer(Modifier.weight(1f))
-        Text(title, fontSize = 23.sp, fontWeight = FontWeight.Bold)
+        Text(title, fontSize = 17.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.width(12.dp))
-        Surface(color = ActionBlue, shape = RoundedCornerShape(40.dp)) {
-            Text(number, Modifier.padding(horizontal = 16.dp, vertical = 9.dp),
-                fontWeight = FontWeight.Bold, fontSize = 18.sp)
+        Surface(color = ActionBlue, contentColor = Color.White, shape = RoundedCornerShape(40.dp)) {
+            Text(number, Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                fontWeight = FontWeight.Bold, fontSize = 17.sp)
         }
     }
 }
@@ -426,9 +437,9 @@ private fun TopupPanel(content: @Composable () -> Unit) {
 private fun LockedPaymentRow(label: String, value: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector) {
     TopupPanel {
-        Row(Modifier.fillMaxWidth().padding(15.dp),
+        Row(Modifier.fillMaxWidth().padding(10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Icon(icon, null, tint = Color(0xFF64B1F6))
             Column(Modifier.weight(1f), horizontalAlignment = Alignment.End) {
                 Text(label, color = SoftText, fontSize = 12.sp)
@@ -445,7 +456,7 @@ private fun makeQr(value: String): Bitmap? {
         val size = 256
         val bits = QRCodeWriter().encode(
             value, BarcodeFormat.QR_CODE, size, size,
-            mapOf(EncodeHintType.MARGIN to 1)
+            mapOf(EncodeHintType.MARGIN to 4)
         )
         Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888).apply {
             for (y in 0 until size) for (x in 0 until size) {
