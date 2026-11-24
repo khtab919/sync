@@ -380,6 +380,14 @@ fun ServerAppScreen(baseUrl: String) {
     }
     if(securityDialog)AccountSecurityDialog(api,!signedIn,{securityDialog=false}){signedIn=false;remembered=false;profile=JSONObject();page=""}
     val screen = page.ifBlank { destinations[tab] }
+    var homeReels by remember(profile.optInt("id")){mutableStateOf(emptyList<JSONObject>())}
+    LaunchedEffect(screen,signedIn,revision){
+        if(screen=="تصفح" && signedIn){
+            try{homeReels=api.request("/api/reels").rows().take(8)}
+            catch(cancel:kotlinx.coroutines.CancellationException){throw cancel}
+            catch(_:Exception){homeReels=emptyList()}
+        }
+    }
     val mainListState = remember(screen, signedIn) { androidx.compose.foundation.lazy.LazyListState() }
     LaunchedEffect(signedIn,screen,foreground,revision){
         if(!signedIn || screen!="تصفح" || !foreground)return@LaunchedEffect
@@ -930,6 +938,24 @@ fun ServerAppScreen(baseUrl: String) {
                                             open("البث المباشر")
                                         }
                                     )
+                                }
+                            }
+                            if(homeReels.isNotEmpty())item(key="suggested_reels"){
+                                Column(Modifier.fillMaxWidth().padding(horizontal=14.dp)){
+                                    Text("ريلز مقترحة",style=MaterialTheme.typography.titleMedium)
+                                    LazyRow(horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                                        items(homeReels,key={it.optInt("id")}){clip->
+                                            Surface(onClick={directReel=clip.optInt("id").toString();tab=1;page="";revision++},
+                                                shape=RoundedCornerShape(14.dp),color=MaterialTheme.colorScheme.surfaceVariant){
+                                                Column(Modifier.width(112.dp).padding(8.dp)){
+                                                    val cover=clip.optString("preview_url")
+                                                    if(cover.isNotBlank())ReferenceImage(cover,Modifier.fillMaxWidth().height(66.dp))
+                                                    else Icon(Icons.Rounded.PlayArrow,"تشغيل",Modifier.size(28.dp))
+                                                    Text(clip.optString("caption").ifBlank{clip.optString("owner_name","ريلز")},maxLines=1,overflow=TextOverflow.Ellipsis)
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                             item(key = "home_feed_heading") {

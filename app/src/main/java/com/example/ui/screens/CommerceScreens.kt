@@ -511,7 +511,7 @@ private fun PublicationEditor(api:LayaliApi, mode:String, accountId:Int, returnT
                 ) {
                     if(busy) {
                         if(uploadProgress >= 0f) {
-                            Text("رفع الملف · ${(uploadProgress*100).toInt()}٪")
+                            Text(if(uploadProgress>=1f)"اكتمل الرفع · جارٍ تجهيز الملف" else "رفع الملف · ${(uploadProgress*100).toInt()}٪")
                             LinearProgressIndicator(
                                 progress = { uploadProgress.coerceIn(0f, 1f) },
                                 modifier = Modifier.fillMaxWidth()
