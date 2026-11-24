@@ -1,3 +1,4 @@
+from . import bank_transfer
 import base64
 import binascii
 import io
@@ -66,6 +67,7 @@ def media_file(request, media_id):
     public = media.owner.is_active and (
         (media.purpose=='avatar' and Profile.objects.filter(user=media.owner,avatar_url__endswith=f'/api/media/{media.pk}').exists())
         or Service.objects.filter(image=media,active=True,approved=True).exists()
+        or Reel.objects.filter(preview=media,active=True,approved=True).exists()
         or (media.purpose=='paid_preview' and (
             PaidPost.objects.filter(preview=media,active=True).exists()
             or Reel.objects.filter(preview=media,approved=True,active=True).exists()))
@@ -204,7 +206,7 @@ def payment_info(request):
         'syriatel_cash_enabled':bool(settings.syriatel_cash_enabled and settings.syriatel_cash_number.strip() and settings.syriatel_cash_syp_per_usd>0),
         'syriatel_cash_number':settings.syriatel_cash_number if settings.syriatel_cash_enabled and settings.syriatel_cash_number.strip() and settings.syriatel_cash_syp_per_usd>0 else '',
         'syriatel_cash_currency':'SYP',
-        'syriatel_cash_manual_review':True})
+        'banktr_enabled':True,'syriatel_cash_manual_review':True})
 
 
 def payment_qr(request):
@@ -230,7 +232,7 @@ def payment_qr(request):
 
 
 def quote_json(row,request):
-    return {'qr_url': request.build_absolute_uri('/api/payment-qr?quote='+str(row.pk)+'&grant='+signing.dumps({'quote':str(row.pk),'user':row.user_id},salt='payment-qr')), 'id':str(row.pk),'method':row.method,'amount_cents':row.amount_cents,'bonus_cents':row.bonus_cents,'coins':row.amount_cents,'payment_amount':str(row.payment_amount),'payment_currency':row.payment_currency,'destination':row.destination,'expires_at':row.expires_at,'duration_seconds':1800,'server_now_ms':int(timezone.now().timestamp()*1000)}
+    return {'beneficiary':bank_transfer.BENEFICIARY if row.method=='banktr' else '', 'qr_url': request.build_absolute_uri('/api/payment-qr?quote='+str(row.pk)+'&grant='+signing.dumps({'quote':str(row.pk),'user':row.user_id},salt='payment-qr')), 'id':str(row.pk),'method':row.method,'amount_cents':row.amount_cents,'bonus_cents':row.bonus_cents,'coins':row.amount_cents,'payment_amount':str(row.payment_amount),'payment_currency':row.payment_currency,'destination':row.destination,'expires_at':row.expires_at,'duration_seconds':1800,'server_now_ms':int(timezone.now().timestamp()*1000)}
 
 
 @endpoint(['POST'])
@@ -240,7 +242,7 @@ def quotes(request):
     cents=amount(request.payload,'amount_cents')
     if cents<100: raise ApiError('minimum_topup_one_usdt')
     method=request.payload.get('method','usdt')
-    if method not in ('usdt','shamcash','nowpayments','stripe','syriatelcash'): raise ApiError('invalid_payment_method')
+    if method not in ('usdt','shamcash','nowpayments','stripe','syriatelcash','banktr'): raise ApiError('invalid_payment_method')
     with transaction.atomic():
         User.objects.select_for_update().get(pk=request.actor.pk)
         existing=TopUpQuote.objects.filter(user=request.actor,method=method,amount_cents=cents,expires_at__gt=timezone.now(),topup__isnull=True,gatewayinvoice__credited_at__isnull=True,stripecheckout__credited_at__isnull=True).exclude(gatewayinvoice__status__in=['failed','expired','refunded']).exclude(stripecheckout__status__in=['failed','expired','refunded','disputed']).first()
@@ -254,8 +256,8 @@ def quotes(request):
             if not stripe_configured():raise ApiError('stripe_not_configured',409)
         if method=='shamcash' and not(settings.shamcash_enabled and settings.shamcash_account and settings.shamcash_rate>0): raise ApiError('shamcash_not_configured',409)
         if method=='syriatelcash' and not(settings.syriatel_cash_enabled and settings.syriatel_cash_number.strip() and settings.syriatel_cash_syp_per_usd>0): raise ApiError('syriatelcash_not_configured',409)
-        rate=(settings.syriatel_cash_syp_per_usd if method=='syriatelcash' else settings.shamcash_rate if method=='shamcash' else Decimal(1))
-        destination=(settings.syriatel_cash_number if method=='syriatelcash' else
+        rate=(bank_transfer.transfer_rate() if method=="banktr" else settings.syriatel_cash_syp_per_usd if method=='syriatelcash' else settings.shamcash_rate if method=='shamcash' else Decimal(1))
+        destination=(bank_transfer.IBAN if method=="banktr" else settings.syriatel_cash_number if method=='syriatelcash' else
                      settings.shamcash_account if method=='shamcash' else
                      'NOWPayments hosted checkout' if method=='nowpayments' else
                      'Stripe hosted card checkout' if method=='stripe' else ADDRESS)
@@ -263,7 +265,7 @@ def quotes(request):
             user=request.actor,method=method,amount_cents=cents,
             bonus_cents=bonus_for(cents),
             payment_amount=(Decimal(cents)*rate/100).quantize(Decimal('.01'),rounding=ROUND_HALF_UP),
-            payment_currency=('SYP' if method=='syriatelcash' else settings.shamcash_currency if method=='shamcash' else 'USD' if method in ('nowpayments','stripe') else 'USDT'),
+            payment_currency=('TRY' if method=='banktr' else 'SYP' if method=='syriatelcash' else settings.shamcash_currency if method=='shamcash' else 'USD' if method in ('nowpayments','stripe') else 'USDT'),
             destination=destination,expires_at=timezone.now()+timedelta(minutes=30))
     return JsonResponse(quote_json(row,request),status=201)
 
@@ -295,7 +297,7 @@ def topups(request):
             reference='0x'+reference
         else:
             if not re.fullmatch('[A-Za-z0-9_-]{4,80}',reference):raise ApiError('invalid_transaction_reference')
-            reference=('syriatelcash:' if method=='syriatelcash' else 'shamcash:')+reference
+            reference=method+':'+reference
         previous=TopUp.objects.filter(transaction_hash=reference).first()
         if previous:
             if previous.user_id==request.actor.pk and previous.amount_cents==cents and str(previous.receipt_id)==request.payload.get('receipt_id'):return JsonResponse({'id':previous.pk,'status':previous.status})
@@ -482,6 +484,7 @@ def paid_wheel(request):
         for p in prizes:
             if pick<p['weight']:prize=p['amount_cents'];break
             pick-=p['weight']
+        wallet.earned_coins=min(wallet.earned_coins,wallet.balance_cents-cost)
         wallet.balance_cents+=prize-cost;wallet.save(update_fields=['balance_cents'])
         config.bankroll_cents+=cost-prize;config.save(update_fields=['bankroll_cents'])
         PaidSpin.objects.create(user=request.actor,request_key=key,cost_cents=cost,prize_cents=prize,prizes_snapshot={'prizes':prizes,'config_version':offer['config_version'],'daily_limit':config.daily_limit,'daily_budget_cents':config.daily_budget_cents,'first_guarantee':offer['first_spin_guaranteed'],'spent_before':offer['spent_cents']})

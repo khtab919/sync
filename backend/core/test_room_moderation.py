@@ -64,7 +64,7 @@ class RoomModerationTests(TestCase):
         self.assertEqual(self.event(row,{'action':'remove_host_ban','user_id':self.viewer.pk}).status_code,200)
 
     def test_invite_mic_requires_local_consent_and_forced_mute_revokes_publish(self):
-        row=self.create();row.max_speakers=2;row.mode='audio';row.save()
+        row=self.create();row.max_speakers=9;row.mode='audio';row.save()
         # The fixture's original video host must publish an audio track before
         # the server will accept a listener into this audio-mode test room.
         self.parts=[{'identity':'host-'+str(self.owner.pk),
@@ -84,7 +84,7 @@ class RoomModerationTests(TestCase):
         self.assertEqual(publishing(a),(True,['microphone']))
 
     def test_lock_seat_blocks_invitation_and_free_join_requires_space(self):
-        row=self.create();row.max_speakers=2;row.mode='audio';row.save()
+        row=self.create();row.max_speakers=9;row.mode='audio';row.save()
         # The fixture's original video host must publish an audio track before
         # the server will accept a listener into this audio-mode test room.
         self.parts=[{'identity':'host-'+str(self.owner.pk),
@@ -92,10 +92,7 @@ class RoomModerationTests(TestCase):
         from . import live
         live.synchronize(row,True)
         self.assertEqual(self.join(row,self.viewer).status_code,200)
-        # Audio rooms have 8 physical slots (host + seven guests), even when
-        # a fixture sets max_speakers=2. Lock all seven guest seats to exhaust
-        # room capacity, rather than assuming slot 2 does not exist.
-        for number in range(1,8):
+        for number in range(1,row.max_speakers):
             self.assertEqual(self.event(row,{'action':'room_settings',
                 'settings':{'lock_seat':{'number':number,'locked':True}}}).status_code,200)
         self.assertEqual(self.event(row,{'action':'invite_to_seat','user_id':self.viewer.pk}).status_code,409)

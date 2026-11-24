@@ -45,10 +45,7 @@ def check_target(row,actor,target):
 
 
 def free_seat(row,ignore_user_id=None):
-    if row.mode=='audio':
-        cap=8
-    else:
-        cap=max(1,row.max_speakers)
+    cap=max(1,row.max_speakers)
     occupied=set(LiveSeat.objects.filter(
         admission__broadcast=row,status='approved'
     ).exclude(admission__user_id=ignore_user_id).exclude(seat_number__isnull=True)
@@ -104,8 +101,21 @@ def manager_action(request,row):
             data=p.get('settings')
             if not isinstance(data,dict) or not data:raise ApiError('invalid_room_settings')
             accepted={'chat_enabled','chat_slow_seconds','block_external_links','seat_join_mode',
-                      'lock_seat','password','clear_password'}
+                      'lock_seat','password','clear_password','capacity','room_theme'}
             if any(k not in accepted for k in data):raise ApiError('invalid_room_settings')
+            if 'capacity' in data:
+                cap=data['capacity']
+                if room.mode!='audio' or type(cap) is not int or cap not in (5,9,13):
+                    raise ApiError('invalid_room_settings')
+                occupied=LiveSeat.objects.filter(admission__broadcast=room,status='approved')
+                if occupied.filter(seat_number__gte=cap).exists() or occupied.count()>cap-1:
+                    raise ApiError('occupied_seat_outside_layout',409)
+                room.max_speakers=cap
+                room.locked_seat_numbers=[n for n in (room.locked_seat_numbers or []) if n<cap]
+            if 'room_theme' in data:
+                if room.mode!='audio' or data['room_theme'] not in ('royal','diamond','emerald','amethyst'):
+                    raise ApiError('invalid_room_settings')
+                room.room_theme=data['room_theme']
             if 'chat_enabled' in data:
                 if type(data['chat_enabled']) is not bool:raise ApiError('invalid_room_settings')
                 room.chat_enabled=data['chat_enabled']
@@ -123,7 +133,7 @@ def manager_action(request,row):
                 x=data['lock_seat']
                 if not isinstance(x,dict) or type(x.get('number')) is not int or type(x.get('locked')) is not bool:
                     raise ApiError('invalid_room_settings')
-                limit=8 if room.mode=='audio' else room.max_speakers
+                limit=room.max_speakers
                 if not 1<=x['number']<limit:raise ApiError('invalid_room_settings')
                 locks=set(room.locked_seat_numbers or [])
                 if x['locked']:locks.add(x['number'])

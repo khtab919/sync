@@ -129,11 +129,20 @@ def moderation(request):
             obj = model.objects.select_for_update().filter(pk=amount(request.payload, 'id')).first()
             if not obj:
                 raise ApiError('content_unavailable', 404)
+            if request.payload.get("action") == "remove":
+                obj.active = False
+                obj.approved = False
+                obj.owner_only = False
+                obj.save(update_fields=["active", "approved", "owner_only"])
+                audit(request.actor, obj, "removed from publication")
+                return JsonResponse({"removed": True})
+            if not obj.active:
+                raise ApiError("content_unavailable", 404)
             obj.approved = approved
             obj.save(update_fields=['approved'])
             audit(request.actor, obj, 'approved' if approved else 'hidden')
-    services = Service.objects.exclude(category='كورس').select_related('owner').order_by('approved', '-id')[:100]
-    reels = Reel.objects.select_related('owner').order_by('approved', '-id')[:100]
+    services = Service.objects.filter(active=True).exclude(category='كورس').select_related('owner').order_by('approved', '-id')[:100]
+    reels = Reel.objects.filter(active=True).select_related('owner').order_by('approved', '-id')[:100]
     from .commerce import grant_url
     return JsonResponse({'items': [dict(id=o.pk, kind='service', title=o.title, owner=o.owner.username, approved=o.approved, url=grant_url(request, o.image) if o.image_id else o.image_url) for o in services] + [dict(id=o.pk, kind='reel', title='ريلز #' + str(o.pk), owner=o.owner.username, approved=o.approved, url=grant_url(request, o.media) if o.media_id else o.video_url) for o in reels]})
 

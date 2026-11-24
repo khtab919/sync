@@ -74,7 +74,7 @@ def authorized(row,user):
 
 def describe(row,user):
     admission=LiveAdmission.objects.select_related('operation').filter(broadcast=row,user=user).first()
-    return {'id':row.pk,'owner_id':row.owner_id,'owner_name':row.owner.profile.display_name or row.owner.username,'avatar_url':row.owner.profile.avatar_url,'title':row.title,'mode':row.mode,'speaker_count':1+__import__('core.models',fromlist=['LiveSeat']).LiveSeat.objects.filter(admission__broadcast=row,status='approved',admission__banned=False).count(),'max_speakers':(min(row.max_speakers,8) if row.mode=='audio' else row.max_speakers),'private':row.private,'password_protected':bool(row.password_hash),'invite_only':row.invite_only,'price_cents':row.price_cents,'max_viewers':row.max_viewers,'viewers':row.viewers,'minimum_seconds':row.minimum_seconds,'status':row.status,'gifts_enabled':row.gifts_enabled,'likes':LiveLike.objects.filter(broadcast=row).count(),'liked':LiveLike.objects.filter(broadcast=row,user=user).exists(),'following':__import__('core.models',fromlist=['Follow']).Follow.objects.filter(user=user,creator=row.owner).exists(),'owner':row.owner_id==user.pk,'admitted':bool(admission and not admission.banned),'payment_status':admission.operation.status if admission and admission.operation_id else 'free','refund_policy':f'يُحجز السعر عند التأكيد. تستحق الخدمة بعد {row.minimum_seconds} ثانية من إتاحة الوسائط أثناء اتصالك. يُعاد الحجز إذا انتهى البث قبل ذلك. لا يتكرر الدفع لإعادة الدخول في البث نفسه.'}
+    return {'id':row.pk,'owner_id':row.owner_id,'owner_name':row.owner.profile.display_name or row.owner.username,'avatar_url':row.owner.profile.avatar_url,'title':row.title,'mode':row.mode,'speaker_count':1+__import__('core.models',fromlist=['LiveSeat']).LiveSeat.objects.filter(admission__broadcast=row,status='approved',admission__banned=False).count(),'max_speakers':row.max_speakers,'private':row.private,'password_protected':bool(row.password_hash),'invite_only':row.invite_only,'price_cents':row.price_cents,'max_viewers':row.max_viewers,'viewers':row.viewers,'minimum_seconds':row.minimum_seconds,'status':row.status,'gifts_enabled':row.gifts_enabled,'likes':LiveLike.objects.filter(broadcast=row).count(),'liked':LiveLike.objects.filter(broadcast=row,user=user).exists(),'following':__import__('core.models',fromlist=['Follow']).Follow.objects.filter(user=user,creator=row.owner).exists(),'owner':row.owner_id==user.pk,'admitted':bool(admission and not admission.banned),'payment_status':admission.operation.status if admission and admission.operation_id else 'free','refund_policy':f'يُحجز السعر عند التأكيد. تستحق الخدمة بعد {row.minimum_seconds} ثانية من إتاحة الوسائط أثناء اتصالك. يُعاد الحجز إذا انتهى البث قبل ذلك. لا يتكرر الدفع لإعادة الدخول في البث نفسه.'}
 
 def financial_locks(row):
     ids=list(LiveAdmission.objects.filter(broadcast=row).values_list('user_id',flat=True))+[row.owner_id]
@@ -175,11 +175,9 @@ def broadcasts(request):
         price=amount(p,'price_cents') if private else 0
         maximum=p.get('max_viewers',25);minimum=p.get('minimum_seconds',30)
         if type(maximum) is not int or not 1<=maximum<=min(100,int(os.environ.get("LAYALI_MAX_LIVE_VIEWERS","25"))) or type(minimum) is not int or not 30<=minimum<=3600:raise ApiError('invalid_live_limits')
-        mode=p.get('mode','video');requested_speakers=p.get('max_speakers',8 if mode=='audio' else 1);goal=p.get('gift_goal_cents',0)
+        mode=p.get('mode','video');requested_speakers=p.get('max_speakers',9 if mode=='audio' else 1);goal=p.get('gift_goal_cents',0)
         if mode not in ('audio','video') or type(requested_speakers) is not int or not 1<=requested_speakers<=min(15 if mode=='audio' else 12,maximum+1 if mode=='video' else 15) or type(goal) is not int or not 0<=goal<=10000000:raise ApiError('invalid_stage_mode')
-        # Audio rooms always have eight places including the host, even when
-        # an older Android client sends its legacy fifteen-seat setting.
-        speakers=8 if mode=='audio' else requested_speakers
+        speakers = 9 if mode == 'audio' and requested_speakers not in (5, 9, 13) else requested_speakers
         names=p.get('invite_names',[])
         if not isinstance(names,list) or len(names)>100 or not all(isinstance(n,str) and 1<=len(n)<=100 for n in names):raise ApiError('invalid_invitations')
         with transaction.atomic():
@@ -284,7 +282,7 @@ def room(request,broadcast_id):
             a=ticket.admission;join=join_token(a,ticket.session);ticket.used_at=timezone.now();ticket.save(update_fields=['used_at'])
         nonce=secrets.token_urlsafe(24)
         control=signing.dumps({'session':ticket.session_id,'admission':a.pk},salt='live-control')
-        config={'id':str(broadcast_id),'token':join,'control':control,'url':os.environ.get('LIVEKIT_PUBLIC_URL',request.build_absolute_uri('/livekit').replace('https://','wss://')),'owner':a.user_id==a.broadcast.owner_id,'ownerId':a.broadcast.owner_id,'ownerPublicId':a.broadcast.owner.profile.public_id or '', 'ownerAvatar':a.broadcast.owner.profile.avatar_url,'ownerName':a.broadcast.owner.profile.display_name or a.broadcast.owner.username,'title':a.broadcast.title,'gifts':a.broadcast.gifts_enabled,'mode':a.broadcast.mode,'maxSpeakers':(min(a.broadcast.max_speakers,8) if a.broadcast.mode=='audio' else a.broadcast.max_speakers),'userId':a.user_id,'userName':a.user.profile.display_name or a.user.username,'userAvatar':a.user.profile.avatar_url,'private':a.broadcast.private,'inviteOnly':a.broadcast.invite_only}
+        config={'id':str(broadcast_id),'token':join,'control':control,'url':os.environ.get('LIVEKIT_PUBLIC_URL',request.build_absolute_uri('/livekit').replace('https://','wss://')),'owner':a.user_id==a.broadcast.owner_id,'ownerId':a.broadcast.owner_id,'ownerPublicId':a.broadcast.owner.profile.public_id or '', 'ownerAvatar':a.broadcast.owner.profile.avatar_url,'ownerName':a.broadcast.owner.profile.display_name or a.broadcast.owner.username,'title':a.broadcast.title,'gifts':a.broadcast.gifts_enabled,'mode':a.broadcast.mode,'maxSpeakers':a.broadcast.max_speakers,'userId':a.user_id,'userName':a.user.profile.display_name or a.user.username,'userAvatar':a.user.profile.avatar_url,'private':a.broadcast.private,'inviteOnly':a.broadcast.invite_only}
         public=urlsplit(config['url'])
         if public.scheme not in ('wss','ws') or public.username or public.password or (public.scheme=='ws' and os.environ.get('LAYALI_TESTING')!='1'):raise ApiError('invalid_live_origin',503)
         ws_origin=public.scheme+'://'+public.netloc
@@ -349,10 +347,43 @@ def room_events(request,broadcast_id):
             if LiveComment.objects.filter(user=request.actor,created_at__gt=timezone.now()-timedelta(seconds=10)).count()>=5:raise ApiError('slow_down',429)
             LiveComment.objects.create(broadcast=row,user=request.actor,text=body)
         elif action=='like':LiveLike.objects.get_or_create(broadcast=row,user=request.actor)
+        elif action=='audience_page':
+            after=request.payload.get('after',0)
+            if type(after) is not int or after<0:raise ApiError('invalid_input')
+            page=audience_page(row,request.actor,after)
+            apply_room_identity(page)
+            return JsonResponse(page)
+        elif action=='host_followers':
+            from .models import Follow
+            if request.actor.pk!=row.owner_id:raise ApiError('forbidden',403)
+            after=request.payload.get('after',0)
+            if type(after) is not int or after<0:raise ApiError('invalid_input')
+            people=list(Follow.objects.filter(creator=row.owner,user__is_active=True,pk__gt=after)
+                .order_by('pk').values('pk','user__profile__display_name','user__username')[:31])
+            return JsonResponse({'names':[p['user__profile__display_name'] or p['user__username'] for p in people[:30]],
+                                 'next':people[29]['pk'] if len(people)>30 else None})
+        elif action=='follow_member':
+            from .models import Follow
+            from .admin_security import blocked
+            target_id=request.payload.get('user_id')
+            if type(target_id) is not int or target_id==request.actor.pk:
+                raise ApiError('invalid_user_id')
+            target=User.objects.filter(pk=target_id,is_active=True).first()
+            if not target or not LiveAdmission.objects.filter(broadcast=row,user=target,banned=False).exists():
+                raise ApiError('participant_unavailable',404)
+            if blocked(target,'ban') or UserBlock.objects.filter(Q(user=request.actor,blocked=target)|Q(user=target,blocked=request.actor)).exists():
+                raise ApiError('participant_unavailable',404)
+            if request.payload.get('following') is False:
+                Follow.objects.filter(user=request.actor,creator=target).delete()
+            else:
+                Follow.objects.get_or_create(user=request.actor,creator=target)
         elif action=='follow':
             from .models import Follow
             if request.actor.pk==row.owner_id:raise ApiError('invalid_action')
-            Follow.objects.get_or_create(user=request.actor,creator=row.owner)
+            if request.payload.get('following') is False:
+                Follow.objects.filter(user=request.actor,creator=row.owner).delete()
+            else:
+                Follow.objects.get_or_create(user=request.actor,creator=row.owner)
         elif action in ('report','report_user'):
             target=None
             if action=='report_user':
@@ -391,11 +422,21 @@ def room_events(request,broadcast_id):
     if room_moderator(row,request.actor):result['participants']=[{'user_id':x.user_id,
         'name':x.user.profile.display_name or x.user.username} for x in LiveAdmission.objects.filter(
             broadcast=row,connected=True).exclude(user=row.owner).select_related('user__profile')]
-    result['participants_visible']=[{'user_id':x.user_id,
-        'name':x.user.profile.display_name or x.user.username,'avatar_url':x.user.profile.avatar_url}
-        for x in LiveAdmission.objects.filter(broadcast=row,connected=True).select_related('user__profile')[:100]]
+    result.update(audience_page(row,request.actor,0))
+    from .models import Follow
+    visible_ids={x['user_id'] for field in ('comments','speakers','participants_visible') for x in result.get(field,[])}
+    result['followed_ids']=list(Follow.objects.filter(user=request.actor,creator_id__in=visible_ids).values_list('creator_id',flat=True))
     apply_room_identity(result)
     return JsonResponse(result)
+
+def audience_page(row,viewer,after):
+    from .models import Follow
+    ids=list(LiveAdmission.objects.filter(broadcast=row,connected=True,banned=False,
+        user__is_active=True,user_id__gt=after).exclude(user_id=row.owner_id)
+        .order_by('user_id').values_list('user_id',flat=True)[:101])
+    followed=set(Follow.objects.filter(user=viewer,creator_id__in=ids[:100]).values_list('creator_id',flat=True))
+    return {'participants_visible':[{'user_id':uid,'connected':True,'following':uid in followed} for uid in ids[:100]],
+            'audience_next':ids[99] if len(ids)>100 else None}
 
 def apply_room_identity(result):
     from .public_presence import public_presence_bulk

@@ -144,12 +144,12 @@ class StageTests(TestCase):
         for payload in [{'mode':'video','max_speakers':13},{'mode':'fake'},{'mode':'audio','max_speakers':True}]:
             r=self.request('/api/live',dict(title='اختبار البث',**payload));self.assertEqual(r.status_code,400)
 
-    def test_audio_rooms_use_eight_seats_even_from_legacy_clients(self):
+    def test_audio_rooms_use_nine_seats_even_from_legacy_clients(self):
         payload={'title':'غرفة صوتية','mode':'audio','max_speakers':15,'max_viewers':25}
         response=self.request('/api/live',payload)
         self.assertEqual(response.status_code,201)
-        self.assertEqual(response.json()['max_speakers'],8)
-        self.assertEqual(LiveBroadcast.objects.get(pk=response.json()['id']).max_speakers,8)
+        self.assertEqual(response.json()['max_speakers'],9)
+        self.assertEqual(LiveBroadcast.objects.get(pk=response.json()['id']).max_speakers,9)
         live.close(LiveBroadcast.objects.get(pk=response.json()['id']))
         for mode,seats in [('audio',16),('video',15)]:
             self.assertEqual(self.request('/api/live',dict(payload,mode=mode,max_speakers=seats)).status_code,400)

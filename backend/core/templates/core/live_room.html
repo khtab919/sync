@@ -7,8 +7,10 @@
 <link rel="stylesheet" href="/static/core/gift-cinema.css?v=cinema-1">
 <link rel="stylesheet" href="/static/core/relaxia-voice-royal.css?v=presence-1">
 <link rel="stylesheet" href="/static/core/room-moderation-ui.css?v=presence-1">
+<link rel="stylesheet" href="/static/core/royal-room.css?v=rooms-controls-24-royal4">
+<link rel="stylesheet" href="/static/core/relaxia-audience.css?v=audience3">
 <body{% if config.mode == "audio" %} class="audio-mode"{% endif %}>
-<main id="stage">
+<main id="stage"{% if config.mode == "audio" %} class="royal-room"{% endif %}>
   <div id="video" aria-label="البث المباشر"{% if config.mode == "audio" %} hidden{% endif %}></div>
   <div id="audioStage"{% if config.mode != "audio" %} hidden{% endif %}>
     <div class="audio-person host-person">
@@ -22,6 +24,7 @@
   <div id="floatingHearts" class="floating-hearts-layer" aria-hidden="true"></div>
 
   <header>
+    {% if config.mode == "audio" %}<button hidden type="button" id="roomMini" aria-label="تصغير الغرفة">−</button>{% endif %}
     <button id="exit" class="round" aria-label="خروج"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
     <span id="viewers" class="pill" title="المشاهدون"><svg class="pill-eye" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span id="viewerCount">—</span></span>
     <span class="live-pill"><span class="pulse-dot"></span>{% if config.mode == "audio" %}غرفة صوتية{% else %}بث مباشر{% endif %}</span>
@@ -66,7 +69,8 @@
       <div class="quick-actions" role="group" aria-label="أدوات البث">
         <button id="more" class="tool-circle" type="button" aria-label="المزيد من خيارات الغرفة"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>
         <button id="gift" class="tool-circle" type="button" aria-label="هدية" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="10" width="17" height="11" rx="2"/><path d="M2.5 10h19V7H2.5zM12 7v14M12 7c-4 0-6.5-1-6.5-3.2 0-2.9 4.3-2.7 6.5 3.2zm0 0c4 0 6.5-1 6.5-3.2 0-2.9-4.3-2.7-6.5 3.2z"/></svg></button>
-        <button id="speaker" class="tool-circle" type="button" aria-label="كتم صوت الغرفة" hidden>🔊</button>
+        {% if config.mode == "audio" %}<button id="roomReact" class="tool-circle" aria-label="تفاعل"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20 4.5 13C-2 6 7.5 1 12 7c4.5-6 14-.9 7.5 6Z"/></svg></button>{% endif %}
+        <button id="speaker" class="tool-circle" type="button" aria-label="كتم صوت الغرفة" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5 6 9H3v6h3l5 4zM15 8a6 6 0 0 1 0 8M18 5a10 10 0 0 1 0 14"/></svg></button>
         <button id="guests" class="tool-circle" type="button" aria-label="المقاعد والضيوف"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 20v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/><circle cx="9.5" cy="7.5" r="3.5"/><path d="M17 4.4a3.4 3.4 0 0 1 0 6.6M20.5 20v-2a4 4 0 0 0-3-3.87"/></svg></button>
         <button id="requestMic" class="request-mic-pill" type="button">طلب الانضمام</button>
         <button id="micQuick" class="tool-circle" type="button" aria-label="المقاعد وطلب التحدث"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg></button>
@@ -123,7 +127,8 @@
 <script src="/static/core/livekit-client.umd.min.js"></script>
 <script src="/static/core/live-media.js?v=rooms-mic-29"></script>
 <script src="/static/core/gift-cinema.js?v=cinema-1"></script>
-<script src="/static/core/live-stage.js?v=presence-1"></script>
-<script src="/static/core/room-moderation-ui.js?v=presence-1"></script>
+<script src="/static/core/live-stage.js?v=royal4"></script>
+<script src="/static/core/room-moderation-ui.js?v=royal4"></script>
+<script src="/static/core/relaxia-audience.js?v=audience3"></script>
 </body>
 </html>

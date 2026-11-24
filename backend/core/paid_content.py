@@ -63,6 +63,8 @@ def _content_access(user,owner,content):
     from .admin_security import blocked
     if blocked(owner,'ban') or blocked(user,'ban'):return False
     if UserBlock.objects.filter(Q(user=user,blocked=owner)|Q(user=owner,blocked=user)).exists():return False
+    if content.owner_only or not content.active:return False
+    if content.price_cents==0:return True
     if isinstance(content,Reel):
         return ContentUnlock.objects.filter(buyer=user,reel=content,operation__status='settled').exists()
     return ContentUnlock.objects.filter(buyer=user,post=content,operation__status='settled').exists()
@@ -71,7 +73,7 @@ def _content_access(user,owner,content):
 def post_json(row,request):
     unlocked=_content_access(request.actor,row.owner,row)
     return {
-        'type':'photo','id':row.pk,'owner_id':row.owner_id,
+        'owner_only':row.owner_only,'comments_allowed':row.comments_allowed,'type':'photo','id':row.pk,'owner_id':row.owner_id,
         'caption':row.caption,'price_cents':row.price_cents,
         'locked':not unlocked,
         'preview_url':request.build_absolute_uri('/api/media/'+str(row.preview_id)),
@@ -83,7 +85,7 @@ def post_json(row,request):
 def reel_json(row,request):
     unlocked=row.price_cents<=0 or _content_access(request.actor,row.owner,row)
     return {
-        'id':row.pk,'owner_id':row.owner_id,'caption':row.caption,
+        'owner_only':row.owner_only,'comments_allowed':row.comments_allowed,'id':row.pk,'owner_id':row.owner_id,'caption':row.caption,
         'price_cents':row.price_cents,'locked':not unlocked,
         'preview_url':request.build_absolute_uri('/api/media/'+str(row.preview_id)) if row.preview_id else '',
         'video_url':grant_url(request,row.media) if unlocked and row.media_id else (row.video_url if unlocked else ''),
@@ -109,17 +111,21 @@ def paid_posts(request):
     media_id=uuid.UUID(text(request.payload,'media_id',36,36))
     media=UploadedMedia.objects.filter(pk=media_id,owner=request.actor,purpose='paid_photo').first()
     if not media:raise ApiError('invalid_paid_photo',403)
-    cost=amount(request.payload,'price_cents')
+    cost=request.payload.get('price_cents',0)
+    if type(cost) is not int or not 0<=cost<=1000000:raise ApiError('invalid_price_cents')
     caption=request.payload.get('caption','')
     if not isinstance(caption,str) or len(caption)>500:raise ApiError('invalid_caption')
     with transaction.atomic():
+        UploadedMedia.objects.select_for_update().get(pk=media.pk)
         existing=PaidPost.objects.filter(media=media).first()
         if existing:
             if existing.price_cents!=cost or existing.caption!=caption:raise ApiError('media_already_published',409)
-            return JsonResponse(post_json(existing,request))
+            return JsonResponse({'id':existing.pk,'status':'published','item':post_json(existing,request)})
+        from .publication import options,notify
         thumbnail=_photo_preview(media)
         row=PaidPost.objects.create(owner=request.actor,media=media,preview=thumbnail,
-                                    caption=caption,price_cents=cost)
+                                    caption=caption,price_cents=cost,**options(request.payload))
+        notify(request.actor,"photo",row)
     return JsonResponse({'id':row.pk,'status':'published','item':post_json(row,request)},status=201)
 
 
@@ -128,7 +134,7 @@ def paid_post_detail(request,post_id):
     row=PaidPost.objects.filter(pk=post_id,owner=request.actor).first()
     if not row:raise ApiError('post_unavailable',404)
     if request.method=='DELETE':
-        row.active=False;row.save(update_fields=['active'])
+        row.active=False;row.owner_only=False;row.save(update_fields=['active','owner_only'])
         return JsonResponse({'deleted':True})
     if set(request.payload)-{'caption','price_cents'}:raise ApiError('unsupported_post_field')
     if 'caption' in request.payload:row.caption=text(request.payload,'caption',0,500)
@@ -178,9 +184,9 @@ def creator_content(request,creator_id):
     owner=User.objects.filter(pk=creator_id,is_active=True).first()
     if not owner or (creator_id!=request.actor.pk and creator_id in visible_owners(request.actor)):
         raise ApiError('creator_unavailable',404)
-    photos=PaidPost.objects.filter(owner=owner,active=True).select_related('owner','media','preview').order_by('-created_at')[:100]
-    reels=Reel.objects.filter(owner=owner,approved=True,active=True).select_related('owner','media','preview').order_by('-created_at')[:100]
-    offers=Service.objects.filter(owner=owner,approved=True,active=True).order_by('-created_at')[:100]
+    photos=PaidPost.objects.filter(owner=owner).filter(Q(active=True) | Q(owner=request.actor,owner_only=True)).select_related('owner','media','preview').order_by('-created_at')[:100]
+    reels=Reel.objects.filter(owner=owner).filter(Q(active=True,approved=True) | Q(owner=request.actor,owner_only=True)).select_related('owner','media','preview').order_by('-created_at')[:100]
+    offers=Service.objects.filter(owner=owner).filter(Q(active=True,approved=True) | Q(owner=request.actor,owner_only=True)).order_by('-created_at')[:100]
     entries=[]
     for p in photos:entries.append({'kind':'photo',**post_json(p,request)})
     for r in reels:entries.append({'kind':'reel',**reel_json(r,request),'created_at':r.created_at.isoformat()})
