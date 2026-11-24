@@ -248,7 +248,7 @@ fun ServerAppScreen(baseUrl: String) {
         avatarUrl = profile.optString("avatar_url")
         profileUsername = profile.optString("username")
         profileEmail = profile.optString("email")
-        chatPrice = (profile.optInt("chat_price_cents") / 100.0).toString()
+        chatPrice = profile.optInt("chat_price_cents").toString()
         open("تعديل الملف")
     }
     fun showService(item: JSONObject) { selected = item; open("تفاصيل العرض") }
@@ -380,12 +380,7 @@ fun ServerAppScreen(baseUrl: String) {
     }
     if(securityDialog)AccountSecurityDialog(api,!signedIn,{securityDialog=false}){signedIn=false;remembered=false;profile=JSONObject();page=""}
     val screen = page.ifBlank { destinations[tab] }
-    val mainListState = rememberLazyListState()
-    // The home feed must always open at the first card, not at a recycled
-    // scroll offset from another bottom-navigation destination.
-    LaunchedEffect(screen, signedIn) {
-        if (signedIn && screen == "تصفح") mainListState.scrollToItem(0)
-    }
+    val mainListState = remember(screen, signedIn) { androidx.compose.foundation.lazy.LazyListState() }
     LaunchedEffect(signedIn,screen,foreground,revision){
         if(!signedIn || screen!="تصفح" || !foreground)return@LaunchedEffect
         var retryDelay=5000L
@@ -889,9 +884,20 @@ fun ServerAppScreen(baseUrl: String) {
                     }
                 } else PullToRefreshBox(isRefreshing = loading, onRefresh = { if (!loading) revision++ }, modifier = Modifier.weight(1f)) {
                 LazyColumn(Modifier.fillMaxSize(), state=mainListState, contentPadding = PaddingValues(bottom = if(screen=="تصفح") 120.dp else 40.dp), verticalArrangement = Arrangement.spacedBy(if (screen == "تصفح") 5.dp else 12.dp)) {
-                    if ((loading && rows.isEmpty() && screen in listOf("دردشة", "الحجوزات", "المحفوظات", "ريلز")) || (loading && services.isEmpty() && screen in listOf("تصفح", "العرض"))) item { LuxurySkeletonCards() }
+                    if ((loading && rows.isEmpty() && screen in listOf("دردشة", "الحجوزات", "المحفوظات", "ريلز")) || (loading && services.isEmpty() && screen == "العرض")) item { LuxurySkeletonCards() }
                     when (screen) {
                         "تصفح" -> {
+                            item(key = "home_dashboard") {
+                                RelaxiaHomeDashboard(
+                                    profile = profile,
+                                    balanceCents = if (walletAccountId == profile.optInt("id") && wallet.has("available_cents"))
+                                        wallet.optLong("available_cents") else null,
+                                    onProfile = { page = ""; tab = 4 },
+                                    onWallet = { open("المحفظة") },
+                                    onLive = { open("البث المباشر") },
+                                    onAudio = { open("بدء غرفة صوتية") }
+                                )
+                            }
                             if(livePreview.isNotEmpty()){
                                 item(key="home_live_hosts"){
                                     RelaxiaLiveHostsBar(
@@ -906,17 +912,6 @@ fun ServerAppScreen(baseUrl: String) {
                                         }
                                     )
                                 }
-                            }
-                            item(key = "home_dashboard") {
-                                RelaxiaHomeDashboard(
-                                    profile = profile,
-                                    balanceCents = if (walletAccountId == profile.optInt("id") && wallet.has("available_cents"))
-                                        wallet.optLong("available_cents") else null,
-                                    onProfile = { page = ""; tab = 4 },
-                                    onWallet = { open("المحفظة") },
-                                    onLive = { open("البث المباشر") },
-                                    onAudio = { open("بدء غرفة صوتية") }
-                                )
                             }
                             // The feed starts immediately when there are no live rooms.
                             // Show only real live previews, loading or an actionable server error.
@@ -1223,7 +1218,7 @@ fun ServerAppScreen(baseUrl: String) {
                                 Field(profileEmail, { profileEmail = it }, "البريد الإلكتروني لتسجيل الدخول")
                                 if(profileEmail.trim()!=profile.optString("email"))OutlinedTextField(emailPassword,{emailPassword=it},label={Text("كلمة المرور لتأكيد تغيير البريد")},visualTransformation=PasswordVisualTransformation())
                                 if (profile.optBoolean("publishing_allowed"))
-                                    Field(chatPrice, { chatPrice = it }, "رسوم المحادثة بالدولار · 0 للمجانية", numeric = true)
+                                    Field(chatPrice, { chatPrice = it }, "رسوم المحادثة بالكوينز · 0 للمجانية", numeric = true)
                             }
                             ReferencePrimary("حفظ التعديلات", !submitting && displayName.isNotBlank()) { perform {
                                 val body = JSONObject().put("display_name", displayName.trim())
@@ -1231,7 +1226,7 @@ fun ServerAppScreen(baseUrl: String) {
                                 if (profileGender.isNotBlank()) body.put("gender", profileGender)
                                 if (advanced) {
                                     body.put("username", profileUsername).put("email", profileEmail.trim()).put("current_password",emailPassword)
-                                    if (profile.optBoolean("publishing_allowed")) body.put("chat_price_cents", cents(chatPrice))
+                                    if (profile.optBoolean("publishing_allowed")) body.put("chat_price_cents", chatPrice.trim().toInt().also { require(it >= 0) })
                                 }
                                 profile = api.request("/api/me", "PATCH", body)
                                 emailPassword="";page = ""; tab = 4; notice = "تم حفظ التعديلات."
@@ -1289,6 +1284,7 @@ fun ServerAppScreen(baseUrl: String) {
                                 } }
                                 ReferencePrimary("إضافة رصيد", !submitting) { buyCredits() }
                                 ReferenceRow(Icons.Rounded.ReceiptLong, "سجل العمليات والإيصالات") { open("سجل العمليات") }
+                                Text("القابل للسحب من الدعم والحجوزات: ${wallet.optLong("withdrawable_coins")} كوين")
                                 Text("سحب USDT", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                                 Text("اختر الشبكة المطابقة لعنوانك. تعتمد الإدارة طلب السحب قبل تنفيذ التحويل عبر بوابة الدفع.",
                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1308,7 +1304,7 @@ fun ServerAppScreen(baseUrl: String) {
                                 else destination.matches(Regex("0x[a-fA-F0-9]{40}"))
                                 if (destination.isNotBlank() && !validDestination)
                                     Text("عنوان المحفظة لا يطابق الشبكة", color = MaterialTheme.colorScheme.error)
-                                ReferencePrimary("طلب سحب", !submitting && validDestination && (price.toDoubleOrNull() ?: 0.0) > 0.0) { perform {
+                                ReferencePrimary("طلب سحب", !submitting && validDestination && runCatching { cents(price).toLong() in 1L..wallet.optLong("withdrawable_coins") }.getOrDefault(false)) { perform {
                                     api.request("/api/withdrawals", "POST",
                                         JSONObject().put("amount_cents", cents(price))
                                             .put("destination", destination)

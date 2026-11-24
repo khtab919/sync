@@ -171,7 +171,7 @@ internal fun CommerceScreen(api: LayaliApi, kind: String, back: () -> Unit) {
                 Text("طلباتي", style = MaterialTheme.typography.titleLarge)
                 rows.forEach { r -> Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp)) {
                     Text(when(r.optString("status")) { "pending" -> "قيد المراجعة"; "approved" -> "معتمد"; "rejected" -> "مرفوض"; else -> r.optString("status") })
-                    if(r.has("amount_cents")) Text("${BigDecimal.valueOf(r.optLong("amount_cents"), 2)} USDT")
+                    if(r.has("amount_cents")) Text("${r.optLong("amount_cents")} كوين")
                     if(r.optString("review_note").isNotBlank()) Text(r.optString("review_note"))
                 } } }
             }
@@ -252,7 +252,7 @@ internal fun SellerPublishScreen(api: LayaliApi, initialReel: Boolean = false, b
     }
     val selectedMedia = if(reel) reelMedia else offerMedia
     val validMoney = runCatching {
-        BigDecimal(price.trim()).movePointRight(2).intValueExact() > 0
+        (price.trim().toIntOrNull() ?: 0) > 0
     }.getOrDefault(false)
     val validOffer = title.trim().length >= 3 && description.trim().length >= 10 &&
         duration.toIntOrNull() in 1..1440 && validMoney
@@ -359,7 +359,7 @@ internal fun SellerPublishScreen(api: LayaliApi, initialReel: Boolean = false, b
                             PublishInput(
                                 value = price,
                                 onChange = { price = it.filter { c -> c.isDigit() || c == '.' }.take(10) },
-                                label = "السعر ($)", numeric = true,
+                                label = "السعر بالكوينز", numeric = true,
                                 modifier = Modifier.weight(1f), enabled = !busy
                             )
                         }
@@ -423,7 +423,7 @@ internal fun SellerPublishScreen(api: LayaliApi, initialReel: Boolean = false, b
                                         "/api/services", "POST",
                                         JSONObject().put("title", title.trim())
                                             .put("description", description.trim())
-                                            .put("price_cents", BigDecimal(price.trim()).movePointRight(2).intValueExact())
+                                            .put("price_cents", price.trim().toInt())
                                             .put("category", category)
                                             .put("image_id", offerMedia.getString("id"))
                                             .put("duration_minutes", duration.toInt())
