@@ -63,6 +63,95 @@ internal fun relaxiaLiveFooterRepairScript(): String = """
           '#stage footer #composer .composer-send{min-width:44px!important;width:44px!important;min-height:44px!important;height:44px!important}',
           '#sheet[open]{position:fixed!important;inset:auto 9px 7px!important;max-height:min(74dvh,calc(var(--room-viewport-height,100dvh) - 24px))!important;overflow-y:auto!important;touch-action:pan-y!important}'
         ].join('');
+        style.textContent += `
+/* The room keeps its own viewport, media tiles, moderation and keyboard layout. */
+#stage {
+  --chat-ink: #fff;
+  --chat-name: #c7e0ff;
+  --chat-shadow: 0 1px 2px #081321, 0 0 4px #081321, 0 1px 8px #081321;
+}
+body.audio-mode #stage {
+  --chat-ink: #102643;
+  --chat-name: #194e91;
+  --chat-shadow: none;
+}
+html[data-theme=dark] body.audio-mode #stage {
+  background: radial-gradient(ellipse at 80% 0%, #244b77, transparent 58%),
+              linear-gradient(155deg, #152b47, #101e33) !important;
+  --chat-ink: #f6f9ff;
+  --chat-name: #b4d6ff;
+}
+html body:not(.audio-mode) #stage .shade {
+  background: linear-gradient(to bottom, rgba(7,18,36,.35), transparent 18%,
+              transparent 64%, rgba(7,18,36,.48)) !important;
+  pointer-events: none;
+}
+html[data-theme] body #stage #messages[role=log],
+html[data-theme] body #stage #messages[role=log] :is(.comment-bubble,.comment-empty) {
+  background: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+html body #stage #messages[role=log] {
+  justify-content: flex-start;
+  touch-action: pan-y;
+}
+html body #stage #messages[role=log] .comment-bubble {
+  max-width: min(100%, 38rem) !important;
+  flex: none;
+  gap: 8px;
+  margin: 1px 0 !important;
+  padding: 3px 2px !important;
+  align-items: center;
+  touch-action: pan-y;
+}
+html body #stage #messages[role=log] :is(.comment-body,.comment-empty) {
+  color: var(--chat-ink) !important;
+  text-shadow: var(--chat-shadow);
+  font-size: 14px !important;
+  line-height: 1.55 !important;
+  overflow-wrap: anywhere;
+}
+html body #stage #messages[role=log] .comment-author {
+  color: var(--chat-name) !important;
+  font-weight: 750;
+}
+html body #stage #messages[role=log] .comment-actions {
+  color: var(--chat-ink) !important;
+  text-shadow: var(--chat-shadow);
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+html body:not(.audio-mode) #stage footer {
+  background: linear-gradient(0deg, rgba(10,26,51,.72), transparent) !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+html body:not(.audio-mode) #stage :is(header .identity,header .pill,header .round, footer #composer, footer .quick-actions .tool-circle) {
+  background: rgba(14,38,70,.72) !important;
+  border: 1px solid rgba(205,226,255,.29) !important;
+  box-shadow: none !important;
+  color: white !important;
+}
+html body:not(.audio-mode) #stage footer #composer:focus-within {
+  outline: 2px solid #bbd9ff !important;
+}
+html body #stage #messages .comment-bubble:focus-visible {
+  outline: 2px solid var(--chat-name);
+  outline-offset: 2px;
+}
+html[data-theme=dark] body.audio-mode #stage #audioStage .audio-seat:not(.host-seat) .audio-name {
+  color: #edf5ff !important;
+  background: #244363;
+}
+html[data-theme=dark] body.audio-mode #stage #audioStage .audio-seat small {
+  color: #cee1f7 !important;
+}
+`;
         document.head.appendChild(style);
       }
       // The WebView has now been constrained by Compose imePadding. Re-measure
