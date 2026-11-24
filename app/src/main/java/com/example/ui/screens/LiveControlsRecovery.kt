@@ -160,6 +160,7 @@ html[data-theme=dark] body.audio-mode #stage #audioStage .audio-seat small {
       // Legacy live assets have conflicting bottom-sheet inset rules. Use
       // explicit pixel coordinates so the modal stays in the Android viewport.
       function positionNativeRoomSheet() {
+        if(document.querySelector("link[href*=royal4]"))return;
         var modal = document.getElementById('sheet');
         if (!modal || !modal.open) return;
         var layoutHeight = Math.max(document.documentElement.clientHeight || 0, window.innerHeight || 0);

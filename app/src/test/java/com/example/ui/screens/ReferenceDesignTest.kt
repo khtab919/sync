@@ -158,18 +158,18 @@ class ReferenceDesignTest {
 
     @Test fun sellerUploadsUsePhonePickerInsteadOfUrlField() {
         compose.setContent { MyApplicationTheme { SellerPublishScreen(com.example.data.api.LayaliApi("https://example.invalid"), back = {}) } }
-        compose.onNodeWithText("إضافة عرض جديد").assertExists()
+        compose.onNodeWithText("إنشاء محتوى").assertExists()
         compose.onNodeWithText("خدمة أو منتج").assertExists()
         compose.onNodeWithText("المدة (دقيقة)").assertExists()
-        compose.onNodeWithText("السعر ($)").assertExists()
+        compose.onNodeWithText("السعر بالكوينز").assertExists()
         compose.onNodeWithText("رفع صورة من الهاتف · حتى 8MB").performScrollTo().assertExists()
         compose.onNodeWithText("رابط صورة HTTPS · اختياري").assertDoesNotExist()
         compose.onNodeWithText("نشر الآن").assertIsNotEnabled()
         screenshot("06-seller-upload")
         compose.onNodeWithText("ريلز").performClick()
-        compose.onNodeWithText("مساحة النشر").assertExists()
-        compose.onNodeWithText("اختيار فيديو MP4 من الهاتف · حتى 20MB").performScrollTo().assertExists()
-        compose.onNodeWithText("عنوان أو وصف الريلز").performScrollTo().assertExists()
+        compose.onNodeWithText("إنشاء محتوى").assertExists()
+        compose.onNodeWithText("اختيار فيديو MP4 من الهاتف · حتى 96MB").performScrollTo().assertExists()
+        compose.onNodeWithText("وصف المحتوى").performScrollTo().assertExists()
         compose.onNodeWithText("نشر الآن").assertIsNotEnabled()
         screenshot("07-reel-upload")
     }

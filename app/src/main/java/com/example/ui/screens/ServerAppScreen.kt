@@ -708,13 +708,8 @@ fun ServerAppScreen(baseUrl: String) {
         if(screen=="سجل العمليات"){FinancialHistory(api){back()};return@MyApplicationTheme}
         if(screen=="الحجوزات"){BookingHistory(api,explore={tab=2;back();revision++}){back();revision++};return@MyApplicationTheme}
 
-        if(screen=="نشر صورة مدفوعة"){
-            PaidPhotoPublishScreen(api){back();revision++}
-            return@MyApplicationTheme
-        }
-        if (screen == "إضافة عرض" || screen == "نشر ريلز") {
-            SellerPublishScreen(api, initialReel = screen == "نشر ريلز", accountId=profile.optInt("id"),
-                onPhoto={open("نشر صورة مدفوعة")},onHome={page="";tab=0;revision++},
+        if (screen in listOf("إضافة عرض","نشر ريلز","نشر صورة مدفوعة")) {
+            SellerPublishScreen(api, initialReel = screen == "نشر ريلز",initialPhoto=screen=="نشر صورة مدفوعة",returnToRoom=if(heldRoom.isNotBlank())({open(heldRoom)}) else null, accountId=profile.optInt("id"),onHome={page="";tab=0;revision++},
                 onView={isReel,result->
                     if(isReel){directReel=result.getInt("id").toString();page="";tab=1;revision++}
                     else {val item=result.optJSONObject("item");if(item!=null)showService(item) else {page="";tab=2;revision++}}
@@ -1153,7 +1148,7 @@ fun ServerAppScreen(baseUrl: String) {
                                     "لا يوجد محتوى منشور بعد","ستظهر الصور والريلز والخدمات هنا.")
                             }
                             items(creatorContent,key={it.optString("kind")+":"+it.optInt("id")}){content->
-                                Box(Modifier.fillMaxWidth().padding(horizontal=18.dp,vertical=5.dp)){
+                                Column(Modifier.fillMaxWidth().padding(horizontal=18.dp,vertical=5.dp)){
                                     CreatorContentCard(
                                         api=api,item=content,mine=own,
                                         onChanged={updated->
@@ -1173,6 +1168,7 @@ fun ServerAppScreen(baseUrl: String) {
                                         onPlayReel={id->directReel=id.toString();page="";tab=1},
                                         onOpenService={offer->showService(offer)}
                                     )
+                                    if(content.optBoolean("comments_allowed",true))PublicationComments(api,content.optString("kind"),content.optInt("id"))
                                 }
                             }
 
@@ -2141,6 +2137,7 @@ private fun ReelItemView(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            if(row.optBoolean("comments_allowed",true))PublicationComments(api,"reel",row.optInt("id"))
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 IconButton(
                     onClick = { setLike(!liked) },
