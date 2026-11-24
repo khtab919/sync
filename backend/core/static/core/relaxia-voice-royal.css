@@ -390,3 +390,33 @@ body.audio-mode.chat-focused #stage #messages{top:calc(env(safe-area-inset-top,0
 @media(prefers-reduced-motion:reduce){
  body.audio-mode .floating-heart{animation:none!important;opacity:0}
 }
+
+/* Royal midnight redesign: preserve live controls and server-driven identities. */
+body.audio-mode #stage,html[data-theme=light] body.audio-mode #stage{
+ --voice-dock:calc(112px + env(safe-area-inset-bottom,0px));
+ background:radial-gradient(ellipse at 50% 22%,#294b9166,transparent 55%),linear-gradient(155deg,#182c61,#0a132c 55%,#060b18)!important;color:#eef4ff;
+}
+body.audio-mode #stage header,html[data-theme=light] body.audio-mode #stage header{background:#91b8ff12!important;border:1px solid #91b8ff33!important;border-radius:22px!important;box-shadow:none!important}
+body.audio-mode #audioStage .audio-seat::before{background:radial-gradient(circle,#477bff26,transparent 75%);border:1px solid #91b8ff38;box-shadow:none}
+body.audio-mode #audioStage .audio-seat img,body.audio-mode #audioStage .audio-seat .audio-placeholder,body.audio-mode #audioStage .audio-seat .seat-plus{background:#182e59!important;border:2px solid #739cff!important;box-shadow:0 4px 12px #0004!important;object-fit:cover}
+body.audio-mode #audioStage .audio-seat.empty-seat .seat-plus{border:1px dashed #91b8ff80!important;background:#91b8ff0d!important}
+body.audio-mode #audioStage .audio-seat .audio-name,html[data-theme=light] body.audio-mode #audioStage .audio-seat .audio-name{background:transparent!important;border:0!important;color:#eef4ff!important;font-size:12px!important;padding:0 3px}
+body.audio-mode #audioStage .audio-seat.host-seat .audio-name{background:transparent!important;color:#ffe3a6!important}
+body.audio-mode #audioStage .audio-seat small{color:#b8c9e8!important}
+body.audio-mode #audioStage .audio-seat.speaking img,body.audio-mode #audioStage .audio-seat.speaking .audio-placeholder{border-color:#72b9ff!important;animation:royalVoicePulse 1.6s ease-out infinite}
+@keyframes royalVoicePulse{0%{box-shadow:0 0 0 0 #72b9ff66}100%{box-shadow:0 0 0 9px #72b9ff00}}
+body.audio-mode #stage #messages,html[data-theme=light] body.audio-mode #stage #messages{background:transparent!important;border:0!important;border-radius:0!important;box-shadow:none!important;backdrop-filter:none!important;padding:8px 12px!important;gap:6px!important}
+body.audio-mode #stage #messages .comment-bubble,html[data-theme=light] body.audio-mode #stage #messages .comment-bubble{background:transparent!important;border:0!important;box-shadow:none!important;border-radius:0!important;width:100%!important;max-width:100%!important;padding:3px 0!important;margin:0!important;gap:8px;overflow-wrap:anywhere}
+body.audio-mode #stage #messages .comment-author{color:#91b8ff!important}
+body.audio-mode #stage #messages .comment-body{color:#f2f5ff!important;font-size:14px!important}
+body.audio-mode #stage #messages .comment-empty{background:transparent!important;border:0!important;color:#b8c9e8!important}
+body.audio-mode #stage footer,html[data-theme=light] body.audio-mode #stage footer{box-sizing:border-box;background:linear-gradient(180deg,#101d3ce8,#070d20)!important;border-top:1px solid #91b8ff26!important;box-shadow:none!important}
+body.audio-mode #stage footer .bottom{flex-direction:column!important;max-height:none!important;min-height:0!important;flex:1 1 auto!important;gap:4px!important}
+body.audio-mode #stage footer .bottom #composer{width:100%!important;flex:0 0 42px!important;min-height:42px!important;background:#91b8ff12!important;border-color:#91b8ff33!important}
+body.audio-mode #stage footer .bottom .quick-actions{width:100%!important;justify-content:space-evenly!important;flex:0 0 48px!important;gap:4px!important}
+body.audio-mode #stage footer .bottom .quick-actions .tool-circle{width:44px!important;height:44px!important;flex:0 0 44px!important;background:#91b8ff12!important;border-color:#91b8ff33!important}
+body.audio-mode #stage footer .bottom .quick-actions #micQuick{background:#315de1!important;border-color:#91b8ff!important}
+body.audio-mode #stage footer .cash-payment-strip{display:none!important}
+body.audio-mode #stage [hidden]{display:none!important}
+@media(max-width:360px){body.audio-mode #stage footer .bottom .quick-actions .tool-circle{width:40px!important;flex-basis:40px!important}body.audio-mode #stage footer .bottom .quick-actions .request-mic-pill{max-width:76px!important}}
+@media(prefers-reduced-motion:reduce){body.audio-mode #audioStage .audio-seat.speaking img,body.audio-mode #audioStage .audio-seat.speaking .audio-placeholder{animation:none!important;outline:2px solid #72b9ff}}
