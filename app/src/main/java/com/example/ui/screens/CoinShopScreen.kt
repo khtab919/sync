@@ -44,7 +44,7 @@ private data class StorePaymentMethod(val code:String,val name:String,val descri
 
 private fun storeMethods(info:JSONObject):List<StorePaymentMethod> = listOf(
     StorePaymentMethod("stripe","فيزا / ماستركارد","بوابة الدفع العالمية · بطاقات بنكية","💳",info.optBoolean("stripe_enabled")),
-    StorePaymentMethod("nowpayments","بوابة الدفع الرقمية","NOWPayments · مدفوعات إلكترونية","✦",info.optBoolean("nowpayments_enabled")),
+    StorePaymentMethod("nowpayments","العملات الرقمية","فاتورة دفع إلكترونية","✦",info.optBoolean("nowpayments_enabled")),
     StorePaymentMethod("syriatelcash","سيريتيل كاش","الليرة السورية الجديدة","",info.optBoolean("syriatel_cash_enabled")),
     StorePaymentMethod("shamcash","شام كاش","تحويل محلي مع إثبات الدفع","◈",info.optBoolean("shamcash_enabled"))
 )
@@ -62,9 +62,6 @@ private fun storePackages(info:JSONObject):List<StorePackage>{
     }
 }
 
-private val CoinNavy=Color(0xFF0B162C)
-private val CoinGlass=Color(0xD916223B)
-private val CoinGold=Color(0xFFF4C37D)
 
 @Composable
 private fun Coin3DArtwork(coins:Int) {
@@ -85,7 +82,7 @@ private fun Coin3DArtwork(coins:Int) {
         // Standalone signed APK still renders a functional card before art is packaged.
         Icon(androidx.compose.material.icons.Icons.Rounded.Toll,
             contentDescription="كوينز ${coins}",
-            modifier=Modifier.size(53.dp),tint=CoinGold)
+            modifier=Modifier.size(53.dp),tint=MaterialTheme.colorScheme.primary)
     }
 }
 
@@ -94,12 +91,12 @@ internal fun CoinPackage(coins:Int,bonus:Int,dollars:String,selected:Boolean,bad
     Surface(
         onClick=choose,
         modifier=Modifier.testTag("pack_$coins"),
-        shape=RoundedCornerShape(16.dp),
-        color=CoinGlass,
-        contentColor=Color.White,
+        shape=RoundedCornerShape(22.dp),
+        color=MaterialTheme.colorScheme.surface,
+        contentColor=MaterialTheme.colorScheme.onSurface,
         shadowElevation=if(selected)9.dp else 2.dp,
         border=BorderStroke(if(selected)1.5.dp else 1.dp,
-            if(selected)Color(0xFFF59E0B) else Color(0xFF465876))
+            if(selected)MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant)
     ){
         Column(
             modifier=Modifier.fillMaxWidth().heightIn(min=110.dp)
@@ -108,23 +105,23 @@ internal fun CoinPackage(coins:Int,bonus:Int,dollars:String,selected:Boolean,bad
             verticalArrangement=Arrangement.spacedBy(4.dp)
         ){
             if(badge!=null) {
-                Surface(shape=RoundedCornerShape(10.dp),color=Color(0xFF2D3955)){
+                Surface(shape=RoundedCornerShape(10.dp),color=MaterialTheme.colorScheme.secondaryContainer){
                     Text(badge,Modifier.padding(horizontal=7.dp,vertical=2.dp),
-                        color=Color.White,fontSize=9.sp,fontWeight=FontWeight.Bold,maxLines=1)
+                        color=MaterialTheme.colorScheme.onSurface,fontSize=9.sp,fontWeight=FontWeight.Bold,maxLines=1)
                 }
             } else Spacer(Modifier.height(16.dp))
             Text(java.text.NumberFormat.getIntegerInstance(java.util.Locale.US).format(coins)+" كوين",
                 fontSize=if(coins>=10000)13.sp else 14.sp,fontWeight=FontWeight.ExtraBold,
-                color=Color.White,maxLines=1)
+                color=MaterialTheme.colorScheme.onSurface,maxLines=1)
             Coin3DArtwork(coins)
             if(bonus>0) {
                 Text("+${java.text.NumberFormat.getIntegerInstance(java.util.Locale.US).format(bonus)} نقطة ترويجية",
-                    fontSize=9.sp,fontWeight=FontWeight.SemiBold,color=Color(0xFF4DE6A0),
+                    fontSize=9.sp,fontWeight=FontWeight.SemiBold,color=MaterialTheme.colorScheme.primary,
                     maxLines=1)
             } else Spacer(Modifier.height(14.dp))
-            Surface(color=Color(0xFF2C3955),shape=RoundedCornerShape(50.dp)){
+            Surface(color=MaterialTheme.colorScheme.surfaceVariant,shape=RoundedCornerShape(50.dp)){
                 Text("USD ${dollars}",Modifier.padding(horizontal=10.dp,vertical=7.dp),
-                    color=Color.White,fontSize=12.sp,fontWeight=FontWeight.Bold,maxLines=1)
+                    color=MaterialTheme.colorScheme.onSurface,fontSize=12.sp,fontWeight=FontWeight.Bold,maxLines=1)
             }
         }
     }
@@ -132,10 +129,9 @@ internal fun CoinPackage(coins:Int,bonus:Int,dollars:String,selected:Boolean,bad
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun CoinShopScreen(api:LayaliApi, fixedMethod:String,back:()->Unit) {
+internal fun CoinShopScreen(api:LayaliApi, back:()->Unit) {
     val context=LocalContext.current
     val scope=rememberCoroutineScope()
-    var directPayment by rememberSaveable { mutableStateOf("") }
     var invoiceUrl by rememberSaveable{mutableStateOf("")}
     var checkoutUrl by rememberSaveable{mutableStateOf("")}
     var checkoutProvider by rememberSaveable{mutableStateOf("")}
@@ -143,7 +139,6 @@ internal fun CoinShopScreen(api:LayaliApi, fixedMethod:String,back:()->Unit) {
     var balance by remember{mutableStateOf<Long?>(null)}
     var rows by remember{mutableStateOf<List<JSONObject>>(emptyList())}
     var selected by rememberSaveable{mutableIntStateOf(1000)}
-    var method by rememberSaveable{mutableStateOf(fixedMethod)}
     var showPaymentSheet by rememberSaveable{mutableStateOf(false)}
     var quoteText by rememberSaveable{mutableStateOf("")}
     var submittedId by rememberSaveable { mutableStateOf("") }
@@ -158,7 +153,7 @@ internal fun CoinShopScreen(api:LayaliApi, fixedMethod:String,back:()->Unit) {
     var note by remember{mutableStateOf("")}
     val quote=remember(quoteText){if(quoteText.isBlank())null else runCatching{JSONObject(quoteText)}.getOrNull()}
     val packages=remember(info){storePackages(info)}
-    val methods=remember(info){storeMethods(info).filter { it.code == fixedMethod }}
+    val methods=remember(info){storeMethods(info).filter { it.enabled }}
     var quoteSeconds by remember{mutableLongStateOf(0L)}
     LaunchedEffect(quoteText){
         val quotation=quote ?: return@LaunchedEffect
@@ -173,22 +168,29 @@ internal fun CoinShopScreen(api:LayaliApi, fixedMethod:String,back:()->Unit) {
     suspend fun reload(){
         val updated=api.request("/api/payment-info")
         info=updated
-        val available=storeMethods(updated).filter{it.enabled && it.code==fixedMethod}
-        if(available.none{it.code==method})method=available.firstOrNull()?.code.orEmpty()
         balance=api.request("/api/wallet").optLong("available_cents")
         val a=api.request("/api/topups").optJSONArray("items")
         rows=if(a==null)emptyList()else(0 until a.length()).map{a.getJSONObject(it)}
     }
     fun perform(block:suspend()->Unit){if(busy)return;busy=true;note="";scope.launch{try{block()}catch(e:CancellationException){throw e}catch(e:Exception){note=commerceError(e)}finally{busy=false}}}
+    suspend fun openCheckout(quotation: JSONObject) {
+        val rail = quotation.getString("method")
+        val bank = rail == "stripe"
+        val endpoint = if (bank) "/api/stripe/checkout" else "/api/nowpayments/invoices"
+        val invoice = api.request(endpoint, "POST", JSONObject().put("quote_id", quotation.getString("id")))
+        val link = invoice.getString(if (bank) "checkout_url" else "invoice_url")
+        val uri = Uri.parse(link)
+        val trusted = if (bank) uri.host == "checkout.stripe.com" else uri.host in setOf("nowpayments.io", "www.nowpayments.io")
+        require(uri.scheme == "https" && trusted && uri.userInfo == null)
+        invoiceUrl = link
+        checkoutProvider = rail
+        checkoutUrl = link
+    }
     val picker=rememberLauncherForActivityResult(ActivityResultContracts.GetContent()){uri->if(uri!=null)perform{val r=api.upload(context,uri,"receipt");receipt=r.getString("id");preview=r.getString("url");note="تم رفع الإيصال."}}
     LaunchedEffect(Unit){busy=true;try{reload()}catch(e:CancellationException){throw e}catch(e:Exception){note=commerceError(e)}finally{busy=false}}
     LaunchedEffect(quoteText, submittedId, showOrders) { scrollState.scrollTo(0) }
 
     val showSelection=!showOrders && quote==null && submittedId.isBlank()
-    if (directPayment.isNotBlank()) {
-        NativeUsdtTopupScreen(api, quoteText, directPayment) { directPayment="";quoteText="";perform{reload()} }
-        return
-    }
     if(checkoutUrl.isNotBlank()){
         PaymentCheckoutScreen(url=checkoutUrl,provider=checkoutProvider,
             onClose={checkoutUrl=""},
@@ -209,50 +211,42 @@ internal fun CoinShopScreen(api:LayaliApi, fixedMethod:String,back:()->Unit) {
         )
         return
     }
-    Surface(Modifier.fillMaxSize(),color=CoinNavy,contentColor=Color.White){
+    Surface(Modifier.fillMaxSize(),color=MaterialTheme.colorScheme.background,contentColor=MaterialTheme.colorScheme.onSurface){
         Box(Modifier.fillMaxSize()
-            .background(Brush.verticalGradient(listOf(Color(0xFF112D56),CoinNavy,Color(0xFF070E1C))))
+            
             .safeDrawingPadding()){
-            Canvas(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(255.dp)){
-                val stars=listOf(.04f to .22f,.19f to .07f,.29f to .53f,
-                    .40f to .15f,.54f to .38f,.62f to .11f,.74f to .59f,
-                    .83f to .25f,.94f to .48f,.17f to .73f,.48f to .81f)
-                for((x,y) in stars)
-                    drawCircle(Color(0xFFE2C387).copy(alpha=.42f),
-                        radius=1.5.dp.toPx(),center=Offset(size.width*x,size.height*y))
-            }
             Column(Modifier.fillMaxSize().imePadding().verticalScroll(scrollState)
                 .padding(horizontal=18.dp)
-                .padding(top=12.dp,bottom=if(showSelection)142.dp else 28.dp),
+                .padding(top=12.dp,bottom=28.dp),
                 verticalArrangement=Arrangement.spacedBy(14.dp)){
         Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
             TextButton(onClick=back,enabled=!busy){Text("رجوع")}
             Spacer(Modifier.weight(1f))
-            Text("Relaxia",fontWeight=FontWeight.SemiBold,color=Color(0xFFA5B9D8))
+            Text("Relaxia",fontWeight=FontWeight.SemiBold,color=MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Text(if(quote==null)"اختر باقة الشحن"else"إتمام الشحن",style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.ExtraBold,color=Color.White)
-        Surface(shape=RoundedCornerShape(50.dp),shadowElevation=2.dp,color=Color(0xFF263857),border=BorderStroke(1.dp,Color(0xFF7288AA))){
+        Text(if(quote==null)"اختر باقة الشحن"else"إتمام الشحن",style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.ExtraBold,color=MaterialTheme.colorScheme.onSurface)
+        Surface(shape=RoundedCornerShape(50.dp),shadowElevation=2.dp,color=MaterialTheme.colorScheme.surface,border=BorderStroke(1.dp,MaterialTheme.colorScheme.outlineVariant)){
             Row(Modifier.fillMaxWidth().padding(horizontal=16.dp,vertical=10.dp),verticalAlignment=Alignment.CenterVertically){
-                Icon(androidx.compose.material.icons.Icons.Rounded.Toll, null, Modifier.size(23.dp), tint=CoinGold)
+                Icon(androidx.compose.material.icons.Icons.Rounded.Toll, null, Modifier.size(23.dp), tint=MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.width(10.dp))
                 Column{
-                    Text("رصيدك الحالي",style=MaterialTheme.typography.bodySmall,color=Color(0xFFA5B9D8))
-                    Text(if(balance==null)"—"else java.text.NumberFormat.getIntegerInstance(java.util.Locale.US).format(balance)+" كوين",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold,color=Color.White)
+                    Text("رصيدك الحالي",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(if(balance==null)"—"else java.text.NumberFormat.getIntegerInstance(java.util.Locale.US).format(balance)+" كوين",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold,color=MaterialTheme.colorScheme.onSurface)
                 }
             }
         }
         Row(horizontalArrangement=Arrangement.spacedBy(10.dp)) {
             val chipColors=FilterChipDefaults.filterChipColors(
-                containerColor=Color(0xFF21334F),
-                labelColor=Color(0xFFCDDBEF),
-                selectedContainerColor=Color(0xFF385A8A),
-                selectedLabelColor=Color.White
+                containerColor=MaterialTheme.colorScheme.surface,
+                labelColor=MaterialTheme.colorScheme.onSurfaceVariant,
+                selectedContainerColor=MaterialTheme.colorScheme.primaryContainer,
+                selectedLabelColor=MaterialTheme.colorScheme.onSurface
             )
             FilterChip(!showOrders,{showOrders=false},label={Text("شراء كوينز")},colors=chipColors)
             FilterChip(showOrders,{showOrders=true},label={Text("طلباتي")},colors=chipColors)
         }
-        if(!showOrders && submittedId.isBlank() && quote!=null) Text("أكمل عملية الدفع",style=MaterialTheme.typography.titleMedium,color=Color.White)
-        if(!showSelection) Text("100 كوين = 1 USD كقيمة أساسية داخل التطبيق. يظهر المبلغ النهائي قبل الدفع. النقاط الترويجية منفصلة وغير قابلة للسحب.",style=MaterialTheme.typography.bodySmall,color=Color(0xFFA5B9D8))
+        if(!showOrders && submittedId.isBlank() && quote!=null) Text("أكمل عملية الدفع",style=MaterialTheme.typography.titleMedium,color=MaterialTheme.colorScheme.onSurface)
+        if(!showSelection) Text("100 كوين = 1 USD كقيمة أساسية داخل التطبيق. يظهر المبلغ النهائي قبل الدفع. النقاط الترويجية منفصلة وغير قابلة للسحب.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
         if(note.isNotBlank())Text(note,color=MaterialTheme.colorScheme.primary)
         if(busy)LuxuryLoadingStatus("جارٍ تحديث الطلب")
         if(submittedId.isNotBlank()) {
@@ -261,7 +255,7 @@ internal fun CoinShopScreen(api:LayaliApi, fixedMethod:String,back:()->Unit) {
             TextButton(onClick={submittedId="";showOrders=true}){Text("عرض جميع طلباتي")}
             if(submittedStatus!="pending")TextButton(onClick={submittedId="";showOrders=false}){Text("شراء رصيد جديد")}
         } else if(!showOrders && quote==null){
-            if(packages.isEmpty()&&!busy)Text("لا تتوفر باقات شحن حاليًا. أعد تحديث المتجر لاحقًا.",color=Color(0xFFB2C3DB))
+            if(packages.isEmpty()&&!busy) TextButton(onClick={perform{reload()}}){Text("إعادة تحميل الباقات")}
             val maxBonus=packages.maxOfOrNull{it.bonusPoints}?:0
             BoxWithConstraints(Modifier.fillMaxWidth()){
                 val columns=if(maxWidth>=480.dp)3 else 2
@@ -275,7 +269,7 @@ internal fun CoinShopScreen(api:LayaliApi, fixedMethod:String,back:()->Unit) {
                                         coins=option.coins,bonus=option.bonusPoints,
                                         dollars=BigDecimal.valueOf(option.coins.toLong(),2).toPlainString(),
                                         selected=selected==option.coins,badge=badge
-                                    ){selected=option.coins}
+                                    ){if (!busy) { selected=option.coins; showPaymentSheet=true }}
                                 }
                             }
                             repeat(columns-line.size){Spacer(Modifier.weight(1f))}
@@ -283,45 +277,20 @@ internal fun CoinShopScreen(api:LayaliApi, fixedMethod:String,back:()->Unit) {
                     }
                 }
             }
-            Text("اختر الباقة ثم اضغط «مراجعة المبلغ».",style=MaterialTheme.typography.bodySmall,color=Color(0xFFA5B9D8))
+            Text("اضغط على الباقة لاختيار وسيلة الدفع.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
         }else if(!showOrders && quote!=null){
             Text("${quote.optInt("amount_cents")} كوين" + if(quote.optInt("bonus_cents")>0) " · +${quote.optInt("bonus_cents")} نقطة ترويجية" else "",fontSize=20.sp,fontWeight=FontWeight.Bold)
             Text(
                 if(quoteSeconds>0L)"صلاحية عرض السعر: %02d:%02d".format(quoteSeconds/60,quoteSeconds%60)
                 else "انتهت صلاحية عرض السعر. إن لم تدفع، اطلب عرضًا جديدًا. إن دفعت بالفعل، أكمل إرسال الإثبات للمراجعة.",
-                style=MaterialTheme.typography.bodySmall,color=Color(0xFFB2C3DB)
+                style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text("المطلوب: ${quote.optString("payment_amount")} ${quote.optString("payment_currency")}",style=MaterialTheme.typography.titleLarge)
             val rail=quote.optString("method")
-            if (rail=="nowpayments") {
-                Button(onClick={perform {
-                    val result=api.request("/api/nowpayments/direct","POST",JSONObject().put("quote_id",quote.getString("id")))
-                    require(result.optString("pay_currency")=="usdttrc20" && result.optString("pay_address").matches(Regex("T[1-9A-HJ-NP-Za-km-z]{33}")) && result.optString("pay_amount").toBigDecimal().signum()>0)
-                    directPayment=result.toString()
-                }},enabled=!busy && quoteSeconds>0){Text("عرض فاتورة USDT على Tron")}
-            } else if(rail=="stripe") {
-                val viaStripe=rail=="stripe"
-                Text(if(viaStripe)"البطاقات البنكية والدفع العالمي"else"دفع آمن عبر NOWPayments",style=MaterialTheme.typography.titleLarge)
-                Text(
-                    if(viaStripe)"تظهر وسائل الدفع المدعومة في صفحة الدفع الرسمية. يتم اعتماد الشحن فقط بعد إشعار الدفع الموقّع."
-                    else "تختار العملة داخل صفحة الدفع الرسمية. لا تُضاف الكوينز قبل تحقق الخادم من العملية.",
-                    style=MaterialTheme.typography.bodySmall
-                )
-                Button(onClick={perform{
-                    val endpoint=if(viaStripe)"/api/stripe/checkout"else"/api/nowpayments/invoices"
-                    val invoice=api.request(endpoint,"POST",JSONObject().put("quote_id",quote.getString("id")))
-                    val link=invoice.getString(if(viaStripe)"checkout_url"else"invoice_url")
-                    val parsed=Uri.parse(link)
-                    val trusted=if(viaStripe)parsed.host=="checkout.stripe.com"
-                        else parsed.host in listOf("nowpayments.io","www.nowpayments.io")
-                    require(parsed.scheme=="https"&&trusted&&parsed.userInfo==null)
-                    invoiceUrl=link
-                    checkoutProvider=rail
-                    val intent=android.content.Intent(android.content.Intent.ACTION_VIEW,parsed)
-                    intent.putExtras(android.os.Bundle().apply { putBinder("android.support.customtabs.extra.SESSION",null) })
-                    context.startActivity(intent)
-                }},enabled=!busy,modifier=Modifier.fillMaxWidth().height(52.dp)){
-                    Text(if(invoiceUrl.isBlank())"فتح بوابة الدفع"else"فتح صفحة الدفع مجددًا")
+            if (rail in setOf("stripe", "nowpayments")) {
+                val viaStripe = rail == "stripe"
+                Button(onClick={perform{openCheckout(quote)}},enabled=!busy && quoteSeconds>0){
+                    Text("فتح صفحة الدفع")
                 }
                 OutlinedButton(onClick={perform{
                     val route=if(viaStripe)"/api/stripe/status/"else"/api/nowpayments/status/"
@@ -336,7 +305,7 @@ internal fun CoinShopScreen(api:LayaliApi, fixedMethod:String,back:()->Unit) {
                 }
             } else {
             Text(if(rail=="usdt")"USDT على BEP20 فقط"else if(rail=="syriatelcash")"استلام عبر سيريتيل كاش"else"استلام عبر شام كاش",fontWeight=FontWeight.Bold)
-            Surface(color=androidx.compose.ui.graphics.Color.White,shape=RoundedCornerShape(24.dp)) { ReferenceImage(quote.optString("qr_url"),Modifier.fillMaxWidth().height(128.dp).padding(16.dp),contentScale=androidx.compose.ui.layout.ContentScale.Fit) }
+            Surface(color=Color.White,shape=RoundedCornerShape(24.dp)) { ReferenceImage(quote.optString("qr_url"),Modifier.fillMaxWidth().height(128.dp).padding(16.dp),contentScale=androidx.compose.ui.layout.ContentScale.Fit) }
             Text(quote.optString("destination"),style=MaterialTheme.typography.bodyMedium.copy(textDirection=androidx.compose.ui.text.style.TextDirection.Ltr))
             OutlinedButton(onClick={(context.getSystemService(Context.CLIPBOARD_SERVICE)as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Relaxia payment",quote.optString("destination")));note="تم نسخ بيانات الاستلام."}){Text("نسخ بيانات الاستلام")}
             if(rail=="shamcash"&&info.optString("shamcash_instructions").isNotBlank())Text(info.optString("shamcash_instructions"))
@@ -344,7 +313,7 @@ internal fun CoinShopScreen(api:LayaliApi, fixedMethod:String,back:()->Unit) {
             Text(if(rail=="usdt")"أدخل TxID كاملًا: 64 حرفًا أو رقمًا من إيصال التحويل."else"أدخل رقم إشعار التحويل كما يظهر في الإيصال.",style=MaterialTheme.typography.bodySmall)
             OutlinedButton(onClick={picker.launch("image/*")},enabled=!busy){Text(if(receipt.isBlank())"رفع صورة إثبات الدفع"else"استبدال الإيصال")}
             if(preview.isNotBlank())ReferenceImage(preview,Modifier.fillMaxWidth().height(150.dp))
-            Text("الرصيد يضاف بعد تحقق المسؤول من وصول المبلغ فعليًا. صورة الإيصال وحدها لا تكفي.",fontSize=12.sp,color=Color(0xFFB2C3DB))
+            Text("الرصيد يضاف بعد تحقق المسؤول من وصول المبلغ فعليًا. صورة الإيصال وحدها لا تكفي.",fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
             Button(onClick={perform{val result=api.request("/api/topups","POST",JSONObject().put("quote_id",quote.getString("id")).put("transaction_hash",reference).put("receipt_id",receipt));submittedId=result.getString("id");submittedStatus=result.optString("status","pending");submittedAmount=quote.optLong("amount_cents");quoteText="";receipt="";reference="";preview="";showOrders=true;try{reload()}catch(e:CancellationException){throw e}catch(e:Exception){note="تم استلام الطلب. تعذّر تحديث القائمة؛ يمكنك تحديث الحالة لاحقًا."}}},enabled=!busy&&receipt.isNotBlank()&&validPaymentReference(rail,reference),modifier=Modifier.fillMaxWidth().height(52.dp)){Text(if(busy)"جارٍ تقديم الطلب…"else"تقديم طلب الشراء")}
             }
             TextButton(onClick={quoteText=""},enabled=!busy){Text("العودة إلى الباقات")}
@@ -352,38 +321,12 @@ internal fun CoinShopScreen(api:LayaliApi, fixedMethod:String,back:()->Unit) {
         if(showOrders && submittedId.isBlank()) {
             Text("طلبات الشراء",style=MaterialTheme.typography.titleLarge)
             OutlinedButton(onClick={perform{reload()}},enabled=!busy){Text("تحديث الطلبات")}
-            if(rows.isEmpty()&&!busy)Text("لا توجد طلبات شراء حتى الآن.",color=Color(0xFFB2C3DB))
+            if(rows.isEmpty()&&!busy)Text("لا توجد طلبات شراء حتى الآن.",color=MaterialTheme.colorScheme.onSurfaceVariant)
             rows.forEach { r ->
                 PurchaseStatusCard(r.optString("id"),r.optLong("amount_cents"),r.optString("status"),r.optString("review_note"))
             }
         }
             } // scrolling content
-            if(showSelection) {
-                Column(
-                    modifier=Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                        .background(Brush.verticalGradient(listOf(Color(0x00101E38),Color(0xFF070E1C))))
-                        .padding(horizontal=20.dp,vertical=12.dp),
-                    horizontalAlignment=Alignment.CenterHorizontally,
-                    verticalArrangement=Arrangement.spacedBy(8.dp)
-                ) {
-                    val canCharge=!busy&&packages.any{it.coins==selected}&&methods.any{it.enabled}
-                    Surface(onClick={showPaymentSheet=true},
-                        enabled=canCharge,
-                        modifier=Modifier.fillMaxWidth().height(52.dp),
-                        shape=RoundedCornerShape(50.dp),
-                        color=Color(0xFF1E40AF)
-                    ){
-                        Box(Modifier.fillMaxSize().background(
-                            Brush.horizontalGradient(listOf(Color(0xFF1E40AF),Color(0xFFF0BC71)))),
-                            contentAlignment=Alignment.Center){
-                            Text("مراجعة المبلغ",color=Color.White,fontWeight=FontWeight.ExtraBold,fontSize=17.sp)
-                        }
-                    }
-                    Text("100 كوين = 1 USD كقيمة أساسية داخل التطبيق. يظهر المبلغ النهائي قبل الدفع. النقاط الترويجية منفصلة وغير قابلة للسحب.",
-                        fontSize=10.sp,lineHeight=13.sp,color=Color(0xFFB2C3DB),
-                        modifier=Modifier.fillMaxWidth())
-                }
-            }
         } // safeDrawingPadding box
     }
     if(showPaymentSheet && !showOrders && quote==null && submittedId.isBlank()){
@@ -392,28 +335,37 @@ internal fun CoinShopScreen(api:LayaliApi, fixedMethod:String,back:()->Unit) {
                 Modifier.fillMaxWidth().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal=22.dp).padding(bottom=20.dp),
                 verticalArrangement=Arrangement.spacedBy(13.dp)
             ){
-                Text("مراجعة طلب الشحن",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.Bold)
+                Text("اختر وسيلة الدفع",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.Bold)
                 val chosen=packages.firstOrNull{it.coins==selected}
-                Surface(color=MaterialTheme.colorScheme.primaryContainer,shape=RoundedCornerShape(16.dp)){
+                Surface(color=MaterialTheme.colorScheme.primaryContainer,shape=RoundedCornerShape(22.dp)){
                     Column(Modifier.fillMaxWidth().padding(16.dp),verticalArrangement=Arrangement.spacedBy(5.dp)){
                         Text("${java.text.NumberFormat.getIntegerInstance(java.util.Locale.US).format(selected)} كوين",fontSize=21.sp,fontWeight=FontWeight.Bold)
                         Text("القيمة الأساسية: ${BigDecimal.valueOf(selected.toLong(),2).toPlainString()} USD",style=MaterialTheme.typography.bodyMedium)
                         if((chosen?.bonusPoints?:0)>0)Text("+${chosen?.bonusPoints} نقطة ترويجية إضافية",color=MaterialTheme.colorScheme.primary)
                     }
                 }
-                Text(methods.firstOrNull()?.name.orEmpty(),fontWeight=FontWeight.Bold)
-                Text("رسوم مزوّد الدفع أو التحويل تُراجع قبل التحويل لدى المزوّد.")
-                Text("لن يتم الخصم عند اختيار الوسيلة. سيعرض الخادم المبلغ النهائي وبيانات التحويل قبل الدفع.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
-                if(methods.none{it.enabled})Text("لا توجد وسيلة دفع مفعّلة حاليًا. يرجى التواصل مع الدعم.",color=MaterialTheme.colorScheme.error,style=MaterialTheme.typography.bodySmall)
-                if(note.isNotBlank())Text(note,color=MaterialTheme.colorScheme.error,style=MaterialTheme.typography.bodySmall)
-                Button(
-                    onClick={perform{
-                        val result=api.request("/api/topup-quotes","POST",JSONObject().put("method",method).put("amount_cents",selected))
-                        quoteText=result.toString();invoiceUrl="";receipt="";reference="";preview="";showPaymentSheet=false
-                    }},
-                    enabled=!busy&&methods.any{it.code==method&&it.enabled},
-                    modifier=Modifier.fillMaxWidth().height(52.dp),shape=RoundedCornerShape(15.dp)
-                ){Text(if(busy)"جارٍ تجهيز الطلب…" else "متابعة الدفع",fontSize=16.sp)}
+                methods.forEach { option ->
+                    OutlinedCard(onClick = {
+                        perform {
+                            val selectedQuote = api.request("/api/topup-quotes", "POST", JSONObject()
+                                .put("method", option.code).put("amount_cents", selected))
+                            quoteText = selectedQuote.toString()
+                            receipt = ""; reference = ""; preview = ""; invoiceUrl = ""
+                            showPaymentSheet = false
+                            if (option.code in setOf("stripe", "nowpayments")) openCheckout(selectedQuote)
+                        }
+                    }, enabled = !busy, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
+                        Column(Modifier.padding(16.dp)) {
+                            Text(option.name, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            Text(option.description, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+                if (methods.isEmpty()) Text("لا توجد بوابة مُعدّة لاستقبال الدفع لهذه الباقة.")
+                if (note.isNotBlank()) Text(note, color = MaterialTheme.colorScheme.error)
+                if (busy) CircularProgressIndicator()
+                else TextButton(onClick = { perform { reload() } }) { Text("تحديث طرق الدفع") }
+
             }
         }
     }

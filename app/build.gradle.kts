@@ -24,8 +24,8 @@ android {
       "LAYALI_API_URL must be an HTTPS origin"
     }
     buildConfigField("String", "LAYALI_API_URL", "\"$backendUrl\"")
-    versionCode = 54
-    versionName = "11.7.13"
+    versionCode = 56
+    versionName = "11.7.15"
     val revision = providers.environmentVariable("GITHUB_SHA").orElse("local").get().take(12)
     buildConfigField("String", "BUILD_REVISION", "\"$revision\"")
 

@@ -1257,7 +1257,7 @@ fun ServerAppScreen(baseUrl: String) {
                                     Text("نقاط ترويجية: ${wallet.optLong("promotional_points")} · غير قابلة للسحب",
                                         style = MaterialTheme.typography.bodySmall)
                                 } }
-                                ReferencePrimary("شحن الكوينز · USDT TRC20", !submitting) { buyCredits() }
+                                ReferencePrimary("إضافة رصيد", !submitting) { buyCredits() }
                                 ReferenceRow(Icons.Rounded.ReceiptLong, "سجل العمليات والإيصالات") { open("سجل العمليات") }
                                 Text("سحب USDT", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                                 Text("اختر الشبكة المطابقة لعنوانك. تعتمد الإدارة طلب السحب قبل تنفيذ التحويل عبر بوابة الدفع.",
