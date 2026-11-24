@@ -85,6 +85,7 @@
     active = true;
     try { panel(); } finally { active = false; }
   }
+  window.RelaxiaAudience = {open};
   viewerButton.addEventListener('click', open);
   viewerButton.addEventListener('keydown', open);
 })();
