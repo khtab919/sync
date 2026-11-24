@@ -252,5 +252,5 @@
    });
    track.observe(audio,{childList:true,subtree:true});
  }
- window.RelaxiaRoomModeration={showUser,roomSettings,reportUser};
+ window.RelaxiaRoomModeration={showUser,roomSettings,reportUser,getState:()=>state,openSheet:sheet,renderPortrait};
 })();
