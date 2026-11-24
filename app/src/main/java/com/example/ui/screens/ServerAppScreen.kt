@@ -659,6 +659,38 @@ fun ServerAppScreen(baseUrl: String) {
             AccountNotices(api){perform{api.request("/api/logout","POST",JSONObject().put("push_token",context.getSharedPreferences("relaxia_push",0).getString("token","")));signedIn=false;remembered=false;profile=JSONObject();page=""}}
             return@MyApplicationTheme
         }
+        var heldRoom by remember { mutableStateOf("") }
+        var miniTitle by remember { mutableStateOf("") }
+        var miniMic by remember { mutableStateOf("مستمع") }
+        val liveRoute = screen in listOf("البث المباشر","الغرف الصوتية","بدء غرفة صوتية")
+        if ((liveRoute || heldRoom.isNotBlank()) && activeCall.isBlank()) {
+            val route = heldRoom.ifBlank { screen }
+            val mini = !liveRoute
+            fun minimize(title:String) {
+                miniTitle=title
+                heldRoom=route
+                page=""
+                routeHistory=arrayListOf()
+                tab=0
+            }
+            Box(if(mini) Modifier.size(1.dp) else Modifier.fillMaxSize()) {
+                LiveLobby(api,baseUrl,{showCreator(it)},{buyCredits()},
+                    initialFilter=if(route=="البث المباشر") "all" else "audio",
+                    initialCreate=route=="بدء غرفة صوتية",initialRoomId=selectedHomeRoomId,
+                    minimized=mini,onMinimize={minimize(it)},onMicStatus={miniMic=it},
+                    onRoomMessage={id,name->minimize(miniTitle.ifBlank{"الغرفة الصوتية"});startChat(id,name)},
+                    onSessionClosed={heldRoom="";miniTitle="";miniMic="مستمع"}
+                ){heldRoom="";selectedHomeRoomId="";back();revision++}
+            }
+            if (!mini) return@MyApplicationTheme
+            androidx.compose.ui.window.Popup(alignment=Alignment.TopStart) {
+                Surface(onClick={open(heldRoom)},modifier=Modifier.statusBarsPadding().padding(start=8.dp,top=4.dp),
+                    shape=RoundedCornerShape(20.dp),color=MaterialTheme.colorScheme.primaryContainer,shadowElevation=5.dp) {
+                    Text("↩  "+miniTitle.take(24)+" · "+miniMic,Modifier.padding(horizontal=12.dp,vertical=9.dp),
+                        style=MaterialTheme.typography.labelMedium,maxLines=1)
+                }
+            }
+        }
         if (activeCall.isNotBlank() && signedIn) {
             InternalCallScreen(api, baseUrl, activeCall) { finishInternalCall() }
             return@MyApplicationTheme
@@ -680,9 +712,7 @@ fun ServerAppScreen(baseUrl: String) {
         if(screen=="الحسابات المحظورة"){BlockedAccounts(api){back()};return@MyApplicationTheme}
         if(screen=="سجل العمليات"){FinancialHistory(api){back()};return@MyApplicationTheme}
         if(screen=="الحجوزات"){BookingHistory(api,explore={tab=2;back();revision++}){back();revision++};return@MyApplicationTheme}
-        if(screen=="البث المباشر"){LiveLobby(api,baseUrl,{showCreator(it)},{buyCredits()},initialFilter="all",initialRoomId=selectedHomeRoomId){selectedHomeRoomId="";back();revision++};return@MyApplicationTheme}
-        if(screen=="الغرف الصوتية"){LiveLobby(api,baseUrl,{showCreator(it)},{buyCredits()},initialFilter="audio",initialRoomId=selectedHomeRoomId){selectedHomeRoomId="";back();revision++};return@MyApplicationTheme}
-        if(screen=="بدء غرفة صوتية"){LiveLobby(api,baseUrl,{showCreator(it)},{buyCredits()},initialFilter="audio",initialCreate=true){back();revision++};return@MyApplicationTheme}
+
         if(screen=="نشر صورة مدفوعة"){
             PaidPhotoPublishScreen(api){back();revision++}
             return@MyApplicationTheme
