@@ -15,19 +15,22 @@
 
   let active = false;
   function panel() {
-    const data = typeof state === 'object' && state ? state : {};
+    const data = window.RelaxiaRoomModeration?.getState?.() || {};
     const participants = Array.isArray(data.participants_visible) ? data.participants_visible : [];
     const users = [...new Map(participants
       .filter(p => Number.isInteger(Number(p.user_id)) && Number(p.user_id) > 0)
       .map(p => [Number(p.user_id), p])).values()];
-    const list = sheet('المشاهدون والمشاركون');
+    const list = window.RelaxiaRoomModeration?.openSheet?.('المشاهدون والمشاركون');
+    if (!list) return;
     const summary = document.createElement('p');
     summary.className = 'audience-summary';
     summary.textContent = 'المتصلون الآن: ' + Number(data.viewers || 0).toLocaleString('ar') +
       ' · الحسابات الظاهرة: ' + users.length.toLocaleString('ar');
     list.append(summary);
     if (!users.length) {
-      note(list, 'لا يوجد مشاهدون متصلون حالياً.');
+      const empty = document.createElement('p');
+      empty.textContent = 'لا يوجد مشاهدون متصلون حالياً.';
+      list.append(empty);
       return;
     }
     const search = document.createElement('input');
@@ -53,7 +56,8 @@
         entry.className = 'audience-person';
         const avatar = document.createElement('span');
         avatar.className = 'audience-avatar';
-        renderPortrait(avatar, person);
+        if (window.RelaxiaRoomModeration?.renderPortrait) window.RelaxiaRoomModeration.renderPortrait(avatar, person);
+        else avatar.textContent = (person.name || 'م').slice(0, 1);
         const description = document.createElement('span');
         description.className = 'audience-person-info';
         const label = document.createElement('strong');
@@ -72,7 +76,11 @@
         });
         entries.append(entry);
       }
-      if (!found.length) note(entries, 'لا يوجد مستخدم مطابق للبحث.');
+      if (!found.length) {
+        const empty = document.createElement('p');
+        empty.textContent = 'لا يوجد مستخدم مطابق للبحث.';
+        entries.append(empty);
+      }
     }
     search.addEventListener('input', draw);
     draw();
