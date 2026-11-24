@@ -14,25 +14,13 @@
   viewerButton.classList.add('audience-trigger');
 
   let active = false;
+  let refreshOpenAudience = null;
   function panel() {
-    const data = window.RelaxiaRoomModeration?.getState?.() || {};
-    const participants = Array.isArray(data.participants_visible) ? data.participants_visible : [];
-    const users = [...new Map(participants
-      .filter(p => Number.isInteger(Number(p.user_id)) && Number(p.user_id) > 0)
-      .map(p => [Number(p.user_id), p])).values()];
     const list = window.RelaxiaRoomModeration?.openSheet?.('المشاهدون والمشاركون');
     if (!list) return;
     const summary = document.createElement('p');
     summary.className = 'audience-summary';
-    summary.textContent = 'المتصلون الآن: ' + Number(data.viewers || 0).toLocaleString('ar') +
-      ' · الحسابات الظاهرة: ' + users.length.toLocaleString('ar');
     list.append(summary);
-    if (!users.length) {
-      const empty = document.createElement('p');
-      empty.textContent = 'لا يوجد مشاهدون متصلون حالياً.';
-      list.append(empty);
-      return;
-    }
     const search = document.createElement('input');
     search.type = 'search';
     search.className = 'audience-search';
@@ -43,9 +31,34 @@
     entries.className = 'audience-entries';
     list.append(entries);
 
-    function draw() {
-      entries.replaceChildren();
+    let lastSnapshot = '';
+    function draw(force = false) {
+      // A separate room sheet may have replaced this one; never rewrite it.
+      if (document.getElementById('sheetTitle')?.textContent !== 'المشاهدون والمشاركون' || !list.isConnected) {
+        if (refreshOpenAudience === draw) refreshOpenAudience = null;
+        return;
+      }
+      const data = window.RelaxiaRoomModeration?.getState?.() || {};
+      const participants = Array.isArray(data.participants_visible) ? data.participants_visible : [];
+      const users = [...new Map(participants
+        .filter(p => Number.isInteger(Number(p.user_id)) && Number(p.user_id) > 0)
+        .map(p => [Number(p.user_id), p])).values()];
+      const count = Math.max(0, Number(data.viewers || 0));
+      summary.textContent = 'المتصلون الآن: ' + count.toLocaleString('ar') +
+        ' · الحسابات الظاهرة: ' + users.length.toLocaleString('ar');
       const term = search.value.trim().toLocaleLowerCase();
+      const snapshot = JSON.stringify([count, term, users]);
+      if (!force && lastSnapshot === snapshot) return;
+      lastSnapshot = snapshot;
+      entries.replaceChildren();
+      if (!users.length) {
+        const empty = document.createElement('p');
+        empty.textContent = count > 0
+          ? 'عدد المشاهدين متاح، لكن أسماء المتصلين لم تصل من الخادم. حاول تحديث الغرفة.'
+          : 'لا يوجد مشاهدون متصلون حالياً.';
+        entries.append(empty);
+        return;
+      }
       const found = users.filter(p => {
         const name = String(p.name || '').toLocaleLowerCase();
         return name.includes(term) || String(p.public_id || '').includes(term);
@@ -82,8 +95,9 @@
         entries.append(empty);
       }
     }
-    search.addEventListener('input', draw);
-    draw();
+    search.addEventListener('input', () => draw(true));
+    refreshOpenAudience = draw;
+    draw(true);
   }
 
   function open(e) {
@@ -93,7 +107,17 @@
     active = true;
     try { panel(); } finally { active = false; }
   }
-  window.RelaxiaAudience = {open};
+  window.RelaxiaAudience = {open, refresh: () => refreshOpenAudience?.()};
+  // The room's normal server poll refreshes the visible audience without
+  // reopening the sheet or losing the visitor's search text.
+  const previousDrawState = window.drawState;
+  if (typeof previousDrawState === 'function') {
+    window.drawState = function (newState) {
+      const result = previousDrawState.apply(this, arguments);
+      window.RelaxiaAudience.refresh();
+      return result;
+    };
+  }
   viewerButton.addEventListener('click', open);
   viewerButton.addEventListener('keydown', open);
 })();
