@@ -49,11 +49,12 @@ import java.time.Instant
 private data class StorePackage(val coins:Int,val bonusPoints:Int){ val id:String get()="pack_$coins" }
 private data class StorePaymentMethod(val code:String,val name:String,val description:String,val icon:ImageVector,val enabled:Boolean)
 
-private fun storeMethods(info:JSONObject):List<StorePaymentMethod> = listOf(
-    StorePaymentMethod("stripe","فيزا / ماستركارد","بوابة الدفع العالمية · بطاقات بنكية",Icons.Rounded.CreditCard,info.optBoolean("stripe_enabled")),
-    StorePaymentMethod("nowpayments","العملات الرقمية","فاتورة دفع إلكترونية",Icons.Rounded.Payments,info.optBoolean("nowpayments_enabled")),
-    StorePaymentMethod("syriatelcash","سيريتيل كاش","الليرة السورية الجديدة",Icons.Rounded.Smartphone,info.optBoolean("syriatel_cash_enabled")),
-    StorePaymentMethod("shamcash","شام كاش","تحويل محلي مع إثبات الدفع",Icons.Rounded.AccountBalanceWallet,info.optBoolean("shamcash_enabled"))
+private fun manualMethods(info:JSONObject) = listOf(
+    StorePaymentMethod("shamcash","شام كاش","تحويل إلى الحساب وإرفاق الإيصال",Icons.Rounded.AccountBalanceWallet,info.optBoolean("shamcash_enabled")),
+    StorePaymentMethod("syriatelcash","سيريتيل كاش","تحويل بالليرة السورية وإرفاق الإيصال",Icons.Rounded.Smartphone,info.optBoolean("syriatel_cash_enabled")),
+    StorePaymentMethod("usdt","تحويل USDT يدوي","شبكة BNB Smart Chain · BEP20",Icons.Rounded.Payments,
+        info.optString("currency")=="USDT" && info.optString("network").contains("BEP20",ignoreCase=true) &&
+            Regex("0x[0-9a-fA-F]{40}").matches(info.optString("address")))
 )
 
 private fun storePackages(info:JSONObject):List<StorePackage>{
@@ -160,7 +161,7 @@ internal fun CoinShopScreen(api:LayaliApi, back:()->Unit) {
     var note by remember{mutableStateOf("")}
     val quote=remember(quoteText){if(quoteText.isBlank())null else runCatching{JSONObject(quoteText)}.getOrNull()}
     val packages=remember(info){storePackages(info)}
-    val methods=remember(info){storeMethods(info).filter { it.enabled }}
+    val methods=remember(info){manualMethods(info)}
     var quoteSeconds by remember{mutableLongStateOf(0L)}
     LaunchedEffect(quoteText){
         val quotation=quote ?: return@LaunchedEffect
@@ -180,19 +181,6 @@ internal fun CoinShopScreen(api:LayaliApi, back:()->Unit) {
         rows=if(a==null)emptyList()else(0 until a.length()).map{a.getJSONObject(it)}
     }
     fun perform(block:suspend()->Unit){if(busy)return;busy=true;note="";scope.launch{try{block()}catch(e:CancellationException){throw e}catch(e:Exception){note=commerceError(e)}finally{busy=false}}}
-    suspend fun openCheckout(quotation: JSONObject) {
-        val rail = quotation.getString("method")
-        val bank = rail == "stripe"
-        val endpoint = if (bank) "/api/stripe/checkout" else "/api/nowpayments/invoices"
-        val invoice = api.request(endpoint, "POST", JSONObject().put("quote_id", quotation.getString("id")))
-        val link = invoice.getString(if (bank) "checkout_url" else "invoice_url")
-        val uri = Uri.parse(link)
-        val trusted = if (bank) uri.host == "checkout.stripe.com" else uri.host in setOf("nowpayments.io", "www.nowpayments.io")
-        require(uri.scheme == "https" && trusted && uri.userInfo == null)
-        invoiceUrl = link
-        checkoutProvider = rail
-        checkoutUrl = link
-    }
     val picker=rememberLauncherForActivityResult(ActivityResultContracts.GetContent()){uri->if(uri!=null)perform{val r=api.upload(context,uri,"receipt");receipt=r.getString("id");preview=r.getString("url");note="تم رفع الإيصال."}}
     LaunchedEffect(Unit){busy=true;try{reload()}catch(e:CancellationException){throw e}catch(e:Exception){note=commerceError(e)}finally{busy=false}}
     LaunchedEffect(quoteText, submittedId, showOrders) { scrollState.scrollTo(0) }
@@ -292,9 +280,6 @@ internal fun CoinShopScreen(api:LayaliApi, back:()->Unit) {
             val rail=quote.optString("method")
             if (rail in setOf("stripe", "nowpayments")) {
                 val viaStripe = rail == "stripe"
-                Button(onClick={perform{openCheckout(quote)}},enabled=!busy && quoteSeconds>0){
-                    Text("فتح صفحة الدفع")
-                }
                 OutlinedButton(onClick={perform{
                     val route=if(viaStripe)"/api/stripe/status/"else"/api/nowpayments/status/"
                     val result=api.request(route+quote.getString("id"))
@@ -347,6 +332,7 @@ internal fun CoinShopScreen(api:LayaliApi, back:()->Unit) {
                         if((chosen?.bonusPoints?:0)>0)Text("+${chosen?.bonusPoints} نقطة ترويجية إضافية",color=MaterialTheme.colorScheme.primary)
                     }
                 }
+                Text("الدفع اليدوي",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold)
                 methods.forEach { option ->
                     OutlinedCard(onClick = {
                         perform {
@@ -355,24 +341,35 @@ internal fun CoinShopScreen(api:LayaliApi, back:()->Unit) {
                             quoteText = selectedQuote.toString()
                             receipt = ""; reference = ""; preview = ""; invoiceUrl = ""
                             showPaymentSheet = false
-                            if (option.code in setOf("stripe", "nowpayments")) openCheckout(selectedQuote)
+
                         }
-                    }, enabled = !busy, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
+                    }, enabled = !busy && option.enabled, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
                         Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement=Arrangement.spacedBy(14.dp), verticalAlignment=Alignment.CenterVertically) {
                             Surface(shape=RoundedCornerShape(14.dp),color=MaterialTheme.colorScheme.primaryContainer) {
                                 Icon(option.icon,null,Modifier.padding(10.dp).size(24.dp),tint=MaterialTheme.colorScheme.onPrimaryContainer)
                             }
                             Column(Modifier.weight(1f)) {
                                 Text(option.name, fontWeight=FontWeight.Bold)
-                                Text(option.description,style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(if (option.enabled) option.description else "بانتظار تفعيل بيانات الاستلام",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                     }
                 }
-                if (methods.isEmpty()) Text("لا توجد بوابة مُعدّة لاستقبال الدفع لهذه الباقة.")
                 if (note.isNotBlank()) Text(note, color = MaterialTheme.colorScheme.error)
                 if (busy) CircularProgressIndicator()
                 else TextButton(onClick = { perform { reload() } }) { Text("تحديث طرق الدفع") }
+                HorizontalDivider()
+                Text("بوابات الدفع الإلكتروني",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold)
+                listOf("فيزا / ماستركارد" to Icons.Rounded.CreditCard, "العملات الرقمية" to Icons.Rounded.Payments).forEach { (label, icon) ->
+                    OutlinedCard(modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(20.dp)) {
+                        Row(Modifier.fillMaxWidth().padding(16.dp),horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=Alignment.CenterVertically) {
+                            Icon(icon,null,tint=MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(label,Modifier.weight(1f))
+                            Text("قريبًا",style=MaterialTheme.typography.labelLarge,color=MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                }
+
 
             }
         }
