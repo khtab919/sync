@@ -420,3 +420,20 @@ body.audio-mode #stage footer .cash-payment-strip{display:none!important}
 body.audio-mode #stage [hidden]{display:none!important}
 @media(max-width:360px){body.audio-mode #stage footer .bottom .quick-actions .tool-circle{width:40px!important;flex-basis:40px!important}body.audio-mode #stage footer .bottom .quick-actions .request-mic-pill{max-width:76px!important}}
 @media(prefers-reduced-motion:reduce){body.audio-mode #audioStage .audio-seat.speaking img,body.audio-mode #audioStage .audio-seat.speaking .audio-placeholder{animation:none!important;outline:2px solid #72b9ff}}
+
+/* Centered host stage, responsive seat rows and expanded stage when chat is hidden. */
+body.audio-mode #stage{--voice-seats:clamp(220px,42dvh,350px)}
+body.audio-mode #audioStage.seat-grid,html[data-theme=light] body.audio-mode #audioStage.seat-grid{
+ grid-template-columns:repeat(4,minmax(0,1fr))!important;
+ grid-template-rows:repeat(var(--seat-rows,3),minmax(0,1fr))!important;
+ gap:4px 8px!important;overflow-y:auto!important;
+}
+body.audio-mode #audioStage .host-seat{grid-column:1/-1;grid-row:1;width:100%!important}
+body.audio-mode #audioStage .host-seat::before{width:76px;height:76px;top:0}
+body.audio-mode #audioStage .host-seat img,body.audio-mode #audioStage .host-seat .audio-placeholder{width:clamp(55px,17vw,78px)!important;height:clamp(55px,17vw,78px)!important}
+body.audio-mode #audioStage .audio-seat .audio-waves{position:absolute!important;top:50%;left:50%;transform:translate(-50%,-65%);pointer-events:none;background:transparent!important;border:0!important;box-shadow:none!important}
+body.audio-mode.comments-hidden #stage{--voice-seats:calc(100dvh - var(--voice-top) - var(--voice-dock) - env(safe-area-inset-top,0px) - 24px)}
+body.audio-mode.comments-hidden #stage #messages{display:none!important}
+body.audio-mode #stage #sheet{border-radius:30px 30px 0 0!important;background:linear-gradient(160deg,#182c61,#101d3c)!important;color:#eef4ff!important;border:1px solid #91b8ff33!important}
+body.audio-mode #stage #sheet button:focus-visible,body.audio-mode #stage footer button:focus-visible{outline:2px solid #91b8ff;outline-offset:2px}
+@media(max-height:650px){body.audio-mode #stage{--voice-seats:clamp(180px,40dvh,260px)}body.audio-mode #audioStage .host-seat img,body.audio-mode #audioStage .host-seat .audio-placeholder{width:48px!important;height:48px!important}body.audio-mode #audioStage .host-seat::before{width:54px;height:54px}}
