@@ -55,7 +55,7 @@ internal fun commerceError(e: Exception): String = when(e.message) {
     "server_error_401" -> "انتهت جلسة الحساب؛ سجّل الدخول مجددًا."
     "server_error_403" -> "لا تملك صلاحية تنفيذ هذا الإجراء."
     "server_error_404" -> "الصفحة أو الحساب المطلوب غير متاح حاليًا."
-    "file_too_large" -> "الحد الأقصى للصورة أو الصوت 8MB، وللريلز 20MB."
+    "file_too_large" -> "الحد الأقصى للصورة أو الصوت 8MB، وللريلز 96MB."
     "invalid_image", "invalid_file", "invalid_media" -> "الملف غير مدعوم. اختر صورة JPG/PNG/WEBP أو فيديو MP4."
     "creator_account_required" -> "صلاحية النشر موقوفة لهذا الحساب. تواصل مع الدعم."
     "purchase_already_submitted" -> "تم تقديم هذا الطلب بالفعل. افتح طلباتي لمتابعة حالته."
@@ -319,10 +319,10 @@ private fun PublicationEditor(api:LayaliApi, mode:String, accountId:Int, returnT
         },confirmButton={TextButton({previewVideo=false}){Text("إغلاق")}})
     }
     if(publishedJson.isNotEmpty()){
-        Column(Modifier.fillMaxSize().safeDrawingPadding().padding(24.dp),verticalArrangement=Arrangement.Center,horizontalAlignment=Alignment.CenterHorizontally){
+        Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(24.dp),verticalArrangement=Arrangement.Center,horizontalAlignment=Alignment.CenterHorizontally){
             Icon(Icons.Rounded.CheckCircle,null,Modifier.size(64.dp),tint=PublishNavy)
             Text("تم النشر بنجاح!",style=MaterialTheme.typography.headlineMedium)
-            Text(if(privatePost)"المحتوى ظاهر لك وحدك." else "أصبح محتواك متاحًا للمشاهدة.")
+            Text(if(privatePost)"المحتوى ظاهر لك وحدك." else "أصبح محتواك متاحاً للمشاهدة والتفاعل.")
             Spacer(Modifier.height(16.dp))
             if(showPhoto && photo) ReferenceImage(JSONObject(publishedJson).optJSONObject("item")?.optString("media_url").orEmpty(),Modifier.fillMaxWidth().height(220.dp))
             Button({if(photo)showPhoto=true else onView(reel,JSONObject(publishedJson))},modifier=Modifier.fillMaxWidth()){Text("مشاهدة المنشور")}
@@ -395,16 +395,9 @@ private fun PublicationEditor(api:LayaliApi, mode:String, accountId:Int, returnT
                         }
                     }
                     if(reel||photo) {
-                        Text(
-                            "النشر متاح فوراً لجميع الحسابات النشطة · محتوى 18+ غير صريح",
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
-                        )
                         PublishMediaDropzone(
                             selected = selectedMedia.has("id"), isReel = reel, enabled = !busy,
-                            modifier = Modifier.fillMaxWidth().height(112.dp)
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 88.dp)
                         ) { picker.launch(arrayOf(if(reel)"video/mp4" else "image/*")) }
                         if(photo && offerMedia.has("id")){
                             ReferenceImage(offerMedia.optString("url"),Modifier.fillMaxWidth().height(114.dp))
@@ -424,7 +417,7 @@ private fun PublicationEditor(api:LayaliApi, mode:String, accountId:Int, returnT
                         PublishInput(
                             value = caption, onChange = { caption = it.take(500) },
                             label = "وصف المحتوى",
-                            hint = "اكتب عنوان الريلز أو وصفاً قصيراً...",
+                            hint = "اكتب وصفاً لمحتواك...",
                             modifier = Modifier.fillMaxWidth(), lines = 2, enabled = !busy
                         )
                         Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,
@@ -457,7 +450,7 @@ private fun PublicationEditor(api:LayaliApi, mode:String, accountId:Int, returnT
                             )
                             PublishInput(
                                 value = price,
-                                onChange = { price = it.filter { c -> c.isDigit() || c == '.' }.take(10) },
+                                onChange = { price = it.filter(Char::isDigit).take(7) },
                                 label = "السعر بالكوينز", numeric = true,
                                 modifier = Modifier.weight(1f), enabled = !busy
                             )
@@ -484,7 +477,7 @@ private fun PublicationEditor(api:LayaliApi, mode:String, accountId:Int, returnT
                         )
                         PublishMediaDropzone(
                             selected = offerMedia.has("id"), isReel = false, enabled = !busy,
-                            modifier = Modifier.fillMaxWidth().height(112.dp)
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 88.dp)
                         ) { picker.launch(arrayOf("image/*")) }
                         if(offerMedia.has("id")) {
                             val imageUrl = offerMedia.optString("url")
@@ -635,63 +628,27 @@ private fun PublishMediaDropzone(
     selected: Boolean, isReel: Boolean, enabled: Boolean,
     modifier: Modifier = Modifier, onPick: () -> Unit
 ) {
-    val radius = 22.dp
-    Box(
-        modifier
-            .clip(RoundedCornerShape(radius))
-            .background(MaterialTheme.colorScheme.surfaceContainerLow)
-            .drawBehind {
-                val stroke = 1.5.dp.toPx()
-                val inset = stroke / 2f
-                drawRoundRect(
-                    color = PublishLine,
-                    topLeft = Offset(inset, inset),
-                    size = Size(size.width - stroke, size.height - stroke),
-                    cornerRadius = CornerRadius(radius.toPx()),
-                    style = Stroke(
-                        width = stroke,
-                        pathEffect = PathEffect.dashPathEffect(
-                            floatArrayOf(10.dp.toPx(), 8.dp.toPx())
-                        )
-                    )
-                )
-            }
-            .clickable(enabled = enabled, onClick = onPick)
-            .padding(16.dp),
-        contentAlignment = Alignment.Center
+    val title = when {
+        selected -> if (isReel) "استبدال الفيديو" else "استبدال الصورة"
+        isReel -> "أضف الفيديو الخاص بك"
+        else -> "أضف صورة لمحتواك"
+    }
+    val shape = RoundedCornerShape(22.dp)
+    Row(
+        modifier.clip(shape).background(androidx.compose.ui.graphics.Brush.linearGradient(
+            listOf(Color(0xFF142F69), Color(0xFF234AAA), Color(0xFF325ECD))
+        )).clickable(enabled = enabled, onClick = onPick).padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = PublishSelected,
-                modifier = Modifier.size(64.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        if(isReel) Icons.Rounded.SmartDisplay else Icons.Rounded.PhotoCamera,
-                        contentDescription = null,
-                        modifier = Modifier.size(30.dp), tint = PublishNavy
-                    )
-                }
-            }
-            Text(
-                when {
-                    selected && isReel -> "تم رفع الفيديو · اضغط للاستبدال"
-                    selected -> "تم رفع الصورة · اضغط للاستبدال"
-                    isReel -> "اختيار فيديو MP4 من الهاتف · حتى 96MB"
-                    else -> "رفع صورة من الهاتف · حتى 8MB"
-                },
-                textAlign = TextAlign.Center,
-                style = MaterialTheme.typography.bodyMedium,
-                color = PublishNavy, fontWeight = FontWeight.Medium
-            )
-            if(selected) Icon(
-                Icons.Rounded.CheckCircle, "الملف مرفوع",
-                tint = Color(0xFF2E795F), modifier = Modifier.size(18.dp)
-            )
+        Surface(shape = RoundedCornerShape(15.dp), color = Color.White.copy(alpha = 0.16f)) {
+            Icon(if (selected) Icons.Rounded.CheckCircle else if (isReel) Icons.Rounded.SmartDisplay
+                 else Icons.Rounded.PhotoCamera, null, Modifier.padding(11.dp).size(23.dp), tint = Color.White)
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(title, color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text("اختر من المعرض أو استخدم الكاميرا", color = Color(0xFFE4ECFF),
+                 style = MaterialTheme.typography.bodySmall)
         }
     }
 }
