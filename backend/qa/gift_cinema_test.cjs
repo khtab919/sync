@@ -125,8 +125,17 @@ test('animated gift overlay is private to a confirmed event and has cleanup',()=
 
 test('live gift UI has inline two-step confirmation, no recipient fallback and measured controls',()=>{
  assert.match(stage,/readyFingerprint!==fingerprint/);
- assert.match(stage,/selectedSeatId==null\?host:speakers.find/);
- assert.doesNotMatch(stage,/selectedSeatId==null\?host:\(speakers.find/);
+ const recipientCode=stage.slice(stage.indexOf('function recipientOf(snapshot)'),stage.indexOf('function updateRecipients(snapshot)'));
+ const host={user_id:1,owner:true},viewer={user_id:2},self={user_id:3};
+ const snapshot={speakers:[host],participants_visible:[viewer,self]};
+ function recipient(seat,person,state=snapshot){
+   return vm.runInNewContext(recipientCode+';recipientOf(snapshot)',{selectedSeatId:seat,selectedPerson:person,config:{userId:3},snapshot:state});
+ }
+ assert.equal(recipient(null,null),host);
+ assert.equal(recipient(2,viewer),viewer);
+ assert.equal(recipient(3,self),null);
+ assert.equal(recipient(9,null),null);
+ assert.equal(recipient(9,{user_id:9}),null);
  assert.doesNotMatch(stage,/confirm\('تأكيد إرسال/);
  assert.match(stage,/RelaxiaGiftCinema\.play\(box,g\)/);
  assert.match(stage,/icon\.src=selected\.icon_url/);
@@ -138,5 +147,7 @@ test('live gift UI has inline two-step confirmation, no recipient fallback and m
  assert.match(page,/relaxia-voice-royal\.css\?v=presence-1/);
  assert.doesNotMatch(page,/syriatelCashLink/);
  assert.doesNotMatch(page,/0997991404/);
- assert.ok(page.indexOf('gift-cinema.js?v=cinema-1')<page.indexOf('live-stage.js?v=presence-1'));
+ const stageIndex=page.indexOf('live-stage.js?v=');
+ assert.ok(stageIndex>page.indexOf('gift-cinema.js?v=cinema-1'));
 });
+
