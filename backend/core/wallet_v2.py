@@ -89,6 +89,8 @@ def withdrawals(request):
             return JsonResponse(serialize(existing))
         if cents > wallet.balance_cents - wallet.reserved_cents:
             raise ApiError("insufficient_funds", 409)
+        if cents > wallet.withdrawable():
+            raise ApiError("insufficient_withdrawable_earnings", 409)
         wallet.reserved_cents += cents
         wallet.save(update_fields=["reserved_cents"])
         row = Withdrawal.objects.create(
@@ -170,6 +172,13 @@ def payouts(request):
             raise ApiError("withdrawal_unavailable", 404)
         Wallet.objects.get_or_create(user_id=row.user_id)
         wallet = Wallet.objects.select_for_update().get(user_id=row.user_id)
+        if action in ("approve", "dispatch", "verify"):
+            from django.db.models import Sum
+            committed = Withdrawal.objects.filter(user_id=row.user_id).exclude(
+                status__in=("paid", "rejected")
+            ).aggregate(total=Sum("amount_cents"))["total"] or 0
+            if committed > wallet.earned_coins:
+                raise ApiError("insufficient_withdrawable_earnings", 409)
         if action == "approve":
             if row.status != "pending":
                 raise ApiError("invalid_payout_transition", 409)
@@ -304,6 +313,7 @@ def payout_ipn(request):
                 wallet = Wallet.objects.select_for_update().get(user_id=row.user_id)
                 if wallet.reserved_cents < row.amount_cents or wallet.balance_cents < row.amount_cents:
                     raise ValueError("wallet_reservation_inconsistent")
+                wallet.earned_coins = max(0, wallet.earned_coins - row.amount_cents)
                 wallet.balance_cents -= row.amount_cents
                 wallet.reserved_cents -= row.amount_cents
                 wallet.save(update_fields=["balance_cents", "reserved_cents"])

@@ -39,6 +39,7 @@
  const originalPeople=window.peopleSheet;
  if(typeof originalPeople==='function'){
    window.peopleSheet=function(){
+     if(window.RelaxiaAudience){window.RelaxiaAudience.open();return}
      const box=sheet('المشاهدون والمشاركون');
      for(const p of state.participants_visible||[]){
        if(Number(p.user_id)!==config.userId)
@@ -95,7 +96,7 @@
  function showUser(user,message=null){
    const id=Number(user?.user_id);
    if(!Number.isInteger(id)||id<1)return;
-   const box=sheet('إجراءات المستخدم');
+   const box=sheet('ملف العضو');
    const card=document.createElement('strong');
    card.className='member-identity';
    card.dataset.userId=String(id);
@@ -105,9 +106,16 @@
    if(message)note(box,message.text);
    if(id===config.userId){note(box,'هذه صفحتك الشخصية.');return}
    sectionHeading(box,'الخيارات الشخصية');
-   if(config.gifts&&(state.speakers||[]).some(s=>s.user_id===id))button(box,'إرسال هدية لهذا المستخدم',()=>giftSheet(id));
-   if(window.LayaliLive?.canOpenProfile?.()){
-     button(box,'عرض الملف الشخصي',()=>{$('sheet').close();window.LayaliLive.openProfile(id)});
+   if(config.gifts&&(user.connected||[...(state.speakers||[]),...(state.participants_visible||[])].some(s=>s.user_id===id)))button(box,'إرسال هدية لهذا المستخدم',()=>giftSheet(id,user));
+   let following=user.following===true||(state.followed_ids||[]).includes(id);
+   const follow=button(box,following?'إلغاء المتابعة':'متابعة +',async()=>{
+     const updated=await api({action:'follow_member',user_id:id,following:!following});
+     following=!following;
+     follow.textContent=following?'إلغاء المتابعة':'متابعة +';
+     window.drawState(updated);
+   });
+   if(window.LayaliLive?.messageMember&&config.mode==='audio'){
+     button(box,'مراسلة',()=>{$('sheet').close();window.LayaliLive.messageMember(id,user.name||'')});
    }
    button(box,ignored.has(id)?'إلغاء التجاهل المحلي':'إخفاء تعليقات المستخدم لدي فقط',()=>updateLocalBlock(id));
    button(box,'الإبلاغ عن المستخدم',()=>reportUser(user));
@@ -172,22 +180,33 @@
        await refresh();roomSettings();
      });
    }
-   sectionHeading(box,'وضع الدردشة');
-   for(const [sec,label] of [[0,'بدون انتظار'],[5,'رسالة كل 5 ثوان'],[10,'رسالة كل 10 ثوان'],[30,'رسالة كل 30 ثانية']]){
-     button(box,(options.chat_slow_seconds===sec?'✓ ':'')+label,async()=>{
-       await api({action:'room_settings',settings:{chat_slow_seconds:sec}});
-       await refresh();roomSettings();
-     });
+   for(const [key,label,choices] of [
+     ['chat_slow_seconds','فاصل التعليقات',[[0,'بدون انتظار'],[5,'5 ثوانٍ'],[10,'10 ثوانٍ'],[30,'30 ثانية']]],
+     ['seat_join_mode','الانضمام للمقاعد',[['request','بطلب موافقة'],['free','مفتوح']]]
+   ]){
+     const field=document.createElement('label');field.textContent=label;
+     const select=document.createElement('select');
+     for(const [value,title] of choices)select.add(new Option(title,value));
+     select.value=String(options[key]);field.append(select);box.append(field);
+     select.onchange=async()=>{select.disabled=true;try{await api({action:'room_settings',settings:{[key]:key==='chat_slow_seconds'?Number(select.value):select.value}});await refresh()}catch(e){select.value=String(options[key]);message(e)}finally{select.disabled=false}};
    }
-   sectionHeading(box,'انضمام المايك');
-   for(const [mode,label] of [['request','طلب الموافقة'],['free','الانضمام المتاح']]){
-     button(box,(options.seat_join_mode===mode?'✓ ':'')+label,async()=>{
-       await api({action:'room_settings',settings:{seat_join_mode:mode}});
-       await refresh();roomSettings();
-     });
+   if(config.mode==='audio'){
+     for(const [key,title,choices,current] of [
+       ['capacity','توزيع المقاعد',[[5,'جلسة خاصة · 5'],[9,'غرفة اجتماعية · 9'],[13,'غرفة كبيرة · 13']],state.max_speakers],
+       ['room_theme','خلفية الغرفة',[['royal','الأزرق الملكي'],['diamond','الماسي الأسود'],['emerald','الزمرد'],['amethyst','الجمشت']],options.room_theme]
+     ]){
+       sectionHeading(box,title);
+       const select=document.createElement('select');select.setAttribute('aria-label',title);
+       for(const [value,label] of choices)select.add(new Option(label,String(value)));
+       select.value=String(current);box.append(select);
+       select.onchange=async()=>{select.disabled=true;try{
+         await api({action:'room_settings',settings:{[key]:key==='capacity'?Number(select.value):select.value}});
+         await refresh();roomSettings();
+       }catch(e){select.value=String(current);note(box,e.message==='occupied_seat_outside_layout'?'أحد المقاعد المطلوب إخفاؤها مشغول.':'تعذر حفظ الإعداد.')}finally{select.disabled=false}};
+     }
    }
    sectionHeading(box,'قفل المقاعد');
-   for(let number=1;number<Math.min(10,config.maxSpeakers);number++){
+   for(let number=1;number<(state.max_speakers||config.maxSpeakers);number++){
      const locked=(options.locked_seat_numbers||[]).includes(number);
      button(box,'المقعد '+number+' — '+(locked?'🔒 مغلق':'مفتوح'),async()=>{
        await api({action:'room_settings',settings:{lock_seat:{number,locked:!locked}}});
@@ -210,6 +229,10 @@
  // Delegate at capture phase: one hook for dynamically re-rendered avatars/comments.
  function openActionFromEvent(e){
    if(e.target.closest?.('.comment-actions'))return;
+   if(config.mode==='audio' && e.target.closest?.('#profile')){
+     const host=state.speakers?.find(s=>s.owner);
+     if(host){e.preventDefault();e.stopPropagation();chosenRoomMember=host.user_id;showUser(host);return}
+   }
    const bubble=e.target.closest?.('#messages .comment-bubble');
    if(bubble){
      const id=Number(bubble.dataset.userId);
@@ -220,11 +243,11 @@
      return;
    }
    const seat=e.target.closest?.('#audioStage .audio-seat[data-user-id]');
-   if(seat && (e.target.closest('.audio-name') || !config.gifts)){
+   if(seat){
      const id=Number(seat.dataset.userId);
      if(id>0&&id!==config.userId){
        const speaker=(state.speakers||[]).find(s=>Number(s.user_id)===id);
-       e.preventDefault();e.stopPropagation();showUser(speaker)
+       chosenRoomMember=id;e.preventDefault();e.stopPropagation();showUser(speaker)
      }
    }
  }
@@ -252,5 +275,5 @@
    });
    track.observe(audio,{childList:true,subtree:true});
  }
- window.RelaxiaRoomModeration={showUser,roomSettings,reportUser};
+ window.RelaxiaRoomModeration={showUser,roomSettings,reportUser,getState:()=>state,openSheet:sheet,renderPortrait,loadAudience:after=>api({action:"audience_page",after})};
 })();

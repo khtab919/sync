@@ -134,7 +134,8 @@ class LiveBroadcastTests(TestCase):
     def test_payout_requires_gateway_confirmation_before_wallet_debit(self):
         wallet=Wallet.objects.get(user=self.viewer)
         wallet.reserved_cents=100
-        wallet.save(update_fields=['reserved_cents'])
+        wallet.earned_coins=100
+        wallet.save(update_fields=['reserved_cents','earned_coins'])
         w=Withdrawal.objects.create(
             user=self.viewer,amount_cents=100,
             network='usdttrc20',destination='T'+'A'*33,request_key=uuid.uuid4())

@@ -97,7 +97,7 @@ class ApiTests(TestCase):
         self.assertEqual(Wallet.objects.get(user=self.user).balance_cents, 0)
 
     def test_withdrawal_reservation_and_idempotency(self):
-        Wallet.objects.filter(user=self.creator).update(balance_cents=1000)
+        Wallet.objects.filter(user=self.creator).update(balance_cents=1000, earned_coins=1000)
         data = {'amount_cents': 600, 'destination': 'test-destination', 'request_key': str(uuid.uuid4())}
         first = self.post('/api/withdrawals', data, self.creator_token)
         second = self.post('/api/withdrawals', data, self.creator_token)
@@ -389,7 +389,7 @@ class WithdrawalConcurrencyTests(TransactionTestCase):
             self.skipTest('Row locking requires PostgreSQL')
         user = get_user_model().objects.create_user('concurrent', password='unique-pass-2026!')
         Profile.objects.create(user=user, date_of_birth=date(1990, 1, 1), creator=True, identity_verified=True)
-        Wallet.objects.create(user=user, balance_cents=1000)
+        Wallet.objects.create(user=user, balance_cents=1000, earned_coins=1000)
         token = issue_token(user)
         def withdraw(_):
             close_old_connections()
@@ -491,7 +491,7 @@ class RelaxiaRequirementsTests(TestCase):
         self.assertEqual(result.status_code, 201)
         self.assertEqual(result.json()['status'], 'published')
         self.assertTrue(Service.objects.get(pk=result.json()['id']).approved)
-        Wallet.objects.filter(user=self.creator).update(balance_cents=1000)
+        Wallet.objects.filter(user=self.creator).update(balance_cents=1000, earned_coins=1000)
         result = self.post('/api/withdrawals', {'request_key': str(uuid.uuid4()), 'amount_cents': 500, 'destination': 'test destination'}, self.creator_token)
         self.assertEqual(result.status_code, 201)
         self.assertEqual(result.json()['status'], 'pending')

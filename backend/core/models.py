@@ -31,6 +31,9 @@ class Profile(models.Model):
     legacy_frames=models.BooleanField(default=False)
 
 class Service(models.Model):
+    publish_key=models.UUIDField(null=True,blank=True,unique=True)
+    owner_only=models.BooleanField(default=False)
+    comments_allowed=models.BooleanField(default=True)
     duration_minutes=models.PositiveIntegerField(default=30)
     terms=models.CharField(max_length=600,blank=True)
     image = models.ForeignKey("UploadedMedia", null=True, blank=True, on_delete=models.PROTECT)
@@ -62,6 +65,22 @@ class Wallet(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     balance_cents = models.BigIntegerField(default=0, editable=False)
     reserved_cents = models.BigIntegerField(default=0, editable=False)
+    earned_coins = models.PositiveBigIntegerField(default=0, editable=False)
+
+    def save(self, *args, **kwargs):
+        fields = kwargs.get("update_fields")
+        if fields is None or "balance_cents" in fields:
+            self.earned_coins = min(self.earned_coins, self.balance_cents)
+            if fields is not None:
+                kwargs["update_fields"] = set(fields) | {"earned_coins"}
+        return super().save(*args, **kwargs)
+
+    def withdrawable(self):
+        pending = Withdrawal.objects.filter(user_id=self.user_id).exclude(
+            status__in=("paid", "rejected")
+        ).aggregate(total=models.Sum("amount_cents"))["total"] or 0
+        return max(0, min(self.earned_coins-pending, self.balance_cents-self.reserved_cents))
+
     class Meta:
         constraints = [models.CheckConstraint(condition=Q(balance_cents__gte=0) & Q(reserved_cents__gte=0) & Q(balance_cents__gte=models.F('reserved_cents')), name='wallet_valid_balance')]
 
@@ -118,6 +137,8 @@ class Message(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
 class Reel(models.Model):
+    owner_only=models.BooleanField(default=False)
+    comments_allowed=models.BooleanField(default=True)
     caption=models.CharField(max_length=500,blank=True)
     media = models.OneToOneField("UploadedMedia", null=True, blank=True, on_delete=models.PROTECT)
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
@@ -129,7 +150,16 @@ class Reel(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
 
+class PublicationComment(models.Model):
+    kind=models.CharField(max_length=10)
+    item_id=models.PositiveBigIntegerField()
+    user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.CASCADE)
+    body=models.CharField(max_length=500)
+    created_at=models.DateTimeField(auto_now_add=True)
+
 class PaidPost(models.Model):
+    owner_only=models.BooleanField(default=False)
+    comments_allowed=models.BooleanField(default=True)
     """Real paid photo, never sent to unpaid clients, with blurred preview only."""
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     media = models.OneToOneField("UploadedMedia", on_delete=models.PROTECT, related_name="paid_post_original")
@@ -403,6 +433,7 @@ class LiveBroadcast(models.Model):
     end_reason=models.CharField(max_length=200,blank=True)
     cleanup_pending=models.BooleanField(default=False)
     mode=models.CharField(max_length=5,default="video",choices=[("audio","صوت"),("video","فيديو")])
+    room_theme=models.CharField(max_length=16,default="royal")
     max_speakers=models.PositiveSmallIntegerField(default=1)
     gift_goal_cents=models.PositiveIntegerField(default=0)
     pinned_comment=models.ForeignKey("LiveComment",on_delete=models.SET_NULL,null=True,blank=True,related_name="pinned_in")
@@ -650,6 +681,9 @@ class PushDelivery(models.Model):
         constraints=[models.UniqueConstraint(fields=['device','event_key'],name='unique_push_delivery')]
         indexes=[models.Index(fields=['sent_at','failed','available_at'])]
 class UploadSession(models.Model):
+    processing = models.CharField(max_length=12,blank=True)
+    clip_start = models.PositiveIntegerField(default=0)
+    clip_end = models.PositiveIntegerField(default=0)
     request_key=models.UUIDField(null=True,blank=True)
     id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False)
     user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.CASCADE)

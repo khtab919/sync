@@ -29,7 +29,7 @@ private fun JSONObject.adminItems(): List<JSONObject> {
     val a = optJSONArray("items") ?: return emptyList()
     return (0 until a.length()).map { a.getJSONObject(it) }
 }
-private fun cents(value: Long) = BigDecimal.valueOf(value, 2).toPlainString() + " USD"
+private fun cents(value: Long) = "$value كوين"
 
 @Composable
 internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boolean=false, allowed:List<String>?=null, exit:(()->Unit)?=null, logout: () -> Unit) {
@@ -130,15 +130,15 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
                 accounts = result.adminItems(); total = result.optInt("total")
             } else if (section == "العجلة") {
                 wheelConfig = api.request("/api/admin/wheel")
-                wheelCost = BigDecimal.valueOf(wheelConfig.optLong("cost_cents"),2).toPlainString()
-                wheelBank = BigDecimal.valueOf(wheelConfig.optLong("bankroll_cents"),2).toPlainString()
+                wheelCost = BigDecimal.valueOf(wheelConfig.optLong("cost_cents")).toPlainString()
+                wheelBank = BigDecimal.valueOf(wheelConfig.optLong("bankroll_cents")).toPlainString()
                 wheelEnabled = wheelConfig.optBoolean("enabled")
-                wheelStep = BigDecimal.valueOf(wheelConfig.optLong("price_step_cents"),2).toPlainString()
-                wheelMaximum = BigDecimal.valueOf(wheelConfig.optLong("maximum_cost_cents"),2).toPlainString()
-                firstReward = BigDecimal.valueOf(wheelConfig.optLong("first_reward_cents"),2).toPlainString()
-                grandUnlock = BigDecimal.valueOf(wheelConfig.optLong("grand_unlock_spend_cents"),2).toPlainString()
+                wheelStep = BigDecimal.valueOf(wheelConfig.optLong("price_step_cents")).toPlainString()
+                wheelMaximum = BigDecimal.valueOf(wheelConfig.optLong("maximum_cost_cents")).toPlainString()
+                firstReward = BigDecimal.valueOf(wheelConfig.optLong("first_reward_cents")).toPlainString()
+                grandUnlock = BigDecimal.valueOf(wheelConfig.optLong("grand_unlock_spend_cents")).toPlainString()
                 val prizes = wheelConfig.optJSONArray("prizes")
-                wheelPrizes = if(prizes == null) "" else (0 until prizes.length()).joinToString("\n") { i -> val p = prizes.getJSONObject(i); "${BigDecimal.valueOf(p.optLong("amount_cents"),2)}:${p.optInt("weight")}" }
+                wheelPrizes = if(prizes == null) "" else (0 until prizes.length()).joinToString("\n") { i -> val p = prizes.getJSONObject(i); "${BigDecimal.valueOf(p.optLong("amount_cents"))}:${p.optInt("weight")}" }
             } else if (section == "الدفع") {
                 val data=api.request("/api/admin/payment-settings")
                 gatewayConfigured=data.optBoolean("nowpayments_configured");paymentAccount=data.optString("account");paymentCurrency=data.optString("currency","USD");paymentRate=data.optString("rate","1");paymentInstructions=data.optString("instructions");paymentEnabled=data.optBoolean("enabled")
@@ -321,11 +321,11 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
                 item {
                     Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text("إضافة رصيد", style = MaterialTheme.typography.titleLarge)
-                        Text("رصيد داخلي بالدولار؛ كل عملية محفوظة مع اسم المسؤول والسبب.")
-                        OutlinedTextField(amount, { amount = it }, label = { Text("المبلغ بالدولار") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), enabled = !busy, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        Text("رصيد داخلي بالكوينز؛ كل عملية محفوظة مع اسم المسؤول والسبب.")
+                        OutlinedTextField(amount, { amount = it }, label = { Text("المبلغ بالكوينز") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), enabled = !busy, singleLine = true, modifier = Modifier.fillMaxWidth())
                         OutlinedTextField(reason, { reason = it.take(300) }, label = { Text("سبب الإضافة") }, enabled = !busy, modifier = Modifier.fillMaxWidth())
                         Button(onClick = {
-                            val value = runCatching { BigDecimal(amount.trim()).movePointRight(2).longValueExact() }.getOrNull()
+                            val value = runCatching { BigDecimal(amount.trim()).longValueExact() }.getOrNull()
                             if (value == null || value !in 1..1000000 || reason.trim().length < 3) error = "أدخل مبلغًا بين 0.01 و10000 دولار بخانتين عشريتين كحد أقصى، وسببًا واضحًا."
                             else confirmation = JSONObject().put("action", "credit").put("amount_cents", value).put("reason", reason.trim()).put("request_key", creditKey).put("label", "إضافة ${cents(value)}")
                         }, enabled = !busy) { Text("مراجعة الإضافة") }
@@ -362,18 +362,18 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
                     Text("إعدادات العجلة المدفوعة", style = MaterialTheme.typography.titleLarge)
                     Text("غير مفعّلة افتراضيًا. كل جائزة واحتمالها يظهران للمستخدم قبل الدفع. احتياطي الجوائز منفصل ويُحدّث مع كل لفة.")
                     Row { Switch(wheelEnabled, { wheelEnabled = it }, enabled = !busy); Text("تفعيل العجلة") }
-                    OutlinedTextField(wheelCost, { wheelCost = it }, label = { Text("سعر اللفة بالدولار") }, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(wheelStep, { wheelStep=it }, label={Text("زيادة السعر بعد كل لفة بالدولار")},modifier=Modifier.fillMaxWidth())
-                    OutlinedTextField(wheelMaximum, { wheelMaximum=it }, label={Text("أعلى سعر للفة بالدولار")},modifier=Modifier.fillMaxWidth())
-                    OutlinedTextField(firstReward, { firstReward=it }, label={Text("جائزة أول لفة المضمونة بالدولار")},modifier=Modifier.fillMaxWidth())
+                    OutlinedTextField(wheelCost, { wheelCost = it }, label = { Text("سعر اللفة بالكوينز") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(wheelStep, { wheelStep=it }, label={Text("زيادة السعر بعد كل لفة بالكوينز")},modifier=Modifier.fillMaxWidth())
+                    OutlinedTextField(wheelMaximum, { wheelMaximum=it }, label={Text("أعلى سعر للفة بالكوينز")},modifier=Modifier.fillMaxWidth())
+                    OutlinedTextField(firstReward, { firstReward=it }, label={Text("جائزة أول لفة المضمونة بالكوينز")},modifier=Modifier.fillMaxWidth())
                     OutlinedTextField(grandUnlock, { grandUnlock=it }, label={Text("إنفاق مطلوب لفتح جائزة 100 دولار")},modifier=Modifier.fillMaxWidth())
-                    OutlinedTextField(wheelBank, { wheelBank = it }, label = { Text("احتياطي الجوائز بالدولار") }, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(wheelPrizes, { wheelPrizes = it }, label = { Text("كل سطر: الجائزة بالدولار:الوزن") }, minLines = 5, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(wheelBank, { wheelBank = it }, label = { Text("احتياطي الجوائز بالكوينز") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(wheelPrizes, { wheelPrizes = it }, label = { Text("كل سطر: الجائزة بالكوينز:الوزن") }, minLines = 5, modifier = Modifier.fillMaxWidth())
                     Text("مجموع الأوزان يحدد نسب الاحتمالات. الوزن 20 من مجموع 100 يعني احتمال 20%. الجائزة صفر تعني خسارة سعر اللفة.")
                     Button(onClick = { perform {
                         val list = org.json.JSONArray()
-                        wheelPrizes.lines().filter { it.isNotBlank() }.forEach { line -> val parts = line.split(":"); require(parts.size == 2); list.put(JSONObject().put("amount_cents", BigDecimal(parts[0].trim()).movePointRight(2).intValueExact()).put("weight", parts[1].trim().toInt())) }
-                        securePost("/api/admin/wheel",JSONObject().put("enabled", wheelEnabled).put("cost_cents", BigDecimal(wheelCost).movePointRight(2).intValueExact()).put("bankroll_cents", BigDecimal(wheelBank).movePointRight(2).longValueExact()).put("expected_bankroll_cents", wheelConfig.optLong("bankroll_cents")).put("prizes", list).put("price_step_cents",BigDecimal(wheelStep).movePointRight(2).intValueExact()).put("maximum_cost_cents",BigDecimal(wheelMaximum).movePointRight(2).intValueExact()).put("first_reward_cents",BigDecimal(firstReward).movePointRight(2).intValueExact()).put("grand_unlock_spend_cents",BigDecimal(grandUnlock).movePointRight(2).intValueExact()))
+                        wheelPrizes.lines().filter { it.isNotBlank() }.forEach { line -> val parts = line.split(":"); require(parts.size == 2); list.put(JSONObject().put("amount_cents", BigDecimal(parts[0].trim()).intValueExact()).put("weight", parts[1].trim().toInt())) }
+                        securePost("/api/admin/wheel",JSONObject().put("enabled", wheelEnabled).put("cost_cents", BigDecimal(wheelCost).intValueExact()).put("bankroll_cents", BigDecimal(wheelBank).longValueExact()).put("expected_bankroll_cents", wheelConfig.optLong("bankroll_cents")).put("prizes", list).put("price_step_cents",BigDecimal(wheelStep).intValueExact()).put("maximum_cost_cents",BigDecimal(wheelMaximum).intValueExact()).put("first_reward_cents",BigDecimal(firstReward).intValueExact()).put("grand_unlock_spend_cents",BigDecimal(grandUnlock).intValueExact()))
                         revision++; success = "تم حفظ إعدادات العجلة."
                     } }, enabled = !busy && !loading) { Text("حفظ الإعدادات") }
                 }
@@ -448,6 +448,7 @@ internal fun MobileAdminScreen(api: LayaliApi, adminName: String, liveOnly:Boole
                         Text(row.optString("title"), style = MaterialTheme.typography.titleMedium)
                         Text("${row.optString("owner")} · ${if (row.optBoolean("approved")) "معتمد" else "غير معتمد"}")
                         if (row.optString("url").startsWith("https://")) TextButton(onClick = { runCatching { uriHandler.openUri(row.optString("url")) } }) { Text("معاينة الوسائط") }
+                        TextButton(onClick = { confirmation = JSONObject().put("kind",row.optString("kind")).put("id",row.optInt("id")).put("approved",false).put("action","remove").put("label","حذف المحتوى من النشر") }, enabled = !busy) { Text("حذف من النشر") }
                         OutlinedButton(onClick = { confirmation = JSONObject().put("kind", row.optString("kind")).put("id", row.optInt("id")).put("approved", !row.optBoolean("approved")).put("label", if(row.optBoolean("approved")) "إخفاء المحتوى" else "اعتماد المحتوى") }, enabled = !busy) { Text(if(row.optBoolean("approved")) "إخفاء" else "اعتماد") }
                     } }
                 }

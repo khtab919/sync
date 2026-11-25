@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Storefront
 import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.SmartDisplay
 import androidx.compose.material.icons.rounded.CheckCircle
@@ -54,7 +55,7 @@ internal fun commerceError(e: Exception): String = when(e.message) {
     "server_error_401" -> "انتهت جلسة الحساب؛ سجّل الدخول مجددًا."
     "server_error_403" -> "لا تملك صلاحية تنفيذ هذا الإجراء."
     "server_error_404" -> "الصفحة أو الحساب المطلوب غير متاح حاليًا."
-    "file_too_large" -> "الحد الأقصى للصورة أو الصوت 8MB، وللريلز 20MB."
+    "file_too_large" -> "الحد الأقصى للصورة أو الصوت 8MB، وللريلز 96MB."
     "invalid_image", "invalid_file", "invalid_media" -> "الملف غير مدعوم. اختر صورة JPG/PNG/WEBP أو فيديو MP4."
     "creator_account_required" -> "صلاحية النشر موقوفة لهذا الحساب. تواصل مع الدعم."
     "purchase_already_submitted" -> "تم تقديم هذا الطلب بالفعل. افتح طلباتي لمتابعة حالته."
@@ -171,7 +172,7 @@ internal fun CommerceScreen(api: LayaliApi, kind: String, back: () -> Unit) {
                 Text("طلباتي", style = MaterialTheme.typography.titleLarge)
                 rows.forEach { r -> Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp)) {
                     Text(when(r.optString("status")) { "pending" -> "قيد المراجعة"; "approved" -> "معتمد"; "rejected" -> "مرفوض"; else -> r.optString("status") })
-                    if(r.has("amount_cents")) Text("${BigDecimal.valueOf(r.optLong("amount_cents"), 2)} USDT")
+                    if(r.has("amount_cents")) Text("${r.optLong("amount_cents")} كوين")
                     if(r.optString("review_note").isNotBlank()) Text(r.optString("review_note"))
                 } } }
             }
@@ -206,25 +207,53 @@ private val PublishHint = Color(0xFF61718B)
  * submitted as a reel (or vice versa).
  */
 @Composable
-internal fun SellerPublishScreen(api: LayaliApi, initialReel: Boolean = false, back: () -> Unit) {
+internal fun SellerPublishScreen(api: LayaliApi, initialReel:Boolean=false, initialPhoto:Boolean=false, returnToRoom:(()->Unit)?=null, accountId:Int=0, onHome:()->Unit={}, onView:(Boolean,JSONObject)->Unit={_,_->}, back:()->Unit) {
+    var mode by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(if(initialPhoto)"photo" else if(initialReel)"reel" else "service") }
+    key(mode,accountId){ PublicationEditor(api,mode,accountId,returnToRoom,{mode=it},onHome,onView,back) }
+}
+
+@Composable
+private fun PublicationEditor(api:LayaliApi, mode:String, accountId:Int, returnToRoom:(()->Unit)?, changeMode:(String)->Unit, onHome:()->Unit, onView:(Boolean,JSONObject)->Unit, back:()->Unit) {
+    val photo=mode=="photo"
+    val reel=mode=="reel"
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var title by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-    var caption by remember { mutableStateOf("") }
-    var reelPaid by remember { mutableStateOf(false) }
-    var reelPrice by remember { mutableStateOf("") }
-    var duration by remember { mutableStateOf("30") }
-    var terms by remember { mutableStateOf("") }
-    var price by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf("خدمة") }
-    var offerMedia by remember { mutableStateOf(JSONObject()) }
-    var reelMedia by remember { mutableStateOf(JSONObject()) }
-    var reel by remember(initialReel) { mutableStateOf(initialReel) }
+    val drafts=remember(accountId){context.getSharedPreferences("publish_draft_"+accountId+"_"+mode,Context.MODE_PRIVATE)}
+    var publishedJson by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
+    var privatePost by remember { mutableStateOf(drafts.getBoolean("private",false)) }
+    var allowComments by remember { mutableStateOf(drafts.getBoolean("comments",true)) }
+    var coverId by remember { mutableStateOf(drafts.getString("cover","").orEmpty()) }
+    var clipStart by remember { mutableStateOf(drafts.getString("start","").orEmpty()) }
+    var clipEnd by remember { mutableStateOf(drafts.getString("end","").orEmpty()) }
+    var captureUri by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
+    var publishKey by remember { mutableStateOf(drafts.getString("publishKey",null)?:java.util.UUID.randomUUID().toString()) }
+    var showPhoto by remember { mutableStateOf(false) }
+    LaunchedEffect(privatePost,allowComments,coverId,clipStart,clipEnd,publishKey){
+        drafts.edit().putBoolean("private",privatePost).putBoolean("comments",allowComments).putString("cover",coverId)
+            .putString("start",clipStart).putString("end",clipEnd).putString("publishKey",publishKey).apply()
+    }
+    var previewVideo by remember { mutableStateOf(false) }
+    var videoSource by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(drafts.getString("videoSource","").orEmpty()) }
+    var title by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(drafts.getString("title","").orEmpty()) }
+    var description by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(drafts.getString("description","").orEmpty()) }
+    var caption by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(drafts.getString("caption","").orEmpty()) }
+    var reelPaid by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(drafts.getBoolean("reelPaid",false)) }
+    var reelPrice by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(drafts.getString("reelPrice","").orEmpty()) }
+    var duration by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(drafts.getString("duration","30").orEmpty()) }
+    var terms by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(drafts.getString("terms","").orEmpty()) }
+    var price by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(drafts.getString("price","").orEmpty()) }
+    var category by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(drafts.getString("category","خدمة").orEmpty()) }
+    var offerJson by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(drafts.getString("offerJson","{}").orEmpty()) }
+    val offerMedia = remember(offerJson) { JSONObject(offerJson) }
+    var offerUri by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(drafts.getString("offerUri","").orEmpty()) }
+    var reelJson by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(drafts.getString("reelJson","{}").orEmpty()) }
+    val reelMedia = remember(reelJson) { JSONObject(reelJson) }
+    var reelUri by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(drafts.getString("reelUri","").orEmpty()) }
+
     var busy by remember { mutableStateOf(false) }
     var uploadProgress by remember { mutableFloatStateOf(-1f) }
-    var note by remember { mutableStateOf("") }
-    var noteIsError by remember { mutableStateOf(false) }
+    var note by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
+    var noteIsError by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
 
     fun perform(block: suspend () -> Unit) {
         if (busy) return
@@ -238,27 +267,80 @@ internal fun SellerPublishScreen(api: LayaliApi, initialReel: Boolean = false, b
             finally { uploadProgress = -1f; busy = false }
         }
     }
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if(uri != null) {
-            val chosenReel = reel
-            perform {
-                val uploaded = api.upload(context, uri, if(chosenReel) "reel" else "offer") {
-                    uploadProgress = it
-                }
-                if(chosenReel) reelMedia = uploaded else offerMedia = uploaded
-                note = if(chosenReel) "تم رفع الفيديو. يمكنك كتابة الوصف ثم النشر." else "تم رفع الصورة بنجاح."
-            }
+    fun uploadDraft(uri: android.net.Uri, chosenReel: Boolean) {
+        perform {
+            uploadProgress = 0f
+            val uploaded = api.upload(context, uri, if(chosenReel) "reel" else if(photo)"paid_photo" else "offer",
+                if(chosenReel)clipStart.toIntOrNull()?:0 else 0,if(chosenReel)clipEnd.toIntOrNull()?:0 else 0) { uploadProgress = it }
+            require(uploaded.optString("id").isNotBlank())
+            if(chosenReel) { reelJson = uploaded.toString(); reelUri = "" }
+            else { offerJson = uploaded.toString(); offerUri = "" }
+            note = if(chosenReel) "تم رفع الفيديو. راجع الوصف ثم انشر." else "تم رفع الصورة."
         }
     }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if(uri != null) {
+            runCatching { context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            if(reel) { videoSource=uri.toString(); reelUri=uri.toString();reelJson="{}";clipStart="";clipEnd="" }
+            else { offerUri=uri.toString(); offerJson="{}";uploadDraft(uri,false) }
+        }
+    }
+    val coverPicker=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()){uri->
+        if(uri!=null)perform {coverId=api.upload(context,uri,"offer").getString("id");note="تم اختيار صورة الغلاف"}
+    }
+    fun captured(ok:Boolean){
+        if(!ok||captureUri.isBlank())return
+        if(reel){videoSource=captureUri;reelUri=captureUri;reelJson="{}";clipStart="";clipEnd=""}
+        else{offerUri=captureUri;offerJson="{}";uploadDraft(android.net.Uri.parse(captureUri),false)}
+    }
+    val captureVideo=rememberLauncherForActivityResult(ActivityResultContracts.CaptureVideo()){captured(it)}
+    val capturePhoto=rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()){captured(it)}
+    fun launchCamera(){
+        runCatching {
+            val directory=java.io.File(context.cacheDir,"publish-camera").apply{mkdirs()}
+            val file=java.io.File.createTempFile("capture-",if(reel)".mp4" else ".jpg",directory)
+            val uri=androidx.core.content.FileProvider.getUriForFile(context,context.packageName+".publish.files",file)
+            captureUri=uri.toString()
+            if(reel)captureVideo.launch(uri) else capturePhoto.launch(uri)
+        }.onFailure{note="تعذّر فتح الكاميرا. يمكنك اختيار ملف من المعرض.";noteIsError=true}
+    }
+    val cameraPermission=rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()){granted->
+        if(granted)launchCamera() else {note="يلزم إذن الكاميرا للتصوير.";noteIsError=true}
+    }
+    LaunchedEffect(title,description,caption,reelPaid,reelPrice,duration,terms,price,category,offerJson,reelJson,reelUri,offerUri,videoSource){
+        drafts.edit().putString("title",title).putString("description",description).putString("caption",caption).putString("reelPrice",reelPrice).putString("duration",duration).putString("terms",terms).putString("price",price).putString("category",category).putString("offerJson",offerJson).putString("reelJson",reelJson).putString("reelUri",reelUri).putString("offerUri",offerUri).putString("videoSource",videoSource).putBoolean("reelPaid",reelPaid).apply()
+    }
+    if(previewVideo && videoSource.isNotBlank()){
+        AlertDialog(onDismissRequest={previewVideo=false}, title={Text("معاينة الريلز")},text={
+            androidx.compose.ui.viewinterop.AndroidView(factory={ctx->android.widget.VideoView(ctx).apply{
+                val controls=android.widget.MediaController(ctx);controls.setAnchorView(this);setMediaController(controls)
+                setVideoURI(android.net.Uri.parse(videoSource));setOnPreparedListener{start()}
+            }},modifier=Modifier.fillMaxWidth().height(260.dp))
+        },confirmButton={TextButton({previewVideo=false}){Text("إغلاق")}})
+    }
+    if(publishedJson.isNotEmpty()){
+        Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(24.dp),verticalArrangement=Arrangement.Center,horizontalAlignment=Alignment.CenterHorizontally){
+            Icon(Icons.Rounded.CheckCircle,null,Modifier.size(64.dp),tint=PublishNavy)
+            Text("تم النشر بنجاح!",style=MaterialTheme.typography.headlineMedium)
+            Text(if(privatePost)"المحتوى ظاهر لك وحدك." else "أصبح محتواك متاحاً للمشاهدة والتفاعل.")
+            Spacer(Modifier.height(16.dp))
+            if(showPhoto && photo) ReferenceImage(JSONObject(publishedJson).optJSONObject("item")?.optString("media_url").orEmpty(),Modifier.fillMaxWidth().height(220.dp))
+            Button({if(photo)showPhoto=true else onView(reel,JSONObject(publishedJson))},modifier=Modifier.fillMaxWidth()){Text("مشاهدة المنشور")}
+            OutlinedButton(onHome,modifier=Modifier.fillMaxWidth()){Text("العودة إلى الرئيسية")}
+            TextButton({publishedJson="";note=""}){Text("إنشاء منشور آخر")}
+        }
+        return
+    }
+    val pendingUri = if(reel) reelUri else offerUri
     val selectedMedia = if(reel) reelMedia else offerMedia
     val validMoney = runCatching {
-        BigDecimal(price.trim()).movePointRight(2).intValueExact() > 0
+        (price.trim().toIntOrNull() ?: 0) > 0
     }.getOrDefault(false)
     val validOffer = title.trim().length >= 3 && description.trim().length >= 10 &&
         duration.toIntOrNull() in 1..1440 && validMoney
     val validReelPrice = !reelPaid || reelPrice.toIntOrNull() in 1..1000000
     val publishEnabled = !busy && selectedMedia.has("id") &&
-        (if(reel) validReelPrice else validOffer)
+        (if(reel||photo) validReelPrice else validOffer)
 
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -266,9 +348,10 @@ internal fun SellerPublishScreen(api: LayaliApi, initialReel: Boolean = false, b
                 Modifier.fillMaxSize().safeDrawingPadding().imePadding()
                     .padding(horizontal = 18.dp)
             ) {
-                Box(Modifier.fillMaxWidth().height(62.dp), contentAlignment = Alignment.Center) {
+                if(returnToRoom!=null) TextButton(returnToRoom,modifier=Modifier.height(36.dp)){Text("↩ العودة إلى الغرفة الصوتية",fontSize=12.sp)}
+                Box(Modifier.fillMaxWidth().height(52.dp), contentAlignment = Alignment.Center) {
                     Text(
-                        if(reel) "مساحة النشر" else "إضافة عرض جديد",
+                        "إنشاء محتوى",
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -285,12 +368,13 @@ internal fun SellerPublishScreen(api: LayaliApi, initialReel: Boolean = false, b
                     Modifier.fillMaxWidth().padding(top = 5.dp, bottom = 10.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    PublishSegment("خدمة أو منتج", !reel, !busy, Modifier.weight(1f)) {
-                        reel = false; note = ""
+                    PublishSegment("خدمة أو منتج", !reel&&!photo, !busy, Modifier.weight(1f)) {
+                        changeMode("service")
                     }
                     PublishSegment("ريلز", reel, !busy, Modifier.weight(1f)) {
-                        reel = true; note = ""
+                        changeMode("reel")
                     }
+                    PublishSegment("صورة", photo, !busy, Modifier.weight(1f)){changeMode("photo")}
                 }
 
                 Column(
@@ -310,34 +394,42 @@ internal fun SellerPublishScreen(api: LayaliApi, initialReel: Boolean = false, b
                             )
                         }
                     }
-                    if(reel) {
-                        Text(
-                            "النشر متاح فوراً لجميع الحسابات النشطة · محتوى 18+ غير صريح",
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
-                        )
+                    if(reel||photo) {
                         PublishMediaDropzone(
-                            selected = reelMedia.has("id"), isReel = true, enabled = !busy,
-                            modifier = Modifier.fillMaxWidth().height(250.dp)
-                        ) { picker.launch("video/mp4") }
+                            selected = selectedMedia.has("id"), isReel = reel, enabled = !busy,
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 88.dp)
+                        ) { picker.launch(arrayOf(if(reel)"video/mp4" else "image/*")) }
+                        if(photo && offerMedia.has("id")){
+                            ReferenceImage(offerMedia.optString("url"),Modifier.fillMaxWidth().height(114.dp))
+                            TextButton({offerJson="{}";offerUri=""},enabled=!busy){Text("إزالة الصورة")}
+                        }
+                        if(reel && videoSource.isNotBlank()){
+                            Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                                PublishInput(clipStart,{clipStart=it.filter(Char::isDigit).take(3);reelJson="{}";reelUri=videoSource},"البداية بالثواني",numeric=true,modifier=Modifier.weight(1f),enabled=!busy)
+                                PublishInput(clipEnd,{clipEnd=it.filter(Char::isDigit).take(3);reelJson="{}";reelUri=videoSource},"النهاية بالثواني",numeric=true,modifier=Modifier.weight(1f),enabled=!busy)
+                            }
+                            Row {
+                                TextButton({previewVideo=true},enabled=!busy){Text("معاينة الفيديو")}
+                                TextButton({videoSource="";reelJson="{}";reelUri="";note=""},enabled=!busy){Text("إزالة الفيديو")}
+                            }
+                        }
+                        Text("${caption.length} / 500",style=MaterialTheme.typography.labelSmall)
                         PublishInput(
                             value = caption, onChange = { caption = it.take(500) },
-                            label = "عنوان أو وصف الريلز",
-                            hint = "اكتب عنوان الريلز أو وصفاً قصيراً...",
+                            label = "وصف المحتوى",
+                            hint = "اكتب وصفاً لمحتواك...",
                             modifier = Modifier.fillMaxWidth(), lines = 2, enabled = !busy
                         )
                         Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,
                             horizontalArrangement=Arrangement.spacedBy(12.dp)) {
                             Switch(checked=reelPaid,onCheckedChange={reelPaid=it},enabled=!busy)
-                            Text("ريلز مدفوع · عرض مموّه إلى حين الشراء",
+                            Text("محتوى مدفوع · معاينة مموّهة قبل الشراء",
                                 modifier=Modifier.weight(1f),style=MaterialTheme.typography.bodyMedium)
                         }
                         if(reelPaid)PublishInput(
                             value=reelPrice,
                             onChange={reelPrice=it.filter(Char::isDigit).take(7)},
-                            label="سعر فتح الريلز (كوين)",numeric=true,
+                            label="سعر الفتح بالكوينز",numeric=true,
                             modifier=Modifier.fillMaxWidth(),enabled=!busy
                         )
                     } else {
@@ -358,8 +450,8 @@ internal fun SellerPublishScreen(api: LayaliApi, initialReel: Boolean = false, b
                             )
                             PublishInput(
                                 value = price,
-                                onChange = { price = it.filter { c -> c.isDigit() || c == '.' }.take(10) },
-                                label = "السعر ($)", numeric = true,
+                                onChange = { price = it.filter(Char::isDigit).take(7) },
+                                label = "السعر بالكوينز", numeric = true,
                                 modifier = Modifier.weight(1f), enabled = !busy
                             )
                         }
@@ -385,16 +477,26 @@ internal fun SellerPublishScreen(api: LayaliApi, initialReel: Boolean = false, b
                         )
                         PublishMediaDropzone(
                             selected = offerMedia.has("id"), isReel = false, enabled = !busy,
-                            modifier = Modifier.fillMaxWidth().height(155.dp)
-                        ) { picker.launch("image/*") }
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 88.dp)
+                        ) { picker.launch(arrayOf("image/*")) }
                         if(offerMedia.has("id")) {
                             val imageUrl = offerMedia.optString("url")
                             if(imageUrl.isNotBlank())
                                 ReferenceImage(imageUrl, Modifier.fillMaxWidth().height(150.dp))
                         }
                     }
+                    OutlinedButton(onClick={cameraPermission.launch(android.Manifest.permission.CAMERA)},enabled=!busy){Text("التصوير بالكاميرا")}
+                    if(reel) TextButton({coverPicker.launch(arrayOf("image/*"))},enabled=!busy){Text(if(coverId.isBlank())"اختيار صورة الغلاف" else "استبدال صورة الغلاف")}
+                    Row(verticalAlignment=Alignment.CenterVertically){
+                        Text("خصوصية النشر",Modifier.weight(1f))
+                        FilterChip(!privatePost,{privatePost=false},enabled=!busy,label={Text("الجميع")})
+                        FilterChip(privatePost,{privatePost=true},enabled=!busy,label={Text("أنا فقط")})
+                    }
+                    Row(verticalAlignment=Alignment.CenterVertically){Text("السماح بالتعليقات",Modifier.weight(1f));Switch(allowComments,{allowComments=it},enabled=!busy)}
+                    if(pendingUri.isNotBlank() && !busy) {
+                        OutlinedButton({ uploadDraft(android.net.Uri.parse(pendingUri),reel) }) { Text(if(noteIsError)"إعادة محاولة الرفع" else "رفع الملف المختار") }
+                    }
                     Spacer(Modifier.height(6.dp))
-                }
 
                 Column(
                     Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 10.dp),
@@ -402,6 +504,7 @@ internal fun SellerPublishScreen(api: LayaliApi, initialReel: Boolean = false, b
                 ) {
                     if(busy) {
                         if(uploadProgress >= 0f) {
+                            Text(if(uploadProgress>=1f)"اكتمل الرفع · جارٍ تجهيز الملف" else "رفع الملف · ${(uploadProgress*100).toInt()}٪")
                             LinearProgressIndicator(
                                 progress = { uploadProgress.coerceIn(0f, 1f) },
                                 modifier = Modifier.fillMaxWidth()
@@ -411,19 +514,19 @@ internal fun SellerPublishScreen(api: LayaliApi, initialReel: Boolean = false, b
                     Button(
                         onClick = {
                             perform {
-                                val response = if(reel) {
+                                val response = if(reel||photo) {
                                     api.request(
-                                        "/api/reels", "POST",
-                                        JSONObject().put("media_id", reelMedia.getString("id"))
+                                        if(reel)"/api/reels" else "/api/paid-posts", "POST",
+                                        JSONObject().put("media_id", selectedMedia.getString("id")).put("owner_only",privatePost).put("comments_allowed",allowComments).put("cover_id",coverId)
                                             .put("caption", caption.trim())
                                             .put("price_cents", if(reelPaid)reelPrice.toInt()else 0)
                                     )
                                 } else {
                                     api.request(
                                         "/api/services", "POST",
-                                        JSONObject().put("title", title.trim())
+                                        JSONObject().put("publish_key",publishKey).put("owner_only",privatePost).put("comments_allowed",allowComments).put("title", title.trim())
                                             .put("description", description.trim())
-                                            .put("price_cents", BigDecimal(price.trim()).movePointRight(2).intValueExact())
+                                            .put("price_cents", price.trim().toInt())
                                             .put("category", category)
                                             .put("image_id", offerMedia.getString("id"))
                                             .put("duration_minutes", duration.toInt())
@@ -431,12 +534,14 @@ internal fun SellerPublishScreen(api: LayaliApi, initialReel: Boolean = false, b
                                     )
                                 }
                                 if(response.optString("status") == "published") {
-                                    if(reel) { reelMedia = JSONObject(); caption = "";reelPaid=false;reelPrice="" }
+                                    publishedJson=response.toString();showPhoto=false;publishKey=java.util.UUID.randomUUID().toString();coverId="";clipStart="";clipEnd=""
+                                    if(photo){caption="";reelPaid=false;reelPrice=""}
+                                    if(reel) { videoSource="";reelJson = "{}"; caption = "";reelPaid=false;reelPrice="" }
                                     else {
-                                        offerMedia = JSONObject(); title = ""; description = ""
+                                        offerJson = "{}"; title = ""; description = ""
                                         price = ""; duration = "30"; terms = ""
                                     }
-                                    note = "تم نشر المحتوى بنجاح."
+                                    note = ""
                                 } else {
                                     noteIsError = true
                                     note = "تم إرسال الطلب، لكن النشر لم يتأكد بعد. تحقق من تحديث الخادم."
@@ -452,10 +557,11 @@ internal fun SellerPublishScreen(api: LayaliApi, initialReel: Boolean = false, b
                         shape = RoundedCornerShape(17.dp)
                     ) {
                         Text(
-                            if(busy) "جارٍ النشر…" else "نشر الآن",
+                            if(uploadProgress>=0f) "جارٍ رفع الملف…" else if(busy) "جارٍ النشر…" else if(noteIsError && publishEnabled) "إعادة محاولة النشر" else "نشر الآن",
                             fontWeight = FontWeight.Bold, fontSize = 16.sp
                         )
                     }
+                }
                 }
             }
         }
@@ -476,10 +582,12 @@ private fun PublishSegment(
         border = androidx.compose.foundation.BorderStroke(
             1.dp, if(selected) PublishSelected else PublishLine
         ),
-        color = if(selected) PublishSelected else Color.Transparent,
-        contentColor = PublishNavy
+        color = if(selected) Color(0xFF214D9A) else MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = if(selected) Color.White else MaterialTheme.colorScheme.onSurface
     ) {
-        Box(Modifier.fillMaxSize().padding(horizontal = 5.dp), contentAlignment = Alignment.Center) {
+        Row(Modifier.fillMaxSize(), verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.Center) {
+            Icon(if(title=="ريلز") Icons.Rounded.SmartDisplay else if(title=="صورة") Icons.Rounded.PhotoCamera else Icons.Rounded.Storefront,null,Modifier.size(16.dp))
+            Spacer(Modifier.width(3.dp))
             Text(
                 title, fontWeight = if(selected) FontWeight.Bold else FontWeight.Medium,
                 fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -520,63 +628,27 @@ private fun PublishMediaDropzone(
     selected: Boolean, isReel: Boolean, enabled: Boolean,
     modifier: Modifier = Modifier, onPick: () -> Unit
 ) {
-    val radius = 22.dp
-    Box(
-        modifier
-            .clip(RoundedCornerShape(radius))
-            .background(MaterialTheme.colorScheme.surfaceContainerLow)
-            .drawBehind {
-                val stroke = 1.5.dp.toPx()
-                val inset = stroke / 2f
-                drawRoundRect(
-                    color = PublishLine,
-                    topLeft = Offset(inset, inset),
-                    size = Size(size.width - stroke, size.height - stroke),
-                    cornerRadius = CornerRadius(radius.toPx()),
-                    style = Stroke(
-                        width = stroke,
-                        pathEffect = PathEffect.dashPathEffect(
-                            floatArrayOf(10.dp.toPx(), 8.dp.toPx())
-                        )
-                    )
-                )
-            }
-            .clickable(enabled = enabled, onClick = onPick)
-            .padding(16.dp),
-        contentAlignment = Alignment.Center
+    val title = when {
+        selected -> if (isReel) "استبدال الفيديو" else "استبدال الصورة"
+        isReel -> "أضف الفيديو الخاص بك"
+        else -> "أضف صورة لمحتواك"
+    }
+    val shape = RoundedCornerShape(22.dp)
+    Row(
+        modifier.clip(shape).background(androidx.compose.ui.graphics.Brush.linearGradient(
+            listOf(Color(0xFF142F69), Color(0xFF234AAA), Color(0xFF325ECD))
+        )).clickable(enabled = enabled, onClick = onPick).padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = PublishSelected,
-                modifier = Modifier.size(64.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        if(isReel) Icons.Rounded.SmartDisplay else Icons.Rounded.PhotoCamera,
-                        contentDescription = null,
-                        modifier = Modifier.size(30.dp), tint = PublishNavy
-                    )
-                }
-            }
-            Text(
-                when {
-                    selected && isReel -> "تم رفع الفيديو · اضغط للاستبدال"
-                    selected -> "تم رفع الصورة · اضغط للاستبدال"
-                    isReel -> "اختيار فيديو MP4 من الهاتف · حتى 20MB"
-                    else -> "رفع صورة من الهاتف · حتى 8MB"
-                },
-                textAlign = TextAlign.Center,
-                style = MaterialTheme.typography.bodyMedium,
-                color = PublishNavy, fontWeight = FontWeight.Medium
-            )
-            if(selected) Icon(
-                Icons.Rounded.CheckCircle, "الملف مرفوع",
-                tint = Color(0xFF2E795F), modifier = Modifier.size(18.dp)
-            )
+        Surface(shape = RoundedCornerShape(15.dp), color = Color.White.copy(alpha = 0.16f)) {
+            Icon(if (selected) Icons.Rounded.CheckCircle else if (isReel) Icons.Rounded.SmartDisplay
+                 else Icons.Rounded.PhotoCamera, null, Modifier.padding(11.dp).size(23.dp), tint = Color.White)
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(title, color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text("اختر من المعرض أو استخدم الكاميرا", color = Color(0xFFE4ECFF),
+                 style = MaterialTheme.typography.bodySmall)
         }
     }
 }

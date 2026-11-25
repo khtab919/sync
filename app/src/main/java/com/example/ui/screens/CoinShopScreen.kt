@@ -50,6 +50,7 @@ private data class StorePackage(val coins:Int,val bonusPoints:Int){ val id:Strin
 private data class StorePaymentMethod(val code:String,val name:String,val description:String,val icon:ImageVector,val enabled:Boolean)
 
 private fun manualMethods(info:JSONObject) = listOf(
+    StorePaymentMethod("banktr","حوالة بنكية","تحويل إلى حساب Luay Elomar وإرفاق الإيصال",Icons.Rounded.AccountBalanceWallet,info.optBoolean("banktr_enabled")),
     StorePaymentMethod("shamcash","شام كاش","تحويل إلى الحساب وإرفاق الإيصال",Icons.Rounded.AccountBalanceWallet,info.optBoolean("shamcash_enabled")),
     StorePaymentMethod("syriatelcash","سيريتيل كاش","تحويل بالليرة السورية وإرفاق الإيصال",Icons.Rounded.Smartphone,info.optBoolean("syriatel_cash_enabled")),
     StorePaymentMethod("usdt","تحويل USDT يدوي","شبكة BNB Smart Chain · BEP20",Icons.Rounded.Payments,
@@ -128,7 +129,7 @@ internal fun CoinPackage(coins:Int,bonus:Int,dollars:String,selected:Boolean,bad
                     maxLines=1)
             } else Spacer(Modifier.height(14.dp))
             Surface(color=MaterialTheme.colorScheme.surfaceVariant,shape=RoundedCornerShape(50.dp)){
-                Text("USD ${dollars}",Modifier.padding(horizontal=10.dp,vertical=7.dp),
+                Text(if(selected)"محددة" else "اختيار",Modifier.padding(horizontal=10.dp,vertical=7.dp),
                     color=MaterialTheme.colorScheme.onSurface,fontSize=12.sp,fontWeight=FontWeight.Bold,maxLines=1)
             }
         }
@@ -237,7 +238,7 @@ internal fun CoinShopScreen(api:LayaliApi, back:()->Unit) {
             FilterChip(showOrders,{showOrders=true},label={Text("طلباتي")},colors=chipColors)
         }
         if(!showOrders && submittedId.isBlank() && quote!=null) Text("أكمل عملية الدفع",style=MaterialTheme.typography.titleMedium,color=MaterialTheme.colorScheme.onSurface)
-        if(!showSelection) Text("100 كوين = 1 USD كقيمة أساسية داخل التطبيق. يظهر المبلغ النهائي قبل الدفع. النقاط الترويجية منفصلة وغير قابلة للسحب.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+        if(!showSelection) Text("النقاط الترويجية منفصلة وغير قابلة للسحب.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
         if(note.isNotBlank())Text(note,color=MaterialTheme.colorScheme.primary)
         if(busy)LuxuryLoadingStatus("جارٍ تحديث الطلب")
         if(submittedId.isNotBlank()) {
@@ -292,7 +293,7 @@ internal fun CoinShopScreen(api:LayaliApi, back:()->Unit) {
                     Text("التحقق من الدفع وتحديث الرصيد")
                 }
             } else {
-            Text(if(rail=="usdt")"USDT على BEP20 فقط"else if(rail=="syriatelcash")"استلام عبر سيريتيل كاش"else"استلام عبر شام كاش",fontWeight=FontWeight.Bold)
+            Text(if(rail=="usdt")"USDT على BEP20 فقط"else if(rail=="banktr") "المستفيد: ${quote.optString("beneficiary")}" else if(rail=="syriatelcash")"استلام عبر سيريتيل كاش"else"استلام عبر شام كاش",fontWeight=FontWeight.Bold)
             Surface(color=Color.White,shape=RoundedCornerShape(24.dp)) { ReferenceImage(quote.optString("qr_url"),Modifier.fillMaxWidth().height(128.dp).padding(16.dp),contentScale=androidx.compose.ui.layout.ContentScale.Fit) }
             Text(quote.optString("destination"),style=MaterialTheme.typography.bodyMedium.copy(textDirection=androidx.compose.ui.text.style.TextDirection.Ltr))
             OutlinedButton(onClick={(context.getSystemService(Context.CLIPBOARD_SERVICE)as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Relaxia payment",quote.optString("destination")));note="تم نسخ بيانات الاستلام."}){Text("نسخ بيانات الاستلام")}
@@ -328,7 +329,7 @@ internal fun CoinShopScreen(api:LayaliApi, back:()->Unit) {
                 Surface(color=MaterialTheme.colorScheme.primaryContainer,shape=RoundedCornerShape(22.dp)){
                     Column(Modifier.fillMaxWidth().padding(16.dp),verticalArrangement=Arrangement.spacedBy(5.dp)){
                         Text("${java.text.NumberFormat.getIntegerInstance(java.util.Locale.US).format(selected)} كوين",fontSize=21.sp,fontWeight=FontWeight.Bold)
-                        Text("القيمة الأساسية: ${BigDecimal.valueOf(selected.toLong(),2).toPlainString()} USD",style=MaterialTheme.typography.bodyMedium)
+                        Text("الباقة المختارة: $selected كوين",style=MaterialTheme.typography.bodyMedium)
                         if((chosen?.bonusPoints?:0)>0)Text("+${chosen?.bonusPoints} نقطة ترويجية إضافية",color=MaterialTheme.colorScheme.primary)
                     }
                 }

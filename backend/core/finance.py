@@ -26,6 +26,8 @@ def settle(operation):
     if source.reserved_cents<operation.amount_cents:raise ApiError('financial_review_required',409)
     source.reserved_cents-=operation.amount_cents;source.balance_cents-=operation.amount_cents
     share=operation.amount_cents*80//100;target.balance_cents+=share
+    if operation.kind in ('live_gift','booking'):
+        target.earned_coins+=share
     source.save(update_fields=['reserved_cents','balance_cents']);target.save(update_fields=['balance_cents'])
     operation.creator_cents=share;operation.platform_cents=operation.amount_cents-share;operation.status='settled';operation.settled_at=timezone.now();operation.save()
 

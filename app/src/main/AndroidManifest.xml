@@ -47,6 +47,9 @@
                 <data android:scheme="relaxia" />
             </intent-filter>
         </activity>
+        <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.publish.files" android:exported="false" android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/relaxia_publish_camera"/>
+        </provider>
     </application>
 
 </manifest>

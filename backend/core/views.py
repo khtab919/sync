@@ -119,7 +119,7 @@ def issue_token(user):
 def health(request):
     with connection.cursor() as cursor:
         cursor.execute('SELECT 1')
-    return JsonResponse({'status': 'ok', 'registration_version': 6, 'avatar_upload_version':1, 'identity_required': False, 'brand': 'Relaxia', 'mobile_admin_version': 2, 'commerce_version': 1, 'calls_version': 2, 'messaging_version': 3, 'paid_chat_version':1, 'shop_version': 2, 'live_version':2, 'booking_payment_version':1, 'pagination_version':1, 'upload_version':2, 'push_version':1, 'account_version':1, 'build':'11.6', 'revision':__import__('os').environ.get('RELEASE_COMMIT','development')})
+    return JsonResponse({'status': 'ok', 'registration_version': 6, 'avatar_upload_version':1, 'identity_required': False, 'brand': 'Relaxia', 'mobile_admin_version': 2, 'commerce_version': 1, 'calls_version': 2, 'messaging_version': 3, 'paid_chat_version':1, 'shop_version': 2, 'live_version':2, 'booking_payment_version':1, 'pagination_version':1, 'upload_version':3, 'push_version':1, 'account_version':1, 'build':'11.6', 'revision':__import__('os').environ.get('RELEASE_COMMIT','development')})
 
 @endpoint(['POST'], authenticated=False)
 def register(request):
@@ -316,7 +316,7 @@ def service_json(service, viewer, identity=None):
     from .public_presence import public_presence
     if identity is None:
         identity = public_presence(service.owner)
-    return {'duration_minutes':service.duration_minutes,'terms':service.terms,'id': service.pk, 'owner_id': service.owner_id,
+    return {'owner_only':service.owner_only,'comments_allowed':service.comments_allowed,'duration_minutes':service.duration_minutes,'terms':service.terms,'id': service.pk, 'owner_id': service.owner_id,
             'owner_name': identity['name'], 'level':identity['level'], 'vip_tier':identity['vip_tier'], 'identity_verified':identity['identity_verified'],
             'owner_frame': identity['selected_frame'], 'owner_avatar_url': identity['avatar_url'], 'title': service.title,
             'description': service.description, 'price_cents': service.price_cents,
@@ -371,8 +371,17 @@ def services(request):
     if type(duration) is not int or not 1<=duration<=1440:raise ApiError('invalid_duration')
     terms=p.get('terms','')
     if not isinstance(terms,str) or len(terms)>600:raise ApiError('invalid_terms')
-    service = Service.objects.create(duration_minutes=duration,terms=terms,image=media, owner=request.actor, title=text(p, 'title', 3, 150), description=text(p, 'description', 10, 600), price_cents=amount(p, 'price_cents'), image_url=image_url, category=category, approved=True)
-    return JsonResponse({'id': service.pk, 'status': 'published'}, status=201)
+    from .publication import options,notify
+    key=uuid.UUID(str(p['publish_key'])) if p.get('publish_key') else None
+    with transaction.atomic():
+        User.objects.select_for_update().get(pk=request.actor.pk)
+        existing=Service.objects.filter(owner=request.actor,publish_key=key).first() if key else None
+        if existing:return JsonResponse({'id':existing.pk,'status':'published','item':service_json(existing,request.actor)})
+        service=Service.objects.create(duration_minutes=duration,terms=terms,image=media,owner=request.actor,
+            title=text(p,'title',3,150),description=text(p,'description',10,600),price_cents=amount(p,'price_cents'),
+            image_url=image_url,category=category,approved=not p.get("owner_only",False),publish_key=key,**options(p))
+        notify(request.actor,'service',service)
+    return JsonResponse({'id':service.pk,'status':'published','item':service_json(service,request.actor)},status=201)
 
 @endpoint(['POST'])
 def reaction(request, service_id):
@@ -576,17 +585,20 @@ def reels(request):
         caption=request.payload.get('caption','')
         if not isinstance(caption,str) or len(caption)>500:raise ApiError('invalid_caption')
         with transaction.atomic():
+            type(media).objects.select_for_update().get(pk=media.pk)
             existing=Reel.objects.filter(media=media).first()
             if existing:
                 if existing.price_cents!=price or existing.caption!=caption:
                     raise ApiError('media_already_published',409)
                 return JsonResponse({'id':existing.pk,'status':'published'})
-            preview=_photo_preview(media) if price>0 else None
+            from .publication import options,notify,cover
+            preview=cover(request.payload,request.actor) or (_photo_preview(media) if price>0 else None)
             reel=Reel.objects.create(
                 owner=request.actor,media=media,
                 video_url=request.build_absolute_uri(f'/api/media/{media.pk}'),
-                approved=True,caption=caption,price_cents=price,preview=preview
+                approved=not request.payload.get("owner_only",False),caption=caption,price_cents=price,preview=preview,**options(request.payload)
             )
+            notify(request.actor,'reel',reel)
         return JsonResponse({'id': reel.pk, 'status': 'published'}, status=201)
     from .feed_ranking import rank_feed
     from .models import ReelPreference
@@ -594,7 +606,7 @@ def reels(request):
     queryset=queryset.exclude(pk__in=ReelPreference.objects.filter(user=request.actor,hidden=True).values('reel_id'))
     if request.GET.get('owner'):queryset=queryset.filter(owner_id=int(request.GET['owner']))
     if request.GET.get('saved')=='1':queryset=queryset.filter(pk__in=ReelPreference.objects.filter(user=request.actor,saved=True).values('reel_id'))
-    if request.GET.get('reel_id'):queryset=queryset.filter(pk=int(request.GET['reel_id']))
+    if request.GET.get('reel_id'):queryset=(queryset | Reel.objects.filter(owner=request.actor,owner_only=True)).filter(pk=int(request.GET['reel_id']))
     q=request.GET.get('q','').strip().removeprefix('@')[:100]
     if q:queryset=queryset.filter(Q(caption__icontains=q)|Q(owner__username__icontains=q)|Q(owner__profile__display_name__icontains=q)|Q(owner__profile__public_id=q))
     if request.GET.get('following')=='1':queryset=queryset.filter(owner_id__in=Follow.objects.filter(user=request.actor).values('creator_id'))
@@ -659,7 +671,7 @@ def reel_like(request, reel_id):
 def wallet(request):
     row = Wallet.objects.get(user=request.actor)
     from .promotions import balance
-    return JsonResponse({'promotional_points':balance(request.actor),'promotional_withdrawable':False,'currency': 'USD', 'balance_cents': row.balance_cents, 'reserved_cents': row.reserved_cents, 'available_cents': row.balance_cents - row.reserved_cents})
+    return JsonResponse({'promotional_points':balance(request.actor),'promotional_withdrawable':False,'withdrawable_coins':row.withdrawable(), 'currency': 'USD', 'balance_cents': row.balance_cents, 'reserved_cents': row.reserved_cents, 'available_cents': row.balance_cents - row.reserved_cents})
 
 @endpoint(['GET', 'POST'])
 def withdrawals(request):
@@ -753,7 +765,7 @@ def reel_detail(request,reel_id):
     row=Reel.objects.filter(pk=reel_id,owner=request.actor).first()
     if row is None:raise ApiError('reel_unavailable',404)
     if request.method=='DELETE':
-        row.active=False;row.save(update_fields=['active'])
+        row.active=False;row.owner_only=False;row.save(update_fields=['active','owner_only'])
         return JsonResponse({'deleted':True})
     if set(request.payload)-{'caption','price_cents'}:raise ApiError('unsupported_reel_field')
     if 'caption' in request.payload:row.caption=text(request.payload,'caption',0,500)
@@ -773,7 +785,7 @@ def service_detail(request,service_id):
     row=Service.objects.filter(pk=service_id,owner=request.actor).first()
     if row is None:raise ApiError('service_unavailable',404)
     if request.method=='DELETE':
-        row.active=False;row.save(update_fields=['active'])
+        row.active=False;row.owner_only=False;row.save(update_fields=['active','owner_only'])
         return JsonResponse({'deleted':True})
     p=request.payload
     if set(p)-{'title','description','price_cents','duration_minutes','terms','category'}:

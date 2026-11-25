@@ -248,7 +248,7 @@ fun ServerAppScreen(baseUrl: String) {
         avatarUrl = profile.optString("avatar_url")
         profileUsername = profile.optString("username")
         profileEmail = profile.optString("email")
-        chatPrice = (profile.optInt("chat_price_cents") / 100.0).toString()
+        chatPrice = profile.optInt("chat_price_cents").toString()
         open("تعديل الملف")
     }
     fun showService(item: JSONObject) { selected = item; open("تفاصيل العرض") }
@@ -380,12 +380,15 @@ fun ServerAppScreen(baseUrl: String) {
     }
     if(securityDialog)AccountSecurityDialog(api,!signedIn,{securityDialog=false}){signedIn=false;remembered=false;profile=JSONObject();page=""}
     val screen = page.ifBlank { destinations[tab] }
-    val mainListState = rememberLazyListState()
-    // The home feed must always open at the first card, not at a recycled
-    // scroll offset from another bottom-navigation destination.
-    LaunchedEffect(screen, signedIn) {
-        if (signedIn && screen == "تصفح") mainListState.scrollToItem(0)
+    var homeReels by remember(profile.optInt("id")){mutableStateOf(emptyList<JSONObject>())}
+    LaunchedEffect(screen,signedIn,revision){
+        if(screen=="تصفح" && signedIn){
+            try{homeReels=api.request("/api/reels").rows().take(8)}
+            catch(cancel:kotlinx.coroutines.CancellationException){throw cancel}
+            catch(_:Exception){homeReels=emptyList()}
+        }
     }
+    val mainListState = remember(screen, signedIn) { androidx.compose.foundation.lazy.LazyListState() }
     LaunchedEffect(signedIn,screen,foreground,revision){
         if(!signedIn || screen!="تصفح" || !foreground)return@LaunchedEffect
         var retryDelay=5000L
@@ -683,10 +686,10 @@ fun ServerAppScreen(baseUrl: String) {
                 ){heldRoom="";selectedHomeRoomId="";back();revision++}
             }
             if (!mini) return@MyApplicationTheme
-            androidx.compose.ui.window.Popup(alignment=Alignment.TopStart) {
+            if(screen !in listOf("نشر ريلز","إضافة عرض","نشر صورة مدفوعة")) androidx.compose.ui.window.Popup(alignment=Alignment.TopStart) {
                 Surface(onClick={open(heldRoom)},modifier=Modifier.statusBarsPadding().padding(start=8.dp,top=4.dp),
                     shape=RoundedCornerShape(20.dp),color=MaterialTheme.colorScheme.primaryContainer,shadowElevation=5.dp) {
-                    Text("↩  "+miniTitle.take(24)+" · "+miniMic,Modifier.padding(horizontal=12.dp,vertical=9.dp),
+                    Text("↩  "+miniTitle.take(12)+" · "+miniMic,Modifier.padding(horizontal=12.dp,vertical=9.dp),
                         style=MaterialTheme.typography.labelMedium,maxLines=1)
                 }
             }
@@ -713,12 +716,12 @@ fun ServerAppScreen(baseUrl: String) {
         if(screen=="سجل العمليات"){FinancialHistory(api){back()};return@MyApplicationTheme}
         if(screen=="الحجوزات"){BookingHistory(api,explore={tab=2;back();revision++}){back();revision++};return@MyApplicationTheme}
 
-        if(screen=="نشر صورة مدفوعة"){
-            PaidPhotoPublishScreen(api){back();revision++}
-            return@MyApplicationTheme
-        }
-        if (screen == "إضافة عرض" || screen == "نشر ريلز") {
-            SellerPublishScreen(api, initialReel = screen == "نشر ريلز") { back(); revision++ }
+        if (screen in listOf("إضافة عرض","نشر ريلز","نشر صورة مدفوعة")) {
+            SellerPublishScreen(api, initialReel = screen == "نشر ريلز",initialPhoto=screen=="نشر صورة مدفوعة",returnToRoom=if(heldRoom.isNotBlank())({open(heldRoom)}) else null, accountId=profile.optInt("id"),onHome={page="";tab=0;revision++},
+                onView={isReel,result->
+                    if(isReel){directReel=result.getInt("id").toString();page="";tab=1;revision++}
+                    else {val item=result.optJSONObject("item");if(item!=null)showService(item) else {page="";tab=2;revision++}}
+                }) { back(); revision++ }
             return@MyApplicationTheme
         }
         if (screen == "محادثة" && peerId.toIntOrNull() != null) {
@@ -889,9 +892,20 @@ fun ServerAppScreen(baseUrl: String) {
                     }
                 } else PullToRefreshBox(isRefreshing = loading, onRefresh = { if (!loading) revision++ }, modifier = Modifier.weight(1f)) {
                 LazyColumn(Modifier.fillMaxSize(), state=mainListState, contentPadding = PaddingValues(bottom = if(screen=="تصفح") 120.dp else 40.dp), verticalArrangement = Arrangement.spacedBy(if (screen == "تصفح") 5.dp else 12.dp)) {
-                    if ((loading && rows.isEmpty() && screen in listOf("دردشة", "الحجوزات", "المحفوظات", "ريلز")) || (loading && services.isEmpty() && screen in listOf("تصفح", "العرض"))) item { LuxurySkeletonCards() }
+                    if ((loading && rows.isEmpty() && screen in listOf("دردشة", "الحجوزات", "المحفوظات", "ريلز")) || (loading && services.isEmpty() && screen == "العرض")) item { LuxurySkeletonCards() }
                     when (screen) {
                         "تصفح" -> {
+                            item(key = "home_dashboard") {
+                                RelaxiaHomeDashboard(
+                                    profile = profile,
+                                    balanceCents = if (walletAccountId == profile.optInt("id") && wallet.has("available_cents"))
+                                        wallet.optLong("available_cents") else null,
+                                    onProfile = { page = ""; tab = 4 },
+                                    onWallet = { open("المحفظة") },
+                                    onLive = { open("البث المباشر") },
+                                    onAudio = { open("بدء غرفة صوتية") }
+                                )
+                            }
                             if(livePreview.isNotEmpty()){
                                 item(key="home_live_hosts"){
                                     RelaxiaLiveHostsBar(
@@ -906,17 +920,6 @@ fun ServerAppScreen(baseUrl: String) {
                                         }
                                     )
                                 }
-                            }
-                            item(key = "home_dashboard") {
-                                RelaxiaHomeDashboard(
-                                    profile = profile,
-                                    balanceCents = if (walletAccountId == profile.optInt("id") && wallet.has("available_cents"))
-                                        wallet.optLong("available_cents") else null,
-                                    onProfile = { page = ""; tab = 4 },
-                                    onWallet = { open("المحفظة") },
-                                    onLive = { open("البث المباشر") },
-                                    onAudio = { open("بدء غرفة صوتية") }
-                                )
                             }
                             // The feed starts immediately when there are no live rooms.
                             // Show only real live previews, loading or an actionable server error.
@@ -935,6 +938,24 @@ fun ServerAppScreen(baseUrl: String) {
                                             open("البث المباشر")
                                         }
                                     )
+                                }
+                            }
+                            if(homeReels.isNotEmpty())item(key="suggested_reels"){
+                                Column(Modifier.fillMaxWidth().padding(horizontal=14.dp)){
+                                    Text("ريلز مقترحة",style=MaterialTheme.typography.titleMedium)
+                                    LazyRow(horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                                        items(homeReels,key={it.optInt("id")}){clip->
+                                            Surface(onClick={directReel=clip.optInt("id").toString();tab=1;page="";revision++},
+                                                shape=RoundedCornerShape(14.dp),color=MaterialTheme.colorScheme.surfaceVariant){
+                                                Column(Modifier.width(112.dp).padding(8.dp)){
+                                                    val cover=clip.optString("preview_url")
+                                                    if(cover.isNotBlank())ReferenceImage(cover,Modifier.fillMaxWidth().height(66.dp))
+                                                    else Icon(Icons.Rounded.PlayArrow,"تشغيل",Modifier.size(28.dp))
+                                                    Text(clip.optString("caption").ifBlank{clip.optString("owner_name","ريلز")},maxLines=1,overflow=TextOverflow.Ellipsis)
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                             item(key = "home_feed_heading") {
@@ -1153,7 +1174,7 @@ fun ServerAppScreen(baseUrl: String) {
                                     "لا يوجد محتوى منشور بعد","ستظهر الصور والريلز والخدمات هنا.")
                             }
                             items(creatorContent,key={it.optString("kind")+":"+it.optInt("id")}){content->
-                                Box(Modifier.fillMaxWidth().padding(horizontal=18.dp,vertical=5.dp)){
+                                Column(Modifier.fillMaxWidth().padding(horizontal=18.dp,vertical=5.dp)){
                                     CreatorContentCard(
                                         api=api,item=content,mine=own,
                                         onChanged={updated->
@@ -1173,6 +1194,7 @@ fun ServerAppScreen(baseUrl: String) {
                                         onPlayReel={id->directReel=id.toString();page="";tab=1},
                                         onOpenService={offer->showService(offer)}
                                     )
+                                    if(content.optBoolean("comments_allowed",true))PublicationComments(api,content.optString("kind"),content.optInt("id"))
                                 }
                             }
 
@@ -1223,7 +1245,7 @@ fun ServerAppScreen(baseUrl: String) {
                                 Field(profileEmail, { profileEmail = it }, "البريد الإلكتروني لتسجيل الدخول")
                                 if(profileEmail.trim()!=profile.optString("email"))OutlinedTextField(emailPassword,{emailPassword=it},label={Text("كلمة المرور لتأكيد تغيير البريد")},visualTransformation=PasswordVisualTransformation())
                                 if (profile.optBoolean("publishing_allowed"))
-                                    Field(chatPrice, { chatPrice = it }, "رسوم المحادثة بالدولار · 0 للمجانية", numeric = true)
+                                    Field(chatPrice, { chatPrice = it }, "رسوم المحادثة بالكوينز · 0 للمجانية", numeric = true)
                             }
                             ReferencePrimary("حفظ التعديلات", !submitting && displayName.isNotBlank()) { perform {
                                 val body = JSONObject().put("display_name", displayName.trim())
@@ -1231,7 +1253,7 @@ fun ServerAppScreen(baseUrl: String) {
                                 if (profileGender.isNotBlank()) body.put("gender", profileGender)
                                 if (advanced) {
                                     body.put("username", profileUsername).put("email", profileEmail.trim()).put("current_password",emailPassword)
-                                    if (profile.optBoolean("publishing_allowed")) body.put("chat_price_cents", cents(chatPrice))
+                                    if (profile.optBoolean("publishing_allowed")) body.put("chat_price_cents", chatPrice.trim().toInt().also { require(it >= 0) })
                                 }
                                 profile = api.request("/api/me", "PATCH", body)
                                 emailPassword="";page = ""; tab = 4; notice = "تم حفظ التعديلات."
@@ -1289,6 +1311,7 @@ fun ServerAppScreen(baseUrl: String) {
                                 } }
                                 ReferencePrimary("إضافة رصيد", !submitting) { buyCredits() }
                                 ReferenceRow(Icons.Rounded.ReceiptLong, "سجل العمليات والإيصالات") { open("سجل العمليات") }
+                                Text("القابل للسحب من الدعم والحجوزات: ${wallet.optLong("withdrawable_coins")} كوين")
                                 Text("سحب USDT", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                                 Text("اختر الشبكة المطابقة لعنوانك. تعتمد الإدارة طلب السحب قبل تنفيذ التحويل عبر بوابة الدفع.",
                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1308,7 +1331,7 @@ fun ServerAppScreen(baseUrl: String) {
                                 else destination.matches(Regex("0x[a-fA-F0-9]{40}"))
                                 if (destination.isNotBlank() && !validDestination)
                                     Text("عنوان المحفظة لا يطابق الشبكة", color = MaterialTheme.colorScheme.error)
-                                ReferencePrimary("طلب سحب", !submitting && validDestination && (price.toDoubleOrNull() ?: 0.0) > 0.0) { perform {
+                                ReferencePrimary("طلب سحب", !submitting && validDestination && runCatching { cents(price).toLong() in 1L..wallet.optLong("withdrawable_coins") }.getOrDefault(false)) { perform {
                                     api.request("/api/withdrawals", "POST",
                                         JSONObject().put("amount_cents", cents(price))
                                             .put("destination", destination)
@@ -2140,6 +2163,7 @@ private fun ReelItemView(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            if(row.optBoolean("comments_allowed",true))PublicationComments(api,"reel",row.optInt("id"))
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 IconButton(
                     onClick = { setLike(!liked) },
@@ -2222,6 +2246,8 @@ private fun friendlyError(code: String?): String = when (code) {
     "verified_creator_required", "creator_account_required" -> "صلاحية النشر موقوفة لهذا الحساب. تواصل مع الدعم."
     "identity_verification_required" -> "خادم التطبيق ما زال بالنسخة القديمة. حدّثه لتفعيل عرض الريلز للجميع."
     "paid_chat_requires_verified_payment" -> "المحادثة مدفوعة. الدفع غير مفعّل بعد، ولم تُرسل الرسالة."
+    "insufficient_withdrawable_earnings" -> "المبلغ يتجاوز أرباح الدعم والحجوزات المتاحة للسحب."
+    "bank_exchange_rate_unavailable" -> "تعذّر جلب سعر الليرة التركية. أعد المحاولة بعد قليل."
     "insufficient_funds" -> "رصيدك المتاح لا يكفي لطلب السحب."
     "too_many_attempts" -> "محاولات كثيرة. حاول بعد 15 دقيقة."
     "username_unavailable" -> "اسم المستخدم مستخدم بالفعل أو محجوز. اختر اسمًا آخر."

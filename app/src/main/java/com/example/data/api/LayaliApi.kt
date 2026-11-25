@@ -21,8 +21,8 @@ class LayaliApi internal constructor(private val baseUrl: String, private val se
         require(url.protocol == "https" && url.host.isNotBlank() && url.userInfo == null)
     }
 
-    suspend fun upload(context: android.content.Context, uri: android.net.Uri, purpose: String, progress:(Float)->Unit={}): JSONObject = withContext(Dispatchers.IO) {
-        val maximum = if(purpose=="reel")20*1024*1024 else 8*1024*1024
+    suspend fun upload(context: android.content.Context, uri: android.net.Uri, purpose: String, clipStart:Int=0, clipEnd:Int=0, progress:(Float)->Unit={}): JSONObject = withContext(Dispatchers.IO) {
+        val maximum = if(purpose=="reel")96*1024*1024 else 8*1024*1024
         val temporary=java.io.File.createTempFile("relaxia-upload-",".bin",context.cacheDir)
         try {
             val digest=java.security.MessageDigest.getInstance("SHA-256")
@@ -31,16 +31,18 @@ class LayaliApi internal constructor(private val baseUrl: String, private val se
                 while(true){val n=input.read(buffer);if(n<0)break;size+=n;if(size>maximum)throw ApiException("file_too_large");output.write(buffer,0,n);digest.update(buffer,0,n)}
             }} ?: throw ApiException("invalid_file")
             // During a staged deployment older servers still accept the original upload API.
-            if(request("/health/").optInt("upload_version")<2){
+            val version=request("/health/").optInt("upload_version")
+            if((temporary.length()>20L*1024*1024 || clipStart>0 || clipEnd>0) && version<3) throw ApiException("server_update_required")
+            if(version<2){
                 val legacy=request("/api/upload","POST",JSONObject().put("purpose",purpose).put("data",android.util.Base64.encodeToString(temporary.readBytes(),android.util.Base64.NO_WRAP)))
                 withContext(Dispatchers.Main){progress(1f)}
                 return@withContext legacy
             }
             val checksum=digest.digest().joinToString(""){"%02x".format(it)}
             val preferences=context.getSharedPreferences("relaxia_uploads",android.content.Context.MODE_PRIVATE)
-            val pendingKey=java.security.MessageDigest.getInstance("SHA-256").digest((origin+":"+token+":"+purpose+":"+checksum).toByteArray()).joinToString(""){"%02x".format(it)}
+            val pendingKey=java.security.MessageDigest.getInstance("SHA-256").digest((origin+":"+token+":"+purpose+":"+clipStart+":"+clipEnd+":"+checksum).toByteArray()).joinToString(""){"%02x".format(it)}
             val requestKey=preferences.getString(pendingKey,null) ?: java.util.UUID.randomUUID().toString().also{preferences.edit().putString(pendingKey,it).commit()}
-            val session=request("/api/uploads","POST",JSONObject().put("purpose",purpose).put("size",temporary.length()).put("sha256",checksum).put("request_key",requestKey))
+            val session=request("/api/uploads","POST",JSONObject().put("purpose",purpose).put("size",temporary.length()).put("sha256",checksum).put("clip_start",clipStart).put("clip_end",clipEnd).put("request_key",requestKey))
             val id=session.getString("id");var offset=session.getLong("offset")
             java.io.RandomAccessFile(temporary,"r").use { input ->
                 val buffer=ByteArray(262144)
@@ -56,7 +58,13 @@ class LayaliApi internal constructor(private val baseUrl: String, private val se
                     offset=result!!.getLong("offset");withContext(Dispatchers.Main){progress(offset.toFloat()/temporary.length())}
                 }
             }
-            val result=request("/api/uploads/$id/finish","POST",JSONObject())
+            var result=request("/api/uploads/$id/finish","POST",JSONObject())
+            var waits=0
+            while(result.optBoolean("processing") && waits++ < 300) {
+                kotlinx.coroutines.delay(3000)
+                result=request("/api/uploads/$id/finish","POST",JSONObject())
+            }
+            if(!result.has("id"))throw ApiException("processing_pending")
             preferences.edit().remove(pendingKey).apply()
             result
         }finally{temporary.delete()}

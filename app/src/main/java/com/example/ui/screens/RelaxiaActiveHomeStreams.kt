@@ -67,7 +67,19 @@ internal fun RelaxiaActiveHomeStreams(
             TextButton(onClick = onBrowse) { Text("عرض الكل") }
         }
 
-        if (rooms.isNotEmpty()) {
+        if(rooms.size==1) {
+            val room=rooms.first()
+            Surface(onClick={onOpenRoom(room)},modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(18.dp),color=LiveRoyalDeep){
+                Row(Modifier.padding(14.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)){
+                    ReferenceAvatar(room.optString("owner_name"),0,42,room.optString("avatar_url"))
+                    Column(Modifier.weight(1f)){
+                        Text(room.optString("title"),color=Color.White,fontWeight=FontWeight.Bold,maxLines=1)
+                        Text(room.optString("owner_name")+" · "+room.optInt("viewers")+" مشاهد",color=Color.White,fontSize=12.sp)
+                    }
+                    Text("دخول",color=Color.White)
+                }
+            }
+        }else if (rooms.isNotEmpty()) {
             Row(
                 Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)

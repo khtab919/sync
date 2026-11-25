@@ -1,0 +1,209 @@
+/* Audio room geometry: the stage, transcript and controls occupy separate bands. */
+html[data-theme] body.audio-mode #stage.royal-room {
+  --night:#0b1730; --stage-light:#234777; --halo:#85bdff; --ink:#f5f8ff;
+  --chat-name:#b7d7ff; --chat-ink:#f5f8ff; --chat-shadow:none;
+  --voice-top:calc(56px + env(safe-area-inset-top,0px));
+  --voice-dock:calc(132px + env(safe-area-inset-bottom,0px));
+  --voice-seats:clamp(144px,48%,382px);
+  font-family:Alexandria,"Noto Sans Arabic",Tahoma,system-ui,sans-serif;
+  background:radial-gradient(ellipse at 51% 6%,var(--stage-light),transparent 55%),
+             radial-gradient(ellipse at 94% 53%,#82b4ef12,transparent 44%),var(--night)!important;
+  color:var(--ink)!important;
+}
+html[data-theme] body.audio-mode #stage.royal-room[data-theme=diamond]{--night:#10131d;--stage-light:#43495b;--halo:#d6e5f7}
+html[data-theme] body.audio-mode #stage.royal-room[data-theme=emerald]{--night:#081e23;--stage-light:#185049;--halo:#97e6cf}
+html[data-theme] body.audio-mode #stage.royal-room[data-theme=amethyst]{--night:#19152b;--stage-light:#493766;--halo:#d1b8fa}
+html[data-theme] body.audio-mode #stage.royal-room header {
+  top:env(safe-area-inset-top,0px)!important; height:54px!important;inset-inline:12px!important;
+  display:flex!important;direction:rtl;gap:5px!important;
+  border:0!important;background:transparent!important;box-shadow:none!important;
+}
+html body #stage.royal-room header #profile{order:-3;flex:1;min-width:0}
+html body #stage.royal-room header #viewers{order:-2}
+html body #stage.royal-room header .live-pill{order:-1}
+html body #stage.royal-room header #exit{order:4}
+html body #stage.royal-room #roomMini{order:3;width:42px;height:42px;border-radius:50%;color:white;background:#d1e6ff16;border:1px solid #d1e6ff34;font-size:21px}
+html body #stage.royal-room #roomMini[hidden]{display:none!important}
+html body #stage.royal-room header #follow{display:none!important}
+html body #stage.royal-room header .identity-avatar-ring{border:1.5px solid #b5c9e5!important;box-shadow:none!important}
+html body #stage.royal-room #connection.is-ready{opacity:0;pointer-events:none}
+html[data-theme] body.audio-mode #stage.royal-room #audioStage.seat-grid {
+  position:absolute!important;inset-inline:16px!important;top:var(--voice-top)!important;
+  height:var(--voice-seats)!important;max-height:none!important;bottom:auto!important;
+  display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  grid-template-rows:none!important;grid-auto-rows:max-content!important;grid-auto-flow:row;
+  align-content:start!important;justify-items:center;align-items:start;
+  gap:10px 12px!important;overflow:auto!important;padding:6px 0!important;
+  scrollbar-width:thin;scrollbar-color:#b1d3ff38 transparent;
+}
+html[data-theme] body.audio-mode #stage.royal-room #audioStage .audio-seat {
+  display:flex!important;flex-direction:column;align-items:center;justify-content:flex-start;
+  width:100%!important;min-width:0;min-height:76px!important;height:auto!important;
+  padding:2px!important;margin:0!important;gap:3px!important;
+  border:0!important;background:none!important;box-shadow:none!important;overflow:visible;
+}
+html body #stage.royal-room #audioStage .audio-seat:first-child {
+  grid-column:1/-1!important;position:relative;isolation:isolate;
+}
+html body #stage.royal-room #audioStage .audio-seat:first-child::before {
+  content:"";position:absolute;inset:58px 15% auto;height:28px;
+  border-radius:50%;background:radial-gradient(ellipse,var(--halo),transparent 70%);
+  opacity:.21;pointer-events:none;z-index:-1;
+}
+html body #stage.royal-room #audioStage :is(.room-portrait,.seat-plus) {
+  width:clamp(48px,13vw,56px)!important;height:clamp(48px,13vw,56px)!important;
+  flex:none!important;border-radius:50%!important;box-sizing:border-box;
+}
+html body #stage.royal-room #audioStage .host-seat .room-portrait {
+  width:72px!important;height:72px!important;
+}
+html body #stage.royal-room #audioStage .room-portrait {
+  border:1.5px solid #dce8f7b0;background:linear-gradient(155deg,#b0c6e03a,#173856);
+  box-shadow:0 3px 10px #0004;
+}
+html body #stage.royal-room #audioStage .seat-plus {
+  color:#c2d5ed!important;background:#b8d6ff0f!important;border:1.5px solid #bfdaff52!important;
+  box-shadow:inset 0 1px 2px #c8e1ff19!important;
+}
+html body #stage.royal-room #audioStage .seat-plus svg{width:22px;height:22px}
+html body #stage.royal-room #audioStage .audio-seat :is(.audio-name,small) {
+  background:none!important;border:0!important;box-shadow:none!important;
+  color:#e5eefb!important;padding:0!important;
+}
+html body #stage.royal-room #audioStage .audio-seat .audio-name{font-size:13px!important;line-height:18px!important}
+html body #stage.royal-room #audioStage .audio-seat small{font-size:10px!important;color:#aec6df!important}
+html body #stage.royal-room #audioStage .audio-waves{display:none!important}
+html body #stage.royal-room .audio-seat .room-portrait::after {
+  content:"";position:absolute;inset:-3px;border:1.5px solid var(--halo);border-radius:50%;
+  opacity:0;transform:scale(1);pointer-events:none;transition:opacity 200ms,transform 180ms;
+}
+html body #stage.royal-room .audio-seat.voice-active .room-portrait::after {
+  opacity:.9;transform:scale(calc(1 + var(--voice-strength,0)*.22));box-shadow:0 0 7px var(--halo);
+}
+html[data-theme] body.audio-mode #stage.royal-room #messages[role=log] {
+  top:calc(var(--voice-top) + var(--voice-seats) + 3px)!important;bottom:var(--voice-dock)!important;
+  inset-inline:16px!important;padding:5px 1px!important;gap:2px!important;
+  background:none!important;border:0!important;box-shadow:none!important;backdrop-filter:none!important;
+  mask-image:linear-gradient(to bottom,transparent,#000 10px)!important;
+}
+html body #stage.royal-room #messages .comment-body{color:#f5f8ff!important;font-size:14px!important}
+html body #stage.royal-room #messages .comment-author{color:#b8d9ff!important}
+html[data-theme] body.comments-hidden #stage.royal-room #audioStage.seat-grid {
+  height:calc(100% - var(--voice-top) - var(--voice-dock))!important;align-content:center!important;
+}
+html[data-theme] body.audio-mode #stage.royal-room footer {
+  inset-inline:0!important;bottom:0!important;top:auto!important;height:var(--voice-dock)!important;
+  box-sizing:border-box;padding:4px 16px max(6px,env(safe-area-inset-bottom,0px))!important;
+  background:linear-gradient(0deg,var(--night) 65%,transparent)!important;border:0!important;box-shadow:none!important;
+}
+html[data-theme] body.audio-mode #stage.royal-room footer .bottom {
+  display:flex!important;flex-flow:column!important;gap:4px!important;width:100%!important;
+  max-height:none!important;height:100%!important;justify-content:flex-end!important;
+}
+html body #stage.royal-room footer .bottom #composer {
+  order:0!important;width:100%!important;flex:0 0 42px!important;min-height:42px!important;
+  background:#e0efff13!important;border:1px solid #d8e8ff40!important;border-radius:20px!important;
+}
+html body #stage.royal-room footer .bottom .quick-actions {
+  order:1;display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr))!important;
+  width:100%!important;gap:2px!important;justify-items:center;align-items:end;
+}
+html body #stage.royal-room .quick-actions :is(#guests,#requestMic,#gift,#share){display:none!important}
+html body #stage.royal-room .quick-actions :is(#bigGiftBtn,#roomReact,#micQuick,#speaker,#more) {
+  display:grid!important;place-content:center;justify-items:center;
+  min-width:44px!important;width:44px!important;height:62px!important;padding:0!important;
+  margin:0!important;border:0!important;box-shadow:none!important;background:transparent!important;color:#eaf3ff!important;
+}
+html body #stage.royal-room .quick-actions button::after{font:600 10px/16px system-ui;color:#dce8f7}
+html body #stage.royal-room #bigGiftBtn{grid-column:1;grid-row:1}
+html body #stage.royal-room #roomReact{grid-column:2;grid-row:1}
+html body #stage.royal-room #micQuick{grid-column:3;grid-row:1}
+html body #stage.royal-room #speaker{grid-column:4;grid-row:1}
+html body #stage.royal-room #more{grid-column:5;grid-row:1}
+html body #stage.royal-room .quick-actions button svg {
+  box-sizing:border-box;width:40px!important;height:40px!important;padding:9px;
+  border-radius:50%;background:#b4d6ff14;border:1px solid #c7e3ff3d;
+}
+html body #stage.royal-room .quick-actions #micQuick svg {
+  width:52px!important;height:52px!important;padding:13px;background:linear-gradient(145deg,#4486da,#245098);
+}
+html body #stage.royal-room .quick-actions #bigGiftBtn::after{content:"هدايا"}
+html body #stage.royal-room .quick-actions #roomReact::after{content:"تفاعل"}
+html body #stage.royal-room .quick-actions #micQuick::after{content:"المايك"}
+html body #stage.royal-room .quick-actions #speaker::after{content:"الصوت"}
+html body #stage.royal-room .quick-actions #more::after{content:"المزيد"}
+body.audio-mode #sheet[open]{border-radius:30px 30px 20px 20px!important;background:linear-gradient(155deg,#203553f7,#12223bf9)!important;color:#f0f6ff!important}
+@media(max-height:550px){
+  html[data-theme] body.audio-mode #stage.royal-room{--voice-seats:32%;--voice-top:46px}
+}
+html[data-theme] body.audio-mode.chat-focused #stage.royal-room{--voice-seats:0px;--voice-dock:56px}
+html body.audio-mode.chat-focused #stage.royal-room :is(#audioStage.seat-grid,footer .bottom .quick-actions){display:none!important}
+@media(prefers-reduced-motion:reduce){#stage.royal-room *{animation-duration:1ms!important;transition-duration:1ms!important}}
+html body #stage.royal-room.quiet-motion .room-portrait::after{transition:none;box-shadow:none!important}
+
+html[data-theme] body.audio-mode #stage.royal-room #messages[role=log] :is(.comment-bubble,.comment-empty){background:none!important;border:0!important;box-shadow:none!important;backdrop-filter:none!important}
+
+/* Let the header, connection notice and seats take their measured heights.
+   On short viewports the stage scrolls independently of chat and controls. */
+html[data-theme] body.audio-mode #stage.royal-room {
+  display:flex!important; flex-direction:column!important; align-items:stretch;
+  box-sizing:border-box; padding:env(safe-area-inset-top,0px) 0 0!important;
+  overflow:hidden!important;
+}
+html[data-theme] body.audio-mode #stage.royal-room :is(header,#connection,#audioStage.seat-grid,#messages[role=log],footer) {
+  position:relative!important; inset:auto!important; transform:none!important;
+}
+html[data-theme] body.audio-mode #stage.royal-room header {
+  order:0; flex:0 0 48px; height:auto!important; margin:0 12px!important;
+  padding:0!important; width:auto!important; box-sizing:border-box;
+}
+html[data-theme] body.audio-mode #stage.royal-room header :is(.live-pill,#hostLevel){display:none!important}
+html[data-theme] body.audio-mode #stage.royal-room #connection:not(.is-ready){
+  order:1; flex:none; align-self:center; max-width:calc(100% - 24px)!important;
+  margin:0 12px 3px!important; padding:3px 8px!important; min-height:0!important;
+  background:#152947!important; border:0!important; line-height:1.35;
+}
+html[data-theme] body.audio-mode #stage.royal-room #connection :is(.dot,#badge){display:none!important}
+html[data-theme] body.audio-mode #stage.royal-room #audioStage.seat-grid{
+  order:2; flex:0 1 auto; min-height:0!important; height:auto!important; max-height:65%!important;
+  width:auto!important; margin:0 12px!important; padding:4px!important; box-sizing:border-box;
+  gap:6px 8px!important; align-content:start!important;
+}
+html[data-theme] body.audio-mode #stage.royal-room #audioStage .audio-seat {
+  min-height:0!important; height:auto!important; gap:2px!important;
+}
+html[data-theme] body.audio-mode #stage.royal-room #audioStage .audio-seat::before{content:none!important}
+html[data-theme] body.audio-mode #stage.royal-room #audioStage .empty-seat .seat-plus {
+  display:grid; place-items:center; width:46px!important; height:46px!important;
+  background:#aaccff0d!important; border:1px dashed #8da9cb!important; box-shadow:none!important;
+}
+html[data-theme] body.audio-mode #stage.royal-room #audioStage .empty-seat .seat-plus svg{width:19px!important;height:19px!important}
+html[data-theme] body.audio-mode #stage.royal-room #audioStage .room-portrait img {
+  width:100%!important;height:100%!important;object-fit:cover;border:0!important;box-shadow:none!important;
+}
+html[data-theme] body.audio-mode #stage.royal-room #messages[role=log] {
+  order:3; flex:1 1 64px; min-height:0!important; max-height:none!important; height:auto!important;
+  width:auto!important; margin:4px 16px!important; overflow-y:auto!important;
+}
+html[data-theme] body.audio-mode.comments-hidden #stage.royal-room #audioStage.seat-grid{flex:1;max-height:none!important;align-content:center!important}
+html[data-theme] body.audio-mode #stage.royal-room footer{
+  order:4;flex:none; margin-top:auto!important;height:auto!important;width:100%!important;
+}
+html[data-theme] body.audio-mode #stage.royal-room footer .bottom{height:auto!important}
+html[data-theme] body.audio-mode #stage.royal-room footer .quick-actions :is(#more,#roomReact,#speaker,#micQuick,#bigGiftBtn) svg{
+  box-sizing:content-box!important;width:22px!important;height:22px!important;
+  padding:8px!important;stroke:#e7f0ff!important;color:#e7f0ff!important;
+}
+html[data-theme] body.audio-mode #stage.royal-room footer .quick-actions #micQuick svg{padding:12px!important}
+html[data-theme] body.audio-mode #stage.royal-room footer .quick-actions #bigGiftBtn[hidden]{visibility:hidden}
+html[data-theme] body.audio-mode #stage.royal-room #sheet .gift-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+html[data-theme] body.audio-mode #stage.royal-room #sheet .gift-card{min-width:0;border-radius:18px;white-space:normal}
+html[data-theme] body.audio-mode #stage.royal-room #sheet .gift-target-summary{display:block}
+
+html[data-theme] body.audio-mode #stage.royal-room header #follow:not([hidden]){display:inline-flex!important;align-items:center;justify-content:center;order:0;flex:none;min-height:36px;padding:0 9px;border-radius:18px;background:#214c84;color:white;font-size:12px}
+
+#stage #sheet.gift-store-open[open]{display:flex;flex-direction:column;overflow:hidden!important}
+#sheet.gift-store-open #sheetBody{display:flex;flex-direction:column;min-height:0;overflow:auto}
+#sheet.gift-store-open .gift-grid{min-height:9rem;max-height:36dvh;overflow:auto;flex:none}
+#sheet.gift-store-open .gift-checkout{position:sticky;bottom:0;z-index:2;background:#162841;color:white;border-radius:16px;padding:8px}
+#sheet label:has(select){display:flex;gap:8px;align-items:center;justify-content:space-between}

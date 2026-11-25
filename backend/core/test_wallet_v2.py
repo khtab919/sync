@@ -22,7 +22,7 @@ class WalletV2Tests(TestCase):
             username='admin_v2', email='admin-v2@example.org', password='test_pass_123')
         for person in (self.user, self.other, self.admin):
             Profile.objects.create(user=person, publishing_allowed=True)
-            Wallet.objects.create(user=person, balance_cents=5000 if person == self.user else 0)
+            Wallet.objects.create(user=person, earned_coins=5000 if person == self.user else 0, balance_cents=5000 if person == self.user else 0)
         self.user_token = issue_token(self.user)
         self.other_token = issue_token(self.other)
         self.admin_token = issue_token(self.admin)

@@ -84,9 +84,9 @@ def snapshot(row,user):
     wallet=Wallet.objects.filter(user=user).values('balance_cents','reserved_cents').first()
     available_coins=max(0,wallet['balance_cents']-wallet['reserved_cents']) if wallet else 0
     from .live_moderation import role
-    return {'mode':row.mode,'max_speakers':(max(8,len(speakers)) if row.mode=='audio' else row.max_speakers),'speakers':speakers,'can_publish':can_publish,'publish_sources':sources,
+    return {'mode':row.mode,'max_speakers':row.max_speakers,'speakers':speakers,'can_publish':can_publish,'publish_sources':sources,
             'current_role':role(row,user),'control_revision':row.control_revision,
-            'room_settings':{'chat_enabled':row.chat_enabled,'chat_slow_seconds':row.chat_slow_seconds,
+            'room_settings':{'room_theme':row.room_theme,'chat_enabled':row.chat_enabled,'chat_slow_seconds':row.chat_slow_seconds,
                 'block_external_links':row.block_external_links,'seat_join_mode':row.seat_join_mode,
                 'locked_seat_numbers':row.locked_seat_numbers,'password_protected':bool(row.password_hash)},
             'seat_status':own.status if own else '', 'manage_room':manager,
@@ -122,10 +122,10 @@ def action(request,row,a):
             users={u.pk:u for u in User.objects.select_for_update().filter(pk__in=sorted({request.actor.pk,recipient_id,row.owner_id})).order_by('pk')}
             current=LiveBroadcast.objects.select_for_update().get(pk=row.pk);authorized(current,request.actor)
             if current.status!='active':raise ApiError('broadcast_ended',409)
-            if recipient_id!=row.owner_id and not LiveSeat.objects.filter(admission__broadcast=row,admission__user_id=recipient_id,admission__banned=False,status='approved').exists():raise ApiError('invalid_gift_recipient')
+            if recipient_id!=row.owner_id and not LiveAdmission.objects.filter(broadcast=row,user_id=recipient_id,connected=True,banned=False,user__is_active=True).exists():raise ApiError('invalid_gift_recipient')
             target=users.get(recipient_id)
             if not target:raise ApiError('invalid_gift_recipient')
-            eligible(target,True)
+            eligible(target)
             from . import finance
             op=finance.hold(request.actor,target,'live_gift',key,str(row.pk),total)
             existing=LiveGiftEvent.objects.filter(operation=op).first()
@@ -144,7 +144,7 @@ def action(request,row,a):
         current=LiveBroadcast.objects.select_for_update().get(pk=row.pk);authorized(current,request.actor)
         if kind=='seat_request':
             eligible(request.actor,True)
-            if (min(current.max_speakers,8) if current.mode=='audio' else current.max_speakers)<=1 or request.actor.pk==row.owner_id:raise ApiError('stage_unavailable',409)
+            if current.max_speakers<=1 or request.actor.pk==row.owner_id:raise ApiError('stage_unavailable',409)
             mode=p.get('mode')
             if mode not in ('audio','video') or (row.mode=='audio' and mode!='audio'):raise ApiError('invalid_stage_mode')
             seat,_=LiveSeat.objects.get_or_create(admission=a,defaults={'mode':mode})
@@ -171,7 +171,7 @@ def action(request,row,a):
             if p.get('approve') is True:
                 eligible(seat.admission.user,True)
                 if seat.admission.banned:raise ApiError('broadcast_forbidden',403)
-                if seat.status!='approved' and LiveSeat.objects.filter(admission__broadcast=row,status='approved').count()>=(min(current.max_speakers,8) if current.mode=='audio' else current.max_speakers)-1:raise ApiError('stage_full',409)
+                if seat.status!='approved' and LiveSeat.objects.filter(admission__broadcast=row,status='approved').count()>=current.max_speakers-1:raise ApiError('stage_full',409)
                 from .live_moderation import free_seat
                 number=seat.seat_number if seat.status=='approved' else free_seat(current)
                 if number is None or number in (current.locked_seat_numbers or []):raise ApiError('stage_full',409)
@@ -198,7 +198,7 @@ def action(request,row,a):
             teams=p.get('teams');duration=p.get('duration')
             if not isinstance(teams,list) or len(teams)!=2 or any(not isinstance(t,list) or not t for t in teams):raise ApiError('invalid_pk_teams')
             flat=[u for t in teams for u in t]
-            if any(type(u) is not int for u in flat) or len(flat)!=len(set(flat)) or len(flat)>(min(current.max_speakers,8) if current.mode=='audio' else current.max_speakers) or row.owner_id not in flat or type(duration) is not int or duration not in (60,180,300):raise ApiError('invalid_pk_teams')
+            if any(type(u) is not int for u in flat) or len(flat)!=len(set(flat)) or len(flat)>current.max_speakers or row.owner_id not in flat or type(duration) is not int or duration not in (60,180,300):raise ApiError('invalid_pk_teams')
             permitted={row.owner_id}|set(LiveSeat.objects.filter(admission__broadcast=row,status='approved',admission__connected=True).values_list('admission__user_id',flat=True))
             if not set(flat)<=permitted:raise ApiError('invalid_pk_teams')
             if LivePK.objects.filter(broadcast=row,cancelled_at__isnull=True,ends_at__gt=timezone.now()).exists():raise ApiError('pk_already_active',409)
